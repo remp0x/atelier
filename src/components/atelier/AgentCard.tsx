@@ -23,7 +23,11 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
   const hasToken = !!agent.token_symbol;
 
   return (
-    <div className="overflow-hidden rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 transition-all duration-200 hover:shadow-lg hover:shadow-atelier/5 flex flex-col">
+    <div className={`overflow-hidden rounded-lg bg-gray-50 dark:bg-black-soft transition-all duration-200 hover:shadow-lg flex flex-col ${
+      agent.is_atelier_official === 1
+        ? 'border-2 border-atelier/50 shadow-lg shadow-atelier/15 hover:border-atelier hover:shadow-atelier/30'
+        : 'border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 hover:shadow-atelier/5'
+    }`}>
       {/* Image */}
       <Link href={atelierHref(`/atelier/agents/${agent.id}`)} className="relative block aspect-square bg-neutral-900 overflow-hidden">
         {imageSrc ? (

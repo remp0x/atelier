@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { AgentCard } from '@/components/atelier/AgentCard';
 import { HireModal } from '@/components/atelier/HireModal';
@@ -46,6 +45,12 @@ export default function AtelierBrowsePage() {
 
 function BrowseContent() {
   const searchParams = useSearchParams();
+
+  const [category, setCategory] = useState(searchParams.get('category') || 'all');
+  const [source, setSource] = useState(searchParams.get('source') || 'all');
+  const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
+  const [search] = useState(searchParams.get('search') || '');
+
   const [agents, setAgents] = useState<AtelierAgentListItem[]>([]);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData | null>>({});
   const [loading, setLoading] = useState(true);
@@ -53,30 +58,37 @@ function BrowseContent() {
   const [hireService, setHireService] = useState<Service | null>(null);
   const [servicePicker, setServicePicker] = useState<{ agentName: string; services: Service[] } | null>(null);
 
-  const activeCategory = searchParams.get('category') || 'all';
-  const activeSource = searchParams.get('source') || 'all';
-  const activeSort = searchParams.get('sort') || 'popular';
-  const search = searchParams.get('search') || '';
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (category !== 'all') params.set('category', category);
+    if (source !== 'all') params.set('source', source);
+    if (sort !== 'popular') params.set('sort', sort);
+    if (search) params.set('search', search);
+    const qs = params.toString();
+    const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
+    window.history.replaceState(null, '', url);
+  }, [category, source, sort, search]);
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       setLoading(true);
       try {
         const params = new URLSearchParams();
-        if (activeCategory !== 'all') params.set('category', activeCategory);
-        if (activeSource === 'official') params.set('source', 'official');
-        if (activeSort !== 'popular') params.set('sortBy', activeSort);
+        if (category !== 'all') params.set('category', category);
+        if (source === 'official') params.set('source', 'official');
+        if (sort !== 'popular') params.set('sortBy', sort);
         if (search) params.set('search', search);
         params.set('limit', '48');
 
         const res = await fetch(`/api/agents?${params}`);
         const json = await res.json();
-        if (!json.success) return;
+        if (cancelled || !json.success) return;
 
         const agentsList: AtelierAgentListItem[] = json.data;
 
         let filtered = agentsList;
-        if (activeSource === 'community') {
+        if (source === 'community') {
           filtered = agentsList.filter((a) => a.is_atelier_official !== 1);
         }
 
@@ -91,18 +103,19 @@ function BrowseContent() {
             body: JSON.stringify({ mints }),
           });
           const marketJson = await marketRes.json();
-          if (marketJson.success) setMarketMap(marketJson.data);
+          if (!cancelled && marketJson.success) setMarketMap(marketJson.data);
         } catch {
           // market data is non-critical
         }
       } catch {
         // silent
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
-  }, [activeCategory, activeSource, activeSort, search]);
+    return () => { cancelled = true; };
+  }, [category, source, sort, search]);
 
   const handleHire = useCallback(async (agent: AtelierAgentListItem) => {
     try {
@@ -124,22 +137,6 @@ function BrowseContent() {
     }
   }, []);
 
-  function buildHref(overrides: Record<string, string | undefined>): string {
-    const params = new URLSearchParams();
-    const merged = {
-      category: activeCategory,
-      source: activeSource,
-      sort: activeSort,
-      search,
-      ...overrides,
-    };
-    for (const [k, v] of Object.entries(merged)) {
-      if (v && v !== 'all' && v !== 'popular') params.set(k, v);
-    }
-    const qs = params.toString();
-    return `/atelier/browse${qs ? `?${qs}` : ''}`;
-  }
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div className="mb-8">
@@ -156,34 +153,34 @@ function BrowseContent() {
         {/* Source filter */}
         <div className="flex items-center gap-1.5">
           {SOURCE_OPTIONS.map((opt) => (
-            <Link
+            <button
               key={opt.value}
-              href={buildHref({ source: opt.value })}
+              onClick={() => setSource(opt.value)}
               className={`px-3 py-1.5 rounded-full text-xs font-mono transition-colors ${
-                activeSource === opt.value
+                source === opt.value
                   ? 'border border-atelier text-atelier bg-atelier/10'
                   : 'border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier/50 hover:text-atelier'
               }`}
             >
               {opt.label}
-            </Link>
+            </button>
           ))}
         </div>
 
         {/* Category filter */}
         <div className="flex items-center gap-1.5">
           {CATEGORIES.map((cat) => (
-            <Link
+            <button
               key={cat}
-              href={buildHref({ category: cat })}
+              onClick={() => setCategory(cat)}
               className={`px-3 py-1.5 rounded-full text-xs font-mono transition-colors ${
-                activeCategory === cat
+                category === cat
                   ? 'border border-atelier text-atelier bg-atelier/10'
                   : 'border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier/50 hover:text-atelier'
               }`}
             >
               {CATEGORY_LABELS[cat]}
-            </Link>
+            </button>
           ))}
         </div>
 
@@ -191,8 +188,8 @@ function BrowseContent() {
         <div className="flex items-center gap-1.5 ml-auto">
           <span className="text-xs text-neutral-500 font-mono">Sort:</span>
           <select
-            value={activeSort}
-            onChange={(e) => { window.location.href = buildHref({ sort: e.target.value }); }}
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
             className="px-2 py-1 rounded text-xs font-mono bg-transparent border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 focus:outline-none focus:border-atelier"
           >
             {SORT_OPTIONS.map((opt) => (

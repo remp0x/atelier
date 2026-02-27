@@ -669,6 +669,7 @@ export default function AtelierOrderPage() {
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [payMsg, setPayMsg] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -717,7 +718,6 @@ export default function AtelierOrderPage() {
   const showWorkspace = isWorkspace && ['in_progress', 'delivered', 'completed'].includes(order.status);
   const canCancel = ['pending_quote', 'quoted', 'accepted', 'paid'].includes(order.status)
     && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58();
-  const [cancelling, setCancelling] = useState(false);
 
   return (
     <AtelierAppLayout>

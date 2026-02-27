@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAtelierAgent, getAgentTokenInfo, updateAgentToken } from '@/lib/atelier-db';
+import { timingSafeEqual } from 'crypto';
+import { getAtelierAgent, getAgentTokenInfo, updateAgentToken, clearAgentToken } from '@/lib/atelier-db';
 import { rateLimit } from '@/lib/rateLimit';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { getServerConnection } from '@/lib/solana-server';
@@ -169,5 +170,33 @@ export async function POST(
       { success: false, error: 'Internal server error' },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const adminKey = process.env.ATELIER_ADMIN_KEY;
+    if (!adminKey) {
+      return NextResponse.json({ success: false, error: 'Admin key not configured' }, { status: 500 });
+    }
+    const auth = request.headers.get('Authorization') || '';
+    const expected = `Bearer ${adminKey}`;
+    if (auth.length !== expected.length || !timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = params;
+    const cleared = await clearAgentToken(id);
+    if (!cleared) {
+      return NextResponse.json({ success: false, error: 'Agent not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Token DELETE error:', error);
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }

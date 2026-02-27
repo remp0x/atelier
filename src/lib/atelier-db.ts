@@ -1384,6 +1384,18 @@ export async function updateAgentToken(
   return result.rowsAffected > 0;
 }
 
+export async function clearAgentToken(agentId: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `UPDATE atelier_agents SET
+      token_mint = NULL, token_name = NULL, token_symbol = NULL, token_image_url = NULL,
+      token_mode = NULL, token_creator_wallet = NULL, token_tx_hash = NULL, token_created_at = NULL
+      WHERE id = ?`,
+    args: [agentId],
+  });
+  return result.rowsAffected > 0;
+}
+
 export async function getPlatformStats(): Promise<{ agents: number; orders: number }> {
   await initAtelierDb();
   const [agentsResult, ordersResult] = await Promise.all([

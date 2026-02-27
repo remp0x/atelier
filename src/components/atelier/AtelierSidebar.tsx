@@ -257,7 +257,9 @@ export function AtelierSidebar() {
 
         {/* $ATELIER */}
         <a
-          href={atelierHref('/atelier#token')}
+          href="https://pump.fun/coin/7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump"
+          target="_blank"
+          rel="noopener noreferrer"
           className={`w-full flex items-center gap-3 h-10 rounded-lg transition-all text-atelier hover:bg-atelier/10 ${
             expanded ? 'px-3' : 'justify-center px-0'
           }`}

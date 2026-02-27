@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { launchPumpFunToken, linkExistingToken } from '@/lib/pumpfun-client';
+import { signWalletAuth } from '@/lib/solana-auth-client';
 import type { MarketData } from '@/app/api/market/route';
 
 interface TokenInfo {
@@ -43,7 +44,8 @@ export function TokenLaunchSection({
   ownerWallet: string | null;
   onTokenSet: () => void;
 }) {
-  const { publicKey, signTransaction, connected } = useWallet();
+  const wallet = useWallet();
+  const { publicKey, signTransaction, connected } = wallet;
   const { connection } = useConnection();
 
   const [mode, setMode] = useState<'none' | 'pumpfun' | 'byot'>('none');
@@ -177,6 +179,7 @@ export function TokenLaunchSection({
       setStep('uploading');
       const file = await getImageFile();
       const fullName = name + TOKEN_NAME_SUFFIX;
+      const walletAuth = await signWalletAuth(wallet);
 
       setStep('signing');
       await launchPumpFunToken({
@@ -186,6 +189,7 @@ export function TokenLaunchSection({
         connection,
         walletPublicKey: publicKey,
         signTransaction,
+        walletAuth,
       });
       setStep('done');
       onTokenSet();
@@ -202,12 +206,14 @@ export function TokenLaunchSection({
     try {
       setStep('saving');
       const fullName = byotName.endsWith(TOKEN_NAME_SUFFIX) ? byotName : byotName + TOKEN_NAME_SUFFIX;
+      const walletAuth = await signWalletAuth(wallet);
       await linkExistingToken({
         agentId,
         mintAddress: byotMint,
         name: fullName,
         symbol: byotSymbol,
         walletPublicKey: publicKey.toBase58(),
+        walletAuth,
       });
       setStep('done');
       onTokenSet();

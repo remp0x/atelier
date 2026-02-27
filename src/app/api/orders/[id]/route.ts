@@ -6,6 +6,7 @@ import { generateWithRetry } from '@/lib/providers/types';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { verifySolanaUsdcPayment } from '@/lib/solana-verify';
 import { sendUsdcPayout } from '@/lib/solana-payout';
+import { notifyAgentWebhook } from '@/lib/webhook';
 
 export const maxDuration = 300;
 
@@ -29,6 +30,15 @@ export async function GET(
       order = (await updateOrderStatus(id, { status: 'delivered' }))!;
     }
 
+    if (
+      order.quota_total === 0 &&
+      order.status === 'in_progress' &&
+      !order.deliverable_url &&
+      Date.now() - new Date(order.created_at).getTime() > 10 * 60 * 1000
+    ) {
+      order = (await updateOrderStatus(id, { status: 'paid' }))!;
+    }
+
     const review = order.status === 'completed' ? await getReviewByOrderId(id) : null;
     const deliverables = order.quota_total > 0 ? await getOrderDeliverables(id) : [];
 
@@ -42,7 +52,8 @@ export async function GET(
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pay: ['quoted', 'accepted', 'paid', 'in_progress'],
   approve: ['delivered'],
-  cancel: ['pending_quote', 'quoted', 'accepted'],
+  cancel: ['pending_quote', 'quoted', 'accepted', 'paid'],
+  dispute: ['delivered'],
 };
 
 export async function PATCH(
@@ -90,7 +101,40 @@ export async function PATCH(
     }
 
     if (action === 'cancel') {
+      let refundFailed = false;
+
+      if (order.status === 'paid' && order.escrow_tx_hash && order.client_wallet) {
+        const refundAmount = parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0');
+        if (refundAmount > 0) {
+          try {
+            await sendUsdcPayout(order.client_wallet, refundAmount);
+          } catch (refundErr) {
+            refundFailed = true;
+            console.error(`Refund failed for order ${id}:`, refundErr);
+          }
+        }
+      }
+
       const updated = await updateOrderStatus(id, { status: 'cancelled' });
+      notifyAgentWebhook(order.provider_agent_id, {
+        event: 'order.cancelled',
+        order_id: id,
+        data: { previous_status: order.status },
+      });
+      return NextResponse.json({
+        success: true,
+        data: updated,
+        ...(refundFailed && { warning: 'Order cancelled but refund failed. Contact support.' }),
+      });
+    }
+
+    if (action === 'dispute') {
+      const updated = await updateOrderStatus(id, { status: 'disputed' });
+      notifyAgentWebhook(order.provider_agent_id, {
+        event: 'order.disputed',
+        order_id: id,
+        data: {},
+      });
       return NextResponse.json({ success: true, data: updated });
     }
 
@@ -117,6 +161,11 @@ export async function PATCH(
       }
 
       const finalOrder = await getServiceOrderById(id);
+      notifyAgentWebhook(order.provider_agent_id, {
+        event: 'order.completed',
+        order_id: id,
+        data: { payout_failed: payoutFailed },
+      });
       return NextResponse.json({
         success: true,
         data: finalOrder,
@@ -174,6 +223,11 @@ export async function PATCH(
       }
 
       const updated = await getServiceOrderById(id);
+      notifyAgentWebhook(order.provider_agent_id, {
+        event: 'order.paid',
+        order_id: id,
+        data: { status: updated?.status },
+      });
       return NextResponse.json({ success: true, data: updated });
     }
 

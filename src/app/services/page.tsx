@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ServiceCard } from '@/components/atelier/ServiceCard';
@@ -64,9 +64,13 @@ interface ServiceWithAgent extends Service {
 
 function ServicesContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [services, setServices] = useState<ServiceWithAgent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [hireService, setHireService] = useState<ServiceWithAgent | null>(null);
+  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
 
   const activeCategory = searchParams.get('category') || 'all';
   const activePrice = searchParams.get('price') || 'all';
@@ -74,29 +78,36 @@ function ServicesContent() {
   const activeSort = searchParams.get('sort') || 'popular';
   const search = searchParams.get('search') || '';
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (activeCategory !== 'all') params.set('category', activeCategory);
-        if (activePrice !== 'all') params.set('price', activePrice);
-        if (activeProvider !== 'all') params.set('provider', activeProvider);
-        if (activeSort !== 'popular') params.set('sortBy', activeSort);
-        if (search) params.set('search', search);
-        params.set('limit', '50');
+  const PAGE_SIZE = 50;
 
-        const res = await fetch(`/api/services?${params}`);
-        const json = await res.json();
-        if (json.success) setServices(json.data);
-      } catch {
-        // silent
-      } finally {
-        setLoading(false);
+  const fetchServices = useCallback(async (offset: number, append: boolean) => {
+    if (append) setLoadingMore(true); else setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (activeCategory !== 'all') params.set('category', activeCategory);
+      if (activePrice !== 'all') params.set('price', activePrice);
+      if (activeProvider !== 'all') params.set('provider', activeProvider);
+      if (activeSort !== 'popular') params.set('sortBy', activeSort);
+      if (search) params.set('search', search);
+      params.set('limit', String(PAGE_SIZE));
+      params.set('offset', String(offset));
+
+      const res = await fetch(`/api/services?${params}`);
+      const json = await res.json();
+      if (json.success) {
+        setServices(prev => append ? [...prev, ...json.data] : json.data);
+        setHasMore(json.data.length >= PAGE_SIZE);
       }
+    } catch {
+      // silent
+    } finally {
+      if (append) setLoadingMore(false); else setLoading(false);
     }
-    load();
   }, [activeCategory, activePrice, activeProvider, activeSort, search]);
+
+  useEffect(() => {
+    fetchServices(0, false);
+  }, [fetchServices]);
 
   function buildHref(overrides: Record<string, string | undefined>): string {
     const params = new URLSearchParams();
@@ -124,6 +135,19 @@ function ServicesContent() {
         <p className="text-sm text-gray-500 dark:text-neutral-500 mt-1">
           Find the exact service you need across all agents
         </p>
+      </div>
+
+      {/* Search */}
+      <div className="mb-6">
+        <form onSubmit={(e) => { e.preventDefault(); router.push(buildHref({ search: searchInput || undefined })); }}>
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search services..."
+            className="w-full max-w-md px-4 py-2 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+          />
+        </form>
       </div>
 
       {/* Category filters */}
@@ -227,6 +251,25 @@ function ServicesContent() {
           <p className="text-gray-400 dark:text-neutral-400 text-xs mt-2">
             Try adjusting your filters
           </p>
+        </div>
+      )}
+
+      {hasMore && !loading && (
+        <div className="flex justify-center mt-8">
+          <button
+            onClick={() => fetchServices(services.length, true)}
+            disabled={loadingMore}
+            className="px-6 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-neutral-500 hover:border-atelier/50 hover:text-atelier disabled:opacity-50 transition-colors flex items-center gap-2"
+          >
+            {loadingMore ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
+                Loading...
+              </>
+            ) : (
+              'Load More'
+            )}
+          </button>
         </div>
       )}
 

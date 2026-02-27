@@ -8,9 +8,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const adminSecret = process.env.ADMIN_SECRET;
+  const adminSecret = process.env.ATELIER_ADMIN_KEY;
   if (!adminSecret) {
-    return NextResponse.json({ success: false, error: 'Admin secret not configured' }, { status: 500 });
+    return NextResponse.json({ success: false, error: 'Admin key not configured' }, { status: 500 });
   }
   const authHeader = request.headers.get('authorization') || '';
   const expected = `Bearer ${adminSecret}`;

@@ -49,11 +49,13 @@ function BrowseContent() {
   const [category, setCategory] = useState(searchParams.get('category') || 'all');
   const [source, setSource] = useState(searchParams.get('source') || 'all');
   const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
-  const [search] = useState(searchParams.get('search') || '');
+  const [search, setSearch] = useState(searchParams.get('search') || '');
 
   const [agents, setAgents] = useState<AtelierAgentListItem[]>([]);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData | null>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
 
   const [hireService, setHireService] = useState<Service | null>(null);
   const [servicePicker, setServicePicker] = useState<{ agentName: string; services: Service[] } | null>(null);
@@ -69,53 +71,56 @@ function BrowseContent() {
     window.history.replaceState(null, '', url);
   }, [category, source, sort, search]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      try {
-        const params = new URLSearchParams();
-        if (category !== 'all') params.set('category', category);
-        if (source === 'official') params.set('source', 'official');
-        if (sort !== 'popular') params.set('sortBy', sort);
-        if (search) params.set('search', search);
-        params.set('limit', '48');
+  const PAGE_SIZE = 48;
 
-        const res = await fetch(`/api/agents?${params}`);
-        const json = await res.json();
-        if (cancelled || !json.success) return;
+  const fetchAgents = useCallback(async (offset: number, append: boolean) => {
+    if (append) setLoadingMore(true); else setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (category !== 'all') params.set('category', category);
+      if (source === 'official') params.set('source', 'official');
+      if (sort !== 'popular') params.set('sortBy', sort);
+      if (search) params.set('search', search);
+      params.set('limit', String(PAGE_SIZE));
+      params.set('offset', String(offset));
 
-        const agentsList: AtelierAgentListItem[] = json.data;
+      const res = await fetch(`/api/agents?${params}`);
+      const json = await res.json();
+      if (!json.success) return;
 
-        let filtered = agentsList;
-        if (source === 'community') {
-          filtered = agentsList.filter((a) => a.is_atelier_official !== 1);
-        }
+      const agentsList: AtelierAgentListItem[] = json.data;
 
-        setAgents(filtered);
-
-        const agentMints = filtered.map((a) => a.token_mint).filter(Boolean) as string[];
-        const mints = Array.from(new Set([ATELIER_MINT, ...agentMints]));
-        try {
-          const marketRes = await fetch('/api/market', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mints }),
-          });
-          const marketJson = await marketRes.json();
-          if (!cancelled && marketJson.success) setMarketMap(marketJson.data);
-        } catch {
-          // market data is non-critical
-        }
-      } catch {
-        // silent
-      } finally {
-        if (!cancelled) setLoading(false);
+      let filtered = agentsList;
+      if (source === 'community') {
+        filtered = agentsList.filter((a) => a.is_atelier_official !== 1);
       }
+
+      setAgents(prev => append ? [...prev, ...filtered] : filtered);
+      setHasMore(agentsList.length >= PAGE_SIZE);
+
+      const agentMints = filtered.map((a) => a.token_mint).filter(Boolean) as string[];
+      const mints = Array.from(new Set([ATELIER_MINT, ...agentMints]));
+      try {
+        const marketRes = await fetch('/api/market', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mints }),
+        });
+        const marketJson = await marketRes.json();
+        if (marketJson.success) setMarketMap(prev => ({ ...prev, ...marketJson.data }));
+      } catch {
+        // market data is non-critical
+      }
+    } catch {
+      // silent
+    } finally {
+      if (append) setLoadingMore(false); else setLoading(false);
     }
-    load();
-    return () => { cancelled = true; };
   }, [category, source, sort, search]);
+
+  useEffect(() => {
+    fetchAgents(0, false);
+  }, [fetchAgents]);
 
   const handleHire = useCallback(async (agent: AtelierAgentListItem) => {
     try {
@@ -146,6 +151,17 @@ function BrowseContent() {
         <p className="text-sm text-gray-500 dark:text-neutral-500 mt-1">
           Discover AI agents for every type of visual content
         </p>
+      </div>
+
+      {/* Search */}
+      <div className="mb-6">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search agents..."
+          className="w-full max-w-md px-4 py-2 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+        />
       </div>
 
       {/* Filter row */}
@@ -246,6 +262,25 @@ function BrowseContent() {
           <p className="text-gray-400 dark:text-neutral-400 text-xs mt-2">
             Be the first to register — <code className="text-atelier">POST /api/agents/register</code>
           </p>
+        </div>
+      )}
+
+      {hasMore && !loading && (
+        <div className="flex justify-center mt-8">
+          <button
+            onClick={() => fetchAgents(agents.length, true)}
+            disabled={loadingMore}
+            className="px-6 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-neutral-500 hover:border-atelier/50 hover:text-atelier disabled:opacity-50 transition-colors flex items-center gap-2"
+          >
+            {loadingMore ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
+                Loading...
+              </>
+            ) : (
+              'Load More'
+            )}
+          </button>
         </div>
       )}
 

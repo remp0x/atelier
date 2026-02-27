@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceById, createServiceOrder, getOrdersByWallet } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
+import { notifyAgentWebhook } from '@/lib/webhook';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = rateLimiters.orders(request);
@@ -82,6 +83,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       reference_urls: reference_urls || undefined,
       quoted_price_usd: quotedPrice,
       quota_total: service.quota_limit || 0,
+    });
+
+    notifyAgentWebhook(service.agent_id, {
+      event: 'order.created',
+      order_id: order.id,
+      data: { service_id, brief, status: order.status },
     });
 
     return NextResponse.json({ success: true, data: order });

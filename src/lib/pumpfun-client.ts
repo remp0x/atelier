@@ -11,6 +11,7 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import BN from 'bn.js';
+import type { WalletAuthPayload } from '@/lib/solana-auth-client';
 
 const ATELIER_PUBKEY = new PublicKey('EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb');
 
@@ -28,6 +29,7 @@ export interface LaunchParams {
   connection: Connection;
   walletPublicKey: PublicKey;
   signTransaction: (tx: VersionedTransaction) => Promise<VersionedTransaction>;
+  walletAuth: WalletAuthPayload;
 }
 
 export interface LaunchResult {
@@ -54,7 +56,7 @@ export async function uploadTokenMetadata(metadata: TokenMetadata): Promise<stri
 }
 
 export async function launchPumpFunToken(params: LaunchParams): Promise<LaunchResult> {
-  const { agentId, metadata, devBuySol, connection, walletPublicKey, signTransaction } = params;
+  const { agentId, metadata, devBuySol, connection, walletPublicKey, signTransaction, walletAuth } = params;
 
   const metadataUri = await uploadTokenMetadata(metadata);
 
@@ -141,6 +143,7 @@ export async function launchPumpFunToken(params: LaunchParams): Promise<LaunchRe
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      ...walletAuth,
       token_mint: mintAddress,
       token_name: metadata.name,
       token_symbol: metadata.symbol,
@@ -160,11 +163,13 @@ export async function linkExistingToken(params: {
   symbol: string;
   imageUrl?: string;
   walletPublicKey: string;
+  walletAuth: WalletAuthPayload;
 }): Promise<void> {
   const res = await fetch(`/api/agents/${params.agentId}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      ...params.walletAuth,
       token_mint: params.mintAddress,
       token_name: params.name,
       token_symbol: params.symbol,

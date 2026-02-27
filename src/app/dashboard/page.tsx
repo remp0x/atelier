@@ -82,8 +82,12 @@ function DashboardContent() {
   const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
+  const [showEditAgent, setShowEditAgent] = useState(false);
   const [showCreateService, setShowCreateService] = useState(false);
+  const [showEditService, setShowEditService] = useState<Service | null>(null);
+  const [deletingService, setDeletingService] = useState<string | null>(null);
   const [showDeliver, setShowDeliver] = useState<string | null>(null);
+  const [showQuote, setShowQuote] = useState<string | null>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [editingPayout, setEditingPayout] = useState(false);
   const [payoutDraft, setPayoutDraft] = useState('');
@@ -128,6 +132,21 @@ function DashboardContent() {
     navigator.clipboard.writeText(key);
     setCopiedKey(agentId);
     setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const deleteService = async (serviceId: string, apiKey: string) => {
+    if (!confirm('Delete this service? This cannot be undone.')) return;
+    setDeletingService(serviceId);
+    try {
+      const res = await fetch(`/api/services/${serviceId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      const json = await res.json();
+      if (json.success) loadDashboard();
+    } finally {
+      setDeletingService(null);
+    }
   };
 
   const savePayoutWallet = async (agentApiKey: string, value: string | null) => {
@@ -261,7 +280,15 @@ function DashboardContent() {
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <h2 className="text-lg font-bold text-black dark:text-white font-display">{agent.name}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-bold text-black dark:text-white font-display">{agent.name}</h2>
+                      <button
+                        onClick={() => setShowEditAgent(true)}
+                        className="text-[11px] font-mono text-neutral-400 hover:text-atelier transition-colors"
+                      >
+                        Edit
+                      </button>
+                    </div>
                     <p className="text-sm text-neutral-500 font-mono mt-0.5 line-clamp-2">{agent.description}</p>
                     <div className="flex items-center gap-4 mt-2 text-xs font-mono text-neutral-400">
                       <span>{agentServices.length} service{agentServices.length !== 1 ? 's' : ''}</span>
@@ -413,6 +440,21 @@ function DashboardContent() {
                             </div>
                           </div>
                         </div>
+                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800/50">
+                          <button
+                            onClick={() => setShowEditService(svc)}
+                            className="text-[11px] font-mono text-neutral-400 hover:text-atelier transition-colors"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => deleteService(svc.id, agent!.api_key ?? '')}
+                            disabled={deletingService === svc.id}
+                            className="text-[11px] font-mono text-neutral-400 hover:text-red-400 disabled:opacity-50 transition-colors"
+                          >
+                            {deletingService === svc.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -437,6 +479,11 @@ function DashboardContent() {
                               <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded ${STATUS_COLORS[order.status]}`}>
                                 {STATUS_LABELS[order.status]}
                               </span>
+                              {order.status === 'paid' && order.escrow_tx_hash && (
+                                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-400/10 text-amber-400">
+                                  Needs delivery
+                                </span>
+                              )}
                             </div>
                             <p className="text-sm font-bold text-black dark:text-white font-display mt-1">{order.service_title}</p>
                             <p className="text-xs text-neutral-500 font-mono mt-0.5 line-clamp-1">{order.brief}</p>
@@ -446,14 +493,24 @@ function DashboardContent() {
                               <span>{formatDate(order.created_at)}</span>
                             </div>
                           </div>
-                          {(order.status === 'paid' || order.status === 'in_progress') && (
-                            <button
-                              onClick={() => setShowDeliver(order.id)}
-                              className="text-xs font-mono font-semibold text-white bg-atelier px-3 py-1.5 rounded hover:bg-atelier/90 transition-colors flex-shrink-0"
-                            >
-                              Deliver
-                            </button>
-                          )}
+                          <div className="flex gap-2 flex-shrink-0">
+                            {order.status === 'pending_quote' && (
+                              <button
+                                onClick={() => setShowQuote(order.id)}
+                                className="text-xs font-mono font-semibold text-atelier border border-atelier px-3 py-1.5 rounded hover:bg-atelier/10 transition-colors"
+                              >
+                                Quote
+                              </button>
+                            )}
+                            {(order.status === 'paid' || order.status === 'in_progress') && (
+                              <button
+                                onClick={() => setShowDeliver(order.id)}
+                                className="text-xs font-mono font-semibold text-white bg-atelier px-3 py-1.5 rounded hover:bg-atelier/90 transition-colors"
+                              >
+                                Deliver
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -474,6 +531,25 @@ function DashboardContent() {
         />
       )}
 
+      {/* Edit Agent Modal */}
+      {showEditAgent && agent && (
+        <EditAgentModal
+          agent={agent}
+          onClose={() => setShowEditAgent(false)}
+          onSuccess={() => { setShowEditAgent(false); loadDashboard(); }}
+        />
+      )}
+
+      {/* Edit Service Modal */}
+      {showEditService && agent && (
+        <EditServiceModal
+          service={showEditService}
+          apiKey={agent.api_key ?? ''}
+          onClose={() => setShowEditService(null)}
+          onSuccess={() => { setShowEditService(null); loadDashboard(); }}
+        />
+      )}
+
       {/* Create Service Modal */}
       {showCreateService && agent && (
         <CreateServiceModal
@@ -481,6 +557,16 @@ function DashboardContent() {
           apiKey={agent.api_key ?? ''}
           onClose={() => setShowCreateService(false)}
           onSuccess={() => { setShowCreateService(false); loadDashboard(); }}
+        />
+      )}
+
+      {/* Quote Modal */}
+      {showQuote && agent && (
+        <QuoteModal
+          orderId={showQuote}
+          apiKey={agent.api_key ?? ''}
+          onClose={() => setShowQuote(null)}
+          onSuccess={() => { setShowQuote(null); loadDashboard(); }}
         />
       )}
 
@@ -766,6 +852,296 @@ function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: {
             className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {saving ? 'Creating...' : 'Create Service'}
+          </button>
+        </div>
+      </div>
+    </ModalOverlay>
+  );
+}
+
+function EditAgentModal({ agent, onClose, onSuccess }: {
+  agent: AtelierAgent;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [name, setName] = useState(agent.name);
+  const [description, setDescription] = useState(agent.description || '');
+  const [avatarUrl, setAvatarUrl] = useState(agent.avatar_url || '');
+  const [endpointUrl, setEndpointUrl] = useState(agent.endpoint_url || '');
+  const [capabilities, setCapabilities] = useState<ServiceCategory[]>(
+    agent.capabilities ? JSON.parse(agent.capabilities) : [],
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/agents/me', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${agent.api_key}`,
+        },
+        body: JSON.stringify({
+          name,
+          description,
+          avatar_url: avatarUrl || null,
+          endpoint_url: endpointUrl,
+          capabilities,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      onSuccess();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update agent');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <h2 className="text-lg font-bold text-black dark:text-white font-display mb-6">Edit Agent</h2>
+      <div className="space-y-4">
+        <div>
+          <label className={LABEL_CLASS}>Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} maxLength={50} className={INPUT_CLASS} />
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>Description</label>
+          <textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={500} rows={3} className={`${INPUT_CLASS} resize-none`} />
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>Endpoint URL</label>
+          <input value={endpointUrl} onChange={e => setEndpointUrl(e.target.value)} placeholder="https://my-agent.example.com" className={INPUT_CLASS} />
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>Avatar URL</label>
+          <input value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://..." className={INPUT_CLASS} />
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>Capabilities</label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {VALID_CATEGORIES.map(cap => (
+              <button
+                key={cap}
+                onClick={() => setCapabilities(prev => prev.includes(cap) ? prev.filter(c => c !== cap) : [...prev, cap])}
+                className={`text-xs font-mono px-3 py-1.5 rounded border transition-colors ${
+                  capabilities.includes(cap)
+                    ? 'bg-atelier/10 text-atelier border-atelier/30'
+                    : 'text-neutral-500 border-gray-200 dark:border-neutral-800 hover:border-atelier/30'
+                }`}
+              >
+                {CATEGORY_LABELS[cap]}
+              </button>
+            ))}
+          </div>
+        </div>
+        {error && <p className="text-xs font-mono text-red-400">{error}</p>}
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-neutral-500 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !name || !description}
+            className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </ModalOverlay>
+  );
+}
+
+function EditServiceModal({ service, apiKey, onClose, onSuccess }: {
+  service: Service;
+  apiKey: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [title, setTitle] = useState(service.title);
+  const [description, setDescription] = useState(service.description);
+  const [category, setCategory] = useState<ServiceCategory>(service.category);
+  const [priceUsd, setPriceUsd] = useState(service.price_usd || '');
+  const [priceType, setPriceType] = useState<ServicePriceType>(service.price_type);
+  const [turnaroundHours, setTurnaroundHours] = useState(String(service.turnaround_hours || ''));
+  const [demoUrl, setDemoUrl] = useState(service.demo_url || '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/services/${service.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          category,
+          title,
+          description,
+          price_usd: priceUsd,
+          price_type: priceType,
+          turnaround_hours: turnaroundHours ? Number(turnaroundHours) : undefined,
+          demo_url: demoUrl || null,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      onSuccess();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update service');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <h2 className="text-lg font-bold text-black dark:text-white font-display mb-6">Edit Service</h2>
+      <div className="space-y-4">
+        <div>
+          <label className={LABEL_CLASS}>Category</label>
+          <select value={category} onChange={e => setCategory(e.target.value as ServiceCategory)} className={INPUT_CLASS}>
+            {VALID_CATEGORIES.map(c => (
+              <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>Title</label>
+          <input value={title} onChange={e => setTitle(e.target.value)} maxLength={100} className={INPUT_CLASS} />
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>Description</label>
+          <textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1000} rows={3} className={`${INPUT_CLASS} resize-none`} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={LABEL_CLASS}>Price (USD)</label>
+            <input value={priceUsd} onChange={e => setPriceUsd(e.target.value)} type="number" min="0" step="0.01" className={INPUT_CLASS} />
+          </div>
+          <div>
+            <label className={LABEL_CLASS}>Price Type</label>
+            <div className="flex gap-2 mt-1.5">
+              {(['fixed', 'quote'] as const).map(pt => (
+                <button
+                  key={pt}
+                  onClick={() => setPriceType(pt)}
+                  className={`flex-1 text-xs font-mono py-2 rounded border transition-colors ${
+                    priceType === pt
+                      ? 'bg-atelier/10 text-atelier border-atelier/30'
+                      : 'text-neutral-500 border-gray-200 dark:border-neutral-800'
+                  }`}
+                >
+                  {pt === 'fixed' ? 'Fixed' : 'Quote'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>Turnaround (hours)</label>
+          <input value={turnaroundHours} onChange={e => setTurnaroundHours(e.target.value)} type="number" min="1" className={INPUT_CLASS} />
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>Demo URL</label>
+          <input value={demoUrl} onChange={e => setDemoUrl(e.target.value)} placeholder="https://..." className={INPUT_CLASS} />
+        </div>
+        {error && <p className="text-xs font-mono text-red-400">{error}</p>}
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-neutral-500 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !title || !description || !priceUsd}
+            className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </ModalOverlay>
+  );
+}
+
+function QuoteModal({ orderId, apiKey, onClose, onSuccess }: {
+  orderId: string;
+  apiKey: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [priceUsd, setPriceUsd] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/quote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ price_usd: priceUsd }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      onSuccess();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to submit quote');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const price = parseFloat(priceUsd);
+  const fee = !isNaN(price) && price > 0 ? (price * 0.10).toFixed(2) : null;
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <h2 className="text-lg font-bold text-black dark:text-white font-display mb-6">Quote Order</h2>
+      <p className="text-xs font-mono text-neutral-500 mb-4">Order: {orderId}</p>
+      <div className="space-y-4">
+        <div>
+          <label className={LABEL_CLASS}>Price (USD) *</label>
+          <input
+            value={priceUsd}
+            onChange={e => setPriceUsd(e.target.value)}
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="5.00"
+            className={INPUT_CLASS}
+          />
+          {fee && (
+            <p className="text-[10px] font-mono text-neutral-500 mt-1">
+              Client pays ${priceUsd} + ${fee} platform fee = ${(price + parseFloat(fee)).toFixed(2)} total
+            </p>
+          )}
+        </div>
+        {error && <p className="text-xs font-mono text-red-400">{error}</p>}
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-neutral-500 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !priceUsd || isNaN(price) || price <= 0}
+            className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Submitting...' : 'Submit Quote'}
           </button>
         </div>
       </div>

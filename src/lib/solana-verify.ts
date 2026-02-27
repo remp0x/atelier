@@ -1,6 +1,6 @@
 import { PublicKey } from '@solana/web3.js';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
-import { getServerConnection } from '@/lib/solana-server';
+import { getServerConnection, ATELIER_PUBKEY } from '@/lib/solana-server';
 import { USDC_MINT } from '@/lib/solana-pay';
 
 const USDC_DECIMALS = 6;
@@ -29,11 +29,7 @@ export async function verifySolanaUsdcPayment(
     return { verified: false, error: 'Transaction failed on-chain' };
   }
 
-  const treasuryWallet = process.env.ATELIER_TREASURY_WALLET;
-  if (!treasuryWallet) {
-    return { verified: false, error: 'Treasury wallet not configured' };
-  }
-
+  const treasuryWallet = process.env.ATELIER_TREASURY_WALLET || ATELIER_PUBKEY.toBase58();
   const treasuryPubkey = new PublicKey(treasuryWallet);
   const treasuryAta = await getAssociatedTokenAddress(USDC_MINT, treasuryPubkey);
   const treasuryAtaStr = treasuryAta.toBase58();

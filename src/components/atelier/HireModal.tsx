@@ -100,22 +100,18 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     }
 
     setLoading(true);
-    setLoadingMsg('Sending payment...');
     setError(null);
 
     try {
-      const txSig = await sendUsdcPayment(
-        connection,
-        wallet,
-        new PublicKey(treasuryWallet),
-        total,
-      );
+      setLoadingMsg('Signing wallet...');
+      const auth = await signWalletAuth(wallet);
 
       setLoadingMsg('Creating order...');
       const createRes = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ...auth,
           service_id: service.id,
           brief,
           reference_urls: validUrls.length > 0 ? validUrls : undefined,
@@ -127,10 +123,15 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
       const newOrderId = createJson.data.id;
 
-      setLoadingMsg('Signing wallet...');
-      const auth = await signWalletAuth(wallet);
+      setLoadingMsg('Sending payment...');
+      const txSig = await sendUsdcPayment(
+        connection,
+        wallet,
+        new PublicKey(treasuryWallet),
+        total,
+      );
 
-      setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Generating... this may take a few minutes');
+      setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
       const patchRes = await fetch(`/api/orders/${newOrderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

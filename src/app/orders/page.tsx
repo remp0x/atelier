@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { signWalletAuth } from '@/lib/solana-auth-client';
 import dynamic from 'next/dynamic';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import type { ServiceOrder, OrderStatus } from '@/lib/atelier-db';
@@ -51,25 +52,41 @@ export default function MyOrdersPage() {
 }
 
 function OrdersContent() {
-  const { publicKey } = useWallet();
+  const wallet = useWallet();
+  const { publicKey } = wallet;
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState(false);
 
-  useEffect(() => {
+  const fetchOrders = useCallback(async () => {
     if (!publicKey) {
       setOrders([]);
       return;
     }
 
     setLoading(true);
-    fetch(`/api/orders?wallet=${publicKey.toBase58()}`)
-      .then((res) => res.json())
-      .then((json) => {
-        if (json.success) setOrders(json.data);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [publicKey]);
+    setAuthError(false);
+    try {
+      const auth = await signWalletAuth(wallet);
+      const params = new URLSearchParams({
+        wallet: auth.wallet,
+        wallet_sig: auth.wallet_sig,
+        wallet_sig_ts: String(auth.wallet_sig_ts),
+      });
+      const res = await fetch(`/api/orders?${params}`);
+      const json = await res.json();
+      if (json.success) setOrders(json.data);
+      else if (res.status === 401) setAuthError(true);
+    } catch {
+      setAuthError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [publicKey, wallet]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -100,6 +117,18 @@ function OrdersContent() {
       ) : loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="w-6 h-6 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : authError ? (
+        <div className="text-center py-20">
+          <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm mb-4">
+            Wallet signature required to view orders
+          </p>
+          <button
+            onClick={fetchOrders}
+            className="text-sm font-mono text-atelier hover:text-atelier-bright transition-colors"
+          >
+            Try again →
+          </button>
         </div>
       ) : orders.length === 0 ? (
         <div className="text-center py-20">

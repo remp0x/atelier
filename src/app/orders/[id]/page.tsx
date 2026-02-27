@@ -5,8 +5,11 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { useConnection } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { signWalletAuth } from '@/lib/solana-auth-client';
+import { sendUsdcPayment } from '@/lib/solana-pay';
 import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable } from '@/lib/atelier-db';
 
 interface OrderData {
@@ -176,6 +179,97 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
       alt="Deliverable"
       className="w-full max-w-md rounded-lg border border-neutral-800 mt-2"
     />
+  );
+}
+
+function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: () => void }) {
+  const wallet = useWallet();
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = useCallback(async () => {
+    if (!wallet.publicKey || rating === 0) return;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const auth = await signWalletAuth(wallet);
+      const res = await fetch(`/api/orders/${orderId}/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...auth,
+          rating,
+          comment: comment.trim() || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        setError(json.error || 'Failed to submit review');
+        return;
+      }
+      onSubmitted();
+    } catch {
+      setError('Network error');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [wallet, orderId, rating, comment, onSubmitted]);
+
+  return (
+    <div className="mt-4 p-4 rounded-lg bg-black-soft border border-neutral-800">
+      <p className="text-sm font-mono text-neutral-400 mb-3">Leave a review</p>
+      <div className="flex items-center gap-1 mb-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <button
+            key={i}
+            onMouseEnter={() => setHoverRating(i + 1)}
+            onMouseLeave={() => setHoverRating(0)}
+            onClick={() => setRating(i + 1)}
+            className="transition-colors"
+          >
+            <svg
+              className={`w-5 h-5 ${
+                i < (hoverRating || rating) ? 'text-atelier' : 'text-neutral-700'
+              }`}
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+          </button>
+        ))}
+        {rating > 0 && (
+          <span className="text-xs font-mono text-neutral-500 ml-2">{rating}/5</span>
+        )}
+      </div>
+      <textarea
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="How was the service? (optional)"
+        rows={2}
+        maxLength={500}
+        className="w-full px-3 py-2 rounded bg-black border border-neutral-800 text-white text-sm font-mono placeholder:text-neutral-600 focus:outline-none focus:border-atelier resize-none mb-3"
+      />
+      {error && <p className="text-xs text-red-400 font-mono mb-2">{error}</p>}
+      <button
+        onClick={handleSubmit}
+        disabled={rating === 0 || submitting}
+        className="w-full py-2 rounded bg-atelier text-white text-xs font-semibold font-mono uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed btn-atelier btn-primary transition-opacity flex items-center justify-center gap-2"
+      >
+        {submitting ? (
+          <>
+            <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            Submitting...
+          </>
+        ) : (
+          'Submit Review'
+        )}
+      </button>
+    </div>
   );
 }
 
@@ -458,10 +552,15 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
 export default function AtelierOrderPage() {
   const params = useParams();
   const wallet = useWallet();
+  const { connection } = useConnection();
   const [data, setData] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
+  const [disputing, setDisputing] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [payMsg, setPayMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -508,6 +607,9 @@ export default function AtelierOrderPage() {
   const isWorkspace = order.quota_total > 0;
   const isTerminal = order.status === 'cancelled' || order.status === 'disputed';
   const showWorkspace = isWorkspace && ['in_progress', 'delivered', 'completed'].includes(order.status);
+  const canCancel = ['pending_quote', 'quoted', 'accepted', 'paid'].includes(order.status)
+    && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58();
+  const [cancelling, setCancelling] = useState(false);
 
   return (
     <AtelierAppLayout>
@@ -548,7 +650,107 @@ export default function AtelierOrderPage() {
               </span>
             )}
           </div>
+
+          {canCancel && (
+            <button
+              onClick={async () => {
+                const msg = order.status === 'paid'
+                  ? 'Cancel this order? A refund will be issued to your wallet.'
+                  : 'Cancel this order?';
+                if (!confirm(msg)) return;
+                setCancelling(true);
+                try {
+                  const auth = await signWalletAuth(wallet);
+                  const res = await fetch(`/api/orders/${order.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...auth, action: 'cancel' }),
+                  });
+                  const json = await res.json();
+                  if (json.success) load();
+                } finally {
+                  setCancelling(false);
+                }
+              }}
+              disabled={cancelling}
+              className="text-xs font-mono text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors"
+            >
+              {cancelling ? 'Cancelling...' : 'Cancel Order'}
+            </button>
+          )}
         </div>
+
+        {/* Accept & Pay for quoted orders */}
+        {order.status === 'quoted' && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
+          <div className="mb-8 p-5 rounded-lg border border-atelier/30 bg-atelier/5">
+            <h3 className="text-sm font-bold font-display text-black dark:text-white mb-3">Quote Received</h3>
+            <div className="flex items-center gap-4 text-sm font-mono mb-4">
+              <span className="text-black dark:text-white font-bold">${order.quoted_price_usd}</span>
+              {order.platform_fee_usd && (
+                <>
+                  <span className="text-neutral-500">+</span>
+                  <span className="text-neutral-400">${order.platform_fee_usd} fee</span>
+                  <span className="text-neutral-500">=</span>
+                  <span className="text-black dark:text-white font-bold">
+                    ${(parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0')).toFixed(2)} total
+                  </span>
+                </>
+              )}
+            </div>
+            {payError && <p className="text-xs font-mono text-red-400 mb-3">{payError}</p>}
+            {payMsg && <p className="text-xs font-mono text-neutral-400 mb-3">{payMsg}</p>}
+            <button
+              onClick={async () => {
+                setPaying(true);
+                setPayError(null);
+                setPayMsg(null);
+                try {
+                  const treasuryWallet = process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET;
+                  if (!treasuryWallet) { setPayError('Treasury wallet not configured'); return; }
+
+                  const total = parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0');
+                  if (total <= 0) { setPayError('Invalid order total'); return; }
+
+                  setPayMsg('Sending USDC payment...');
+                  const txSig = await sendUsdcPayment(connection, wallet, new PublicKey(treasuryWallet), total);
+
+                  setPayMsg('Verifying payment...');
+                  const auth = await signWalletAuth(wallet);
+                  const res = await fetch(`/api/orders/${order.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      ...auth,
+                      action: 'pay',
+                      payment_method: 'usdc-sol',
+                      escrow_tx_hash: txSig,
+                    }),
+                  });
+                  const json = await res.json();
+                  if (!json.success) { setPayError(json.error || 'Payment verification failed'); return; }
+                  setPayMsg(null);
+                  load();
+                } catch (e) {
+                  setPayError(e instanceof Error ? e.message : 'Payment failed');
+                } finally {
+                  setPaying(false);
+                  setPayMsg(null);
+                }
+              }}
+              disabled={paying}
+              className="w-full py-3 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {paying ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  {payMsg || 'Processing...'}
+                </>
+              ) : (
+                `Accept & Pay $${(parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0')).toFixed(2)}`
+              )}
+            </button>
+          </div>
+        )}
 
         {showWorkspace ? (
           <WorkspaceView data={data} onRefresh={load} />
@@ -597,36 +799,64 @@ export default function AtelierOrderPage() {
             </div>
 
             {order.status === 'delivered' && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
-              <button
-                onClick={async () => {
-                  setApproving(true);
-                  try {
-                    const auth = await signWalletAuth(wallet);
-                    const res = await fetch(`/api/orders/${order.id}`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ...auth, action: 'approve' }),
-                    });
-                    const json = await res.json();
-                    if (json.success) load();
-                  } finally {
-                    setApproving(false);
-                  }
-                }}
-                disabled={approving}
-                className="mt-8 w-full py-3 rounded-lg bg-emerald-500 text-white text-sm font-semibold font-mono uppercase tracking-wider disabled:opacity-60 hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2"
-              >
-                {approving ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    Approving...
-                  </>
-                ) : (
-                  'Approve & Complete'
-                )}
-              </button>
+              <div className="mt-8 flex gap-3">
+                <button
+                  onClick={async () => {
+                    setApproving(true);
+                    try {
+                      const auth = await signWalletAuth(wallet);
+                      const res = await fetch(`/api/orders/${order.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...auth, action: 'approve' }),
+                      });
+                      const json = await res.json();
+                      if (json.success) load();
+                    } finally {
+                      setApproving(false);
+                    }
+                  }}
+                  disabled={approving || disputing}
+                  className="flex-1 py-3 rounded-lg bg-emerald-500 text-white text-sm font-semibold font-mono uppercase tracking-wider disabled:opacity-60 hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2"
+                >
+                  {approving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      Approving...
+                    </>
+                  ) : (
+                    'Approve & Complete'
+                  )}
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirm('Are you sure you want to dispute this order?')) return;
+                    setDisputing(true);
+                    try {
+                      const auth = await signWalletAuth(wallet);
+                      const res = await fetch(`/api/orders/${order.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...auth, action: 'dispute' }),
+                      });
+                      const json = await res.json();
+                      if (json.success) load();
+                    } finally {
+                      setDisputing(false);
+                    }
+                  }}
+                  disabled={approving || disputing}
+                  className="px-4 py-3 rounded-lg border border-red-400/30 text-red-400 text-sm font-mono hover:bg-red-400/10 disabled:opacity-60 transition-colors"
+                >
+                  {disputing ? 'Disputing...' : 'Dispute'}
+                </button>
+              </div>
             )}
           </>
+        )}
+
+        {order.status === 'completed' && !review && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
+          <ReviewForm orderId={order.id} onSubmitted={load} />
         )}
       </div>
     </AtelierAppLayout>

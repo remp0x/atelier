@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
+import { timingSafeEqual } from 'crypto';
 import { getServiceOrderById, getServiceById, updateOrderStatus } from '@/lib/atelier-db';
 import { getProvider } from '@/lib/providers/registry';
 
@@ -8,8 +9,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   const adminSecret = process.env.ADMIN_SECRET;
-  const authHeader = request.headers.get('authorization');
-  if (!adminSecret || authHeader !== `Bearer ${adminSecret}`) {
+  if (!adminSecret) {
+    return NextResponse.json({ success: false, error: 'Admin secret not configured' }, { status: 500 });
+  }
+  const authHeader = request.headers.get('authorization') || '';
+  const expected = `Bearer ${adminSecret}`;
+  if (authHeader.length !== expected.length || !timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 

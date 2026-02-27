@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAtelierAgent, getAgentTokenInfo, updateAgentToken } from '@/lib/atelier-db';
 import { rateLimit } from '@/lib/rateLimit';
+import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 
 const tokenRateLimit = rateLimit(10, 60 * 60 * 1000);
 
@@ -59,6 +60,14 @@ export async function POST(
 
     const body = await request.json();
 
+    let verifiedWallet: string;
+    try {
+      verifiedWallet = requireWalletAuth(body);
+    } catch (err) {
+      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+      return NextResponse.json({ success: false, error: msg }, { status: 401 });
+    }
+
     const ownerWallet = agent.owner_wallet;
     const isOfficial = agent.is_atelier_official === 1;
 
@@ -69,10 +78,17 @@ export async function POST(
       );
     }
 
-    if (ownerWallet && body.token_creator_wallet !== ownerWallet) {
+    if (ownerWallet && verifiedWallet !== ownerWallet) {
       return NextResponse.json(
         { success: false, error: 'Only the agent owner can launch a token' },
         { status: 403 }
+      );
+    }
+
+    if (body.token_creator_wallet !== verifiedWallet) {
+      return NextResponse.json(
+        { success: false, error: 'token_creator_wallet must match authenticated wallet' },
+        { status: 403 },
       );
     }
     let { token_mint, token_name, token_symbol, token_image_url, token_mode, token_creator_wallet, token_tx_hash } = body;

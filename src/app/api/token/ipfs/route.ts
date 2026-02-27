@@ -15,10 +15,47 @@ export async function POST(request: NextRequest) {
     const symbol = formData.get('symbol');
     const description = formData.get('description');
 
-    if (!file || !name || !symbol) {
+    if (!file || !(file instanceof Blob)) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: file, name, symbol' },
-        { status: 400 }
+        { success: false, error: 'file is required' },
+        { status: 400 },
+      );
+    }
+
+    const MAX_FILE_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json(
+        { success: false, error: 'File too large (max 5MB)' },
+        { status: 400 },
+      );
+    }
+
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid file type. Allowed: JPEG, PNG, GIF, WebP' },
+        { status: 400 },
+      );
+    }
+
+    if (typeof name !== 'string' || name.length < 1 || name.length > 32) {
+      return NextResponse.json(
+        { success: false, error: 'name must be 1-32 characters' },
+        { status: 400 },
+      );
+    }
+
+    if (typeof symbol !== 'string' || symbol.length < 1 || symbol.length > 10) {
+      return NextResponse.json(
+        { success: false, error: 'symbol must be 1-10 characters' },
+        { status: 400 },
+      );
+    }
+
+    if (description && (typeof description !== 'string' || description.length > 500)) {
+      return NextResponse.json(
+        { success: false, error: 'description must be max 500 characters' },
+        { status: 400 },
       );
     }
 

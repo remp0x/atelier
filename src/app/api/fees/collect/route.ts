@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { OnlinePumpSdk } from '@pump-fun/pump-sdk';
 import {
   getAtelierKeypair,
@@ -15,8 +16,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ success: false, error: 'Admin key not configured' }, { status: 500 });
     }
 
-    const auth = request.headers.get('Authorization');
-    if (auth !== `Bearer ${adminKey}`) {
+    const auth = request.headers.get('Authorization') || '';
+    const expected = `Bearer ${adminKey}`;
+    if (auth.length !== expected.length || !timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 

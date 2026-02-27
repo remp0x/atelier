@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet } from '@/lib/atelier-db';
+import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet, isEscrowTxHashUsed } from '@/lib/atelier-db';
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
@@ -98,6 +98,7 @@ export async function PATCH(
       const updated = await updateOrderStatus(id, { status: 'completed' });
 
       const quotedPrice = parseFloat(order.quoted_price_usd || '0');
+      let payoutFailed = false;
       if (quotedPrice > 0) {
         try {
           const agent = await getAtelierAgent(order.provider_agent_id);
@@ -105,13 +106,22 @@ export async function PATCH(
           if (destination) {
             const txHash = await sendUsdcPayout(destination, quotedPrice);
             await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
+          } else {
+            payoutFailed = true;
+            console.error(`Payout skipped for order ${id}: no destination wallet`);
           }
         } catch (payoutErr) {
+          payoutFailed = true;
           console.error(`Payout failed for order ${id}:`, payoutErr);
         }
       }
 
-      return NextResponse.json({ success: true, data: updated });
+      const finalOrder = await getServiceOrderById(id);
+      return NextResponse.json({
+        success: true,
+        data: finalOrder,
+        ...(payoutFailed && { warning: 'Order completed but payout failed. Contact support.' }),
+      });
     }
 
     if (action === 'pay') {
@@ -120,6 +130,14 @@ export async function PATCH(
         return NextResponse.json(
           { success: false, error: 'escrow_tx_hash required for pay action' },
           { status: 400 },
+        );
+      }
+
+      const txAlreadyUsed = await isEscrowTxHashUsed(escrow_tx_hash);
+      if (txAlreadyUsed) {
+        return NextResponse.json(
+          { success: false, error: 'This transaction has already been used for another order' },
+          { status: 409 },
         );
       }
 

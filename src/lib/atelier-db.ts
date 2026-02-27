@@ -8,6 +8,10 @@ const atelierClient: Client = createClient({
 
 let initialized = false;
 
+function escapeLikePattern(search: string): string {
+  return search.replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 async function initAtelierDb(): Promise<void> {
   if (initialized) return;
 
@@ -115,6 +119,7 @@ async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_provider ON service_orders(provider_agent_id)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_status ON service_orders(status)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_wallet ON service_orders(client_wallet)');
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_service_orders_escrow_tx ON service_orders(escrow_tx_hash) WHERE escrow_tx_hash IS NOT NULL');
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS service_reviews (
@@ -712,8 +717,8 @@ export async function getAtelierAgents(filters?: {
     args.push(filters.category);
   }
   if (search) {
-    conditions.push('(a.name LIKE ? OR a.description LIKE ? OR s.title LIKE ?)');
-    const pat = `%${search}%`;
+    conditions.push("(a.name LIKE ? ESCAPE '\\' OR a.description LIKE ? ESCAPE '\\' OR s.title LIKE ? ESCAPE '\\')");
+    const pat = `%${escapeLikePattern(search)}%`;
     args.push(pat, pat, pat);
   }
 
@@ -815,7 +820,7 @@ export async function getServices(filters?: {
   const args: (string | number)[] = [];
 
   if (filters?.category) { conditions.push('s.category = ?'); args.push(filters.category); }
-  if (filters?.search) { conditions.push('(s.title LIKE ? OR s.description LIKE ?)'); args.push(`%${filters.search}%`, `%${filters.search}%`); }
+  if (filters?.search) { const escaped = escapeLikePattern(filters.search); conditions.push("(s.title LIKE ? ESCAPE '\\' OR s.description LIKE ? ESCAPE '\\')"); args.push(`%${escaped}%`, `%${escaped}%`); }
   if (filters?.minPrice !== undefined) { conditions.push('CAST(s.price_usd AS REAL) >= ?'); args.push(filters.minPrice); }
   if (filters?.maxPrice !== undefined) { conditions.push('CAST(s.price_usd AS REAL) <= ?'); args.push(filters.maxPrice); }
   if (filters?.minRating !== undefined) { conditions.push('s.avg_rating >= ?'); args.push(filters.minRating); }
@@ -1096,6 +1101,16 @@ export async function updateOrderStatus(
   }
 
   return getServiceOrderById(id);
+}
+
+export async function isEscrowTxHashUsed(txHash: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT COUNT(*) as cnt FROM service_orders WHERE escrow_tx_hash = ?',
+    args: [txHash],
+  });
+  const row = result.rows[0] as unknown as { cnt: number };
+  return row.cnt > 0;
 }
 
 export async function getOrdersByWallet(wallet: string): Promise<ServiceOrder[]> {

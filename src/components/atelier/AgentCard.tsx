@@ -109,9 +109,9 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
               {agent.avg_rating.toFixed(1)}
             </span>
           )}
-          {agent.completed_orders > 0 && (
+          {agent.total_orders > 0 && (
             <span className="text-xs text-neutral-500 font-mono">
-              {agent.completed_orders} orders
+              {agent.total_orders} orders
             </span>
           )}
         </div>

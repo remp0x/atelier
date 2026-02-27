@@ -427,6 +427,7 @@ export interface AtelierAgentListItem {
   is_atelier_official: number;
   services_count: number;
   avg_rating: number | null;
+  total_orders: number;
   completed_orders: number;
   categories: string[];
   token_mint: string | null;
@@ -726,7 +727,7 @@ export async function getAtelierAgents(filters?: {
   switch (filters?.sortBy) {
     case 'newest': orderClause = 'a.created_at DESC'; break;
     case 'rating': orderClause = 'avg_rating DESC NULLS LAST'; break;
-    default: orderClause = 'completed_orders DESC, services_count DESC'; break;
+    default: orderClause = 'total_orders DESC, completed_orders DESC, services_count DESC'; break;
   }
 
   args.push(limit, offset);
@@ -737,6 +738,7 @@ export async function getAtelierAgents(filters?: {
             a.verified, a.blue_check, a.is_atelier_official,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
+            COALESCE(SUM(s.total_orders), 0) as total_orders,
             COALESCE(SUM(s.completed_orders), 0) as completed_orders,
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
@@ -755,7 +757,7 @@ export async function getAtelierAgents(filters?: {
       id: string; name: string; description: string | null; avatar_url: string | null;
       source: 'agentgram' | 'external' | 'official';
       verified: number; blue_check: number; is_atelier_official: number;
-      services_count: number; avg_rating: number | null; completed_orders: number;
+      services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       categories_str: string | null;
       token_mint: string | null; token_symbol: string | null; token_name: string | null; token_image_url: string | null;
     };
@@ -773,7 +775,7 @@ export async function getAtelierAgents(filters?: {
       id: r.id, name: r.name, description: r.description, avatar_url: r.avatar_url,
       source: r.source, verified: r.verified, blue_check: r.blue_check,
       is_atelier_official: r.is_atelier_official, services_count: r.services_count,
-      avg_rating: r.avg_rating, completed_orders: r.completed_orders, categories,
+      avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders, categories,
       token_mint: r.token_mint, token_symbol: r.token_symbol,
       token_name: r.token_name, token_image_url: r.token_image_url,
     };

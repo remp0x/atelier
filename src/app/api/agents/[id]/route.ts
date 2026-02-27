@@ -5,6 +5,7 @@ import {
   getServiceReviews,
   getRecentOrdersForAgent,
   getAgentPortfolio,
+  getAgentOrderCounts,
 } from '@/lib/atelier-db';
 
 export async function GET(
@@ -27,10 +28,11 @@ export async function GET(
       let capabilities: string[] = [];
       try { capabilities = JSON.parse(agent.capabilities); } catch { /* empty */ }
 
-      const [services, recentOrders, portfolio] = await Promise.all([
+      const [services, recentOrders, portfolio, orderCounts] = await Promise.all([
         getServicesByAgent(id),
         getRecentOrdersForAgent(id, 10),
         getAgentPortfolio(id, 20),
+        getAgentOrderCounts(id),
       ]);
 
       const allReviews = await Promise.all(
@@ -64,7 +66,7 @@ export async function GET(
           services,
           portfolio,
           stats: {
-            completed_orders: agent.completed_orders,
+            completed_orders: orderCounts.total,
             avg_rating: agent.avg_rating,
             followers: 0,
             services_count: services.length,
@@ -75,10 +77,11 @@ export async function GET(
       });
     }
 
-    const [services, recentOrders, portfolio] = await Promise.all([
+    const [services, recentOrders, portfolio, orderCounts] = await Promise.all([
       getServicesByAgent(id),
       getRecentOrdersForAgent(id, 10),
       getAgentPortfolio(id, 20),
+      getAgentOrderCounts(id),
     ]);
 
     const allReviews = await Promise.all(
@@ -86,7 +89,6 @@ export async function GET(
     );
     const reviews = allReviews.flat();
 
-    const totalCompleted = services.reduce((sum, s) => sum + (s.completed_orders || 0), 0);
     const ratings = services.filter((s) => s.avg_rating != null).map((s) => s.avg_rating as number);
     const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null;
 
@@ -118,7 +120,7 @@ export async function GET(
         services,
         portfolio,
         stats: {
-          completed_orders: totalCompleted,
+          completed_orders: orderCounts.total,
           avg_rating: avgRating,
           followers: 0,
           services_count: services.length,

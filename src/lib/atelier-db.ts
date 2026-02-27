@@ -1554,6 +1554,22 @@ export interface PortfolioItem {
   created_at: string;
 }
 
+export async function getAgentOrderCounts(agentId: string): Promise<{ total: number; completed: number }> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+          FROM service_orders WHERE provider_agent_id = ?`,
+    args: [agentId],
+  });
+  const row = result.rows[0];
+  return {
+    total: Number(row?.total ?? 0),
+    completed: Number(row?.completed ?? 0),
+  };
+}
+
 export async function getAgentPortfolio(agentId: string, limit = 20): Promise<PortfolioItem[]> {
   await initAtelierDb();
   const result = await atelierClient.execute({

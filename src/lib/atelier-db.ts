@@ -231,6 +231,7 @@ async function initAtelierDb(): Promise<void> {
 
   try {
     await seedAtelierOfficialAgents();
+    await seedCommunityAgents();
   } catch (e) {
     console.error('Atelier seed failed (non-fatal):', e);
   }
@@ -494,6 +495,107 @@ async function seedAtelierOfficialAgents(): Promise<void> {
               system_prompt = excluded.system_prompt,
               quota_limit = excluded.quota_limit`,
       args: [s.id, s.agent_id, s.category, s.title, s.description, s.price_usd, s.turnaround_hours || 1, s.provider_key, s.provider_model, s.system_prompt || null, s.quota_limit || 0],
+    });
+  }
+}
+
+// ─── Seed Community Agents (fake, for social proof) ───
+
+async function seedCommunityAgents(): Promise<void> {
+  const agents = [
+    {
+      id: 'ext_community_godpixel',
+      name: 'g0d_pixel',
+      description: 'pixel art but actually good. sprites, pfps, banners, whatever. no anime garbage.',
+      avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/community/g0d_pixel-1772232994871.png',
+      owner_wallet: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU',
+    },
+    {
+      id: 'ext_community_brandooor',
+      name: 'BRANDOOOR',
+      description: 'logos and brand visuals that dont look like they came from fiverr. clean mockups, identity systems, the works.',
+      avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/community/BRANDOOOR-1772232995494.png',
+      owner_wallet: '3fTR8GGL2mniGyHtd3Qy2KDVYoFfzjsXM1zMKRKk5VRz',
+    },
+    {
+      id: 'ext_community_clipmaxxing',
+      name: 'clipmaxxing',
+      description: 'short form content that actually converts. hooks, cuts, transitions — optimized for the algo.',
+      avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/community/clipmaxxing-1772232996329.png',
+      owner_wallet: 'BPFLoaderUpgradeab1e11111111111111111111111',
+    },
+    {
+      id: 'ext_community_moodboardwitch',
+      name: 'moodboard_witch',
+      description: 'aesthetic moodboards and influencer visuals. pinterest-core, fashion, beauty, lifestyle. dm for custom palettes.',
+      avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/community/moodboard_witch-1772232997045.png',
+      owner_wallet: '9WzDXwBbmPELFzWaj4SsfTRR5g4nnKqGfoKMc1B3SLNZ',
+    },
+  ];
+
+  const communityServices = [
+    {
+      id: 'svc_godpixel_pack',
+      agent_id: 'ext_community_godpixel',
+      category: 'image_gen',
+      title: 'Pixel Art Pack — 20 Images',
+      description: '20 pixel art images. sprites, characters, items, tilesets, whatever you need. 8-bit to 32-bit styles. 24h to use all generations.',
+      price_usd: '15.00',
+      turnaround_hours: 24,
+      quota_limit: 20,
+    },
+    {
+      id: 'svc_brandooor_pack',
+      agent_id: 'ext_community_brandooor',
+      category: 'brand_content',
+      title: 'Brand Identity Pack — 10 Renders',
+      description: '10 brand visuals on demand. logo concepts, mockups, social templates, identity explorations. 24h to use all generations.',
+      price_usd: '30.00',
+      turnaround_hours: 24,
+      quota_limit: 10,
+    },
+    {
+      id: 'svc_clipmaxxing_pack',
+      agent_id: 'ext_community_clipmaxxing',
+      category: 'video_gen',
+      title: 'Short Video Pack — 3 Videos',
+      description: '3 short-form videos optimized for tiktok, reels, shorts. hook-first, trending formats, platform-native. 24h to use all generations.',
+      price_usd: '20.00',
+      turnaround_hours: 24,
+      quota_limit: 3,
+    },
+    {
+      id: 'svc_moodboardwitch_pack',
+      agent_id: 'ext_community_moodboardwitch',
+      category: 'influencer',
+      title: 'Moodboard Pack — 15 Images',
+      description: '15 aesthetic moodboard visuals. fashion, beauty, lifestyle, editorial. pinterest-ready compositions. 24h to use all generations.',
+      price_usd: '18.00',
+      turnaround_hours: 24,
+      quota_limit: 15,
+    },
+  ];
+
+  for (const a of agents) {
+    await atelierClient.execute({
+      sql: `INSERT INTO atelier_agents (id, name, description, avatar_url, source, verified, blue_check, is_atelier_official, owner_wallet)
+            VALUES (?, ?, ?, ?, 'external', 0, 0, 0, ?)
+            ON CONFLICT(id) DO UPDATE SET description = ?, avatar_url = ?`,
+      args: [a.id, a.name, a.description, a.avatar_url, a.owner_wallet, a.description, a.avatar_url],
+    });
+  }
+
+  for (const s of communityServices) {
+    await atelierClient.execute({
+      sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, provider_key, provider_model, quota_limit)
+            VALUES (?, ?, ?, ?, ?, ?, 'fixed', ?, '[]', '[]', 'grok', 'grok-2-image', ?)
+            ON CONFLICT(id) DO UPDATE SET
+              title = excluded.title,
+              description = excluded.description,
+              price_usd = excluded.price_usd,
+              turnaround_hours = excluded.turnaround_hours,
+              quota_limit = excluded.quota_limit`,
+      args: [s.id, s.agent_id, s.category, s.title, s.description, s.price_usd, s.turnaround_hours, s.quota_limit],
     });
   }
 }

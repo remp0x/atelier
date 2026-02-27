@@ -738,8 +738,8 @@ export async function getAtelierAgents(filters?: {
             a.verified, a.blue_check, a.is_atelier_official,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
-            COALESCE(SUM(s.total_orders), 0) as total_orders,
-            COALESCE(SUM(s.completed_orders), 0) as completed_orders,
+            (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id) as total_orders,
+            (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
             a.created_at

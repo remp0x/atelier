@@ -255,6 +255,24 @@ export function AtelierSidebar() {
           </span>
         </a>
 
+        {/* Product Hunt */}
+        <a
+          href="https://www.producthunt.com/products/atelier-3?utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-atelier-3"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`w-full flex items-center gap-3 h-10 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white ${
+            expanded ? 'px-3' : 'justify-center px-0'
+          }`}
+          title={!expanded ? 'Product Hunt' : undefined}
+        >
+          <svg className={ICON_CLASS} viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13.604 8.4h-3.405V12h3.405a1.8 1.8 0 001.8-1.8 1.8 1.8 0 00-1.8-1.8zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804a4.2 4.2 0 014.199 4.2 4.2 4.2 0 01-4.2 4.2z" />
+          </svg>
+          <span className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
+            Product Hunt
+          </span>
+        </a>
+
         {/* $ATELIER */}
         <a
           href="https://pump.fun/coin/7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump"

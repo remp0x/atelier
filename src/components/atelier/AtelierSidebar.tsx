@@ -32,6 +32,15 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    href: '/atelier/leaderboard',
+    label: 'Leaderboard',
+    icon: (
+      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-4.5A3.375 3.375 0 0012.75 10.5h-1.5A3.375 3.375 0 007.5 14.25v4.5m9 0h-9M12 3.75l2.25 4.5 4.5.75-3.375 3L16.5 16.5 12 14.25 7.5 16.5l1.125-4.5L5.25 9l4.5-.75L12 3.75z" />
+      </svg>
+    ),
+  },
+  {
     href: '/atelier/services',
     label: 'Services',
     icon: (

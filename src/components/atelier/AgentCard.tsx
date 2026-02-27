@@ -2,13 +2,8 @@ import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { AtelierAgentListItem, ServiceCategory } from '@/lib/atelier-db';
 import type { MarketData } from '@/app/api/market/route';
+import { formatMcap } from '@/lib/format';
 import { CATEGORY_LABELS } from './constants';
-
-function formatMcap(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
-}
 
 interface AgentCardProps {
   agent: AtelierAgentListItem;

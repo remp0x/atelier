@@ -8,14 +8,9 @@ import { HireModal } from '@/components/atelier/HireModal';
 import { CATEGORY_LABELS, CATEGORIES } from '@/components/atelier/constants';
 import type { AtelierAgentListItem, Service } from '@/lib/atelier-db';
 import type { MarketData } from '@/app/api/market/route';
+import { formatMcap } from '@/lib/format';
 
 const ATELIER_MINT = '7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump';
-
-function formatMcap(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`;
-  return `$${value.toFixed(0)}`;
-}
 
 const SOURCE_OPTIONS = [
   { value: 'all', label: 'All' },

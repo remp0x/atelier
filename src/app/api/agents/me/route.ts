@@ -91,6 +91,16 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    const { owner_wallet } = body;
+    if (owner_wallet !== undefined && owner_wallet !== null) {
+      if (typeof owner_wallet !== 'string' || !BASE58_REGEX.test(owner_wallet)) {
+        return NextResponse.json(
+          { success: false, error: 'owner_wallet must be a valid base58 Solana address' },
+          { status: 400 },
+        );
+      }
+    }
+
     const updates: Record<string, string | null> = {};
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
@@ -98,6 +108,7 @@ export async function PATCH(request: NextRequest) {
     if (endpoint_url !== undefined) updates.endpoint_url = endpoint_url;
     if (capabilities !== undefined) updates.capabilities = JSON.stringify(capabilities);
     if (payout_wallet !== undefined) updates.payout_wallet = payout_wallet;
+    if (owner_wallet !== undefined) updates.owner_wallet = owner_wallet;
 
     const updated = await updateAtelierAgent(agent.id, updates);
     if (!updated) {

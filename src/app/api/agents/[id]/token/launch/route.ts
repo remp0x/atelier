@@ -19,6 +19,7 @@ import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
 
 const launchRateLimit = rateLimit(10, 60 * 60 * 1000);
 
+const TOKEN_NAME_SUFFIX = ' by Atelier';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const PENDING_TTL_MS = 5 * 60 * 1000;
@@ -27,7 +28,10 @@ interface PendingLaunch {
   mint: string;
   agentId: string;
   wallet: string;
+  tokenName: string;
+  tokenSymbol: string;
   metadataUri: string;
+  imageUrl: string;
   expiresAt: number;
 }
 
@@ -81,32 +85,18 @@ export async function POST(
       );
     }
 
-    const { name, symbol, description, image_url, dev_buy_sol } = body;
-
-    if (typeof name !== 'string' || name.length < 1 || name.length > 32) {
+    if (!agent.avatar_url) {
       return NextResponse.json(
-        { success: false, error: 'name must be 1-32 characters' },
+        { success: false, error: 'Agent must have an avatar_url set before launching a token' },
         { status: 400 },
       );
     }
+
+    const { symbol, dev_buy_sol } = body;
 
     if (typeof symbol !== 'string' || symbol.length < 1 || symbol.length > 10) {
       return NextResponse.json(
         { success: false, error: 'symbol must be 1-10 characters' },
-        { status: 400 },
-      );
-    }
-
-    if (description !== undefined && (typeof description !== 'string' || description.length > 500)) {
-      return NextResponse.json(
-        { success: false, error: 'description must be max 500 characters' },
-        { status: 400 },
-      );
-    }
-
-    if (typeof image_url !== 'string' || !image_url.startsWith('https://')) {
-      return NextResponse.json(
-        { success: false, error: 'image_url must be a valid HTTPS URL' },
         { status: 400 },
       );
     }
@@ -119,11 +109,14 @@ export async function POST(
       );
     }
 
-    const imageResponse = await fetch(image_url);
+    const tokenName = agent.name + TOKEN_NAME_SUFFIX;
+    const description = agent.description || '';
+
+    const imageResponse = await fetch(agent.avatar_url);
     if (!imageResponse.ok) {
       return NextResponse.json(
-        { success: false, error: `Failed to download image: ${imageResponse.status}` },
-        { status: 400 },
+        { success: false, error: `Failed to download agent avatar: ${imageResponse.status}` },
+        { status: 502 },
       );
     }
 
@@ -131,7 +124,7 @@ export async function POST(
     const matchedType = ALLOWED_IMAGE_TYPES.find(t => contentType.startsWith(t));
     if (!matchedType) {
       return NextResponse.json(
-        { success: false, error: 'Invalid image type. Allowed: JPEG, PNG, GIF, WebP' },
+        { success: false, error: 'Agent avatar must be JPEG, PNG, GIF, or WebP' },
         { status: 400 },
       );
     }
@@ -139,14 +132,14 @@ export async function POST(
     const imageBuffer = await imageResponse.arrayBuffer();
     if (imageBuffer.byteLength > MAX_IMAGE_SIZE) {
       return NextResponse.json(
-        { success: false, error: 'Image too large (max 5MB)' },
+        { success: false, error: 'Agent avatar too large (max 5MB)' },
         { status: 400 },
       );
     }
 
     const imageBlob = new Blob([imageBuffer], { type: matchedType });
 
-    const { metadataUri } = await uploadToPumpFunIpfs(imageBlob, name, symbol, description);
+    const { metadataUri } = await uploadToPumpFunIpfs(imageBlob, tokenName, symbol, description);
 
     const connection = getServerConnection();
     const mintKeypair = Keypair.generate();
@@ -172,7 +165,7 @@ export async function POST(
       instructions = await PUMP_SDK.createV2AndBuyInstructions({
         global,
         mint,
-        name,
+        name: tokenName,
         symbol,
         uri: metadataUri,
         creator: ATELIER_PUBKEY,
@@ -185,7 +178,7 @@ export async function POST(
       instructions = [
         await PUMP_SDK.createV2Instruction({
           mint,
-          name,
+          name: tokenName,
           symbol,
           uri: metadataUri,
           creator: ATELIER_PUBKEY,
@@ -214,7 +207,10 @@ export async function POST(
       mint: mintAddress,
       agentId: id,
       wallet: verifiedWallet,
+      tokenName,
+      tokenSymbol: symbol,
       metadataUri,
+      imageUrl: agent.avatar_url,
       expiresAt: Date.now() + PENDING_TTL_MS,
     });
 
@@ -324,14 +320,11 @@ export async function PUT(
       );
     }
 
-    const SUFFIX = ' by Atelier';
-    const tokenName = agent.name.endsWith(SUFFIX) ? agent.name : agent.name + SUFFIX;
-
     const updated = await updateAgentToken(id, {
       token_mint: mint,
-      token_name: tokenName,
-      token_symbol: body.symbol || mint.slice(0, 6),
-      token_image_url: pending.metadataUri,
+      token_name: pending.tokenName,
+      token_symbol: pending.tokenSymbol,
+      token_image_url: pending.imageUrl,
       token_mode: 'pumpfun',
       token_creator_wallet: verifiedWallet,
       token_tx_hash: txSignature,
@@ -353,7 +346,9 @@ export async function PUT(
         tx_signature: txSignature,
         token_info: {
           token_mint: mint,
-          token_name: tokenName,
+          token_name: pending.tokenName,
+          token_symbol: pending.tokenSymbol,
+          token_image_url: pending.imageUrl,
           token_mode: 'pumpfun',
           token_creator_wallet: verifiedWallet,
           token_tx_hash: txSignature,

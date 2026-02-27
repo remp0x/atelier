@@ -72,6 +72,7 @@ export default function AtelierAgentPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hireService, setHireService] = useState<Service | null>(null);
+  const [ordersPage, setOrdersPage] = useState(0);
 
   async function loadAgent() {
     try {
@@ -218,50 +219,82 @@ export default function AtelierAgentPage() {
         </div>
 
         {/* Recent Orders */}
-        {recentOrders.length > 0 && (
-          <div className="mb-12">
-            <h2 className="text-lg font-bold font-display text-black dark:text-white mb-4">Recent Orders</h2>
-            <div className="space-y-2">
-              {recentOrders.map((order) => {
-                const wallet = order.client_wallet;
-                const displayName = order.client_display_name
-                  || (wallet ? `${wallet.slice(0, 4)}...${wallet.slice(-4)}` : 'Anonymous');
-                const statusColor =
-                  order.status === 'completed' ? 'text-green-500' :
-                  order.status === 'in_progress' || order.status === 'delivered' ? 'text-atelier' :
-                  order.status === 'cancelled' || order.status === 'disputed' ? 'text-red-400' :
-                  'text-neutral-500';
-                const timeAgo = getTimeAgo(order.created_at);
-                return (
-                  <div key={order.id} className="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center text-atelier text-xs font-bold font-mono flex-shrink-0">
-                        {displayName.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-mono text-black dark:text-white truncate">
-                          {displayName}
-                        </p>
-                        <p className="text-2xs text-neutral-500 font-mono truncate">{order.service_title}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 flex-shrink-0">
-                      {order.quoted_price_usd && (
-                        <span className="text-sm font-mono font-semibold text-black dark:text-white">
-                          ${parseFloat(order.quoted_price_usd).toFixed(2)}
-                        </span>
-                      )}
-                      <span className={`text-2xs font-mono ${statusColor}`}>
-                        {order.status.replace(/_/g, ' ')}
-                      </span>
-                      <span className="text-2xs text-neutral-500 font-mono hidden sm:block">{timeAgo}</span>
-                    </div>
+        {recentOrders.length > 0 && (() => {
+          const perPage = 5;
+          const totalPages = Math.ceil(recentOrders.length / perPage);
+          const paged = recentOrders.slice(ordersPage * perPage, (ordersPage + 1) * perPage);
+          return (
+            <div className="mb-12">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold font-display text-black dark:text-white">Recent Orders</h2>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setOrdersPage((p) => Math.max(0, p - 1))}
+                      disabled={ordersPage === 0}
+                      className="p-1.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400 hover:text-atelier hover:border-atelier/40 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                      </svg>
+                    </button>
+                    <span className="text-2xs font-mono text-gray-500 dark:text-neutral-500">
+                      {ordersPage + 1}/{totalPages}
+                    </span>
+                    <button
+                      onClick={() => setOrdersPage((p) => Math.min(totalPages - 1, p + 1))}
+                      disabled={ordersPage >= totalPages - 1}
+                      className="p-1.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400 hover:text-atelier hover:border-atelier/40 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </button>
                   </div>
-                );
-              })}
+                )}
+              </div>
+              <div className="space-y-2">
+                {paged.map((order) => {
+                  const wallet = order.client_wallet;
+                  const displayName = order.client_display_name
+                    || (wallet ? `${wallet.slice(0, 4)}...${wallet.slice(-4)}` : 'Anonymous');
+                  const statusColor =
+                    order.status === 'completed' ? 'text-green-500' :
+                    order.status === 'in_progress' || order.status === 'delivered' ? 'text-atelier' :
+                    order.status === 'cancelled' || order.status === 'disputed' ? 'text-red-400' :
+                    'text-neutral-500';
+                  const timeAgo = getTimeAgo(order.created_at);
+                  return (
+                    <div key={order.id} className="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center text-atelier text-xs font-bold font-mono flex-shrink-0">
+                          {displayName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-mono text-black dark:text-white truncate">
+                            {displayName}
+                          </p>
+                          <p className="text-2xs text-neutral-500 font-mono truncate">{order.service_title}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 flex-shrink-0">
+                        {order.quoted_price_usd && (
+                          <span className="text-sm font-mono font-semibold text-black dark:text-white">
+                            ${parseFloat(order.quoted_price_usd).toFixed(2)}
+                          </span>
+                        )}
+                        <span className={`text-2xs font-mono ${statusColor}`}>
+                          {order.status.replace(/_/g, ' ')}
+                        </span>
+                        <span className="text-2xs text-neutral-500 font-mono hidden sm:block">{timeAgo}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Services */}
         {services.length > 0 && (

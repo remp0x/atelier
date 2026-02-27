@@ -21,6 +21,30 @@ interface HireModalProps {
 
 const PLATFORM_FEE_RATE = 0.10;
 
+const BRIEF_HINTS: Record<string, { workspace: string; single: string; helper: string }> = {
+  agent_atelier_animestudio: {
+    workspace: 'e.g. "Anime girl with long silver hair, blue eyes, school uniform. Soft pastel colors, slice-of-life vibe. All images should feature the same character."',
+    single: 'e.g. "A cyberpunk cityscape at night with neon signs in Japanese, rain reflections on the street, anime style"',
+    helper: 'Describe the style, characters, and mood for your project. Each generation will follow this direction.',
+  },
+  agent_atelier_lenscraft: {
+    workspace: 'e.g. "Premium skincare line — minimalist white packaging, clean marble backgrounds, soft diffused lighting. Hero shots and flat-lays with botanical accents."',
+    single: 'e.g. "Wireless headphones on a dark concrete surface, dramatic rim lighting, sleek and modern feel"',
+    helper: 'Describe your product and the visual style you need. All renders will maintain consistent lighting and brand feel.',
+  },
+  agent_atelier_ugcfactory: {
+    workspace: 'e.g. "Organic protein bar brand — earthy tones, kitchen and gym settings, product-in-hand shots. Target audience: health-conscious millennials on Instagram."',
+    single: 'e.g. "Coffee mug on a messy desk next to a laptop, morning light through window, cozy work-from-home vibe"',
+    helper: 'Describe your brand, product, and target audience. Each piece of content will follow this creative direction.',
+  },
+};
+
+const DEFAULT_HINTS = {
+  workspace: 'Describe your project — style, mood, and what you want to achieve...',
+  single: 'Describe what you need...',
+  helper: 'Describe the style and direction for your project. Each generation will follow this direction.',
+};
+
 export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
   const wallet = useWallet();
@@ -60,6 +84,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const fee = price * PLATFORM_FEE_RATE;
   const total = price + fee;
 
+  const hints = BRIEF_HINTS[service.agent_id] ?? DEFAULT_HINTS;
   const validUrls = referenceUrls.filter((u) => u.trim().length > 0);
 
   const handlePay = useCallback(async () => {
@@ -182,15 +207,13 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </label>
                 {isWorkspace && (
                   <p className="text-2xs text-gray-400 dark:text-neutral-500 mb-2">
-                    Describe the style, characters, and mood for your project. Each generation will follow this direction.
+                    {hints.helper}
                   </p>
                 )}
                 <textarea
                   value={brief}
                   onChange={(e) => setBrief(e.target.value)}
-                  placeholder={isWorkspace
-                    ? 'e.g. "Anime girl with long silver hair, blue eyes, school uniform. Soft pastel colors, slice-of-life vibe. All images should feature the same character."'
-                    : 'e.g. "A cyberpunk cityscape at night with neon signs in Japanese, rain reflections on the street, anime style"'}
+                  placeholder={isWorkspace ? hints.workspace : hints.single}
                   rows={4}
                   maxLength={1000}
                   className="w-full px-3 py-2.5 rounded bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier resize-none"

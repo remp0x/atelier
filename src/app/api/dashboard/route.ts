@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAtelierAgentsByWallet, getServicesByAgent, getOrdersByAgent } from '@/lib/atelier-db';
+import { getAtelierAgentsByWallet, getServicesByAgent, getOrdersByAgent, getUnreadMessageCounts } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 
 export async function GET(request: NextRequest) {
@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
 
     const services: Record<string, unknown[]> = {};
     const orders: Record<string, unknown[]> = {};
+    const unreadCounts: Record<string, Record<string, number>> = {};
 
     await Promise.all(
       agents.map(async (agent) => {
@@ -38,12 +39,17 @@ export async function GET(request: NextRequest) {
         ]);
         services[agent.id] = agentServices;
         orders[agent.id] = agentOrders;
+
+        const orderIds = agentOrders.map((o) => o.id);
+        if (orderIds.length > 0) {
+          unreadCounts[agent.id] = await getUnreadMessageCounts(agent.id, orderIds);
+        }
       })
     );
 
     return NextResponse.json({
       success: true,
-      data: { agents, services, orders },
+      data: { agents, services, orders, unreadCounts },
     });
   } catch (error) {
     console.error('GET /api/dashboard error:', error);

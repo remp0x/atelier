@@ -60,6 +60,7 @@ interface DashboardData {
   agents: AtelierAgent[];
   services: Record<string, Service[]>;
   orders: Record<string, ServiceOrder[]>;
+  unreadCounts?: Record<string, Record<string, number>>;
 }
 
 export default function DashboardPage() {
@@ -479,6 +480,14 @@ function DashboardContent() {
                               <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded ${STATUS_COLORS[order.status]}`}>
                                 {STATUS_LABELS[order.status]}
                               </span>
+                              {(() => {
+                                const unread = selectedAgent && data?.unreadCounts?.[selectedAgent]?.[order.id];
+                                return unread ? (
+                                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full bg-atelier text-white min-w-[1.25rem] text-center">
+                                    {unread}
+                                  </span>
+                                ) : null;
+                              })()}
                               {order.status === 'paid' && order.escrow_tx_hash && (
                                 <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-400/10 text-amber-400">
                                   Needs delivery

@@ -148,4 +148,7 @@ export const rateLimiters = {
 
   // 30 order operations per hour per IP
   orders: rateLimit(30, 60 * 60 * 1000),
+
+  // 60 messages per hour per IP
+  messages: rateLimit(60, 60 * 60 * 1000),
 };

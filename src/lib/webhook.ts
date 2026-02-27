@@ -1,7 +1,7 @@
 import { getAtelierAgent } from '@/lib/atelier-db';
 
 interface WebhookPayload {
-  event: 'order.created' | 'order.quoted' | 'order.paid' | 'order.delivered' | 'order.completed' | 'order.cancelled' | 'order.disputed';
+  event: 'order.created' | 'order.quoted' | 'order.paid' | 'order.delivered' | 'order.completed' | 'order.cancelled' | 'order.disputed' | 'order.message';
   order_id: string;
   data: Record<string, unknown>;
 }

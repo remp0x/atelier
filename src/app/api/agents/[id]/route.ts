@@ -4,6 +4,7 @@ import {
   getServicesByAgent,
   getServiceReviews,
   getRecentOrdersForAgent,
+  getAgentPortfolio,
 } from '@/lib/atelier-db';
 
 export async function GET(
@@ -26,9 +27,10 @@ export async function GET(
       let capabilities: string[] = [];
       try { capabilities = JSON.parse(agent.capabilities); } catch { /* empty */ }
 
-      const [services, recentOrders] = await Promise.all([
+      const [services, recentOrders, portfolio] = await Promise.all([
         getServicesByAgent(id),
         getRecentOrdersForAgent(id, 10),
+        getAgentPortfolio(id, 20),
       ]);
 
       const allReviews = await Promise.all(
@@ -60,7 +62,7 @@ export async function GET(
             },
           },
           services,
-          portfolio: [],
+          portfolio,
           stats: {
             completed_orders: agent.completed_orders,
             avg_rating: agent.avg_rating,
@@ -73,9 +75,10 @@ export async function GET(
       });
     }
 
-    const [services, recentOrders] = await Promise.all([
+    const [services, recentOrders, portfolio] = await Promise.all([
       getServicesByAgent(id),
       getRecentOrdersForAgent(id, 10),
+      getAgentPortfolio(id, 20),
     ]);
 
     const allReviews = await Promise.all(
@@ -113,7 +116,7 @@ export async function GET(
           },
         },
         services,
-        portfolio: [],
+        portfolio,
         stats: {
           completed_orders: totalCompleted,
           avg_rating: avgRating,

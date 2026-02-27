@@ -193,6 +193,40 @@ async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_fee_payouts_wallet ON creator_fee_payouts(recipient_wallet)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_fee_payouts_agent ON creator_fee_payouts(agent_id)');
 
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS hidden_portfolio_items (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      hidden_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_hidden_portfolio_agent ON hidden_portfolio_items(agent_id)');
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_hidden_portfolio_unique ON hidden_portfolio_items(agent_id, source_type, source_id)');
+
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS order_messages (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      sender_type TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      sender_name TEXT,
+      content TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_order_messages_order ON order_messages(order_id, created_at)');
+
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS order_message_reads (
+      order_id TEXT NOT NULL,
+      participant_id TEXT NOT NULL,
+      last_read_at DATETIME NOT NULL,
+      PRIMARY KEY (order_id, participant_id)
+    )
+  `);
+
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_wallet TEXT'); } catch (_e) { }
 
   try {
@@ -1507,4 +1541,146 @@ export async function getAgentTokenInfo(agentId: string): Promise<AgentTokenInfo
   });
   if (!result.rows[0]) return null;
   return result.rows[0] as unknown as AgentTokenInfo;
+}
+
+// ─── Portfolio ───
+
+export interface PortfolioItem {
+  source_type: 'order' | 'deliverable';
+  source_id: string;
+  deliverable_url: string;
+  deliverable_media_type: 'image' | 'video';
+  prompt: string | null;
+  created_at: string;
+}
+
+export async function getAgentPortfolio(agentId: string, limit = 20): Promise<PortfolioItem[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT source_type, source_id, deliverable_url, deliverable_media_type, prompt, created_at
+          FROM (
+            SELECT 'order' as source_type, o.id as source_id,
+                   o.deliverable_url, o.deliverable_media_type, o.brief as prompt, o.completed_at as created_at
+            FROM service_orders o
+            WHERE o.provider_agent_id = ? AND o.status = 'completed'
+              AND o.deliverable_url IS NOT NULL AND o.quota_total = 0
+              AND NOT EXISTS (
+                SELECT 1 FROM hidden_portfolio_items h
+                WHERE h.agent_id = ? AND h.source_type = 'order' AND h.source_id = o.id
+              )
+            UNION ALL
+            SELECT 'deliverable' as source_type, d.id as source_id,
+                   d.deliverable_url, d.deliverable_media_type, d.prompt, d.created_at
+            FROM order_deliverables d
+            INNER JOIN service_orders o ON d.order_id = o.id
+            WHERE o.provider_agent_id = ? AND d.status = 'completed'
+              AND d.deliverable_url IS NOT NULL
+              AND o.quota_total > 0
+              AND NOT EXISTS (
+                SELECT 1 FROM hidden_portfolio_items h
+                WHERE h.agent_id = ? AND h.source_type = 'deliverable' AND h.source_id = d.id
+              )
+          ) portfolio
+          ORDER BY created_at DESC
+          LIMIT ?`,
+    args: [agentId, agentId, agentId, agentId, limit],
+  });
+  return result.rows as unknown as PortfolioItem[];
+}
+
+export async function hidePortfolioItem(agentId: string, sourceType: string, sourceId: string): Promise<void> {
+  await initAtelierDb();
+  const id = `hpi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await atelierClient.execute({
+    sql: `INSERT INTO hidden_portfolio_items (id, agent_id, source_type, source_id) VALUES (?, ?, ?, ?)
+          ON CONFLICT(agent_id, source_type, source_id) DO NOTHING`,
+    args: [id, agentId, sourceType, sourceId],
+  });
+}
+
+export async function unhidePortfolioItem(agentId: string, sourceType: string, sourceId: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'DELETE FROM hidden_portfolio_items WHERE agent_id = ? AND source_type = ? AND source_id = ?',
+    args: [agentId, sourceType, sourceId],
+  });
+}
+
+// ─── Order Messages ───
+
+export interface OrderMessage {
+  id: string;
+  order_id: string;
+  sender_type: 'client' | 'agent';
+  sender_id: string;
+  sender_name: string | null;
+  content: string;
+  created_at: string;
+}
+
+export async function createOrderMessage(data: {
+  order_id: string;
+  sender_type: 'client' | 'agent';
+  sender_id: string;
+  sender_name?: string;
+  content: string;
+}): Promise<OrderMessage> {
+  await initAtelierDb();
+  const id = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await atelierClient.execute({
+    sql: `INSERT INTO order_messages (id, order_id, sender_type, sender_id, sender_name, content) VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [id, data.order_id, data.sender_type, data.sender_id, data.sender_name || null, data.content],
+  });
+  await atelierClient.execute({
+    sql: `INSERT INTO order_message_reads (order_id, participant_id, last_read_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(order_id, participant_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`,
+    args: [data.order_id, data.sender_id],
+  });
+  const result = await atelierClient.execute({ sql: 'SELECT * FROM order_messages WHERE id = ?', args: [id] });
+  return result.rows[0] as unknown as OrderMessage;
+}
+
+export async function getOrderMessages(orderId: string, limit = 50): Promise<OrderMessage[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM order_messages WHERE order_id = ? ORDER BY created_at ASC LIMIT ?',
+    args: [orderId, limit],
+  });
+  return result.rows as unknown as OrderMessage[];
+}
+
+export async function markOrderMessagesRead(orderId: string, participantId: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `INSERT INTO order_message_reads (order_id, participant_id, last_read_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(order_id, participant_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`,
+    args: [orderId, participantId],
+  });
+}
+
+export async function getUnreadMessageCounts(participantId: string, orderIds: string[]): Promise<Record<string, number>> {
+  await initAtelierDb();
+  if (orderIds.length === 0) return {};
+
+  const placeholders = orderIds.map(() => '?').join(',');
+  const result = await atelierClient.execute({
+    sql: `SELECT m.order_id, COUNT(*) as unread
+          FROM order_messages m
+          LEFT JOIN order_message_reads r
+            ON r.order_id = m.order_id AND r.participant_id = ?
+          WHERE m.order_id IN (${placeholders})
+            AND m.sender_id != ?
+            AND (r.last_read_at IS NULL OR m.created_at > r.last_read_at)
+          GROUP BY m.order_id`,
+    args: [participantId, ...orderIds, participantId],
+  });
+
+  const counts: Record<string, number> = {};
+  for (const row of result.rows) {
+    const r = row as unknown as { order_id: string; unread: number };
+    counts[r.order_id] = Number(r.unread);
+  }
+  return counts;
 }

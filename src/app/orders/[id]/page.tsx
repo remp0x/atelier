@@ -10,7 +10,7 @@ import { PublicKey } from '@solana/web3.js';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { signWalletAuth } from '@/lib/solana-auth-client';
 import { sendUsdcPayment } from '@/lib/solana-pay';
-import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable } from '@/lib/atelier-db';
+import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable, OrderMessage } from '@/lib/atelier-db';
 
 interface OrderData {
   order: ServiceOrder;
@@ -549,6 +549,114 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
   );
 }
 
+function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet: string }) {
+  const walletCtx = useWallet();
+  const [messages, setMessages] = useState<OrderMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const fetchMessages = useCallback(async () => {
+    try {
+      const auth = await signWalletAuth(walletCtx);
+      const qs = new URLSearchParams({
+        wallet: auth.wallet,
+        wallet_sig: auth.wallet_sig,
+        wallet_sig_ts: String(auth.wallet_sig_ts),
+      });
+      const res = await fetch(`/api/orders/${orderId}/messages?${qs}`);
+      const json = await res.json();
+      if (json.success) {
+        setMessages(json.data);
+      }
+    } catch {
+      // silent polling failure
+    }
+  }, [orderId, walletCtx]);
+
+  useEffect(() => {
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 10_000);
+    return () => clearInterval(interval);
+  }, [fetchMessages]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length]);
+
+  const handleSend = useCallback(async () => {
+    if (!input.trim() || sending) return;
+    setSending(true);
+    try {
+      const auth = await signWalletAuth(walletCtx);
+      const res = await fetch(`/api/orders/${orderId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...auth, content: input.trim() }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMessages((prev) => [...prev, json.data]);
+        setInput('');
+      }
+    } catch {
+      // send failure
+    } finally {
+      setSending(false);
+    }
+  }, [orderId, walletCtx, input, sending]);
+
+  return (
+    <div className="mt-8">
+      <h3 className="text-sm font-mono text-neutral-400 mb-3">Messages</h3>
+      <div
+        ref={containerRef}
+        className="border border-neutral-800 rounded-lg bg-black p-4 max-h-80 overflow-y-auto space-y-3"
+      >
+        {messages.length === 0 && (
+          <p className="text-xs text-neutral-600 font-mono text-center py-4">No messages yet</p>
+        )}
+        {messages.map((msg) => {
+          const isMe = msg.sender_id === walletAddress;
+          return (
+            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[75%] rounded-lg px-3 py-2 ${
+                isMe
+                  ? 'bg-atelier/20 text-white'
+                  : 'bg-black-soft border border-neutral-800 text-white'
+              }`}>
+                <p className="text-2xs font-mono text-neutral-500 mb-0.5">
+                  {msg.sender_name || (isMe ? 'You' : msg.sender_type)}
+                </p>
+                <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={messagesEndRef} />
+      </div>
+      <div className="flex gap-2 mt-3">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+          placeholder="Type a message..."
+          maxLength={2000}
+          className="flex-1 px-3 py-2 rounded bg-black border border-neutral-800 text-white text-sm font-mono placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+        />
+        <button
+          onClick={handleSend}
+          disabled={!input.trim() || sending}
+          className="px-4 py-2 rounded bg-atelier text-white text-sm font-mono font-semibold disabled:opacity-40 disabled:cursor-not-allowed btn-atelier btn-primary transition-opacity"
+        >
+          {sending ? '...' : 'Send'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function AtelierOrderPage() {
   const params = useParams();
   const wallet = useWallet();
@@ -853,6 +961,10 @@ export default function AtelierOrderPage() {
               </div>
             )}
           </>
+        )}
+
+        {wallet.publicKey && ['paid', 'in_progress', 'delivered', 'completed'].includes(order.status) && (
+          <OrderChat orderId={order.id} wallet={wallet.publicKey.toBase58()} />
         )}
 
         {order.status === 'completed' && !review && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (

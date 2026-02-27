@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
+import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
 
 const ipfsRateLimit = rateLimit(10, 60 * 60 * 1000);
 
@@ -59,36 +60,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const pumpFormData = new FormData();
-    pumpFormData.append('file', file);
-    pumpFormData.append('name', name);
-    pumpFormData.append('symbol', symbol);
-    if (description) pumpFormData.append('description', description);
+    const result = await uploadToPumpFunIpfs(
+      file,
+      name,
+      symbol,
+      typeof description === 'string' ? description : undefined,
+    );
 
-    const response = await fetch('https://pump.fun/api/ipfs', {
-      method: 'POST',
-      body: pumpFormData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('PumpFun IPFS error:', response.status, errorText);
-      return NextResponse.json(
-        { success: false, error: `PumpFun IPFS upload failed: ${response.status}` },
-        { status: 502 }
-      );
-    }
-
-    const data = await response.json();
-    return NextResponse.json({
-      success: true,
-      data: { metadataUri: data.metadataUri || data.uri || data.metadata?.uri },
-    });
+    return NextResponse.json({ success: true, data: result });
   } catch (error) {
     console.error('IPFS proxy error:', error);
+    if (error instanceof Error && error.message.includes('PumpFun IPFS upload failed')) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

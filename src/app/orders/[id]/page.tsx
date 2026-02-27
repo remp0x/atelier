@@ -549,6 +549,8 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
   );
 }
 
+const AUTH_CACHE_TTL = 4 * 60 * 1000;
+
 function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet: string }) {
   const walletCtx = useWallet();
   const [messages, setMessages] = useState<OrderMessage[]>([]);
@@ -556,10 +558,21 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const cachedAuthRef = useRef<{ payload: { wallet: string; wallet_sig: string; wallet_sig_ts: number }; ts: number } | null>(null);
+
+  const getCachedAuth = useCallback(async () => {
+    const cached = cachedAuthRef.current;
+    if (cached && Date.now() - cached.ts < AUTH_CACHE_TTL) {
+      return cached.payload;
+    }
+    const payload = await signWalletAuth(walletCtx);
+    cachedAuthRef.current = { payload, ts: Date.now() };
+    return payload;
+  }, [walletCtx]);
 
   const fetchMessages = useCallback(async () => {
     try {
-      const auth = await signWalletAuth(walletCtx);
+      const auth = await getCachedAuth();
       const qs = new URLSearchParams({
         wallet: auth.wallet,
         wallet_sig: auth.wallet_sig,
@@ -569,11 +582,13 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
       const json = await res.json();
       if (json.success) {
         setMessages(json.data);
+      } else if (json.error?.includes('expired')) {
+        cachedAuthRef.current = null;
       }
     } catch {
       // silent polling failure
     }
-  }, [orderId, walletCtx]);
+  }, [orderId, getCachedAuth]);
 
   useEffect(() => {
     fetchMessages();
@@ -589,7 +604,7 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
     if (!input.trim() || sending) return;
     setSending(true);
     try {
-      const auth = await signWalletAuth(walletCtx);
+      const auth = await getCachedAuth();
       const res = await fetch(`/api/orders/${orderId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -605,7 +620,7 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
     } finally {
       setSending(false);
     }
-  }, [orderId, walletCtx, input, sending]);
+  }, [orderId, getCachedAuth, input, sending]);
 
   return (
     <div className="mt-8">

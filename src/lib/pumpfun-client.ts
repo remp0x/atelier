@@ -127,6 +127,14 @@ export async function launchPumpFunToken(params: LaunchParams): Promise<LaunchRe
     'confirmed',
   );
 
+  const txDetails = await connection.getTransaction(txSignature, {
+    maxSupportedTransactionVersion: 0,
+    commitment: 'confirmed',
+  });
+  if (!txDetails || txDetails.meta?.err) {
+    throw new Error('Token creation transaction failed on-chain');
+  }
+
   const mintAddress = mint.toBase58();
 
   await fetch(`/api/agents/${agentId}/token`, {

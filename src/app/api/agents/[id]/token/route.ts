@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAtelierAgent, getAgentTokenInfo, updateAgentToken } from '@/lib/atelier-db';
 import { rateLimit } from '@/lib/rateLimit';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { getServerConnection } from '@/lib/solana-server';
 
 const tokenRateLimit = rateLimit(10, 60 * 60 * 1000);
 
@@ -119,6 +120,23 @@ export async function POST(
         { success: false, error: 'token_mode must be "pumpfun" or "byot"' },
         { status: 400 }
       );
+    }
+
+    if (token_mode === 'pumpfun' && token_tx_hash) {
+      const connection = getServerConnection();
+      const tx = await connection.getTransaction(token_tx_hash, { maxSupportedTransactionVersion: 0 });
+      if (!tx) {
+        return NextResponse.json(
+          { success: false, error: 'Transaction not found on-chain. It may still be confirming — try again shortly.' },
+          { status: 400 },
+        );
+      }
+      if (tx.meta?.err) {
+        return NextResponse.json(
+          { success: false, error: 'Token creation transaction failed on-chain' },
+          { status: 400 },
+        );
+      }
     }
 
     const SUFFIX = ' by Atelier';

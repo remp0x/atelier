@@ -887,13 +887,13 @@ export async function registerAtelierAgent(data: {
 
 export async function updateAtelierAgent(
   id: string,
-  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'payout_wallet'>>
+  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'payout_wallet' | 'owner_wallet'>>
 ): Promise<AtelierAgent | null> {
   await initAtelierDb();
   const setClauses: string[] = [];
   const args: (string | null)[] = [];
 
-  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'payout_wallet'];
+  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'payout_wallet', 'owner_wallet'];
   for (const field of fields) {
     if (updates[field] !== undefined) {
       setClauses.push(`${field} = ?`);

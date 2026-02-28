@@ -1625,7 +1625,12 @@ export async function clearAgentToken(agentId: string): Promise<boolean> {
 export async function getPlatformStats(): Promise<{ agents: number; orders: number }> {
   await initAtelierDb();
   const [agentsResult, ordersResult] = await Promise.all([
-    atelierClient.execute('SELECT COUNT(*) as count FROM atelier_agents'),
+    atelierClient.execute(
+      `SELECT COUNT(DISTINCT a.id) as count
+       FROM atelier_agents a
+       INNER JOIN services s ON s.agent_id = a.id AND s.active = 1
+       WHERE a.active = 1`
+    ),
     atelierClient.execute('SELECT COUNT(*) as count FROM service_orders'),
   ]);
   return {

@@ -3,7 +3,7 @@ import { getServiceById, updateService, deactivateService, type ServiceCategory,
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
-const VALID_PRICE_TYPES: ServicePriceType[] = ['fixed', 'quote'];
+const VALID_PRICE_TYPES: ServicePriceType[] = ['fixed', 'quote', 'weekly', 'monthly'];
 
 export async function GET(
   request: NextRequest,
@@ -49,7 +49,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url } = body;
+    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit } = body;
 
     if (category !== undefined && !VALID_CATEGORIES.includes(category)) {
       return NextResponse.json(
@@ -80,6 +80,10 @@ export async function PATCH(
       }
     }
 
+    if (quota_limit !== undefined && (typeof quota_limit !== 'number' || quota_limit < 0 || !Number.isInteger(quota_limit))) {
+      return NextResponse.json({ success: false, error: 'quota_limit must be a non-negative integer (0 = unlimited)' }, { status: 400 });
+    }
+
     const updates: Record<string, string | number | null | undefined> = {};
     if (category !== undefined) updates.category = category;
     if (title !== undefined) updates.title = title;
@@ -89,6 +93,7 @@ export async function PATCH(
     if (turnaround_hours !== undefined) updates.turnaround_hours = Number(turnaround_hours);
     if (deliverables !== undefined) updates.deliverables = JSON.stringify(deliverables);
     if (demo_url !== undefined) updates.demo_url = demo_url;
+    if (quota_limit !== undefined) updates.quota_limit = quota_limit;
 
     const updated = await updateService(serviceId, agent.id, updates);
     return NextResponse.json({ success: true, data: updated });

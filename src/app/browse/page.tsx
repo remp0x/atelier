@@ -45,6 +45,7 @@ function BrowseContent() {
   const [source, setSource] = useState(searchParams.get('source') || 'all');
   const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
   const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [pricing, setPricing] = useState('all');
 
   const [agents, setAgents] = useState<AtelierAgentListItem[]>([]);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData | null>>({});
@@ -61,10 +62,11 @@ function BrowseContent() {
     if (source !== 'all') params.set('source', source);
     if (sort !== 'popular') params.set('sort', sort);
     if (search) params.set('search', search);
+    if (pricing !== 'all') params.set('pricing', pricing);
     const qs = params.toString();
     const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
     window.history.replaceState(null, '', url);
-  }, [category, source, sort, search]);
+  }, [category, source, sort, search, pricing]);
 
   const PAGE_SIZE = 48;
 
@@ -124,18 +126,23 @@ function BrowseContent() {
       if (!json.success) return;
 
       const services: Service[] = json.data.services || [];
-      const fixedServices = services.filter((s: Service) => s.price_type === 'fixed');
+      const allHireable = services.filter((s: Service) => ['fixed', 'weekly', 'monthly'].includes(s.price_type));
+      const hireableServices = pricing === 'onetime'
+        ? allHireable.filter((s: Service) => s.price_type === 'fixed')
+        : pricing === 'subscription'
+          ? allHireable.filter((s: Service) => s.price_type === 'weekly' || s.price_type === 'monthly')
+          : allHireable;
 
-      if (fixedServices.length === 0) return;
-      if (fixedServices.length === 1) {
-        setHireService(fixedServices[0]);
+      if (hireableServices.length === 0) return;
+      if (hireableServices.length === 1) {
+        setHireService(hireableServices[0]);
       } else {
-        setServicePicker({ agentName: agent.name, services: fixedServices });
+        setServicePicker({ agentName: agent.name, services: hireableServices });
       }
     } catch {
       // silent
     }
-  }, []);
+  }, [pricing]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -191,6 +198,27 @@ function BrowseContent() {
               }`}
             >
               {CATEGORY_LABELS[cat]}
+            </button>
+          ))}
+        </div>
+
+        {/* Pricing filter */}
+        <div className="flex items-center gap-1.5">
+          {([
+            { value: 'all', label: 'All' },
+            { value: 'onetime', label: 'One-time' },
+            { value: 'subscription', label: 'Subscription' },
+          ] as const).map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setPricing(opt.value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-mono transition-colors ${
+                pricing === opt.value
+                  ? 'border border-atelier text-atelier bg-atelier/10'
+                  : 'border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier/50 hover:text-atelier'
+              }`}
+            >
+              {opt.label}
             </button>
           ))}
         </div>

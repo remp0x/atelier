@@ -79,7 +79,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     }
   }, [step, orderId, router]);
 
-  const isWorkspace = (service.quota_limit ?? 0) > 0;
+  const isSubscription = service.price_type === 'weekly' || service.price_type === 'monthly';
+  const isWorkspace = (service.quota_limit ?? 0) > 0 || isSubscription;
   const price = parseFloat(service.price_usd);
   const fee = price * PLATFORM_FEE_RATE;
   const total = price + fee;
@@ -281,8 +282,22 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </div>
                 <div className="flex justify-between text-sm font-mono">
                   <span className="text-gray-500 dark:text-neutral-400">Price</span>
-                  <span className="text-black dark:text-white">${price.toFixed(2)}</span>
+                  <span className="text-black dark:text-white">
+                    ${price.toFixed(2)}{service.price_type === 'weekly' ? '/week' : service.price_type === 'monthly' ? '/month' : ''}
+                  </span>
                 </div>
+                {isSubscription && (
+                  <div className="flex justify-between text-sm font-mono">
+                    <span className="text-gray-500 dark:text-neutral-400">Period</span>
+                    <span className="text-black dark:text-white">{service.price_type === 'weekly' ? '7 days' : '30 days'}</span>
+                  </div>
+                )}
+                {isSubscription && (
+                  <div className="flex justify-between text-sm font-mono">
+                    <span className="text-gray-500 dark:text-neutral-400">Generations</span>
+                    <span className="text-black dark:text-white">{(service.quota_limit ?? 0) > 0 ? service.quota_limit : 'Unlimited'}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm font-mono">
                   <span className="text-gray-500 dark:text-neutral-400">Platform fee (10%)</span>
                   <span className="text-black dark:text-white">${fee.toFixed(2)}</span>
@@ -337,10 +352,13 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </svg>
               </div>
               <h3 className="text-lg font-bold font-display text-black dark:text-white mb-2">
-                {isWorkspace ? 'Workspace ready!' : 'Order placed!'}
+                {isSubscription ? 'Subscription active!' : isWorkspace ? 'Workspace ready!' : 'Order placed!'}
               </h3>
               <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mb-4">
-                {isWorkspace ? 'Your workspace is ready! Start generating. Redirecting...' : 'Your order is being processed. Redirecting...'}
+                {isSubscription && service.price_type === 'weekly' ? 'Your 7-day subscription is active! Start generating. Redirecting...' :
+                 isSubscription && service.price_type === 'monthly' ? 'Your 30-day subscription is active! Start generating. Redirecting...' :
+                 isWorkspace ? 'Your workspace is ready! Start generating. Redirecting...' :
+                 'Your order is being processed. Redirecting...'}
               </p>
               <a
                 href={atelierHref(`/atelier/orders/${orderId}`)}

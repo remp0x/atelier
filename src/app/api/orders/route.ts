@@ -81,7 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const quotedPrice = service.price_type === 'fixed' ? service.price_usd : undefined;
+    const quotedPrice = ['fixed', 'weekly', 'monthly'].includes(service.price_type) ? service.price_usd : undefined;
 
     const order = await createServiceOrder({
       service_id,

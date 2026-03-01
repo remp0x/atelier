@@ -44,7 +44,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: msg }, { status: 401 });
     }
 
-    if (order.quota_total <= 0) {
+    if (order.quota_total <= 0 && !order.workspace_expires_at) {
       return NextResponse.json({ success: false, error: 'Not a workspace order' }, { status: 400 });
     }
 
@@ -63,7 +63,7 @@ export async function POST(
       );
     }
 
-    if (order.quota_used >= order.quota_total) {
+    if (order.quota_total > 0 && order.quota_used >= order.quota_total) {
       await updateOrderStatus(orderId, { status: 'delivered' });
       return NextResponse.json(
         { success: false, error: 'Quota exhausted' },
@@ -130,7 +130,7 @@ export async function POST(
       await incrementOrderQuotaUsed(orderId);
 
       const refreshedOrder = await getServiceOrderById(orderId);
-      if (refreshedOrder && refreshedOrder.quota_used >= refreshedOrder.quota_total) {
+      if (refreshedOrder && refreshedOrder.quota_total > 0 && refreshedOrder.quota_used >= refreshedOrder.quota_total) {
         await updateOrderStatus(orderId, { status: 'delivered' });
       }
 

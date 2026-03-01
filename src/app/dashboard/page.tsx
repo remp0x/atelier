@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import dynamic from 'next/dynamic';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
@@ -620,11 +620,57 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: {
   const [description, setDescription] = useState('');
   const [endpointUrl, setEndpointUrl] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarPreview, setAvatarPreview] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [capabilities, setCapabilities] = useState<ServiceCategory[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ agent_id: string; api_key: string } | null>(null);
   const [copiedNewKey, setCopiedNewKey] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setError('Only JPG and PNG files are allowed');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File too large (max 5MB)');
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+    try {
+      const auth = await signWalletAuth(wallet);
+      const form = new FormData();
+      form.append('file', file);
+      const params = new URLSearchParams({
+        wallet: auth.wallet,
+        wallet_sig: auth.wallet_sig,
+        wallet_sig_ts: String(auth.wallet_sig_ts),
+      });
+      const res = await fetch(`/api/profile/avatar?${params}`, {
+        method: 'POST',
+        body: form,
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAvatarUrl(json.data.url);
+        setAvatarPreview(json.data.url);
+      } else {
+        setError(json.error || 'Upload failed');
+      }
+    } catch {
+      setError('Upload failed');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -637,7 +683,7 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: {
         body: JSON.stringify({
           name,
           description,
-          endpoint_url: endpointUrl,
+          endpoint_url: endpointUrl || undefined,
           avatar_url: avatarUrl || undefined,
           capabilities,
           owner_wallet: walletAddress,
@@ -703,12 +749,45 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: {
           <textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={500} rows={3} placeholder="What your agent does..." className={`${INPUT_CLASS} resize-none`} />
         </div>
         <div>
-          <label className={LABEL_CLASS}>Endpoint URL *</label>
+          <label className={LABEL_CLASS}>Endpoint URL</label>
           <input value={endpointUrl} onChange={e => setEndpointUrl(e.target.value)} placeholder="https://my-agent.example.com" className={INPUT_CLASS} />
         </div>
         <div>
-          <label className={LABEL_CLASS}>Avatar URL</label>
-          <input value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://..." className={INPUT_CLASS} />
+          <label className={LABEL_CLASS}>Avatar</label>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png"
+            onChange={handleAvatarUpload}
+            className="hidden"
+          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-800 group flex-shrink-0"
+            >
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gray-50 dark:bg-black flex items-center justify-center">
+                  <svg className="w-6 h-6 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                  </svg>
+                </div>
+              )}
+              {uploading && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                </div>
+              )}
+            </button>
+            <span className="text-xs font-mono text-neutral-500">
+              {uploading ? 'Uploading...' : 'JPG or PNG, max 5MB'}
+            </span>
+          </div>
         </div>
         <div>
           <label className={LABEL_CLASS}>Capabilities</label>
@@ -735,7 +814,7 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={saving || !name || !description || !endpointUrl}
+            disabled={saving || !name || !description}
             className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {saving ? 'Registering...' : 'Register'}
@@ -757,6 +836,7 @@ function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: {
   const [category, setCategory] = useState<ServiceCategory>('image_gen');
   const [priceUsd, setPriceUsd] = useState('');
   const [priceType, setPriceType] = useState<ServicePriceType>('fixed');
+  const [quotaLimit, setQuotaLimit] = useState('0');
   const [turnaroundHours, setTurnaroundHours] = useState('48');
   const [deliverables, setDeliverables] = useState('');
   const [demoUrl, setDemoUrl] = useState('');
@@ -779,6 +859,7 @@ function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: {
           description,
           price_usd: priceUsd,
           price_type: priceType,
+          quota_limit: (priceType === 'weekly' || priceType === 'monthly') ? Number(quotaLimit) || 0 : undefined,
           turnaround_hours: turnaroundHours ? Number(turnaroundHours) : undefined,
           deliverables: deliverables ? deliverables.split(',').map(s => s.trim()).filter(Boolean) : [],
           demo_url: demoUrl || undefined,
@@ -822,7 +903,7 @@ function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: {
           <div>
             <label className={LABEL_CLASS}>Price Type *</label>
             <div className="flex gap-2 mt-1.5">
-              {(['fixed', 'quote'] as const).map(pt => (
+              {(['fixed', 'quote', 'weekly', 'monthly'] as const).map(pt => (
                 <button
                   key={pt}
                   onClick={() => setPriceType(pt)}
@@ -832,12 +913,18 @@ function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: {
                       : 'text-neutral-500 border-gray-200 dark:border-neutral-800'
                   }`}
                 >
-                  {pt === 'fixed' ? 'Fixed' : 'Quote'}
+                  {pt === 'fixed' ? 'Fixed' : pt === 'quote' ? 'Quote' : pt === 'weekly' ? 'Weekly' : 'Monthly'}
                 </button>
               ))}
             </div>
           </div>
         </div>
+        {(priceType === 'weekly' || priceType === 'monthly') && (
+          <div>
+            <label className={LABEL_CLASS}>Generation Limit (0 = unlimited)</label>
+            <input value={quotaLimit} onChange={e => setQuotaLimit(e.target.value)} type="number" min="0" step="1" placeholder="0" className={INPUT_CLASS} />
+          </div>
+        )}
         <div>
           <label className={LABEL_CLASS}>Turnaround (hours)</label>
           <input value={turnaroundHours} onChange={e => setTurnaroundHours(e.target.value)} type="number" min="1" placeholder="48" className={INPUT_CLASS} />

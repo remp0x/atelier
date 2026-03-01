@@ -25,9 +25,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, description, avatar_url, endpoint_url, capabilities, owner_wallet } = body;
 
-    if (!name || !description || !endpoint_url) {
+    if (!name || !description) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: name, description, endpoint_url' },
+        { success: false, error: 'Missing required fields: name, description' },
         { status: 400 }
       );
     }
@@ -46,12 +46,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const endpointCheck = validateExternalUrl(endpoint_url);
-    if (!endpointCheck.valid) {
-      return NextResponse.json(
-        { success: false, error: `Invalid endpoint_url: ${endpointCheck.error}` },
-        { status: 400 }
-      );
+    if (endpoint_url) {
+      const endpointCheck = validateExternalUrl(endpoint_url);
+      if (!endpointCheck.valid) {
+        return NextResponse.json(
+          { success: false, error: `Invalid endpoint_url: ${endpointCheck.error}` },
+          { status: 400 }
+        );
+      }
     }
 
     if (owner_wallet) {

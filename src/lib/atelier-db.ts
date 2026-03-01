@@ -617,7 +617,7 @@ async function seedCommunityAgents(): Promise<void> {
 // ─── Types ───
 
 export type ServiceCategory = 'image_gen' | 'video_gen' | 'ugc' | 'influencer' | 'brand_content' | 'custom';
-export type ServicePriceType = 'fixed' | 'quote';
+export type ServicePriceType = 'fixed' | 'quote' | 'weekly' | 'monthly';
 export type OrderStatus = 'pending_quote' | 'quoted' | 'accepted' | 'paid' | 'in_progress' | 'delivered' | 'completed' | 'disputed' | 'cancelled';
 
 export interface AtelierAgent {
@@ -881,7 +881,7 @@ export async function registerAtelierAgent(data: {
   name: string;
   description: string;
   avatar_url?: string;
-  endpoint_url: string;
+  endpoint_url?: string;
   capabilities?: string[];
   owner_wallet?: string;
 }): Promise<{ agent_id: string; api_key: string }> {
@@ -893,7 +893,7 @@ export async function registerAtelierAgent(data: {
   await atelierClient.execute({
     sql: `INSERT INTO atelier_agents (id, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet)
           VALUES (?, ?, ?, ?, 'external', ?, ?, ?, ?)`,
-    args: [id, data.name, data.description, data.avatar_url || null, data.endpoint_url, capabilities, apiKey, data.owner_wallet || null],
+    args: [id, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null],
   });
 
   return { agent_id: id, api_key: apiKey };
@@ -1035,13 +1035,14 @@ export async function createService(data: {
   deliverables?: string[];
   portfolio_post_ids?: number[];
   demo_url?: string;
+  quota_limit?: number;
 }): Promise<Service> {
   await initAtelierDb();
   const id = `svc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   await atelierClient.execute({
-    sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null],
+    sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url, quota_limit)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null, data.quota_limit ?? 0],
   });
   return getServiceById(id) as Promise<Service>;
 }
@@ -1158,13 +1159,13 @@ export async function getServicesByAgent(agentId: string): Promise<Service[]> {
 export async function updateService(
   id: string,
   agentId: string,
-  updates: Partial<Pick<Service, 'title' | 'description' | 'price_usd' | 'price_type' | 'category' | 'turnaround_hours' | 'deliverables' | 'portfolio_post_ids' | 'demo_url' | 'active'>>
+  updates: Partial<Pick<Service, 'title' | 'description' | 'price_usd' | 'price_type' | 'category' | 'turnaround_hours' | 'deliverables' | 'portfolio_post_ids' | 'demo_url' | 'active' | 'quota_limit'>>
 ): Promise<Service | null> {
   await initAtelierDb();
   const setClauses: string[] = [];
   const args: (string | number | null)[] = [];
 
-  const fields: (keyof typeof updates)[] = ['title', 'description', 'price_usd', 'price_type', 'category', 'turnaround_hours', 'deliverables', 'portfolio_post_ids', 'demo_url', 'active'];
+  const fields: (keyof typeof updates)[] = ['title', 'description', 'price_usd', 'price_type', 'category', 'turnaround_hours', 'deliverables', 'portfolio_post_ids', 'demo_url', 'active', 'quota_limit'];
   for (const field of fields) {
     if (updates[field] !== undefined) {
       setClauses.push(`${field} = ?`);
@@ -1462,7 +1463,7 @@ export async function updateOrderDeliverable(
 export async function incrementOrderQuotaUsed(orderId: string): Promise<number> {
   await initAtelierDb();
   const result = await atelierClient.execute({
-    sql: `UPDATE service_orders SET quota_used = quota_used + 1 WHERE id = ? AND quota_used < quota_total`,
+    sql: `UPDATE service_orders SET quota_used = quota_used + 1 WHERE id = ? AND (quota_total = 0 OR quota_used < quota_total)`,
     args: [orderId],
   });
   return result.rowsAffected;

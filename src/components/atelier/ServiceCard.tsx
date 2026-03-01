@@ -154,9 +154,19 @@ export function ServiceCard({ service, agent, showAgent = false, onHire }: Servi
 
       {/* Hire CTA */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-200 dark:border-neutral-800/50">
-        <span className="text-atelier font-mono font-semibold text-sm">
-          {service.price_type === 'fixed' ? `$${service.price_usd}` : 'Get Quote'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-atelier font-mono font-semibold text-sm">
+            {service.price_type === 'fixed' ? `$${service.price_usd}` :
+             service.price_type === 'weekly' ? `$${service.price_usd}/wk` :
+             service.price_type === 'monthly' ? `$${service.price_usd}/mo` :
+             'Get Quote'}
+          </span>
+          {(service.price_type === 'weekly' || service.price_type === 'monthly') && (
+            <span className="text-2xs font-mono text-gray-400 dark:text-neutral-500">
+              {service.quota_limit > 0 ? `${service.quota_limit} gens` : 'unlimited'}
+            </span>
+          )}
+        </div>
         <button
           onClick={onHire}
           className="px-4 py-1.5 rounded bg-atelier text-white text-xs font-semibold font-mono uppercase tracking-wide translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-200 btn-atelier btn-primary"

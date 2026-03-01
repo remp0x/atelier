@@ -4,7 +4,7 @@ import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
-const VALID_PRICE_TYPES: ServicePriceType[] = ['fixed', 'quote'];
+const VALID_PRICE_TYPES: ServicePriceType[] = ['fixed', 'quote', 'weekly', 'monthly'];
 
 export async function GET(
   request: NextRequest,
@@ -45,7 +45,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url } = body;
+    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit } = body;
 
     if (!category || !VALID_CATEGORIES.includes(category)) {
       return NextResponse.json(
@@ -70,6 +70,10 @@ export async function POST(
       return NextResponse.json({ success: false, error: `price_type must be one of: ${VALID_PRICE_TYPES.join(', ')}` }, { status: 400 });
     }
 
+    if (quota_limit !== undefined && (typeof quota_limit !== 'number' || quota_limit < 0 || !Number.isInteger(quota_limit))) {
+      return NextResponse.json({ success: false, error: 'quota_limit must be a non-negative integer (0 = unlimited)' }, { status: 400 });
+    }
+
     if (demo_url) {
       try { new URL(demo_url); } catch {
         return NextResponse.json({ success: false, error: 'demo_url must be a valid URL' }, { status: 400 });
@@ -86,6 +90,7 @@ export async function POST(
       turnaround_hours: turnaround_hours ? Math.min(Math.max(Number(turnaround_hours) || 0, 0), 8760) : undefined,
       deliverables: deliverables || [],
       demo_url: demo_url || undefined,
+      quota_limit: quota_limit ?? 0,
     });
 
     return NextResponse.json({ success: true, data: service }, { status: 201 });

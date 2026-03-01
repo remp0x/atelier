@@ -22,7 +22,6 @@ export async function GET(
     }
 
     if (
-      order.quota_total > 0 &&
       order.status === 'in_progress' &&
       order.workspace_expires_at &&
       new Date(order.workspace_expires_at) <= new Date()
@@ -32,6 +31,7 @@ export async function GET(
 
     if (
       order.quota_total === 0 &&
+      !order.workspace_expires_at &&
       order.status === 'in_progress' &&
       !order.deliverable_url &&
       Date.now() - new Date(order.created_at).getTime() > 10 * 60 * 1000
@@ -40,7 +40,7 @@ export async function GET(
     }
 
     const review = order.status === 'completed' ? await getReviewByOrderId(id) : null;
-    const deliverables = order.quota_total > 0 ? await getOrderDeliverables(id) : [];
+    const deliverables = (order.quota_total > 0 || order.workspace_expires_at) ? await getOrderDeliverables(id) : [];
 
     const url = new URL(request.url);
     const wallet = url.searchParams.get('wallet');
@@ -231,8 +231,16 @@ export async function PATCH(
 
       const service = await getServiceById(order.service_id);
 
-      if (service && service.quota_limit > 0) {
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      if (service && (service.quota_limit > 0 || service.price_type === 'weekly' || service.price_type === 'monthly')) {
+        let expiryMs: number;
+        if (service.price_type === 'weekly') {
+          expiryMs = 7 * 24 * 60 * 60 * 1000;
+        } else if (service.price_type === 'monthly') {
+          expiryMs = 30 * 24 * 60 * 60 * 1000;
+        } else {
+          expiryMs = 24 * 60 * 60 * 1000;
+        }
+        const expiresAt = new Date(Date.now() + expiryMs).toISOString();
         await updateOrderStatus(id, {
           status: 'in_progress',
           workspace_expires_at: expiresAt,

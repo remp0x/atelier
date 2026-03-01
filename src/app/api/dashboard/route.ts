@@ -25,14 +25,15 @@ export async function GET(request: NextRequest) {
       throw e;
     }
 
-    const agents = await getAtelierAgentsByWallet(wallet);
+    const rawAgents = await getAtelierAgentsByWallet(wallet);
+    const agents = rawAgents.map(({ api_key, ...rest }) => rest);
 
     const services: Record<string, unknown[]> = {};
     const orders: Record<string, unknown[]> = {};
     const unreadCounts: Record<string, Record<string, number>> = {};
 
     await Promise.all(
-      agents.map(async (agent) => {
+      rawAgents.map(async (agent) => {
         const [agentServices, agentOrders] = await Promise.all([
           getServicesByAgent(agent.id),
           getOrdersByAgent(agent.id, 'provider'),

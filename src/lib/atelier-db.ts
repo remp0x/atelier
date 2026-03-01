@@ -227,6 +227,20 @@ async function initAtelierDb(): Promise<void> {
     )
   `);
 
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS pending_token_launches (
+      key TEXT PRIMARY KEY,
+      mint TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      wallet TEXT NOT NULL,
+      token_name TEXT NOT NULL,
+      token_symbol TEXT NOT NULL,
+      metadata_uri TEXT NOT NULL,
+      image_url TEXT NOT NULL,
+      expires_at INTEGER NOT NULL
+    )
+  `);
+
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_wallet TEXT'); } catch (_e) { }
 
   try {
@@ -1313,7 +1327,7 @@ export async function updateOrderStatus(
   }
 
   args.push(id);
-  await atelierClient.execute({
+  const updateResult = await atelierClient.execute({
     sql: `UPDATE service_orders SET ${setClauses.join(', ')} WHERE id = ?`,
     args,
   });
@@ -1329,6 +1343,55 @@ export async function updateOrderStatus(
   }
 
   return getServiceOrderById(id);
+}
+
+// ─── Pending Token Launches ───
+
+export interface PendingLaunchRecord {
+  mint: string;
+  agent_id: string;
+  wallet: string;
+  token_name: string;
+  token_symbol: string;
+  metadata_uri: string;
+  image_url: string;
+  expires_at: number;
+}
+
+export async function savePendingLaunch(key: string, data: PendingLaunchRecord): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `INSERT OR REPLACE INTO pending_token_launches (key, mint, agent_id, wallet, token_name, token_symbol, metadata_uri, image_url, expires_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [key, data.mint, data.agent_id, data.wallet, data.token_name, data.token_symbol, data.metadata_uri, data.image_url, data.expires_at],
+  });
+}
+
+export async function getPendingLaunch(key: string): Promise<PendingLaunchRecord | null> {
+  await initAtelierDb();
+  await atelierClient.execute({ sql: 'DELETE FROM pending_token_launches WHERE expires_at < ?', args: [Date.now()] });
+  const result = await atelierClient.execute({ sql: 'SELECT * FROM pending_token_launches WHERE key = ?', args: [key] });
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0] as unknown as PendingLaunchRecord & { key: string };
+  return { mint: row.mint, agent_id: row.agent_id, wallet: row.wallet, token_name: row.token_name, token_symbol: row.token_symbol, metadata_uri: row.metadata_uri, image_url: row.image_url, expires_at: row.expires_at };
+}
+
+export async function deletePendingLaunch(key: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({ sql: 'DELETE FROM pending_token_launches WHERE key = ?', args: [key] });
+}
+
+export async function atomicStatusTransition(
+  id: string,
+  expectedStatus: string,
+  newStatus: OrderStatus,
+): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'UPDATE service_orders SET status = ? WHERE id = ? AND status = ?',
+    args: [newStatus, id, expectedStatus],
+  });
+  return (result.rowsAffected ?? 0) > 0;
 }
 
 export async function isEscrowTxHashUsed(txHash: string): Promise<boolean> {

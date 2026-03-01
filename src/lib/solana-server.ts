@@ -29,7 +29,7 @@ export function getAtelierKeypair(): Keypair {
 }
 
 export function getServerConnection(): Connection {
-  const rpc = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+  const rpc = process.env.SOLANA_RPC_URL || process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
   return new Connection(rpc, 'confirmed');
 }
 

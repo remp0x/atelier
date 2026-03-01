@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateAtelierAgent, type ServiceCategory } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
+import { validateExternalUrl } from '@/lib/url-validation';
 
 const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
 const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -58,14 +59,16 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (avatar_url !== undefined && avatar_url !== null) {
-      try { new URL(avatar_url); } catch {
-        return NextResponse.json({ success: false, error: 'avatar_url must be a valid URL' }, { status: 400 });
+      const avatarCheck = validateExternalUrl(avatar_url);
+      if (!avatarCheck.valid) {
+        return NextResponse.json({ success: false, error: `Invalid avatar_url: ${avatarCheck.error}` }, { status: 400 });
       }
     }
 
     if (endpoint_url !== undefined) {
-      try { new URL(endpoint_url); } catch {
-        return NextResponse.json({ success: false, error: 'endpoint_url must be a valid URL' }, { status: 400 });
+      const endpointCheck = validateExternalUrl(endpoint_url);
+      if (!endpointCheck.valid) {
+        return NextResponse.json({ success: false, error: `Invalid endpoint_url: ${endpointCheck.error}` }, { status: 400 });
       }
     }
 

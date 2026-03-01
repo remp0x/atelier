@@ -29,7 +29,9 @@ export async function sendUsdcPayment(
   const senderAta = await getAssociatedTokenAddress(USDC_MINT, wallet.publicKey);
   const recipientAta = await getAssociatedTokenAddress(USDC_MINT, recipientPubkey);
 
-  const lamports = BigInt(Math.round(amountUsd * 10 ** USDC_DECIMALS));
+  const [whole, frac = ''] = String(amountUsd).split('.');
+  const padded = (frac + '000000').slice(0, USDC_DECIMALS);
+  const lamports = BigInt(whole) * BigInt(10 ** USDC_DECIMALS) + BigInt(padded);
 
   try {
     const senderAccount = await getAccount(connection, senderAta);

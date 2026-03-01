@@ -1,8 +1,19 @@
 import { PublicKey } from '@solana/web3.js';
+import { createHash } from 'crypto';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 
 const SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000;
+const CLOCK_SKEW_MS = 30_000;
+
+const usedSignatures = new Map<string, number>();
+
+setInterval(() => {
+  const cutoff = Date.now() - SIGNATURE_MAX_AGE_MS - CLOCK_SKEW_MS;
+  usedSignatures.forEach((ts, key) => {
+    if (ts < cutoff) usedSignatures.delete(key);
+  });
+}, 60_000);
 
 export function verifyWalletSignature(wallet: string, signature: string, message: string): boolean {
   const messageBytes = new TextEncoder().encode(message);
@@ -33,9 +44,17 @@ export function requireWalletAuth(
   }
 
   const now = Date.now();
-  const age = Math.abs(now - wallet_sig_ts);
-  if (age > SIGNATURE_MAX_AGE_MS) {
+
+  if (wallet_sig_ts > now + CLOCK_SKEW_MS) {
+    throw new WalletAuthError('Signature timestamp is in the future');
+  }
+  if (now - wallet_sig_ts > SIGNATURE_MAX_AGE_MS) {
     throw new WalletAuthError('Signature expired');
+  }
+
+  const sigHash = createHash('sha256').update(`${wallet}:${wallet_sig}`).digest('hex');
+  if (usedSignatures.has(sigHash)) {
+    throw new WalletAuthError('Signature already used');
   }
 
   const message = `atelier:${wallet}:${wallet_sig_ts}`;
@@ -49,6 +68,8 @@ export function requireWalletAuth(
   if (!valid) {
     throw new WalletAuthError('Invalid wallet signature');
   }
+
+  usedSignatures.set(sigHash, now);
 
   return wallet;
 }

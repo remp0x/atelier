@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'crypto';
 import { getAtelierAgent, getAgentTokenInfo, updateAgentToken, clearAgentToken } from '@/lib/atelier-db';
 import { rateLimit } from '@/lib/rateLimit';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { PublicKey } from '@solana/web3.js';
 import { getServerConnection } from '@/lib/solana-server';
 
 const tokenRateLimit = rateLimit(10, 60 * 60 * 1000);
@@ -102,6 +103,20 @@ export async function POST(
       );
     }
 
+    if (typeof token_name !== 'string' || token_name.length < 1 || token_name.length > 32) {
+      return NextResponse.json(
+        { success: false, error: 'token_name must be between 1 and 32 characters' },
+        { status: 400 }
+      );
+    }
+
+    if (typeof token_symbol !== 'string' || token_symbol.length < 1 || token_symbol.length > 10) {
+      return NextResponse.json(
+        { success: false, error: 'token_symbol must be between 1 and 10 characters' },
+        { status: 400 }
+      );
+    }
+
     if (!BASE58_REGEX.test(token_mint)) {
       return NextResponse.json(
         { success: false, error: 'Invalid token_mint: must be a valid base58 Solana address' },
@@ -123,8 +138,9 @@ export async function POST(
       );
     }
 
+    const connection = getServerConnection();
+
     if (token_mode === 'pumpfun' && token_tx_hash) {
-      const connection = getServerConnection();
       const tx = await connection.getTransaction(token_tx_hash, { maxSupportedTransactionVersion: 0 });
       if (!tx) {
         return NextResponse.json(
@@ -135,6 +151,23 @@ export async function POST(
       if (tx.meta?.err) {
         return NextResponse.json(
           { success: false, error: 'Token creation transaction failed on-chain' },
+          { status: 400 },
+        );
+      }
+      const accountKeys = tx.transaction.message.staticAccountKeys?.map((k: { toBase58(): string }) => k.toBase58()) ?? [];
+      if (!accountKeys.includes(token_mint)) {
+        return NextResponse.json(
+          { success: false, error: 'Transaction does not reference the claimed token_mint address' },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (token_mode === 'byot') {
+      const mintAccountInfo = await connection.getAccountInfo(new PublicKey(token_mint));
+      if (!mintAccountInfo) {
+        return NextResponse.json(
+          { success: false, error: 'token_mint account does not exist on-chain' },
           { status: 400 },
         );
       }

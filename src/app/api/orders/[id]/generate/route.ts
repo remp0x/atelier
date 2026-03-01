@@ -148,15 +148,16 @@ export async function POST(
         },
       });
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Generation failed';
-      await updateOrderDeliverable(deliverable.id, { status: 'failed', error: errorMsg });
+      console.error('Generation error:', err);
+      const internalMsg = err instanceof Error ? err.message : 'Generation failed';
+      await updateOrderDeliverable(deliverable.id, { status: 'failed', error: internalMsg });
 
       return NextResponse.json(
         {
           success: false,
-          error: errorMsg,
+          error: 'Generation failed',
           data: {
-            deliverable: { ...deliverable, status: 'failed', error: errorMsg },
+            deliverable: { ...deliverable, status: 'failed', error: 'Generation failed' },
           },
         },
         { status: 500 },

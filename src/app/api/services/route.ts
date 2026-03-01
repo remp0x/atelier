@@ -34,13 +34,13 @@ export async function GET(req: NextRequest) {
 
     const services = await getServices({
       category: category || undefined,
-      search: searchParams.get('search') || undefined,
+      search: (searchParams.get('search') || '').slice(0, 200) || undefined,
       minPrice,
       maxPrice,
       providerKey,
       sortBy,
-      limit: Math.min(parseInt(searchParams.get('limit') || '50'), 100),
-      offset: parseInt(searchParams.get('offset') || '0'),
+      limit: Math.min(Math.max(parseInt(searchParams.get('limit') || '50') || 50, 1), 100),
+      offset: Math.max(parseInt(searchParams.get('offset') || '0') || 0, 0),
     });
 
     return NextResponse.json({ success: true, data: services });

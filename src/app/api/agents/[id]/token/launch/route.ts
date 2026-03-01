@@ -11,11 +11,12 @@ import {
   OnlinePumpSdk,
 } from '@pump-fun/pump-sdk';
 import BN from 'bn.js';
-import { getAtelierAgent, updateAgentToken } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, savePendingLaunch, getPendingLaunch, deletePendingLaunch } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { getServerConnection, ATELIER_PUBKEY } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
 import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
+import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 
 const launchRateLimit = rateLimit(10, 60 * 60 * 1000);
 
@@ -24,25 +25,7 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const PENDING_TTL_MS = 5 * 60 * 1000;
 
-interface PendingLaunch {
-  mint: string;
-  agentId: string;
-  wallet: string;
-  tokenName: string;
-  tokenSymbol: string;
-  metadataUri: string;
-  imageUrl: string;
-  expiresAt: number;
-}
-
-const pendingLaunches = new Map<string, PendingLaunch>();
-
-function cleanExpiredLaunches(): void {
-  const now = Date.now();
-  pendingLaunches.forEach((entry, key) => {
-    if (now > entry.expiresAt) pendingLaunches.delete(key);
-  });
-}
+const MAX_DEV_BUY_SOL = 50;
 
 export async function POST(
   request: NextRequest,
@@ -102,15 +85,23 @@ export async function POST(
     }
 
     const devBuySol = typeof dev_buy_sol === 'number' ? dev_buy_sol : 0;
-    if (devBuySol < 0) {
+    if (devBuySol < 0 || devBuySol > MAX_DEV_BUY_SOL) {
       return NextResponse.json(
-        { success: false, error: 'dev_buy_sol must be >= 0' },
+        { success: false, error: `dev_buy_sol must be between 0 and ${MAX_DEV_BUY_SOL}` },
         { status: 400 },
       );
     }
 
     const tokenName = agent.name + TOKEN_NAME_SUFFIX;
     const description = agent.description || '';
+
+    const avatarUrlCheck = await validateExternalUrlWithDNS(agent.avatar_url);
+    if (!avatarUrlCheck.valid) {
+      return NextResponse.json(
+        { success: false, error: `Invalid avatar URL: ${avatarUrlCheck.error}` },
+        { status: 400 },
+      );
+    }
 
     const imageResponse = await fetch(agent.avatar_url);
     if (!imageResponse.ok) {
@@ -202,16 +193,15 @@ export async function POST(
     const txBase64 = Buffer.from(transaction.serialize()).toString('base64');
     const mintAddress = mint.toBase58();
 
-    cleanExpiredLaunches();
-    pendingLaunches.set(`${id}:${mintAddress}`, {
+    await savePendingLaunch(`${id}:${mintAddress}`, {
       mint: mintAddress,
-      agentId: id,
+      agent_id: id,
       wallet: verifiedWallet,
-      tokenName,
-      tokenSymbol: symbol,
-      metadataUri,
-      imageUrl: agent.avatar_url,
-      expiresAt: Date.now() + PENDING_TTL_MS,
+      token_name: tokenName,
+      token_symbol: symbol,
+      metadata_uri: metadataUri,
+      image_url: agent.avatar_url,
+      expires_at: Date.now() + PENDING_TTL_MS,
     });
 
     return NextResponse.json({
@@ -276,9 +266,8 @@ export async function PUT(
       );
     }
 
-    cleanExpiredLaunches();
     const pendingKey = `${id}:${mint}`;
-    const pending = pendingLaunches.get(pendingKey);
+    const pending = await getPendingLaunch(pendingKey);
     if (!pending) {
       return NextResponse.json(
         { success: false, error: 'No pending launch found for this mint. It may have expired (5 min TTL).' },
@@ -297,6 +286,29 @@ export async function PUT(
 
     const txBytes = Buffer.from(txBase64, 'base64');
     const transaction = VersionedTransaction.deserialize(txBytes);
+
+    const mintPubkey = new PublicKey(mint);
+    const accountKeys = transaction.message.staticAccountKeys;
+    const hasMintSigner = accountKeys.some(
+      (key, i) => key.equals(mintPubkey) && transaction.signatures[i] && !transaction.signatures[i].every(b => b === 0)
+    );
+    if (!hasMintSigner) {
+      return NextResponse.json(
+        { success: false, error: 'Transaction does not contain a valid signature from the expected mint keypair' },
+        { status: 400 },
+      );
+    }
+
+    const userPubkey = new PublicKey(verifiedWallet);
+    const hasUserSigner = accountKeys.some(
+      (key, i) => key.equals(userPubkey) && transaction.signatures[i] && !transaction.signatures[i].every(b => b === 0)
+    );
+    if (!hasUserSigner) {
+      return NextResponse.json(
+        { success: false, error: 'Transaction must be signed by the authenticated wallet' },
+        { status: 400 },
+      );
+    }
 
     const txSignature = await connection.sendRawTransaction(transaction.serialize(), {
       skipPreflight: false,
@@ -322,15 +334,15 @@ export async function PUT(
 
     const updated = await updateAgentToken(id, {
       token_mint: mint,
-      token_name: pending.tokenName,
-      token_symbol: pending.tokenSymbol,
-      token_image_url: pending.imageUrl,
+      token_name: pending.token_name,
+      token_symbol: pending.token_symbol,
+      token_image_url: pending.image_url,
       token_mode: 'pumpfun',
       token_creator_wallet: verifiedWallet,
       token_tx_hash: txSignature,
     });
 
-    pendingLaunches.delete(pendingKey);
+    await deletePendingLaunch(pendingKey);
 
     if (!updated) {
       return NextResponse.json(
@@ -346,9 +358,9 @@ export async function PUT(
         tx_signature: txSignature,
         token_info: {
           token_mint: mint,
-          token_name: pending.tokenName,
-          token_symbol: pending.tokenSymbol,
-          token_image_url: pending.imageUrl,
+          token_name: pending.token_name,
+          token_symbol: pending.token_symbol,
+          token_image_url: pending.image_url,
           token_mode: 'pumpfun',
           token_creator_wallet: verifiedWallet,
           token_tx_hash: txSignature,

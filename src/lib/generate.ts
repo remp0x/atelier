@@ -98,7 +98,8 @@ export async function generateImage(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${modelKey} API error (${res.status}): ${text}`);
+    console.error(`${modelKey} API error (${res.status}):`, text);
+    throw new Error(`Generation provider error (${res.status})`);
   }
 
   const json = (await res.json()) as ImageAPIResponse;

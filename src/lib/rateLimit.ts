@@ -5,15 +5,16 @@ interface RateLimitRecord {
   resetTime: number;
 }
 
-const rateLimitMap = new Map<string, RateLimitRecord>();
+const ipRateLimitMap = new Map<string, RateLimitRecord>();
+const keyRateLimitMap = new Map<string, RateLimitRecord>();
 
-// Cleanup old entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
-  rateLimitMap.forEach((record, key) => {
-    if (now > record.resetTime) {
-      rateLimitMap.delete(key);
-    }
+  ipRateLimitMap.forEach((record, key) => {
+    if (now > record.resetTime) ipRateLimitMap.delete(key);
+  });
+  keyRateLimitMap.forEach((record, key) => {
+    if (now > record.resetTime) keyRateLimitMap.delete(key);
   });
 }, 5 * 60 * 1000);
 
@@ -30,16 +31,16 @@ export function rateLimit(
   return (req: NextRequest) => {
     // Get IP address from headers (Vercel provides this)
     const ip =
+      req.headers.get('x-vercel-forwarded-for')?.split(',')[0].trim() ||
       req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
       req.headers.get('x-real-ip') ||
       'unknown';
 
     const now = Date.now();
-    const record = rateLimitMap.get(ip);
+    const record = ipRateLimitMap.get(ip);
 
-    // If no record or window has expired, create new record
     if (!record || now > record.resetTime) {
-      rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
+      ipRateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
       return null;
     }
 
@@ -75,10 +76,10 @@ export function rateLimitByKey(
 ): (key: string) => NextResponse | null {
   return (key: string) => {
     const now = Date.now();
-    const record = rateLimitMap.get(key);
+    const record = keyRateLimitMap.get(key);
 
     if (!record || now > record.resetTime) {
-      rateLimitMap.set(key, { count: 1, resetTime: now + windowMs });
+      keyRateLimitMap.set(key, { count: 1, resetTime: now + windowMs });
       return null;
     }
 

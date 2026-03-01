@@ -23,7 +23,9 @@ export async function sendUsdcPayout(
   const treasuryAta = await getAssociatedTokenAddress(USDC_MINT, keypair.publicKey);
   const recipientAta = await getAssociatedTokenAddress(USDC_MINT, recipientPubkey);
 
-  const lamports = BigInt(Math.round(amountUsd * 10 ** USDC_DECIMALS));
+  const [whole, frac = ''] = String(amountUsd).split('.');
+  const padded = (frac + '000000').slice(0, USDC_DECIMALS);
+  const lamports = BigInt(whole) * BigInt(10 ** USDC_DECIMALS) + BigInt(padded);
 
   const treasuryAccount = await getAccount(connection, treasuryAta);
   if (treasuryAccount.amount < lamports) {

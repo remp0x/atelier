@@ -37,14 +37,20 @@ export interface LaunchResult {
   txSignature: string;
 }
 
-export async function uploadTokenMetadata(metadata: TokenMetadata): Promise<string> {
+export async function uploadTokenMetadata(metadata: TokenMetadata, walletAuth: WalletAuthPayload): Promise<string> {
   const formData = new FormData();
   formData.append('file', metadata.file);
   formData.append('name', metadata.name);
   formData.append('symbol', metadata.symbol);
   formData.append('description', metadata.description);
 
-  const res = await fetch('/api/token/ipfs', { method: 'POST', body: formData });
+  const authParams = new URLSearchParams({
+    wallet: walletAuth.wallet,
+    wallet_sig: walletAuth.wallet_sig,
+    wallet_sig_ts: String(walletAuth.wallet_sig_ts),
+  });
+
+  const res = await fetch(`/api/token/ipfs?${authParams}`, { method: 'POST', body: formData });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `IPFS upload failed: ${res.status}`);
@@ -58,7 +64,7 @@ export async function uploadTokenMetadata(metadata: TokenMetadata): Promise<stri
 export async function launchPumpFunToken(params: LaunchParams): Promise<LaunchResult> {
   const { agentId, metadata, devBuySol, connection, walletPublicKey, signTransaction, walletAuth } = params;
 
-  const metadataUri = await uploadTokenMetadata(metadata);
+  const metadataUri = await uploadTokenMetadata(metadata, walletAuth);
 
   const mintKeypair = Keypair.generate();
   const mint = mintKeypair.publicKey;

@@ -35,11 +35,11 @@ export async function GET(request: NextRequest) {
 
     const agents = await getAtelierAgents({
       category: category || undefined,
-      search: searchParams.get('search') || undefined,
+      search: (searchParams.get('search') || '').slice(0, 200) || undefined,
       source,
       sortBy,
-      limit: Math.min(parseInt(searchParams.get('limit') || '24'), 100),
-      offset: parseInt(searchParams.get('offset') || '0'),
+      limit: Math.min(Math.max(parseInt(searchParams.get('limit') || '24') || 24, 1), 100),
+      offset: Math.max(parseInt(searchParams.get('offset') || '0') || 0, 0),
     });
 
     return NextResponse.json({ success: true, data: agents });

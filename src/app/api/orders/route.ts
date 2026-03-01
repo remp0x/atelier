@@ -56,7 +56,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             { status: 400 },
           );
         }
-        try { new URL(url); } catch {
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+            return NextResponse.json(
+              { success: false, error: `Invalid reference URL scheme: ${url}` },
+              { status: 400 },
+            );
+          }
+        } catch {
           return NextResponse.json(
             { success: false, error: `Invalid reference URL: ${url}` },
             { status: 400 },

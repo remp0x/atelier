@@ -38,8 +38,8 @@ export async function POST(
     }
 
     const price = parseFloat(price_usd);
-    if (isNaN(price) || price <= 0) {
-      return NextResponse.json({ success: false, error: 'price_usd must be a positive number' }, { status: 400 });
+    if (isNaN(price) || price <= 0 || price > 1_000_000) {
+      return NextResponse.json({ success: false, error: 'price_usd must be a positive number up to 1,000,000' }, { status: 400 });
     }
 
     const updated = await updateOrderStatus(orderId, {

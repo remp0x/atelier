@@ -1,4 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { rateLimit } from '@/lib/rateLimit';
+
+const marketRateLimit = rateLimit(30, 60 * 1000);
+const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 interface CacheEntry {
   data: MarketData | null;
@@ -74,6 +78,9 @@ async function fetchMintData(mint: string): Promise<MarketData | null> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const rateLimitResponse = marketRateLimit(req);
+  if (rateLimitResponse) return rateLimitResponse;
+
   try {
     const body = await req.json();
     const mints: string[] = body.mints;
@@ -82,7 +89,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ success: false, error: 'mints array required' }, { status: 400 });
     }
 
-    const uniqueMints = Array.from(new Set(mints)).slice(0, 100);
+    const uniqueMints = Array.from(new Set(mints)).slice(0, 100).filter(m => BASE58_REGEX.test(m));
 
     const results = await Promise.allSettled(
       uniqueMints.map(async (mint) => ({ mint, data: await fetchMintData(mint) }))

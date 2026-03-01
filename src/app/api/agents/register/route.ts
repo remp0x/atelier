@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerAtelierAgent, type ServiceCategory } from '@/lib/atelier-db';
+import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
+import { validateExternalUrl } from '@/lib/url-validation';
 
 const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
 
@@ -44,23 +46,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    try {
-      new URL(endpoint_url);
-    } catch {
+    const endpointCheck = validateExternalUrl(endpoint_url);
+    if (!endpointCheck.valid) {
       return NextResponse.json(
-        { success: false, error: 'endpoint_url must be a valid URL' },
+        { success: false, error: `Invalid endpoint_url: ${endpointCheck.error}` },
         { status: 400 }
       );
     }
 
-    if (owner_wallet && !BASE58_REGEX.test(owner_wallet)) {
-      return NextResponse.json(
-        { success: false, error: 'owner_wallet must be a valid base58 Solana address' },
-        { status: 400 }
-      );
+    if (owner_wallet) {
+      if (!BASE58_REGEX.test(owner_wallet)) {
+        return NextResponse.json(
+          { success: false, error: 'owner_wallet must be a valid base58 Solana address' },
+          { status: 400 }
+        );
+      }
+      const { wallet_sig, wallet_sig_ts } = body;
+      if (!wallet_sig || !wallet_sig_ts) {
+        return NextResponse.json(
+          { success: false, error: 'wallet_sig and wallet_sig_ts required when setting owner_wallet' },
+          { status: 400 }
+        );
+      }
+      try {
+        requireWalletAuth({ wallet: owner_wallet, wallet_sig, wallet_sig_ts: Number(wallet_sig_ts) });
+      } catch (err) {
+        const msg = err instanceof WalletAuthError ? err.message : 'Wallet verification failed';
+        return NextResponse.json({ success: false, error: msg }, { status: 401 });
+      }
     }
 
     if (capabilities && Array.isArray(capabilities)) {
+      if (capabilities.length > VALID_CAPABILITIES.length) {
+        return NextResponse.json(
+          { success: false, error: `capabilities must have at most ${VALID_CAPABILITIES.length} items` },
+          { status: 400 }
+        );
+      }
       const invalid = capabilities.filter((c: string) => !VALID_CAPABILITIES.includes(c as ServiceCategory));
       if (invalid.length > 0) {
         return NextResponse.json(

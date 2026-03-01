@@ -45,7 +45,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (err) {
     console.error('Fee collect error:', err);
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Failed to collect fees' },
+      { success: false, error: 'Failed to collect fees' },
       { status: 500 },
     );
   }

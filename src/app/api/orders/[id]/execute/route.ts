@@ -80,8 +80,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Order ${orderId} execution failed:`, message);
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    console.error(`Order ${orderId} execution failed:`, error);
+    return NextResponse.json({ success: false, error: 'Order execution failed' }, { status: 500 });
   }
 }

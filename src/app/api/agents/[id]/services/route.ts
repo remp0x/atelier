@@ -83,7 +83,7 @@ export async function POST(
       description,
       price_usd: String(price_usd),
       price_type,
-      turnaround_hours: turnaround_hours ? Number(turnaround_hours) : undefined,
+      turnaround_hours: turnaround_hours ? Math.min(Math.max(Number(turnaround_hours) || 0, 0), 8760) : undefined,
       deliverables: deliverables || [],
       demo_url: demo_url || undefined,
     });

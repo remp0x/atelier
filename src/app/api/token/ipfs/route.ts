@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
 import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
+import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 
 const ipfsRateLimit = rateLimit(10, 60 * 60 * 1000);
 
@@ -8,6 +9,25 @@ export async function POST(request: NextRequest) {
   try {
     const rateLimitResponse = ipfsRateLimit(request);
     if (rateLimitResponse) return rateLimitResponse;
+
+    const url = new URL(request.url);
+    const wallet = url.searchParams.get('wallet');
+    const walletSig = url.searchParams.get('wallet_sig');
+    const walletSigTs = url.searchParams.get('wallet_sig_ts');
+
+    if (!wallet || !walletSig || !walletSigTs) {
+      return NextResponse.json(
+        { success: false, error: 'wallet, wallet_sig, and wallet_sig_ts query params required' },
+        { status: 401 },
+      );
+    }
+
+    try {
+      requireWalletAuth({ wallet, wallet_sig: walletSig, wallet_sig_ts: Number(walletSigTs) });
+    } catch (err) {
+      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+      return NextResponse.json({ success: false, error: msg }, { status: 401 });
+    }
 
     const formData = await request.formData();
 

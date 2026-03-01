@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet, isEscrowTxHashUsed } from '@/lib/atelier-db';
+import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet, isEscrowTxHashUsed, atomicStatusTransition } from '@/lib/atelier-db';
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
@@ -11,7 +11,7 @@ import { notifyAgentWebhook } from '@/lib/webhook';
 export const maxDuration = 300;
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
@@ -42,7 +42,17 @@ export async function GET(
     const review = order.status === 'completed' ? await getReviewByOrderId(id) : null;
     const deliverables = order.quota_total > 0 ? await getOrderDeliverables(id) : [];
 
-    return NextResponse.json({ success: true, data: { order, review, deliverables } });
+    const url = new URL(request.url);
+    const wallet = url.searchParams.get('wallet');
+    const isOwner = wallet && (wallet === order.client_wallet || wallet === order.provider_agent_id);
+
+    const safeOrder = isOwner ? order : {
+      ...order,
+      escrow_tx_hash: undefined,
+      payout_tx_hash: undefined,
+    };
+
+    return NextResponse.json({ success: true, data: { order: safeOrder, review, deliverables } });
   } catch (error) {
     console.error('Error fetching order:', error);
     return NextResponse.json({ success: false, error: 'Failed to fetch order' }, { status: 500 });
@@ -101,13 +111,21 @@ export async function PATCH(
     }
 
     if (action === 'cancel') {
-      let refundFailed = false;
+      const claimed = await atomicStatusTransition(id, order.status, 'cancelled');
+      if (!claimed) {
+        return NextResponse.json(
+          { success: false, error: 'Order status changed concurrently, please retry' },
+          { status: 409 },
+        );
+      }
 
-      if (order.status === 'paid' && order.escrow_tx_hash && order.client_wallet) {
+      let refundFailed = false;
+      if (order.status === 'paid' && order.escrow_tx_hash && order.client_wallet && !order.payout_tx_hash) {
         const refundAmount = parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0');
         if (refundAmount > 0) {
           try {
-            await sendUsdcPayout(order.client_wallet, refundAmount);
+            const txHash = await sendUsdcPayout(order.client_wallet, refundAmount);
+            await updateOrderStatus(id, { status: 'cancelled', payout_tx_hash: txHash });
           } catch (refundErr) {
             refundFailed = true;
             console.error(`Refund failed for order ${id}:`, refundErr);
@@ -115,7 +133,7 @@ export async function PATCH(
         }
       }
 
-      const updated = await updateOrderStatus(id, { status: 'cancelled' });
+      const updated = await getServiceOrderById(id);
       notifyAgentWebhook(order.provider_agent_id, {
         event: 'order.cancelled',
         order_id: id,
@@ -139,7 +157,13 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
-      const updated = await updateOrderStatus(id, { status: 'completed' });
+      const claimed = await atomicStatusTransition(id, order.status, 'completed');
+      if (!claimed) {
+        return NextResponse.json(
+          { success: false, error: 'Order status changed concurrently, please retry' },
+          { status: 409 },
+        );
+      }
 
       const quotedPrice = parseFloat(order.quoted_price_usd || '0');
       let payoutFailed = false;

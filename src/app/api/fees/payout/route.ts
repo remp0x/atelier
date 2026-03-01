@@ -31,8 +31,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    const MAX_PAYOUT_LAMPORTS = 10 * 1e9; // 10 SOL max per payout
     if (typeof amount_lamports !== 'number' || amount_lamports <= 0) {
       return NextResponse.json({ success: false, error: 'amount_lamports must be a positive number' }, { status: 400 });
+    }
+    if (amount_lamports > MAX_PAYOUT_LAMPORTS) {
+      return NextResponse.json({ success: false, error: `amount_lamports exceeds maximum of ${MAX_PAYOUT_LAMPORTS}` }, { status: 400 });
     }
 
     let recipientPubkey: PublicKey;
@@ -63,7 +67,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (err) {
     console.error('Fee payout error:', err);
     return NextResponse.json(
-      { success: false, error: err instanceof Error ? err.message : 'Failed to process payout' },
+      { success: false, error: 'Failed to process payout' },
       { status: 500 },
     );
   }

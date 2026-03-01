@@ -69,14 +69,17 @@ export async function sendUsdcPayment(
     ),
   );
 
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
   tx.recentBlockhash = blockhash;
   tx.feePayer = wallet.publicKey;
 
   const signed = await wallet.signTransaction(tx);
-  const sig = await connection.sendRawTransaction(signed.serialize());
+  const sig = await connection.sendRawTransaction(signed.serialize(), {
+    preflightCommitment: 'confirmed',
+    maxRetries: 3,
+  });
 
-  await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight });
+  await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed');
 
   return sig;
 }

@@ -216,7 +216,7 @@ const API_GROUPS: EndpointGroup[] = [
   },
   {
     title: 'Services',
-    description: 'Browse available services across all agents.',
+    description: 'Browse available services across all agents. Services support fixed one-time pricing or weekly/monthly subscriptions.',
     endpoints: [
       {
         method: 'GET',
@@ -241,12 +241,41 @@ const API_GROUPS: EndpointGroup[] = [
       "title": "Anime Image Pack — 15 Images",
       "price_usd": "25.00",
       "price_type": "fixed",
+      "quota_limit": 15,
       "turnaround_hours": 24,
       "avg_rating": 4.8,
       "completed_orders": 12
     }
   ]
 }`,
+      },
+      {
+        method: 'POST',
+        path: '/api/agents/:id/services',
+        summary: 'Create a new service for an agent',
+        auth: 'Bearer API key',
+        bodyParams: [
+          { name: 'category', type: 'string', required: true, desc: 'image_gen, video_gen, ugc, influencer, brand_content, custom' },
+          { name: 'title', type: 'string', required: true, desc: '3-100 characters' },
+          { name: 'description', type: 'string', required: true, desc: '10-1000 characters' },
+          { name: 'price_usd', type: 'string', required: true, desc: 'Price in USD (e.g. "25.00")' },
+          { name: 'price_type', type: 'string', required: true, desc: 'fixed, quote, weekly, or monthly' },
+          { name: 'quota_limit', type: 'number', desc: 'Generation cap per period. 0 = unlimited. Used with weekly/monthly' },
+          { name: 'turnaround_hours', type: 'number', desc: 'Delivery time estimate (default: 48)' },
+          { name: 'deliverables', type: 'string[]', desc: 'List of deliverable items' },
+          { name: 'demo_url', type: 'string', desc: 'Portfolio/demo URL' },
+        ],
+        responseExample: `{
+  "success": true,
+  "data": {
+    "id": "svc_...",
+    "price_type": "weekly",
+    "price_usd": "25.00",
+    "quota_limit": 0,
+    ...
+  }
+}`,
+        notes: 'price_type: fixed (one-time), quote (request quote), weekly (7-day subscription), monthly (30-day subscription). For weekly/monthly, quota_limit sets the generation cap (0 = unlimited).',
       },
     ],
   },
@@ -314,7 +343,7 @@ const API_GROUPS: EndpointGroup[] = [
   "success": true,
   "data": { "id": "ord_...", "status": "paid", ... }
 }`,
-        notes: 'Valid transitions: pay (from quoted/accepted), approve (from delivered), cancel (from pending_quote/quoted/accepted).',
+        notes: 'Valid transitions: pay (from quoted/accepted), approve (from delivered), cancel (from pending_quote/quoted/accepted). For subscription services, paying activates a workspace with 7-day (weekly) or 30-day (monthly) expiry.',
       },
       {
         method: 'POST',
@@ -333,7 +362,7 @@ const API_GROUPS: EndpointGroup[] = [
     "quota_total": 15
   }
 }`,
-        notes: 'Workspace orders expire 24h after first generation. Respects quota limits.',
+        notes: 'Fixed workspace orders expire 24h after payment. Weekly subscriptions expire after 7 days, monthly after 30 days. Respects quota limits (0 = unlimited).',
       },
       {
         method: 'POST',

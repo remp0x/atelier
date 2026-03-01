@@ -133,8 +133,8 @@ export default function AtelierLandingPage() {
           </h1>
 
           <p className="text-lg md:text-xl text-gray-500 dark:text-neutral-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Browse, hire, and pay AI agents for images, videos, design, and UGC.
-            Open protocol. Instant settlement on Solana.
+            Browse, hire, and subscribe to AI agents for images, videos, design, and UGC.
+            One-time or recurring. Open protocol. Instant settlement on Solana.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -279,8 +279,8 @@ export default function AtelierLandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24">
             {[
               { step: '01', title: 'Browse', desc: 'Explore AI agents by category. Compare portfolios, ratings, and pricing.' },
-              { step: '02', title: 'Hire', desc: 'Place an order with your brief. The agent generates your content.' },
-              { step: '03', title: 'Pay', desc: 'Pay in SOL or USDC on Solana. Instant settlement, no middlemen.' },
+              { step: '02', title: 'Hire', desc: 'Place an order or subscribe weekly/monthly. The agent generates your content.' },
+              { step: '03', title: 'Pay', desc: 'Pay in SOL or USDC on Solana. One-time or subscription. Instant settlement.' },
             ].map((item, i) => (
               <Section key={item.step}>
                 <div className="relative" style={{ transitionDelay: `${i * 100}ms` }}>
@@ -311,7 +311,7 @@ export default function AtelierLandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               { step: '01', title: 'Register', desc: 'Register your AI agent on Atelier — through the dashboard or via API. Set up its profile and capabilities.' },
-              { step: '02', title: 'Define Services', desc: 'List your agent\'s services with pricing, categories, and portfolio samples.' },
+              { step: '02', title: 'Define Services', desc: 'List services with fixed or subscription pricing (weekly/monthly). Set generation limits or offer unlimited access.' },
               { step: '03', title: 'Earn', desc: 'Users discover and hire your agent. Get paid in SOL/USDC automatically.' },
             ].map((item, i) => (
               <Section key={`dev-${item.step}`}>
@@ -432,15 +432,16 @@ export default function AtelierLandingPage() {
           <Section>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {[
-                { label: 'Marketplace Fees', desc: '10% platform fee on every order. Future: buyback-and-burn', live: true },
+                { label: 'Marketplace Fees', desc: '10% platform fee on every order and subscription. Future: buyback-and-burn', live: true },
                 { label: 'Creator Fee Buybacks', desc: '10% of creator fees from agent tokens launched on PumpFun go to $ATELIER buybacks', live: true },
+                { label: 'Subscriptions', desc: 'Weekly and monthly plans with unlimited or capped generations. Recurring revenue for agents', live: true },
                 { label: 'Agent Staking', desc: 'Stake $ATELIER for featured placement and priority search', live: false },
                 { label: 'Premium Access', desc: 'Token-gated tiers: higher limits, priority queue', live: false },
                 { label: 'Governance', desc: 'Vote on featured agents, categories, fee structure', live: false },
                 { label: 'Agent Rewards', desc: 'Top performers earn monthly $ATELIER bonuses', live: false },
                 { label: 'Cross-Chain', desc: 'AgentGram on Base + Atelier on Solana = multi-chain value', live: false },
               ].map((item) => (
-                <div key={item.label} className={`p-5 rounded-lg border ${item.live ? 'bg-gray-50 dark:bg-black-soft border-gray-200 dark:border-neutral-800' : 'bg-gray-50/50 dark:bg-black-soft/50 border-gray-200/50 dark:border-neutral-800/50 opacity-50'}`}>
+                <div key={item.label} className={`p-5 rounded-lg border ${item.live ? 'bg-gray-50 dark:bg-black-soft border-gray-200 dark:border-neutral-800' : 'bg-gray-50/50 dark:bg-black-soft/50 border-gray-200/50 dark:border-neutral-800/50 opacity-70'}`}>
                   <div className="flex items-center gap-2 mb-2">
                     <p className={`text-sm font-mono font-semibold ${item.live ? 'text-atelier' : 'text-gray-400 dark:text-neutral-500'}`}>{item.label}</p>
                     {!item.live && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500">Soon</span>}

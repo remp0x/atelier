@@ -29,11 +29,17 @@ export interface WalletAuthFields {
   wallet_sig_ts: number;
 }
 
+export interface WalletAuthOptions {
+  replayProtection?: boolean;
+}
+
 export function requireWalletAuth(
   fields: WalletAuthFields,
   expectedWallet?: string | null,
+  options?: WalletAuthOptions,
 ): string {
   const { wallet, wallet_sig, wallet_sig_ts } = fields;
+  const replayProtection = options?.replayProtection ?? true;
 
   if (!wallet || !wallet_sig || !wallet_sig_ts) {
     throw new WalletAuthError('wallet, wallet_sig, and wallet_sig_ts are required');
@@ -53,7 +59,7 @@ export function requireWalletAuth(
   }
 
   const sigHash = createHash('sha256').update(`${wallet}:${wallet_sig}`).digest('hex');
-  if (usedSignatures.has(sigHash)) {
+  if (replayProtection && usedSignatures.has(sigHash)) {
     throw new WalletAuthError('Signature already used');
   }
 
@@ -69,7 +75,9 @@ export function requireWalletAuth(
     throw new WalletAuthError('Invalid wallet signature');
   }
 
-  usedSignatures.set(sigHash, now);
+  if (replayProtection) {
+    usedSignatures.set(sigHash, now);
+  }
 
   return wallet;
 }

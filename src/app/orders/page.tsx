@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { signWalletAuth } from '@/lib/solana-auth-client';
+import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import dynamic from 'next/dynamic';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import type { ServiceOrder, OrderStatus } from '@/lib/atelier-db';
@@ -54,6 +54,7 @@ export default function MyOrdersPage() {
 function OrdersContent() {
   const wallet = useWallet();
   const { publicKey } = wallet;
+  const { getAuth } = useWalletAuth();
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState(false);
@@ -67,7 +68,7 @@ function OrdersContent() {
     setLoading(true);
     setAuthError(false);
     try {
-      const auth = await signWalletAuth(wallet);
+      const auth = await getAuth();
       const params = new URLSearchParams({
         wallet: auth.wallet,
         wallet_sig: auth.wallet_sig,
@@ -82,7 +83,7 @@ function OrdersContent() {
     } finally {
       setLoading(false);
     }
-  }, [publicKey, wallet]);
+  }, [publicKey, getAuth]);
 
   useEffect(() => {
     fetchOrders();

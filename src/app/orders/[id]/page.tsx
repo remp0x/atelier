@@ -8,7 +8,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
-import { signWalletAuth } from '@/lib/solana-auth-client';
+import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import { sendUsdcPayment } from '@/lib/solana-pay';
 import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable, OrderMessage } from '@/lib/atelier-db';
 
@@ -184,6 +184,7 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
 
 function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: () => void }) {
   const wallet = useWallet();
+  const { getAuth } = useWalletAuth();
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -196,7 +197,7 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
     setError(null);
 
     try {
-      const auth = await signWalletAuth(wallet);
+      const auth = await getAuth();
       const res = await fetch(`/api/orders/${orderId}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -217,7 +218,7 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
     } finally {
       setSubmitting(false);
     }
-  }, [wallet, orderId, rating, comment, onSubmitted]);
+  }, [getAuth, wallet.publicKey, orderId, rating, comment, onSubmitted]);
 
   return (
     <div className="mt-4 p-4 rounded-lg bg-black-soft border border-neutral-800">
@@ -323,6 +324,7 @@ function TimelineDot({ state, isTerminal }: { state: StepState; isTerminal: bool
 function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => void }) {
   const { order, deliverables: initialDeliverables } = data;
   const wallet = useWallet();
+  const { getAuth } = useWalletAuth();
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
@@ -364,7 +366,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
     setGenError(null);
 
     try {
-      const auth = await signWalletAuth(wallet);
+      const auth = await getAuth();
       const res = await fetch(`/api/orders/${order.id}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -395,13 +397,13 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
     } finally {
       setGenerating(false);
     }
-  }, [canGenerate, wallet.publicKey, prompt, order.id, order.quota_total, onRefresh]);
+  }, [canGenerate, wallet.publicKey, prompt, order.id, order.quota_total, onRefresh, getAuth]);
 
   const handleApprove = useCallback(async () => {
     if (!wallet.publicKey) return;
     setApproving(true);
     try {
-      const auth = await signWalletAuth(wallet);
+      const auth = await getAuth();
       const res = await fetch(`/api/orders/${order.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -412,7 +414,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
     } finally {
       setApproving(false);
     }
-  }, [wallet, order.id, onRefresh]);
+  }, [getAuth, wallet.publicKey, order.id, onRefresh]);
 
   return (
     <div className="space-y-6">
@@ -549,30 +551,17 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
   );
 }
 
-const AUTH_CACHE_TTL = 4 * 60 * 1000;
-
 function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet: string }) {
-  const walletCtx = useWallet();
+  const { getAuth, clearAuth } = useWalletAuth();
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const cachedAuthRef = useRef<{ payload: { wallet: string; wallet_sig: string; wallet_sig_ts: number }; ts: number } | null>(null);
-
-  const getCachedAuth = useCallback(async () => {
-    const cached = cachedAuthRef.current;
-    if (cached && Date.now() - cached.ts < AUTH_CACHE_TTL) {
-      return cached.payload;
-    }
-    const payload = await signWalletAuth(walletCtx);
-    cachedAuthRef.current = { payload, ts: Date.now() };
-    return payload;
-  }, [walletCtx]);
 
   const fetchMessages = useCallback(async () => {
     try {
-      const auth = await getCachedAuth();
+      const auth = await getAuth();
       const qs = new URLSearchParams({
         wallet: auth.wallet,
         wallet_sig: auth.wallet_sig,
@@ -583,12 +572,12 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
       if (json.success) {
         setMessages(json.data);
       } else if (json.error?.includes('expired')) {
-        cachedAuthRef.current = null;
+        clearAuth();
       }
     } catch {
       // silent polling failure
     }
-  }, [orderId, getCachedAuth]);
+  }, [orderId, getAuth, clearAuth]);
 
   useEffect(() => {
     fetchMessages();
@@ -604,7 +593,7 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
     if (!input.trim() || sending) return;
     setSending(true);
     try {
-      const auth = await getCachedAuth();
+      const auth = await getAuth();
       const res = await fetch(`/api/orders/${orderId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -620,7 +609,7 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
     } finally {
       setSending(false);
     }
-  }, [orderId, getCachedAuth, input, sending]);
+  }, [orderId, getAuth, input, sending]);
 
   return (
     <div className="mt-8">
@@ -676,6 +665,7 @@ export default function AtelierOrderPage() {
   const params = useParams();
   const wallet = useWallet();
   const { connection } = useConnection();
+  const { getAuth } = useWalletAuth();
   const [data, setData] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -783,7 +773,7 @@ export default function AtelierOrderPage() {
                 if (!confirm(msg)) return;
                 setCancelling(true);
                 try {
-                  const auth = await signWalletAuth(wallet);
+                  const auth = await getAuth();
                   const res = await fetch(`/api/orders/${order.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -838,7 +828,7 @@ export default function AtelierOrderPage() {
                   const txSig = await sendUsdcPayment(connection, wallet, new PublicKey(treasuryWallet), total);
 
                   setPayMsg('Verifying payment...');
-                  const auth = await signWalletAuth(wallet);
+                  const auth = await getAuth();
                   const res = await fetch(`/api/orders/${order.id}`, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -927,7 +917,7 @@ export default function AtelierOrderPage() {
                   onClick={async () => {
                     setApproving(true);
                     try {
-                      const auth = await signWalletAuth(wallet);
+                      const auth = await getAuth();
                       const res = await fetch(`/api/orders/${order.id}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
@@ -956,7 +946,7 @@ export default function AtelierOrderPage() {
                     if (!confirm('Are you sure you want to dispute this order?')) return;
                     setDisputing(true);
                     try {
-                      const auth = await signWalletAuth(wallet);
+                      const auth = await getAuth();
                       const res = await fetch(`/api/orders/${order.id}`, {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },

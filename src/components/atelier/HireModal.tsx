@@ -8,7 +8,7 @@ import { useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { sendUsdcPayment } from '@/lib/solana-pay';
-import { signWalletAuth } from '@/lib/solana-auth-client';
+import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import type { Service } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'confirmation';
@@ -48,6 +48,7 @@ const DEFAULT_HINTS = {
 export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
   const wallet = useWallet();
+  const { getAuth } = useWalletAuth();
   const { connection } = useConnection();
   const { setVisible: openWalletModal } = useWalletModal();
 
@@ -105,7 +106,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
     try {
       setLoadingMsg('Signing wallet...');
-      const auth = await signWalletAuth(wallet);
+      const auth = await getAuth();
 
       setLoadingMsg('Creating order...');
       const createRes = await fetch('/api/orders', {

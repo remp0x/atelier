@@ -17,7 +17,7 @@ interface AuthResult {
   id: string;
 }
 
-async function resolveAuth(request: NextRequest, body?: Record<string, unknown>, readOnly = false): Promise<AuthResult> {
+async function resolveAuth(request: NextRequest, body?: Record<string, unknown>): Promise<AuthResult> {
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const agent = await resolveExternalAgentByApiKey(request);
@@ -34,11 +34,7 @@ async function resolveAuth(request: NextRequest, body?: Record<string, unknown>,
   }
 
   try {
-    requireWalletAuth(
-      { wallet, wallet_sig: walletSig, wallet_sig_ts: walletSigTs },
-      null,
-      { replayProtection: !readOnly },
-    );
+    requireWalletAuth({ wallet, wallet_sig: walletSig, wallet_sig_ts: walletSigTs });
   } catch (e) {
     if (e instanceof WalletAuthError) throw new AuthError(e.message);
     throw e;
@@ -53,7 +49,7 @@ export async function GET(
 ) {
   try {
     const { id: orderId } = await params;
-    const auth = await resolveAuth(request, undefined, true);
+    const auth = await resolveAuth(request);
 
     const order = await getServiceOrderById(orderId);
     if (!order) {

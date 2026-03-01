@@ -50,6 +50,8 @@ const STATUS_COLORS: Record<string, string> = {
   disputed: 'text-red-400',
 };
 
+type TabId = 'services' | 'portfolio' | 'reviews' | 'activity';
+
 interface AgentTokenInfo {
   mint: string | null;
   name: string | null;
@@ -98,6 +100,7 @@ export default function AtelierAgentPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hireService, setHireService] = useState<Service | null>(null);
+  const [activeTab, setActiveTab] = useState<TabId>('services');
 
   async function loadAgent() {
     try {
@@ -145,8 +148,17 @@ export default function AtelierAgentPage() {
   const { agent, services, portfolio, stats, reviews, recentOrders } = data;
   const avatarLetter = agent.name.charAt(0).toUpperCase();
   const isOwner = publicKey && agent.owner_wallet === publicKey.toBase58();
-  const avgRating = stats.avg_rating ?? 0;
+
+  const avgRating = stats.avg_rating
+    ?? (reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0);
   const roundedRating = Math.round(avgRating);
+
+  const tabs: { id: TabId; label: string; count: number }[] = [
+    { id: 'services', label: 'Services', count: services.length },
+    { id: 'portfolio', label: 'Portfolio', count: portfolio.length },
+    { id: 'reviews', label: 'Reviews', count: reviews.length },
+    { id: 'activity', label: 'Activity', count: recentOrders.length },
+  ];
 
   return (
     <AtelierAppLayout>
@@ -154,7 +166,7 @@ export default function AtelierAgentPage() {
         {/* Back link */}
         <Link
           href={atelierHref('/atelier/browse')}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-neutral-400 hover:text-atelier font-mono mb-8 transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-neutral-400 hover:text-atelier font-mono mb-6 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -162,75 +174,120 @@ export default function AtelierAgentPage() {
           Back
         </Link>
 
-        {/* ── Profile header ── */}
-        <div className="flex flex-col md:flex-row gap-6 mb-10">
-          <div className="shrink-0">
-            {agent.avatar_url ? (
-              <img src={agent.avatar_url} alt={agent.name} className="w-20 h-20 rounded-xl object-cover" />
-            ) : (
-              <div className="w-20 h-20 rounded-xl bg-atelier/20 flex items-center justify-center text-atelier text-2xl font-bold font-mono">
-                {avatarLetter}
+        {/* ── Profile card ── */}
+        <div className="rounded-xl bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 p-6 mb-8">
+          <div className="flex flex-col md:flex-row gap-6">
+            <div className="shrink-0">
+              {agent.avatar_url ? (
+                <img src={agent.avatar_url} alt={agent.name} className="w-20 h-20 rounded-xl object-cover" />
+              ) : (
+                <div className="w-20 h-20 rounded-xl bg-atelier/20 flex items-center justify-center text-atelier text-2xl font-bold font-mono">
+                  {avatarLetter}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h1 className="text-2xl font-bold font-display text-black dark:text-white">{agent.name}</h1>
+                {agent.verified === 1 && agent.is_atelier_official !== 1 && agent.blue_check !== 1 && (
+                  <svg className="w-5 h-5 text-atelier" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.403 12.652a3 3 0 010-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                  </svg>
+                )}
+                {agent.is_atelier_official === 1 && (
+                  <svg className="w-5 h-5 text-atelier" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.403 12.652a3 3 0 010-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                  </svg>
+                )}
+                {agent.blue_check === 1 && agent.is_atelier_official !== 1 && (
+                  <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.403 12.652a3 3 0 010-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                  </svg>
+                )}
+                <span className={`px-2 py-0.5 rounded text-2xs font-mono ${
+                  agent.source === 'official'
+                    ? 'bg-atelier/10 text-atelier'
+                    : agent.source === 'agentgram'
+                      ? 'bg-orange/10 text-orange'
+                      : 'bg-atelier/10 text-atelier'
+                }`}>
+                  {agent.source === 'official' ? 'by ATELIER' : agent.source === 'agentgram' ? 'AgentGram' : 'External'}
+                </span>
               </div>
-            )}
+
+              <div className="flex items-center gap-2 mb-3">
+                <StarRating rating={roundedRating} size="md" />
+                <span className="text-sm font-mono text-neutral-500">
+                  {reviews.length > 0
+                    ? `${avgRating.toFixed(1)} (${reviews.length} ${reviews.length === 1 ? 'review' : 'reviews'})`
+                    : '0 reviews'}
+                </span>
+              </div>
+
+              <p className="text-sm text-gray-500 dark:text-neutral-400 mb-3">
+                {agent.bio || agent.description}
+              </p>
+
+              <div className="flex items-center gap-4 text-xs font-mono text-neutral-500">
+                <span>{stats.completed_orders} orders</span>
+                <span className="text-neutral-700 dark:text-neutral-700">·</span>
+                <span>{stats.followers} followers</span>
+                <span className="text-neutral-700 dark:text-neutral-700">·</span>
+                <span>{stats.services_count} services</span>
+              </div>
+            </div>
           </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-2xl font-bold font-display text-black dark:text-white">{agent.name}</h1>
-              {agent.verified === 1 && agent.is_atelier_official !== 1 && agent.blue_check !== 1 && (
-                <svg className="w-5 h-5 text-atelier" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.403 12.652a3 3 0 010-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                </svg>
-              )}
-              {agent.is_atelier_official === 1 && (
-                <svg className="w-5 h-5 text-atelier" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.403 12.652a3 3 0 010-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                </svg>
-              )}
-              {agent.blue_check === 1 && agent.is_atelier_official !== 1 && (
-                <svg className="w-5 h-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.403 12.652a3 3 0 010-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                </svg>
-              )}
-              <span className={`px-2 py-0.5 rounded text-2xs font-mono ${
-                agent.source === 'official'
-                  ? 'bg-atelier/10 text-atelier'
-                  : agent.source === 'agentgram'
-                    ? 'bg-orange/10 text-orange'
-                    : 'bg-atelier/10 text-atelier'
-              }`}>
-                {agent.source === 'official' ? 'by ATELIER' : agent.source === 'agentgram' ? 'AgentGram' : 'External'}
-              </span>
-            </div>
-
-            {/* Star rating — always visible */}
-            <div className="flex items-center gap-2 mb-3">
-              <StarRating rating={roundedRating} size="md" />
-              <span className="text-sm font-mono text-neutral-500">
-                {reviews.length > 0
-                  ? `${avgRating.toFixed(1)} (${reviews.length} ${reviews.length === 1 ? 'review' : 'reviews'})`
-                  : '0 reviews'}
-              </span>
-            </div>
-
-            <p className="text-sm text-gray-500 dark:text-neutral-400 mb-3">
-              {agent.bio || agent.description}
-            </p>
-
-            <div className="flex items-center gap-4 text-xs font-mono text-neutral-500">
-              <span>{stats.completed_orders} orders</span>
-              <span className="text-neutral-700 dark:text-neutral-700">·</span>
-              <span>{stats.followers} followers</span>
-              <span className="text-neutral-700 dark:text-neutral-700">·</span>
-              <span>{stats.services_count} services</span>
-            </div>
+          {/* Token — inside profile card */}
+          <div className="mt-5 pt-5 border-t border-gray-200 dark:border-neutral-800">
+            <TokenLaunchSection
+              agentId={agent.id}
+              agentName={agent.name}
+              agentDescription={agent.bio || agent.description || ''}
+              agentAvatarUrl={agent.avatar_url}
+              token={agent.token || null}
+              ownerWallet={agent.owner_wallet || null}
+              onTokenSet={loadAgent}
+            />
+            {agent.token?.mode === 'pumpfun' && agent.token.creator_wallet && publicKey?.toBase58() === agent.token.creator_wallet && (
+              <p className="mt-2 text-2xs text-neutral-500 font-mono">
+                Creator fees: managed by Atelier (90% yours, 10% platform fee)
+              </p>
+            )}
           </div>
         </div>
 
-        {/* ── Services ── */}
-        {services.length > 0 && (
-          <section className="mb-12">
-            <h2 className="text-lg font-bold font-display text-black dark:text-white mb-4">Services</h2>
+        {/* ── Tabs ── */}
+        <div className="flex items-center gap-1 border-b border-gray-200 dark:border-neutral-800 mb-6">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 text-sm font-mono transition-colors relative ${
+                activeTab === tab.id
+                  ? 'text-atelier'
+                  : 'text-neutral-500 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span className={`ml-1.5 text-2xs ${activeTab === tab.id ? 'text-atelier' : 'text-neutral-600'}`}>
+                  {tab.count}
+                </span>
+              )}
+              {activeTab === tab.id && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-atelier rounded-full" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Tab content ── */}
+
+        {/* Services */}
+        {activeTab === 'services' && (
+          services.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {services.map((svc) => (
                 <ServiceCard
@@ -240,16 +297,14 @@ export default function AtelierAgentPage() {
                 />
               ))}
             </div>
-          </section>
+          ) : (
+            <EmptyTab message="No services listed yet" />
+          )
         )}
 
-        {/* ── Portfolio ── */}
-        {portfolio.length > 0 && (
-          <section className="mb-12">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold font-display text-black dark:text-white">Portfolio</h2>
-              <span className="text-xs font-mono text-neutral-500">{portfolio.length} works</span>
-            </div>
+        {/* Portfolio */}
+        {activeTab === 'portfolio' && (
+          portfolio.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {portfolio.map((item, idx) => {
                 const isFeatured = idx < 2 && portfolio.length >= 4;
@@ -309,21 +364,14 @@ export default function AtelierAgentPage() {
                 );
               })}
             </div>
-          </section>
+          ) : (
+            <EmptyTab message="No portfolio items yet" />
+          )
         )}
 
-        {/* ── Reviews ── */}
-        <section className="mb-12">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold font-display text-black dark:text-white">Reviews</h2>
-            {reviews.length > 0 && (
-              <div className="flex items-center gap-2">
-                <StarRating rating={roundedRating} />
-                <span className="text-sm font-mono text-neutral-500">{avgRating.toFixed(1)}</span>
-              </div>
-            )}
-          </div>
-          {reviews.length > 0 ? (
+        {/* Reviews */}
+        {activeTab === 'reviews' && (
+          reviews.length > 0 ? (
             <div className="space-y-3">
               {reviews.map((review) => (
                 <div key={review.id} className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
@@ -338,37 +386,18 @@ export default function AtelierAgentPage() {
               ))}
             </div>
           ) : (
-            <div className="py-8 text-center rounded-lg border border-dashed border-gray-200 dark:border-neutral-800">
+            <div className="py-12 text-center">
               <StarRating rating={0} size="md" />
               <p className="text-xs font-mono text-neutral-500 mt-2">No reviews yet</p>
             </div>
-          )}
-        </section>
+          )
+        )}
 
-        {/* ── Token ── */}
-        <section className="mb-12">
-          <TokenLaunchSection
-            agentId={agent.id}
-            agentName={agent.name}
-            agentDescription={agent.bio || agent.description || ''}
-            agentAvatarUrl={agent.avatar_url}
-            token={agent.token || null}
-            ownerWallet={agent.owner_wallet || null}
-            onTokenSet={loadAgent}
-          />
-          {agent.token?.mode === 'pumpfun' && agent.token.creator_wallet && publicKey?.toBase58() === agent.token.creator_wallet && (
-            <p className="mt-2 text-2xs text-neutral-500 font-mono">
-              Creator fees: managed by Atelier (90% yours, 10% platform fee)
-            </p>
-          )}
-        </section>
-
-        {/* ── Activity feed ── */}
-        {recentOrders.length > 0 && (
-          <section className="mb-12">
-            <h2 className="text-sm font-mono text-neutral-500 uppercase tracking-wider mb-3">Recent Activity</h2>
+        {/* Activity */}
+        {activeTab === 'activity' && (
+          recentOrders.length > 0 ? (
             <div className="space-y-1">
-              {recentOrders.slice(0, 8).map((order) => {
+              {recentOrders.map((order) => {
                 const wallet = order.client_wallet;
                 const displayName = order.client_display_name
                   || (wallet ? `${wallet.slice(0, 4)}...${wallet.slice(-4)}` : 'Anonymous');
@@ -395,11 +424,13 @@ export default function AtelierAgentPage() {
                 );
               })}
             </div>
-          </section>
+          ) : (
+            <EmptyTab message="No recent activity" />
+          )
         )}
 
         {/* Empty state for external agents */}
-        {agent.source === 'external' && services.length === 0 && portfolio.length === 0 && (
+        {agent.source === 'external' && services.length === 0 && portfolio.length === 0 && activeTab === 'services' && (
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm mb-2">This is an external agent</p>
             {agent.endpoint_url && (
@@ -419,5 +450,13 @@ export default function AtelierAgentPage() {
         />
       )}
     </AtelierAppLayout>
+  );
+}
+
+function EmptyTab({ message }: { message: string }) {
+  return (
+    <div className="py-12 text-center">
+      <p className="text-sm font-mono text-neutral-500">{message}</p>
+    </div>
   );
 }

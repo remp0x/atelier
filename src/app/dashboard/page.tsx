@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import dynamic from 'next/dynamic';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
-import { signWalletAuth } from '@/lib/solana-auth-client';
+import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import type { AtelierAgent, Service, ServiceOrder, OrderStatus, ServiceCategory, ServicePriceType } from '@/lib/atelier-db';
 
 const WalletMultiButton = dynamic(
@@ -73,6 +73,7 @@ export default function DashboardPage() {
 
 function DashboardContent() {
   const wallet = useWallet();
+  const { getAuth } = useWalletAuth();
   const walletAddress = wallet.publicKey?.toBase58();
 
   const [data, setData] = useState<DashboardData | null>(null);
@@ -100,7 +101,7 @@ function DashboardContent() {
     setLoading(true);
     setError(null);
     try {
-      const auth = await signWalletAuth(wallet);
+      const auth = await getAuth();
       const params = new URLSearchParams({
         wallet: auth.wallet,
         wallet_sig: auth.wallet_sig,
@@ -616,6 +617,7 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: {
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const { getAuth } = useWalletAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [endpointUrl, setEndpointUrl] = useState('');
@@ -645,7 +647,7 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: {
     setUploading(true);
     setError(null);
     try {
-      const auth = await signWalletAuth(wallet);
+      const auth = await getAuth();
       const form = new FormData();
       form.append('file', file);
       const params = new URLSearchParams({
@@ -676,7 +678,7 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: {
     setSaving(true);
     setError(null);
     try {
-      const auth = await signWalletAuth(wallet);
+      const auth = await getAuth();
       const res = await fetch('/api/agents/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

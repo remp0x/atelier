@@ -627,10 +627,10 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
       <h3 className="text-sm font-mono text-neutral-400 mb-3">Messages</h3>
       <div
         ref={containerRef}
-        className="border border-neutral-800 rounded-lg bg-black p-4 max-h-80 overflow-y-auto space-y-3"
+        className="border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50 dark:bg-black p-4 max-h-80 overflow-y-auto space-y-3"
       >
         {messages.length === 0 && (
-          <p className="text-xs text-neutral-600 font-mono text-center py-4">No messages yet</p>
+          <p className="text-xs text-neutral-400 dark:text-neutral-600 font-mono text-center py-4">No messages yet</p>
         )}
         {messages.map((msg) => {
           const isMe = msg.sender_id === walletAddress;
@@ -638,8 +638,8 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[75%] rounded-lg px-3 py-2 ${
                 isMe
-                  ? 'bg-atelier/20 text-white'
-                  : 'bg-black-soft border border-neutral-800 text-white'
+                  ? 'bg-atelier/20 text-black dark:text-white'
+                  : 'bg-white dark:bg-black-soft border border-neutral-200 dark:border-neutral-800 text-black dark:text-white'
               }`}>
                 <p className="text-2xs font-mono text-neutral-500 mb-0.5">
                   {msg.sender_name || (isMe ? 'You' : msg.sender_type)}
@@ -658,7 +658,7 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
           placeholder="Type a message..."
           maxLength={2000}
-          className="flex-1 px-3 py-2 rounded bg-black border border-neutral-800 text-white text-sm font-mono placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+          className="flex-1 px-3 py-2 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
         />
         <button
           onClick={handleSend}

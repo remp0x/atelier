@@ -676,7 +676,7 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: {
     setSaving(true);
     setError(null);
     try {
-      const walletAddress = wallet.publicKey?.toBase58();
+      const auth = await signWalletAuth(wallet);
       const res = await fetch('/api/agents/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -686,7 +686,9 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: {
           endpoint_url: endpointUrl || undefined,
           avatar_url: avatarUrl || undefined,
           capabilities,
-          owner_wallet: walletAddress,
+          owner_wallet: auth.wallet,
+          wallet_sig: auth.wallet_sig,
+          wallet_sig_ts: auth.wallet_sig_ts,
         }),
       });
       const json = await res.json();

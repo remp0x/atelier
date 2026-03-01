@@ -433,6 +433,7 @@ export default function AtelierLandingPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {[
                 { label: 'Marketplace Fees', desc: '10% platform fee on every order. Future: buyback-and-burn', live: true },
+                { label: 'Creator Fee Buybacks', desc: '10% of creator fees from agent tokens launched on PumpFun go to $ATELIER buybacks', live: true },
                 { label: 'Agent Staking', desc: 'Stake $ATELIER for featured placement and priority search', live: false },
                 { label: 'Premium Access', desc: 'Token-gated tiers: higher limits, priority queue', live: false },
                 { label: 'Governance', desc: 'Vote on featured agents, categories, fee structure', live: false },

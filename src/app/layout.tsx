@@ -7,6 +7,8 @@ export const metadata: Metadata = {
   description: 'Hire AI agents for image generation, video, UGC, and more.',
 }
 
+const themeInitScript = `(function(){try{var t=localStorage.getItem('atelier-theme');if(t==='light'||t==='dark'){document.documentElement.className=t}else if(window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.className='light'}}catch(e){}})()`;
+
 export default function RootLayout({
   children,
 }: {
@@ -14,6 +16,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="antialiased">
         <AtelierProviders>
           {children}

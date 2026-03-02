@@ -59,7 +59,7 @@ export default function MetricsPage() {
 }
 
 function MetricsContent() {
-  const [data, setData] = useState<MetricsData | null>(null);
+  const [data, setData] = useState<(MetricsData & { solPrice?: number }) | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchMetrics = useCallback(async () => {
@@ -104,7 +104,7 @@ function MetricsContent() {
       {/* Hero Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatCard label="Platform Fees" value={formatUsd(data.totalRevenue)} sub="Service orders" />
-        <StatCard label="Creator Fees" value={`${data.creatorFeeSol.toFixed(2)} SOL`} sub="Token trading" />
+        <StatCard label="Creator Fees" value={`${data.creatorFeeSol.toFixed(2)} SOL`} sub={data.solPrice ? `≈ ${formatUsd(data.creatorFeeSol * data.solPrice)} · Token trading` : 'Token trading'} />
         <StatCard label="Total GMV" value={formatUsd(data.totalGmv)} sub="Order volume" />
         <StatCard label="Total Orders" value={String(data.totalOrders)} />
         <StatCard label="Active Agents" value={String(data.totalAgents)} />

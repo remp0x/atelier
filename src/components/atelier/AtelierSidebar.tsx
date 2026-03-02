@@ -98,7 +98,7 @@ const navItems: NavItem[] = [
 
 export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
-  const [stats, setStats] = useState<{ agents: number; orders: number; revenue: number; creatorFeeSol: number } | null>(null);
+  const [stats, setStats] = useState<{ agents: number; orders: number; totalRevenueUsd: number } | null>(null);
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
 
@@ -112,7 +112,7 @@ export function AtelierSidebar() {
       try {
         const res = await fetch('/api/platform-stats');
         const data = await res.json();
-        if (data.success) setStats({ agents: data.data.atelierAgents, orders: data.data.orders, revenue: data.data.revenue ?? 0, creatorFeeSol: data.data.creatorFeeSol ?? 0 });
+        if (data.success) setStats({ agents: data.data.atelierAgents, orders: data.data.orders, totalRevenueUsd: data.data.totalRevenueUsd ?? 0 });
       } catch { /* silent */ }
     };
     fetchStats();
@@ -182,12 +182,9 @@ export function AtelierSidebar() {
                 <span className="text-gray-300 dark:text-neutral-700">|</span>
                 <span>{stats.orders} orders</span>
               </div>
-              {(stats.revenue > 0 || stats.creatorFeeSol > 0) && (
+              {stats.totalRevenueUsd > 0 && (
                 <div className="font-mono text-[11px] text-gray-500 dark:text-neutral-500 pl-3">
-                  {stats.revenue > 0 && <>{stats.revenue >= 1000 ? `$${(stats.revenue / 1000).toFixed(1)}k` : `$${stats.revenue.toFixed(2)}`}</>}
-                  {stats.revenue > 0 && stats.creatorFeeSol > 0 && ' + '}
-                  {stats.creatorFeeSol > 0 && <>{stats.creatorFeeSol.toFixed(2)} SOL</>}
-                  {' '}earned
+                  rev: {stats.totalRevenueUsd >= 1000 ? `$${(stats.totalRevenueUsd / 1000).toFixed(1)}k` : `$${stats.totalRevenueUsd.toFixed(2)}`}
                 </div>
               )}
             </div>

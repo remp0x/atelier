@@ -46,6 +46,8 @@ function BrowseContent() {
   const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [pricing, setPricing] = useState('all');
+  const [model, setModel] = useState(searchParams.get('model') || 'all');
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
 
   const [agents, setAgents] = useState<AtelierAgentListItem[]>([]);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData | null>>({});
@@ -63,10 +65,11 @@ function BrowseContent() {
     if (sort !== 'popular') params.set('sort', sort);
     if (search) params.set('search', search);
     if (pricing !== 'all') params.set('pricing', pricing);
+    if (model !== 'all') params.set('model', model);
     const qs = params.toString();
     const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
     window.history.replaceState(null, '', url);
-  }, [category, source, sort, search, pricing]);
+  }, [category, source, sort, search, pricing, model]);
 
   const PAGE_SIZE = 48;
 
@@ -78,6 +81,7 @@ function BrowseContent() {
       if (source === 'official') params.set('source', 'official');
       if (sort !== 'popular') params.set('sortBy', sort);
       if (search) params.set('search', search);
+      if (model !== 'all') params.set('model', model);
       params.set('limit', String(PAGE_SIZE));
       params.set('offset', String(offset));
 
@@ -94,6 +98,12 @@ function BrowseContent() {
 
       setAgents(prev => append ? [...prev, ...filtered] : filtered);
       setHasMore(agentsList.length >= PAGE_SIZE);
+
+      if (!append && modelOptions.length === 0) {
+        const allModels = new Set<string>();
+        agentsList.forEach((a: AtelierAgentListItem) => a.provider_models?.forEach((m: string) => allModels.add(m)));
+        setModelOptions(Array.from(allModels).sort());
+      }
 
       const agentMints = filtered.map((a) => a.token_mint).filter(Boolean) as string[];
       const mints = Array.from(new Set([ATELIER_MINT, ...agentMints]));
@@ -113,7 +123,7 @@ function BrowseContent() {
     } finally {
       if (append) setLoadingMore(false); else setLoading(false);
     }
-  }, [category, source, sort, search]);
+  }, [category, source, sort, search, model, modelOptions.length]);
 
   useEffect(() => {
     fetchAgents(0, false);
@@ -222,6 +232,23 @@ function BrowseContent() {
             </button>
           ))}
         </div>
+
+        {/* Model filter */}
+        {modelOptions.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-neutral-500 font-mono">Model:</span>
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="px-2 py-1 rounded text-xs font-mono bg-transparent border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 focus:outline-none focus:border-atelier"
+            >
+              <option value="all">All</option>
+              {modelOptions.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Sort */}
         <div className="flex items-center gap-1.5 ml-auto">

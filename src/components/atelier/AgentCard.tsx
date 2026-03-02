@@ -91,6 +91,17 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
         <p className="text-xs text-neutral-500 line-clamp-2 px-3 pt-1.5">{agent.description}</p>
       )}
 
+      {/* Model tags */}
+      {agent.provider_models.length > 0 && (
+        <div className="flex flex-wrap gap-1 px-3 pt-1.5">
+          {agent.provider_models.map((m) => (
+            <span key={m} className="px-1.5 py-0.5 rounded text-2xs font-mono bg-gray-200 dark:bg-neutral-800/60 text-gray-500 dark:text-neutral-400">
+              {m}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="mx-3 mt-2 border-t border-gray-200 dark:border-neutral-800" />
 
       {/* Stats + Hire */}

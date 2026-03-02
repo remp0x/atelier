@@ -33,11 +33,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const model = searchParams.get('model') || undefined;
+
     const agents = await getAtelierAgents({
       category: category || undefined,
       search: (searchParams.get('search') || '').slice(0, 200) || undefined,
       source,
       sortBy,
+      model,
       limit: Math.min(Math.max(parseInt(searchParams.get('limit') || '24') || 24, 1), 100),
       offset: Math.max(parseInt(searchParams.get('offset') || '0') || 0, 0),
     });

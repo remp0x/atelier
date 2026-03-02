@@ -1,31 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   Keypair,
-  PublicKey,
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import {
-  PUMP_SDK,
-  getBuyTokenAmountFromSolAmount,
-  OnlinePumpSdk,
-} from '@pump-fun/pump-sdk';
-import BN from 'bn.js';
-import { getAtelierAgent, updateAgentToken, savePendingLaunch, getPendingLaunch, deletePendingLaunch } from '@/lib/atelier-db';
+import { PUMP_SDK } from '@pump-fun/pump-sdk';
+import { getAtelierAgent, updateAgentToken } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
-import { getServerConnection, ATELIER_PUBKEY } from '@/lib/solana-server';
+import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
 import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
+import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 
 const launchRateLimit = rateLimit(10, 60 * 60 * 1000);
 
 const TOKEN_NAME_SUFFIX = ' by Atelier';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-const PENDING_TTL_MS = 5 * 60 * 1000;
-
-const MAX_DEV_BUY_SOL = 50;
 
 export async function POST(
   request: NextRequest,
@@ -38,15 +30,29 @@ export async function POST(
     const { id } = await params;
     const body = await request.json();
 
-    let verifiedWallet: string;
+    let agentId = id;
+
+    // Auth: wallet auth from body, or API key from Authorization header
+    let verifiedWallet: string | null = null;
     try {
       verifiedWallet = requireWalletAuth(body);
-    } catch (err) {
-      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
-      return NextResponse.json({ success: false, error: msg }, { status: 401 });
+    } catch {
+      // Wallet auth failed — try API key
+      try {
+        const apiAgent = await resolveExternalAgentByApiKey(request);
+        if (apiAgent.id !== agentId) {
+          return NextResponse.json(
+            { success: false, error: 'API key does not belong to this agent' },
+            { status: 403 },
+          );
+        }
+      } catch (err) {
+        const msg = err instanceof AuthError ? err.message : 'Authentication failed';
+        return NextResponse.json({ success: false, error: msg }, { status: 401 });
+      }
     }
 
-    const agent = await getAtelierAgent(id);
+    const agent = await getAtelierAgent(agentId);
     if (!agent) {
       return NextResponse.json(
         { success: false, error: 'Agent not found' },
@@ -54,7 +60,7 @@ export async function POST(
       );
     }
 
-    if (!agent.owner_wallet || verifiedWallet !== agent.owner_wallet) {
+    if (verifiedWallet && agent.owner_wallet && verifiedWallet !== agent.owner_wallet) {
       return NextResponse.json(
         { success: false, error: 'Only the agent owner can launch a token' },
         { status: 403 },
@@ -75,19 +81,11 @@ export async function POST(
       );
     }
 
-    const { symbol, dev_buy_sol } = body;
+    const { symbol } = body;
 
     if (typeof symbol !== 'string' || symbol.length < 1 || symbol.length > 10) {
       return NextResponse.json(
         { success: false, error: 'symbol must be 1-10 characters' },
-        { status: 400 },
-      );
-    }
-
-    const devBuySol = typeof dev_buy_sol === 'number' ? dev_buy_sol : 0;
-    if (devBuySol < 0 || devBuySol > MAX_DEV_BUY_SOL) {
-      return NextResponse.json(
-        { success: false, error: `dev_buy_sol must be between 0 and ${MAX_DEV_BUY_SOL}` },
         { status: 400 },
       );
     }
@@ -133,189 +131,36 @@ export async function POST(
     const { metadataUri } = await uploadToPumpFunIpfs(imageBlob, tokenName, symbol, description);
 
     const connection = getServerConnection();
+    const atelierKeypair = getAtelierKeypair();
     const mintKeypair = Keypair.generate();
     const mint = mintKeypair.publicKey;
-    const userPubkey = new PublicKey(verifiedWallet);
 
-    let instructions;
-    if (devBuySol > 0) {
-      const onlineSdk = new OnlinePumpSdk(connection);
-      const [global, feeConfig] = await Promise.all([
-        onlineSdk.fetchGlobal(),
-        onlineSdk.fetchFeeConfig(),
-      ]);
-      const solAmount = new BN(Math.floor(devBuySol * 1e9));
-      const tokenAmount = getBuyTokenAmountFromSolAmount({
-        global,
-        feeConfig,
-        mintSupply: null,
-        bondingCurve: null,
-        amount: solAmount,
-      });
+    const instruction = await PUMP_SDK.createV2Instruction({
+      mint,
+      name: tokenName,
+      symbol,
+      uri: metadataUri,
+      creator: ATELIER_PUBKEY,
+      user: ATELIER_PUBKEY,
+      mayhemMode: false,
+    });
 
-      instructions = await PUMP_SDK.createV2AndBuyInstructions({
-        global,
-        mint,
-        name: tokenName,
-        symbol,
-        uri: metadataUri,
-        creator: ATELIER_PUBKEY,
-        user: userPubkey,
-        amount: tokenAmount,
-        solAmount,
-        mayhemMode: false,
-      });
-    } else {
-      instructions = [
-        await PUMP_SDK.createV2Instruction({
-          mint,
-          name: tokenName,
-          symbol,
-          uri: metadataUri,
-          creator: ATELIER_PUBKEY,
-          user: userPubkey,
-          mayhemMode: false,
-        }),
-      ];
-    }
-
-    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
 
     const messageV0 = new TransactionMessage({
-      payerKey: userPubkey,
+      payerKey: ATELIER_PUBKEY,
       recentBlockhash: blockhash,
-      instructions,
+      instructions: [instruction],
     }).compileToV0Message();
 
     const transaction = new VersionedTransaction(messageV0);
-    transaction.sign([mintKeypair]);
-
-    const txBase64 = Buffer.from(transaction.serialize()).toString('base64');
-    const mintAddress = mint.toBase58();
-
-    await savePendingLaunch(`${id}:${mintAddress}`, {
-      mint: mintAddress,
-      agent_id: id,
-      wallet: verifiedWallet,
-      token_name: tokenName,
-      token_symbol: symbol,
-      metadata_uri: metadataUri,
-      image_url: agent.avatar_url,
-      expires_at: Date.now() + PENDING_TTL_MS,
-    });
-
-    return NextResponse.json({
-      success: true,
-      data: { transaction: txBase64, mint: mintAddress },
-    });
-  } catch (error) {
-    console.error('Token launch prepare error:', error);
-    if (error instanceof Error && error.message.includes('PumpFun IPFS upload failed')) {
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 502 },
-      );
-    }
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 },
-    );
-  }
-}
-
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-): Promise<NextResponse> {
-  try {
-    const rateLimitResponse = launchRateLimit(request);
-    if (rateLimitResponse) return rateLimitResponse;
-
-    const { id } = await params;
-    const body = await request.json();
-
-    let verifiedWallet: string;
-    try {
-      verifiedWallet = requireWalletAuth(body);
-    } catch (err) {
-      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
-      return NextResponse.json({ success: false, error: msg }, { status: 401 });
-    }
-
-    const agent = await getAtelierAgent(id);
-    if (!agent) {
-      return NextResponse.json(
-        { success: false, error: 'Agent not found' },
-        { status: 404 },
-      );
-    }
-
-    if (!agent.owner_wallet || verifiedWallet !== agent.owner_wallet) {
-      return NextResponse.json(
-        { success: false, error: 'Only the agent owner can launch a token' },
-        { status: 403 },
-      );
-    }
-
-    const { transaction: txBase64, mint } = body;
-
-    if (typeof txBase64 !== 'string' || typeof mint !== 'string') {
-      return NextResponse.json(
-        { success: false, error: 'transaction (base64) and mint are required' },
-        { status: 400 },
-      );
-    }
-
-    const pendingKey = `${id}:${mint}`;
-    const pending = await getPendingLaunch(pendingKey);
-    if (!pending) {
-      return NextResponse.json(
-        { success: false, error: 'No pending launch found for this mint. It may have expired (5 min TTL).' },
-        { status: 404 },
-      );
-    }
-
-    if (pending.wallet !== verifiedWallet) {
-      return NextResponse.json(
-        { success: false, error: 'Wallet mismatch with pending launch' },
-        { status: 403 },
-      );
-    }
-
-    const connection = getServerConnection();
-
-    const txBytes = Buffer.from(txBase64, 'base64');
-    const transaction = VersionedTransaction.deserialize(txBytes);
-
-    const mintPubkey = new PublicKey(mint);
-    const accountKeys = transaction.message.staticAccountKeys;
-    const hasMintSigner = accountKeys.some(
-      (key, i) => key.equals(mintPubkey) && transaction.signatures[i] && !transaction.signatures[i].every(b => b === 0)
-    );
-    if (!hasMintSigner) {
-      return NextResponse.json(
-        { success: false, error: 'Transaction does not contain a valid signature from the expected mint keypair' },
-        { status: 400 },
-      );
-    }
-
-    const userPubkey = new PublicKey(verifiedWallet);
-    const hasUserSigner = accountKeys.some(
-      (key, i) => key.equals(userPubkey) && transaction.signatures[i] && !transaction.signatures[i].every(b => b === 0)
-    );
-    if (!hasUserSigner) {
-      return NextResponse.json(
-        { success: false, error: 'Transaction must be signed by the authenticated wallet' },
-        { status: 400 },
-      );
-    }
+    transaction.sign([atelierKeypair, mintKeypair]);
 
     const txSignature = await connection.sendRawTransaction(transaction.serialize(), {
       skipPreflight: false,
       maxRetries: 3,
     });
 
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
     await connection.confirmTransaction(
       { signature: txSignature, blockhash, lastValidBlockHeight },
       'confirmed',
@@ -332,17 +177,17 @@ export async function PUT(
       );
     }
 
-    const updated = await updateAgentToken(id, {
-      token_mint: mint,
-      token_name: pending.token_name,
-      token_symbol: pending.token_symbol,
-      token_image_url: pending.image_url,
+    const mintAddress = mint.toBase58();
+
+    const updated = await updateAgentToken(agentId, {
+      token_mint: mintAddress,
+      token_name: tokenName,
+      token_symbol: symbol,
+      token_image_url: agent.avatar_url,
       token_mode: 'pumpfun',
-      token_creator_wallet: verifiedWallet,
+      token_creator_wallet: ATELIER_PUBKEY.toBase58(),
       token_tx_hash: txSignature,
     });
-
-    await deletePendingLaunch(pendingKey);
 
     if (!updated) {
       return NextResponse.json(
@@ -353,22 +198,16 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: {
-        mint,
-        tx_signature: txSignature,
-        token_info: {
-          token_mint: mint,
-          token_name: pending.token_name,
-          token_symbol: pending.token_symbol,
-          token_image_url: pending.image_url,
-          token_mode: 'pumpfun',
-          token_creator_wallet: verifiedWallet,
-          token_tx_hash: txSignature,
-        },
-      },
+      data: { mint: mintAddress, tx_signature: txSignature },
     });
   } catch (error) {
-    console.error('Token launch submit error:', error);
+    console.error('Token launch error:', error);
+    if (error instanceof Error && error.message.includes('PumpFun IPFS upload failed')) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(
       { success: false, error: 'Internal server error' },
       { status: 500 },

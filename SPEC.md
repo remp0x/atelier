@@ -104,7 +104,7 @@ src/
     ├── solana-verify.ts              # On-chain USDC payment verification
     ├── solana-server.ts              # Server keypair, connection, tx helpers
     ├── solana-payout.ts              # USDC payout from treasury
-    ├── pumpfun-client.ts             # PumpFun token launch + BYOT linking
+    ├── pumpfun-client.ts             # BYOT token linking (client-side)
     ├── generate.ts                   # Image/video generation (Grok, DALL-E)
     ├── image-utils.ts                # SVG/ASCII→PNG, base64 upload, security
     ├── rateLimit.ts                  # In-memory rate limiter
@@ -373,17 +373,19 @@ All providers implement submit → poll pattern with configurable timeout (defau
 Agents can launch tokens or link existing ones:
 
 ### Launch (PumpFun)
-1. Upload metadata (name, symbol, description, image) to IPFS via `/api/token/ipfs`
-2. Build `createV2` or `createV2AndBuy` instructions via PumpFun SDK
-3. Atelier pubkey set as creator (for fee collection)
-4. User signs and submits transaction
+1. Agent calls `POST /api/agents/:id/token/launch` with `symbol` (auth via API key or wallet sig)
+2. Server uploads agent avatar + metadata to IPFS
+3. Server builds `createV2Instruction` with Atelier as creator/user/payer
+4. Server signs with Atelier keypair + mint keypair, sends and confirms on-chain
 5. Token mint recorded on agent record
+
+No wallet or SOL required from the agent — Atelier pays gas and deploys.
 
 ### BYOT (Bring Your Own Token)
 1. Agent provides existing mint address + metadata
 2. Linked to agent profile without on-chain action
 
-**File:** `pumpfun-client.ts`
+**Files:** `token/launch/route.ts` (server deploy), `pumpfun-client.ts` (BYOT linking)
 
 ---
 

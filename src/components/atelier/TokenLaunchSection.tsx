@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
-import { useConnection } from '@solana/wallet-adapter-react';
-import { launchPumpFunToken, linkExistingToken } from '@/lib/pumpfun-client';
+import { linkExistingToken } from '@/lib/pumpfun-client';
 import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import type { MarketData } from '@/app/api/market/route';
 
@@ -17,7 +16,7 @@ interface TokenInfo {
   tx_hash: string | null;
 }
 
-type LaunchStep = 'idle' | 'uploading' | 'signing' | 'confirming' | 'saving' | 'done' | 'error';
+type LaunchStep = 'idle' | 'launching' | 'confirming' | 'saving' | 'done' | 'error';
 
 const TOKEN_NAME_SUFFIX = ' by Atelier';
 
@@ -46,8 +45,7 @@ export function TokenLaunchSection({
 }) {
   const wallet = useWallet();
   const { getAuth } = useWalletAuth();
-  const { publicKey, signTransaction, connected } = wallet;
-  const { connection } = useConnection();
+  const { publicKey, connected } = wallet;
 
   const [mode, setMode] = useState<'none' | 'pumpfun' | 'byot'>('none');
   const [step, setStep] = useState<LaunchStep>('idle');
@@ -59,10 +57,6 @@ export function TokenLaunchSection({
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
   const [description, setDescription] = useState('');
-  const [devBuy, setDevBuy] = useState('1');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [useAgentAvatar, setUseAgentAvatar] = useState(true);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   // BYOT form
   const [byotMint, setByotMint] = useState('');
@@ -162,36 +156,30 @@ export function TokenLaunchSection({
 
   const busy = step !== 'idle' && step !== 'done' && step !== 'error';
 
-  async function getImageFile(): Promise<File> {
-    if (imageFile) return imageFile;
-    if (useAgentAvatar && agentAvatarUrl) {
-      const res = await fetch(agentAvatarUrl);
-      const blob = await res.blob();
-      return new File([blob], 'avatar.png', { type: blob.type || 'image/png' });
-    }
-    throw new Error('No image selected');
-  }
-
   async function handlePumpFunLaunch() {
-    if (!publicKey || !signTransaction) return;
+    if (!publicKey) return;
     setError(null);
 
     try {
-      setStep('uploading');
-      const file = await getImageFile();
-      const fullName = name + TOKEN_NAME_SUFFIX;
+      setStep('launching');
       const walletAuth = await getAuth();
 
-      setStep('signing');
-      await launchPumpFunToken({
-        agentId,
-        metadata: { name: fullName, symbol, description, file },
-        devBuySol: parseFloat(devBuy) || 0,
-        connection,
-        walletPublicKey: publicKey,
-        signTransaction,
-        walletAuth,
+      const res = await fetch(`/api/agents/${agentId}/token/launch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...walletAuth,
+          symbol,
+          name,
+          description,
+        }),
       });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || `Launch failed: ${res.status}`);
+      }
+
       setStep('done');
       onTokenSet();
     } catch (err) {
@@ -224,11 +212,8 @@ export function TokenLaunchSection({
     }
   }
 
-  const hasImage = imageFile || (useAgentAvatar && agentAvatarUrl);
-
   const stepLabels: Record<string, string> = {
-    uploading: 'Uploading metadata...',
-    signing: 'Waiting for signature...',
+    launching: 'Launching token...',
     confirming: 'Confirming transaction...',
     saving: 'Saving token info...',
   };
@@ -290,51 +275,6 @@ export function TokenLaunchSection({
             disabled={busy}
             className="w-full px-3 py-2 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 resize-none disabled:opacity-50"
           />
-          <div className="flex gap-3 items-center">
-            {agentAvatarUrl && (
-              <label className="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-neutral-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useAgentAvatar && !imageFile}
-                  onChange={(e) => { setUseAgentAvatar(e.target.checked); if (e.target.checked) setImageFile(null); }}
-                  className="accent-atelier"
-                />
-                Use agent avatar
-              </label>
-            )}
-            <button
-              onClick={() => { setUseAgentAvatar(false); fileRef.current?.click(); }}
-              disabled={busy}
-              className="px-3 py-2 rounded bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 btn-atelier btn-secondary hover:border-atelier/50 disabled:opacity-50"
-            >
-              {imageFile ? imageFile.name.slice(0, 20) : 'Custom Image'}
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => { setImageFile(e.target.files?.[0] || null); setUseAgentAvatar(false); }}
-            />
-            <div className="flex flex-col gap-1">
-              <label className="text-2xs font-mono text-neutral-500">Initial Buy (SOL)</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={devBuy}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === '' || parseFloat(val) >= 0) setDevBuy(val);
-                  }}
-                  min="0"
-                  step="0.1"
-                  disabled={busy}
-                  className="w-32 px-3 py-2 pr-10 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 disabled:opacity-50"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-2xs font-mono text-neutral-400 pointer-events-none">SOL</span>
-              </div>
-            </div>
-          </div>
 
           {busy && (
             <div className="flex items-center gap-2 py-2">
@@ -350,7 +290,7 @@ export function TokenLaunchSection({
           <div className="flex gap-3">
             <button
               onClick={handlePumpFunLaunch}
-              disabled={busy || !name || !symbol || !hasImage}
+              disabled={busy || !name || !symbol}
               className="flex-1 px-3 py-2 rounded bg-green-500 text-black text-xs font-bold font-mono uppercase tracking-wide btn-atelier btn-green hover:bg-green-400 disabled:opacity-50 disabled:hover:bg-green-500"
             >
               Launch Token

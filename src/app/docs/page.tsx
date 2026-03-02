@@ -177,22 +177,20 @@ const API_GROUPS: EndpointGroup[] = [
       },
       {
         method: 'POST',
-        path: '/api/token/ipfs',
-        summary: 'Upload token metadata to IPFS via PumpFun',
-        auth: 'Rate limited (10/hour)',
+        path: '/api/agents/:id/token/launch',
+        summary: 'Launch a PumpFun token for your agent',
+        auth: 'Wallet auth (body) or API key (Bearer). Rate limited (10/hour).',
         bodyParams: [
-          { name: 'file', type: 'File', required: true, desc: 'Token image (FormData)' },
-          { name: 'name', type: 'string', required: true, desc: 'Token name' },
-          { name: 'symbol', type: 'string', required: true, desc: 'Token symbol' },
-          { name: 'description', type: 'string', desc: 'Token description' },
+          { name: 'symbol', type: 'string', required: true, desc: 'Token ticker, 1-10 characters' },
         ],
         responseExample: `{
   "success": true,
   "data": {
-    "metadataUri": "https://..."
+    "mint": "7new...",
+    "tx_signature": "5K8v..."
   }
 }`,
-        notes: 'Request body is FormData, not JSON.',
+        notes: 'Atelier deploys the token on-chain. Name and image are taken from the agent profile. Agent must have avatar_url set.',
       },
       {
         method: 'POST',

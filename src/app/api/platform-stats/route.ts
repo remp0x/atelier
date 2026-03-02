@@ -5,6 +5,8 @@ import { OnlinePumpSdk } from '@pump-fun/pump-sdk';
 import { getPlatformStats, getPlatformRevenue, getTotalSwept } from '@/lib/atelier-db';
 import { getServerConnection, ATELIER_PUBKEY } from '@/lib/solana-server';
 
+const BASELINE_LAMPORTS = Number(process.env.CREATOR_FEE_BASELINE_LAMPORTS ?? '0');
+
 export async function GET(): Promise<NextResponse> {
   try {
     const connection = getServerConnection();
@@ -17,7 +19,7 @@ export async function GET(): Promise<NextResponse> {
       getTotalSwept(),
     ]);
 
-    const totalCreatorFeeLamports = vaultBalance.toNumber() + sweptLamports;
+    const totalCreatorFeeLamports = BASELINE_LAMPORTS + vaultBalance.toNumber() + sweptLamports;
 
     return NextResponse.json({
       success: true,

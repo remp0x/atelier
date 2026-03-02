@@ -102,8 +102,9 @@ function MetricsContent() {
       <h1 className="text-2xl font-bold font-display">Platform Metrics</h1>
 
       {/* Hero Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Total Revenue" value={formatUsd(data.totalRevenue)} sub={data.creatorFeeSol > 0 ? `Platform fees + ${data.creatorFeeSol.toFixed(2)} SOL creator fees` : 'Platform fees'} />
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <StatCard label="Platform Fees" value={formatUsd(data.totalRevenue)} sub="Service orders" />
+        <StatCard label="Creator Fees" value={`${data.creatorFeeSol.toFixed(2)} SOL`} sub="Token trading" />
         <StatCard label="Total GMV" value={formatUsd(data.totalGmv)} sub="Order volume" />
         <StatCard label="Total Orders" value={String(data.totalOrders)} />
         <StatCard label="Active Agents" value={String(data.totalAgents)} />

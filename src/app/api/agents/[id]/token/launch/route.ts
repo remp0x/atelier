@@ -6,8 +6,8 @@ import {
 } from '@solana/web3.js';
 import { PUMP_SDK } from '@pump-fun/pump-sdk';
 import { getAtelierAgent, updateAgentToken } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
-import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair } from '@/lib/solana-server';
+import { requireWalletAuth } from '@/lib/solana-auth';
+import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
 import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
@@ -103,7 +103,7 @@ export async function POST(
       );
     }
 
-    const imageResponse = await fetch(agent.avatar_url);
+    const imageResponse = await fetch(agent.avatar_url, { signal: AbortSignal.timeout(15_000) });
     if (!imageResponse.ok) {
       return NextResponse.json(
         { success: false, error: `Failed to download agent avatar: ${imageResponse.status}` },
@@ -130,6 +130,7 @@ export async function POST(
 
     const imageBlob = new Blob([imageBuffer], { type: matchedType });
 
+    console.log(`[token-launch] Uploading metadata to IPFS for agent ${agentId}`);
     const { metadataUri } = await uploadToPumpFunIpfs(imageBlob, tokenName, symbol, description);
 
     const connection = getServerConnection();
@@ -137,6 +138,7 @@ export async function POST(
     const mintKeypair = Keypair.generate();
     const mint = mintKeypair.publicKey;
 
+    console.log(`[token-launch] Creating V2 instruction, mint=${mint.toBase58()}`);
     const instruction = await PUMP_SDK.createV2Instruction({
       mint,
       name: tokenName,
@@ -147,7 +149,7 @@ export async function POST(
       mayhemMode: false,
     });
 
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
 
     const messageV0 = new TransactionMessage({
       payerKey: ATELIER_PUBKEY,
@@ -158,29 +160,18 @@ export async function POST(
     const transaction = new VersionedTransaction(messageV0);
     transaction.sign([atelierKeypair, mintKeypair]);
 
+    console.log(`[token-launch] Sending transaction`);
     const txSignature = await connection.sendRawTransaction(transaction.serialize(), {
       skipPreflight: false,
       maxRetries: 3,
     });
 
-    await connection.confirmTransaction(
-      { signature: txSignature, blockhash, lastValidBlockHeight },
-      'confirmed',
-    );
-
-    const txDetails = await connection.getTransaction(txSignature, {
-      maxSupportedTransactionVersion: 0,
-      commitment: 'confirmed',
-    });
-    if (!txDetails || txDetails.meta?.err) {
-      return NextResponse.json(
-        { success: false, error: 'Token creation transaction failed on-chain' },
-        { status: 400 },
-      );
-    }
+    console.log(`[token-launch] Polling confirmation for ${txSignature}`);
+    await pollTransactionConfirmation(connection, txSignature, 60_000);
 
     const mintAddress = mint.toBase58();
 
+    console.log(`[token-launch] Confirmed. Saving mint=${mintAddress} to DB`);
     const updated = await updateAgentToken(agentId, {
       token_mint: mintAddress,
       token_name: tokenName,
@@ -203,11 +194,25 @@ export async function POST(
       data: { mint: mintAddress, tx_signature: txSignature },
     });
   } catch (error) {
-    console.error('Token launch error:', error);
-    if (error instanceof Error && error.message.includes('PumpFun IPFS upload failed')) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[token-launch] Error:', message, error);
+
+    if (message.includes('PumpFun IPFS upload failed')) {
       return NextResponse.json(
-        { success: false, error: error.message },
+        { success: false, error: message },
         { status: 502 },
+      );
+    }
+    if (message.includes('Transaction failed') || message.includes('confirmation timed out')) {
+      return NextResponse.json(
+        { success: false, error: message },
+        { status: 502 },
+      );
+    }
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      return NextResponse.json(
+        { success: false, error: 'External request timed out' },
+        { status: 504 },
       );
     }
     return NextResponse.json(

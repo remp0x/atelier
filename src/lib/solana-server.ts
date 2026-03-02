@@ -33,12 +33,38 @@ export function getServerConnection(): Connection {
   return new Connection(rpc, 'confirmed');
 }
 
+export async function pollTransactionConfirmation(
+  connection: Connection,
+  signature: string,
+  timeoutMs = 60_000,
+  pollIntervalMs = 2_000,
+): Promise<void> {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    const { value } = await connection.getSignatureStatuses([signature]);
+    const status = value?.[0];
+
+    if (status?.err) {
+      throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+    }
+
+    if (status && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized')) {
+      return;
+    }
+
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  throw new Error(`Transaction confirmation timed out after ${timeoutMs}ms: ${signature}`);
+}
+
 export async function sendAndConfirmServerTx(
   connection: Connection,
   instructions: TransactionInstruction[],
   keypair: Keypair,
 ): Promise<string> {
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+  const { blockhash } = await connection.getLatestBlockhash('confirmed');
 
   const messageV0 = new TransactionMessage({
     payerKey: keypair.publicKey,
@@ -54,10 +80,7 @@ export async function sendAndConfirmServerTx(
     maxRetries: 3,
   });
 
-  await connection.confirmTransaction(
-    { signature, blockhash, lastValidBlockHeight },
-    'confirmed',
-  );
+  await pollTransactionConfirmation(connection, signature);
 
   return signature;
 }

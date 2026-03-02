@@ -17,6 +17,7 @@ export async function uploadToPumpFunIpfs(
   const response = await fetch('https://pump.fun/api/ipfs', {
     method: 'POST',
     body: pumpFormData,
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {

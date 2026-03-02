@@ -227,20 +227,6 @@ async function initAtelierDb(): Promise<void> {
     )
   `);
 
-  await atelierClient.execute(`
-    CREATE TABLE IF NOT EXISTS pending_token_launches (
-      key TEXT PRIMARY KEY,
-      mint TEXT NOT NULL,
-      agent_id TEXT NOT NULL,
-      wallet TEXT NOT NULL,
-      token_name TEXT NOT NULL,
-      token_symbol TEXT NOT NULL,
-      metadata_uri TEXT NOT NULL,
-      image_url TEXT NOT NULL,
-      expires_at INTEGER NOT NULL
-    )
-  `);
-
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_wallet TEXT'); } catch (_e) { }
 
   try {
@@ -670,6 +656,7 @@ export interface AtelierAgentListItem {
   total_orders: number;
   completed_orders: number;
   categories: string[];
+  provider_models: string[];
   token_mint: string | null;
   token_symbol: string | null;
   token_name: string | null;
@@ -931,6 +918,7 @@ export async function getAtelierAgents(filters?: {
   search?: string;
   source?: 'atelier' | 'external' | 'official' | 'all';
   sortBy?: 'popular' | 'newest' | 'rating';
+  model?: string;
   limit?: number;
   offset?: number;
 }): Promise<AtelierAgentListItem[]> {
@@ -962,6 +950,10 @@ export async function getAtelierAgents(filters?: {
     const pat = `%${escapeLikePattern(search)}%`;
     args.push(pat, pat, pat);
   }
+  if (filters?.model) {
+    conditions.push('s.provider_model = ?');
+    args.push(filters.model);
+  }
 
   let orderClause: string;
   switch (filters?.sortBy) {
@@ -981,6 +973,7 @@ export async function getAtelierAgents(filters?: {
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id) as total_orders,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
+            GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
             a.created_at
           FROM atelier_agents a
@@ -999,6 +992,7 @@ export async function getAtelierAgents(filters?: {
       verified: number; blue_check: number; is_atelier_official: number;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       categories_str: string | null;
+      provider_models_str: string | null;
       token_mint: string | null; token_symbol: string | null; token_name: string | null; token_image_url: string | null;
     };
 
@@ -1011,11 +1005,14 @@ export async function getAtelierAgents(filters?: {
       }
     }
 
+    const provider_models = r.provider_models_str ? r.provider_models_str.split(',').filter(Boolean) : [];
+
     return {
       id: r.id, name: r.name, description: r.description, avatar_url: r.avatar_url,
       source: r.source, verified: r.verified, blue_check: r.blue_check,
       is_atelier_official: r.is_atelier_official, services_count: r.services_count,
-      avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders, categories,
+      avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders,
+      categories, provider_models,
       token_mint: r.token_mint, token_symbol: r.token_symbol,
       token_name: r.token_name, token_image_url: r.token_image_url,
     };
@@ -1346,42 +1343,6 @@ export async function updateOrderStatus(
   return getServiceOrderById(id);
 }
 
-// ─── Pending Token Launches ───
-
-export interface PendingLaunchRecord {
-  mint: string;
-  agent_id: string;
-  wallet: string;
-  token_name: string;
-  token_symbol: string;
-  metadata_uri: string;
-  image_url: string;
-  expires_at: number;
-}
-
-export async function savePendingLaunch(key: string, data: PendingLaunchRecord): Promise<void> {
-  await initAtelierDb();
-  await atelierClient.execute({
-    sql: `INSERT OR REPLACE INTO pending_token_launches (key, mint, agent_id, wallet, token_name, token_symbol, metadata_uri, image_url, expires_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [key, data.mint, data.agent_id, data.wallet, data.token_name, data.token_symbol, data.metadata_uri, data.image_url, data.expires_at],
-  });
-}
-
-export async function getPendingLaunch(key: string): Promise<PendingLaunchRecord | null> {
-  await initAtelierDb();
-  await atelierClient.execute({ sql: 'DELETE FROM pending_token_launches WHERE expires_at < ?', args: [Date.now()] });
-  const result = await atelierClient.execute({ sql: 'SELECT * FROM pending_token_launches WHERE key = ?', args: [key] });
-  if (result.rows.length === 0) return null;
-  const row = result.rows[0] as unknown as PendingLaunchRecord & { key: string };
-  return { mint: row.mint, agent_id: row.agent_id, wallet: row.wallet, token_name: row.token_name, token_symbol: row.token_symbol, metadata_uri: row.metadata_uri, image_url: row.image_url, expires_at: row.expires_at };
-}
-
-export async function deletePendingLaunch(key: string): Promise<void> {
-  await initAtelierDb();
-  await atelierClient.execute({ sql: 'DELETE FROM pending_token_launches WHERE key = ?', args: [key] });
-}
-
 export async function atomicStatusTransition(
   id: string,
   expectedStatus: string,
@@ -1703,6 +1664,14 @@ export async function getPlatformStats(): Promise<{ agents: number; orders: numb
   };
 }
 
+export async function getPlatformRevenue(): Promise<number> {
+  await initAtelierDb();
+  const result = await atelierClient.execute(
+    `SELECT COALESCE(SUM(platform_fee_usd), 0) as total FROM service_orders WHERE status IN ('completed','delivered','in_progress','paid')`
+  );
+  return Number(result.rows[0].total);
+}
+
 export async function getAgentTokenInfo(agentId: string): Promise<AgentTokenInfo | null> {
   await initAtelierDb();
   const result = await atelierClient.execute({
@@ -1870,4 +1839,130 @@ export async function getUnreadMessageCounts(participantId: string, orderIds: st
     counts[r.order_id] = Number(r.unread);
   }
   return counts;
+}
+
+// ─── Metrics ───
+
+export interface MetricsData {
+  totalRevenue: number;
+  totalGmv: number;
+  totalOrders: number;
+  ordersByStatus: Record<string, number>;
+  totalAgents: number;
+  agentsWithTokens: { total: number; pumpfun: number; byot: number };
+  servicesByCategory: Record<string, number>;
+  servicesByProvider: Record<string, number>;
+  servicesByModel: Record<string, number>;
+  topAgentsByOrders: { id: string; name: string; avatar_url: string | null; completed_orders: number; avg_rating: number | null }[];
+  avgRating: number | null;
+  ordersOverTime: { month: string; count: number }[];
+}
+
+const REVENUE_STATUSES = `('completed','delivered','in_progress','paid')`;
+
+export async function getMetricsData(): Promise<MetricsData> {
+  await initAtelierDb();
+
+  const [
+    revenueResult,
+    gmvResult,
+    totalOrdersResult,
+    ordersByStatusResult,
+    totalAgentsResult,
+    tokensResult,
+    servicesByCategoryResult,
+    servicesByProviderResult,
+    servicesByModelResult,
+    topAgentsResult,
+    avgRatingResult,
+    ordersOverTimeResult,
+  ] = await Promise.all([
+    atelierClient.execute(
+      `SELECT COALESCE(SUM(platform_fee_usd), 0) as total FROM service_orders WHERE status IN ${REVENUE_STATUSES}`
+    ),
+    atelierClient.execute(
+      `SELECT COALESCE(SUM(quoted_price_usd), 0) as total FROM service_orders WHERE status IN ${REVENUE_STATUSES}`
+    ),
+    atelierClient.execute('SELECT COUNT(*) as count FROM service_orders'),
+    atelierClient.execute('SELECT status, COUNT(*) as count FROM service_orders GROUP BY status'),
+    atelierClient.execute('SELECT COUNT(*) as count FROM atelier_agents WHERE active = 1'),
+    atelierClient.execute(
+      `SELECT
+        SUM(CASE WHEN token_mint IS NOT NULL THEN 1 ELSE 0 END) as total,
+        SUM(CASE WHEN token_mint IS NOT NULL AND token_mode = 'pumpfun' THEN 1 ELSE 0 END) as pumpfun,
+        SUM(CASE WHEN token_mint IS NOT NULL AND token_mode = 'byot' THEN 1 ELSE 0 END) as byot
+      FROM atelier_agents WHERE active = 1`
+    ),
+    atelierClient.execute('SELECT category, COUNT(*) as count FROM services WHERE active = 1 GROUP BY category'),
+    atelierClient.execute('SELECT provider_key, COUNT(*) as count FROM services WHERE active = 1 GROUP BY provider_key'),
+    atelierClient.execute('SELECT provider_model, COUNT(*) as count FROM services WHERE active = 1 GROUP BY provider_model'),
+    atelierClient.execute(
+      `SELECT a.id, a.name, a.avatar_url, a.completed_orders, a.avg_rating
+       FROM atelier_agents a
+       WHERE a.active = 1 AND a.completed_orders > 0
+       ORDER BY a.completed_orders DESC LIMIT 5`
+    ),
+    atelierClient.execute('SELECT AVG(rating) as avg FROM service_reviews'),
+    atelierClient.execute(
+      `SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as count
+       FROM service_orders
+       GROUP BY strftime('%Y-%m', created_at)
+       ORDER BY month ASC`
+    ),
+  ]);
+
+  const ordersByStatus: Record<string, number> = {};
+  for (const row of ordersByStatusResult.rows) {
+    ordersByStatus[String(row.status)] = Number(row.count);
+  }
+
+  const servicesByCategory: Record<string, number> = {};
+  for (const row of servicesByCategoryResult.rows) {
+    servicesByCategory[String(row.category)] = Number(row.count);
+  }
+
+  const servicesByProvider: Record<string, number> = {};
+  for (const row of servicesByProviderResult.rows) {
+    servicesByProvider[String(row.provider_key)] = Number(row.count);
+  }
+
+  const servicesByModel: Record<string, number> = {};
+  for (const row of servicesByModelResult.rows) {
+    servicesByModel[String(row.provider_model)] = Number(row.count);
+  }
+
+  const topAgentsByOrders = topAgentsResult.rows.map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    avatar_url: row.avatar_url ? String(row.avatar_url) : null,
+    completed_orders: Number(row.completed_orders),
+    avg_rating: row.avg_rating ? Number(row.avg_rating) : null,
+  }));
+
+  const ordersOverTime = ordersOverTimeResult.rows.map((row) => ({
+    month: String(row.month),
+    count: Number(row.count),
+  }));
+
+  let tokenTotal = 0, tokenPumpfun = 0, tokenByot = 0;
+  if (tokensResult.rows[0]) {
+    tokenTotal = Number(tokensResult.rows[0].total);
+    tokenPumpfun = Number(tokensResult.rows[0].pumpfun);
+    tokenByot = Number(tokensResult.rows[0].byot);
+  }
+
+  return {
+    totalRevenue: Number(revenueResult.rows[0].total),
+    totalGmv: Number(gmvResult.rows[0].total),
+    totalOrders: Number(totalOrdersResult.rows[0].count),
+    ordersByStatus,
+    totalAgents: Number(totalAgentsResult.rows[0].count),
+    agentsWithTokens: { total: tokenTotal, pumpfun: tokenPumpfun, byot: tokenByot },
+    servicesByCategory,
+    servicesByProvider,
+    servicesByModel,
+    topAgentsByOrders,
+    avgRating: avgRatingResult.rows[0]?.avg ? Number(avgRatingResult.rows[0].avg) : null,
+    ordersOverTime,
+  };
 }

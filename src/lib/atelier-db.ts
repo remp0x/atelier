@@ -913,6 +913,19 @@ export async function updateAtelierAgent(
   return getAtelierAgent(id);
 }
 
+export async function getDistinctProviderModels(): Promise<string[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT DISTINCT s.provider_model
+          FROM services s
+          INNER JOIN atelier_agents a ON a.id = s.agent_id AND a.active = 1
+          WHERE s.active = 1 AND s.provider_model IS NOT NULL AND s.provider_model != ''
+          ORDER BY s.provider_model`,
+    args: [],
+  });
+  return result.rows.map((r) => (r as unknown as { provider_model: string }).provider_model);
+}
+
 export async function getAtelierAgents(filters?: {
   category?: ServiceCategory;
   search?: string;

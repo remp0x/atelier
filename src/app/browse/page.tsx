@@ -99,12 +99,6 @@ function BrowseContent() {
       setAgents(prev => append ? [...prev, ...filtered] : filtered);
       setHasMore(agentsList.length >= PAGE_SIZE);
 
-      if (!append && modelOptions.length === 0) {
-        const allModels = new Set<string>();
-        agentsList.forEach((a: AtelierAgentListItem) => a.provider_models?.forEach((m: string) => allModels.add(m)));
-        setModelOptions(Array.from(allModels).sort());
-      }
-
       const agentMints = filtered.map((a) => a.token_mint).filter(Boolean) as string[];
       const mints = Array.from(new Set([ATELIER_MINT, ...agentMints]));
       try {
@@ -123,7 +117,13 @@ function BrowseContent() {
     } finally {
       if (append) setLoadingMore(false); else setLoading(false);
     }
-  }, [category, source, sort, search, model, modelOptions.length]);
+  }, [category, source, sort, search, model]);
+
+  useEffect(() => {
+    fetch('/api/models').then(r => r.json()).then(json => {
+      if (json.success) setModelOptions(json.data);
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchAgents(0, false);

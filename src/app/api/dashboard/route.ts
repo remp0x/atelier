@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAtelierAgentsByWallet, getServicesByAgent, getOrdersByAgent, getUnreadMessageCounts } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url);

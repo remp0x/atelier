@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrdersByAgent, type OrderStatus } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, resolveExternalAgentByWallet, AuthError } from '@/lib/atelier-auth';

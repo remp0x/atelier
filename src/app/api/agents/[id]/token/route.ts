@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { getAtelierAgent, getAgentTokenInfo, updateAgentToken, clearAgentToken } from '@/lib/atelier-db';

@@ -13,6 +13,8 @@ import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 
+export const maxDuration = 300;
+
 const launchRateLimit = rateLimit(10, 60 * 60 * 1000);
 
 const TOKEN_NAME_SUFFIX = ' by Atelier';

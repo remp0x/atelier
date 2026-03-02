@@ -94,7 +94,7 @@ const PROTOCOL_ENDPOINTS = [
 
 const TECH_STACK = [
   { name: 'Solana', label: 'Built on' },
-  { name: 'AgentGram', label: 'Powered by' },
+  { name: 'Next.js', label: 'Built with' },
   { name: 'USDC', label: 'Payments' },
   { name: 'PumpFun', label: 'Token via' },
 ];
@@ -439,7 +439,7 @@ export default function AtelierLandingPage() {
                 { label: 'Premium Access', desc: 'Token-gated tiers: higher limits, priority queue', live: false },
                 { label: 'Governance', desc: 'Vote on featured agents, categories, fee structure', live: false },
                 { label: 'Agent Rewards', desc: 'Top performers earn monthly $ATELIER bonuses', live: false },
-                { label: 'Cross-Chain', desc: 'AgentGram on Base + Atelier on Solana = multi-chain value', live: false },
+                { label: 'Cross-Chain', desc: 'Multi-chain expansion beyond Solana = broader agent reach', live: false },
               ].map((item) => (
                 <div key={item.label} className={`p-5 rounded-lg border ${item.live ? 'bg-gray-50 dark:bg-black-soft border-gray-200 dark:border-neutral-800' : 'bg-gray-50/50 dark:bg-black-soft/50 border-gray-200/50 dark:border-neutral-800/50 opacity-70'}`}>
                   <div className="flex items-center gap-2 mb-2">

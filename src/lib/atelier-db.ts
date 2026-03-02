@@ -626,7 +626,7 @@ export interface AtelierAgent {
   description: string | null;
   avatar_url: string | null;
   bio: string | null;
-  source: 'agentgram' | 'external' | 'official';
+  source: 'atelier' | 'external' | 'official';
   endpoint_url: string | null;
   capabilities: string;
   api_key: string | null;
@@ -661,7 +661,7 @@ export interface AtelierAgentListItem {
   name: string;
   description: string | null;
   avatar_url: string | null;
-  source: 'agentgram' | 'external' | 'official';
+  source: 'atelier' | 'external' | 'official';
   verified: number;
   blue_check: number;
   is_atelier_official: number;
@@ -811,7 +811,7 @@ export async function ensureAtelierAgent(coreAgent: {
   token_created_at: string | null;
 }): Promise<AtelierAgent> {
   await initAtelierDb();
-  const source = coreAgent.is_atelier_official ? 'official' : 'agentgram';
+  const source = coreAgent.is_atelier_official ? 'official' : 'atelier';
 
   await atelierClient.execute({
     sql: `INSERT INTO atelier_agents (id, name, description, avatar_url, bio, source, verified, blue_check, is_atelier_official, twitter_username, bankr_wallet, owner_wallet, token_mint, token_name, token_symbol, token_image_url, token_mode, token_creator_wallet, token_tx_hash, token_created_at)
@@ -929,7 +929,7 @@ export async function updateAtelierAgent(
 export async function getAtelierAgents(filters?: {
   category?: ServiceCategory;
   search?: string;
-  source?: 'agentgram' | 'external' | 'official' | 'all';
+  source?: 'atelier' | 'external' | 'official' | 'all';
   sortBy?: 'popular' | 'newest' | 'rating';
   limit?: number;
   offset?: number;
@@ -946,8 +946,8 @@ export async function getAtelierAgents(filters?: {
 
   if (source === 'official') {
     conditions.push("a.source = 'official'");
-  } else if (source === 'agentgram') {
-    conditions.push("a.source IN ('agentgram', 'official')");
+  } else if (source === 'atelier') {
+    conditions.push("a.source IN ('atelier', 'agentgram', 'official')");
     conditions.push('a.is_atelier_official = 0');
   } else if (source === 'external') {
     conditions.push("a.source = 'external'");
@@ -995,7 +995,7 @@ export async function getAtelierAgents(filters?: {
   return result.rows.map((row) => {
     const r = row as unknown as {
       id: string; name: string; description: string | null; avatar_url: string | null;
-      source: 'agentgram' | 'external' | 'official';
+      source: 'atelier' | 'external' | 'official';
       verified: number; blue_check: number; is_atelier_official: number;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       categories_str: string | null;

@@ -48,7 +48,7 @@ const API_GROUPS: EndpointGroup[] = [
         queryParams: [
           { name: 'category', type: 'string', desc: 'image_gen, video_gen, ugc, influencer, brand_content, custom' },
           { name: 'sortBy', type: 'string', desc: 'popular (default), newest, rating' },
-          { name: 'source', type: 'string', desc: 'all (default), agentgram, external, official' },
+          { name: 'source', type: 'string', desc: 'all (default), atelier, external, official' },
           { name: 'search', type: 'string', desc: 'Search by name or description' },
           { name: 'limit', type: 'number', desc: 'Max 100, default 24' },
           { name: 'offset', type: 'number', desc: 'Pagination offset' },

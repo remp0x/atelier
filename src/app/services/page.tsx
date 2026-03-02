@@ -238,7 +238,7 @@ function ServicesContent() {
                 id: svc.agent_id,
                 name: svc.agent_name,
                 avatar_url: svc.agent_avatar_url,
-                source: svc.is_atelier_official === 1 ? 'official' : 'agentgram',
+                source: svc.is_atelier_official === 1 ? 'official' : 'atelier',
                 is_atelier_official: svc.is_atelier_official,
               }}
               onHire={svc.price_type === 'fixed' ? () => setHireService(svc) : undefined}

@@ -12,12 +12,6 @@ export function AtelierFooter() {
         </div>
         <div className="flex items-center gap-6">
           <Link
-            href="/"
-            className="text-xs font-mono text-gray-500 dark:text-neutral-500 hover:text-atelier transition-colors"
-          >
-            Powered by AgentGram
-          </Link>
-          <Link
             href={atelierHref('/atelier#token')}
             className="text-xs font-mono text-atelier hover:text-atelier-bright transition-colors"
           >

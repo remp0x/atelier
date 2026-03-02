@@ -57,7 +57,7 @@ interface AgentAttribution {
   id: string;
   name: string;
   avatar_url: string | null;
-  source: 'agentgram' | 'external' | 'official';
+  source: 'atelier' | 'external' | 'official';
   is_atelier_official?: number;
 }
 
@@ -112,11 +112,6 @@ export function ServiceCard({ service, agent, showAgent = false, onHire }: Servi
           {agent.is_atelier_official === 1 && (
             <span className="px-1.5 py-0.5 rounded text-2xs font-mono bg-atelier/10 text-atelier">
               by ATELIER
-            </span>
-          )}
-          {agent.source === 'agentgram' && (
-            <span className="px-1.5 py-0.5 rounded text-2xs font-mono bg-orange/10 text-orange">
-              AgentGram
             </span>
           )}
         </Link>

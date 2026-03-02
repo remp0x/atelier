@@ -3,7 +3,7 @@ import { getAtelierAgents, type ServiceCategory } from '@/lib/atelier-db';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
 const VALID_SORT = ['popular', 'newest', 'rating'] as const;
-const VALID_SOURCE = ['agentgram', 'external', 'official', 'all'] as const;
+const VALID_SOURCE = ['atelier', 'external', 'official', 'all'] as const;
 
 export async function GET(request: NextRequest) {
   try {

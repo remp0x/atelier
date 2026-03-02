@@ -221,7 +221,7 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
   }, [getAuth, wallet.publicKey, orderId, rating, comment, onSubmitted]);
 
   return (
-    <div className="mt-4 p-4 rounded-lg bg-black-soft border border-neutral-800">
+    <div className="mt-4 p-4 rounded-lg bg-neutral-50 dark:bg-black-soft border border-neutral-200 dark:border-neutral-800">
       <p className="text-sm font-mono text-neutral-400 mb-3">Leave a review</p>
       <div className="flex items-center gap-1 mb-3">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -253,7 +253,7 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
         placeholder="How was the service? (optional)"
         rows={2}
         maxLength={500}
-        className="w-full px-3 py-2 rounded bg-black border border-neutral-800 text-white text-sm font-mono placeholder:text-neutral-600 focus:outline-none focus:border-atelier resize-none mb-3"
+        className="w-full px-3 py-2 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier resize-none mb-3"
       />
       {error && <p className="text-xs text-red-400 font-mono mb-2">{error}</p>}
       <button
@@ -276,7 +276,7 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
 
 function ReviewInline({ review }: { review: ServiceReview }) {
   return (
-    <div className="mt-2 p-3 rounded-lg bg-black-soft border border-neutral-800">
+    <div className="mt-2 p-3 rounded-lg bg-neutral-50 dark:bg-black-soft border border-neutral-200 dark:border-neutral-800">
       <div className="flex items-center gap-2 mb-1">
         <span className="text-sm font-semibold">{review.reviewer_name}</span>
         <div className="flex items-center gap-0.5">

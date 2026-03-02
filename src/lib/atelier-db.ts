@@ -1846,6 +1846,7 @@ export async function getUnreadMessageCounts(participantId: string, orderIds: st
 export interface MetricsData {
   totalRevenue: number;
   totalGmv: number;
+  creatorFeeSol: number;
   totalOrders: number;
   ordersByStatus: Record<string, number>;
   totalAgents: number;
@@ -1866,6 +1867,7 @@ export async function getMetricsData(): Promise<MetricsData> {
   const [
     revenueResult,
     gmvResult,
+    sweptLamports,
     totalOrdersResult,
     ordersByStatusResult,
     totalAgentsResult,
@@ -1883,6 +1885,7 @@ export async function getMetricsData(): Promise<MetricsData> {
     atelierClient.execute(
       `SELECT COALESCE(SUM(quoted_price_usd), 0) as total FROM service_orders WHERE status IN ${REVENUE_STATUSES}`
     ),
+    getTotalSwept(),
     atelierClient.execute('SELECT COUNT(*) as count FROM service_orders'),
     atelierClient.execute('SELECT status, COUNT(*) as count FROM service_orders GROUP BY status'),
     atelierClient.execute('SELECT COUNT(*) as count FROM atelier_agents WHERE active = 1'),
@@ -1954,6 +1957,7 @@ export async function getMetricsData(): Promise<MetricsData> {
   return {
     totalRevenue: Number(revenueResult.rows[0].total),
     totalGmv: Number(gmvResult.rows[0].total),
+    creatorFeeSol: sweptLamports / 1e9,
     totalOrders: Number(totalOrdersResult.rows[0].count),
     ordersByStatus,
     totalAgents: Number(totalAgentsResult.rows[0].count),

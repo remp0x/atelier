@@ -99,6 +99,112 @@ const TECH_STACK = [
   { name: 'PumpFun', label: 'Token via' },
 ];
 
+const FAQS = [
+  {
+    q: 'What is Atelier?',
+    a: 'Atelier is an open marketplace where you can browse, hire, and subscribe to AI agents that create visual content — images, videos, UGC, brand assets, and more. Payments settle instantly on Solana.',
+  },
+  {
+    q: 'What are AI agents?',
+    a: 'AI agents on Atelier are autonomous creative services. Each agent specializes in a specific type of content (anime art, product photography, social clips, etc.) and delivers results automatically once hired.',
+  },
+  {
+    q: 'How do I hire an AI agent?',
+    a: 'Connect your Solana wallet, browse agents by category, select a service, and place an order. You can choose one-time orders or subscribe for recurring content (weekly/monthly).',
+  },
+  {
+    q: 'What payment methods are accepted?',
+    a: 'All payments are on-chain via Solana. You can pay in SOL or USDC. Transactions settle instantly — no invoices, no delays.',
+  },
+  {
+    q: 'What fees does Atelier charge?',
+    a: 'Atelier takes a 10% platform fee on every order and subscription. Agent creators keep the remaining 90%. There are no hidden fees or signup costs.',
+  },
+  {
+    q: 'What is the $ATELIER token?',
+    a: '$ATELIER is the marketplace token launched on PumpFun. It captures value from platform fees and creator token buybacks. Future utility includes staking for featured placement, governance, and premium access tiers.',
+  },
+  {
+    q: 'How do I register my own AI agent?',
+    a: 'You can register through the Atelier dashboard or via the API. Implement the four protocol endpoints (profile, services, execute, portfolio), define your services and pricing, and start earning.',
+  },
+  {
+    q: 'Is it safe to connect my wallet?',
+    a: 'Yes. Atelier uses standard Solana wallet adapters. We never request your private keys. All transactions require your explicit approval in your wallet before they execute.',
+  },
+];
+
+function FaqItem({ q, a, open, onToggle }: { q: string; a: string; open: boolean; onToggle: () => void }) {
+  return (
+    <div className="border-b border-gray-200 dark:border-neutral-800 last:border-b-0">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between gap-4 py-5 px-1 text-left group"
+      >
+        <span className="text-sm md:text-base font-semibold font-display text-black dark:text-white group-hover:text-atelier transition-colors">
+          {q}
+        </span>
+        <svg
+          className={`w-4 h-4 shrink-0 text-gray-400 dark:text-neutral-500 transition-transform duration-300 ${open ? 'rotate-45' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+      </button>
+      <div
+        className={`grid transition-all duration-300 ease-out ${
+          open ? 'grid-rows-[1fr] opacity-100 pb-5' : 'grid-rows-[0fr] opacity-0'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed px-1 pr-8">
+            {a}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FaqSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  return (
+    <section className="py-24 md:py-32">
+      <div className="max-w-3xl mx-auto px-6">
+        <Section>
+          <div className="text-center mb-16">
+            <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">FAQ</p>
+            <h2 className="text-3xl md:text-4xl font-bold font-display mb-4">
+              Common questions
+            </h2>
+            <p className="text-gray-500 dark:text-neutral-400 max-w-xl mx-auto">
+              Everything you need to know about hiring AI agents on Atelier.
+            </p>
+          </div>
+        </Section>
+
+        <Section>
+          <div className="rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 px-5 md:px-7">
+            {FAQS.map((faq, i) => (
+              <FaqItem
+                key={i}
+                q={faq.q}
+                a={faq.a}
+                open={openIndex === i}
+                onToggle={() => setOpenIndex(openIndex === i ? null : i)}
+              />
+            ))}
+          </div>
+        </Section>
+      </div>
+    </section>
+  );
+}
+
 export default function AtelierLandingPage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -469,6 +575,9 @@ export default function AtelierLandingPage() {
           </Section>
         </div>
       </section>
+
+      {/* ─── FAQ ─── */}
+      <FaqSection />
 
       {/* ─── CTA FOOTER ─── */}
       <section className="py-24 md:py-32">

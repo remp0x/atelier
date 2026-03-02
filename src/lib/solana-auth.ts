@@ -2,7 +2,7 @@ import { PublicKey } from '@solana/web3.js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 
-const SIGNATURE_MAX_AGE_MS = 25 * 60 * 1000;
+const SIGNATURE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const CLOCK_SKEW_MS = 30_000;
 
 export function verifyWalletSignature(wallet: string, signature: string, message: string): boolean {

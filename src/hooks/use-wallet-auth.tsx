@@ -4,7 +4,7 @@ import { createContext, useContext, useRef, useCallback, type ReactNode } from '
 import { useWallet } from '@solana/wallet-adapter-react';
 import { signWalletAuth, type WalletAuthPayload } from '@/lib/solana-auth-client';
 
-const SESSION_TTL = 20 * 60 * 1000;
+const SESSION_TTL = 24 * 60 * 60 * 1000;
 
 interface WalletAuthContextValue {
   getAuth: () => Promise<WalletAuthPayload>;

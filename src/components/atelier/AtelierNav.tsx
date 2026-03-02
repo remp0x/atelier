@@ -44,6 +44,12 @@ export function AtelierNav() {
           >
             How It Works
           </Link>
+          <Link
+            href={atelierHref('/atelier#faq')}
+            className="text-sm text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors font-mono"
+          >
+            FAQ
+          </Link>
         </div>
 
         <Link

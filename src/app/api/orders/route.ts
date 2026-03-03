@@ -12,7 +12,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const body = await request.json();
-    const { service_id, brief, reference_urls, client_wallet } = body;
+    const { service_id, brief, reference_urls, reference_images, client_wallet } = body;
 
     if (!service_id || !brief || !client_wallet) {
       return NextResponse.json(
@@ -75,6 +75,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
+    if (reference_images) {
+      if (!Array.isArray(reference_images) || reference_images.length > 3) {
+        return NextResponse.json(
+          { success: false, error: 'reference_images must be an array of max 3 URLs' },
+          { status: 400 },
+        );
+      }
+      for (const url of reference_images) {
+        if (typeof url !== 'string' || !url.includes('.vercel-storage.com')) {
+          return NextResponse.json(
+            { success: false, error: 'reference_images must contain valid Vercel Blob URLs' },
+            { status: 400 },
+          );
+        }
+      }
+    }
+
     const service = await getServiceById(service_id);
     if (!service || !service.active) {
       return NextResponse.json(
@@ -91,6 +108,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       provider_agent_id: service.agent_id,
       brief,
       reference_urls: reference_urls || undefined,
+      reference_images: reference_images || undefined,
       quoted_price_usd: quotedPrice,
       quota_total: service.quota_limit || 0,
     });
@@ -98,7 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     notifyAgentWebhook(service.agent_id, {
       event: 'order.created',
       order_id: order.id,
-      data: { service_id, brief, status: order.status },
+      data: { service_id, brief, reference_images: reference_images || undefined, status: order.status },
     });
 
     return NextResponse.json({ success: true, data: order });

@@ -89,7 +89,28 @@ function buildTimeline(order: ServiceOrder, review: ServiceReview | null): Timel
       state: 'done',
       timestamp: order.created_at,
       content: (
-        <p className="text-sm text-neutral-400">{order.brief}</p>
+        <div>
+          <p className="text-sm text-neutral-400">{order.brief}</p>
+          {order.reference_images && (() => {
+            try {
+              const images: string[] = JSON.parse(order.reference_images);
+              if (images.length === 0) return null;
+              return (
+                <div className="flex gap-2 mt-2">
+                  {images.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={url}
+                        alt={`Reference ${i + 1}`}
+                        className="w-16 h-16 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors"
+                      />
+                    </a>
+                  ))}
+                </div>
+              );
+            } catch { return null; }
+          })()}
+        </div>
       ),
     },
     {
@@ -423,6 +444,25 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
         <div className="p-3 rounded bg-atelier/5 border border-atelier/10">
           <p className="text-2xs font-mono text-neutral-500 mb-1">Project brief</p>
           <p className="text-sm text-neutral-300">{order.brief}</p>
+          {order.reference_images && (() => {
+            try {
+              const images: string[] = JSON.parse(order.reference_images);
+              if (images.length === 0) return null;
+              return (
+                <div className="flex gap-2 mt-2">
+                  {images.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={url}
+                        alt={`Reference ${i + 1}`}
+                        className="w-16 h-16 rounded border border-atelier/20 object-cover hover:border-atelier transition-colors"
+                      />
+                    </a>
+                  ))}
+                </div>
+              );
+            } catch { return null; }
+          })()}
         </div>
       )}
 

@@ -228,6 +228,7 @@ async function initAtelierDb(): Promise<void> {
   `);
 
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_wallet TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN reference_images TEXT'); } catch (_e) { }
 
   try {
     await seedAtelierOfficialAgents();
@@ -703,6 +704,7 @@ export interface ServiceOrder {
   provider_name: string;
   brief: string;
   reference_urls: string | null;
+  reference_images: string | null;
   quoted_price_usd: string | null;
   platform_fee_usd: string | null;
   payment_method: string | null;
@@ -1217,6 +1219,7 @@ export async function createServiceOrder(data: {
   provider_agent_id: string;
   brief: string;
   reference_urls?: string[];
+  reference_images?: string[];
   quoted_price_usd?: string;
   quota_total?: number;
 }): Promise<ServiceOrder> {
@@ -1226,9 +1229,9 @@ export async function createServiceOrder(data: {
   const platformFee = data.quoted_price_usd ? (parseFloat(data.quoted_price_usd) * 0.10).toFixed(2) : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, quoted_price_usd, platform_fee_usd, status, quota_total)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0],
+    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.reference_images ? JSON.stringify(data.reference_images) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0],
   });
 
   await atelierClient.execute({

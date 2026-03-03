@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useWallet } from '@solana/wallet-adapter-react';
@@ -19,7 +19,16 @@ interface HireModalProps {
   onClose: () => void;
 }
 
+interface ReferenceImage {
+  url: string;
+  name: string;
+  uploading: boolean;
+}
+
 const PLATFORM_FEE_RATE = 0.10;
+const MAX_REFERENCE_IMAGES = 3;
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
 
 const BRIEF_HINTS: Record<string, { workspace: string; single: string; helper: string }> = {
   agent_atelier_animestudio: {
@@ -59,12 +68,15 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
       setStep('brief');
       setBrief('');
       setReferenceUrls(['']);
+      setReferenceImages([]);
       setError(null);
       setLoading(false);
       setOrderId(null);
@@ -88,6 +100,67 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
   const hints = BRIEF_HINTS[service.agent_id] ?? DEFAULT_HINTS;
   const validUrls = referenceUrls.filter((u) => u.trim().length > 0);
+
+  const isUploading = referenceImages.some((img) => img.uploading);
+
+  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    e.target.value = '';
+
+    const file = files[0];
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setError('Only JPEG and PNG images are allowed');
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      setError('Image must be under 5MB');
+      return;
+    }
+    if (referenceImages.length >= MAX_REFERENCE_IMAGES) {
+      setError(`Maximum ${MAX_REFERENCE_IMAGES} images allowed`);
+      return;
+    }
+
+    setError(null);
+    const placeholder: ReferenceImage = { url: '', name: file.name, uploading: true };
+    setReferenceImages((prev) => [...prev, placeholder]);
+    const idx = referenceImages.length;
+
+    try {
+      const auth = await getAuth();
+      const params = new URLSearchParams({
+        wallet: auth.wallet,
+        wallet_sig: auth.wallet_sig,
+        wallet_sig_ts: String(auth.wallet_sig_ts),
+      });
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch(`/api/orders/brief-images?${params}`, {
+        method: 'POST',
+        body: formData,
+      });
+      const json = await res.json();
+
+      if (!json.success) {
+        setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
+        setError(json.error || 'Upload failed');
+        return;
+      }
+
+      setReferenceImages((prev) =>
+        prev.map((img, i) => (i === idx ? { url: json.data.url, name: file.name, uploading: false } : img)),
+      );
+    } catch {
+      setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
+      setError('Image upload failed');
+    }
+  }, [referenceImages.length, getAuth]);
+
+  const removeImage = useCallback((idx: number) => {
+    setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
 
   const handlePay = useCallback(async () => {
     if (!wallet.publicKey) {
@@ -117,6 +190,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           service_id: service.id,
           brief,
           reference_urls: validUrls.length > 0 ? validUrls : undefined,
+          reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
           client_wallet: wallet.publicKey.toBase58(),
         }),
       });
@@ -154,7 +228,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [wallet, connection, service, brief, validUrls, total, openWalletModal]);
+  }, [wallet, connection, service, brief, validUrls, referenceImages, total, openWalletModal, getAuth, isWorkspace]);
 
   if (!open) return null;
 
@@ -264,9 +338,53 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 )}
               </div>
 
+              <div>
+                <label className="block text-sm font-mono text-gray-600 dark:text-neutral-400 mb-1.5">
+                  Reference Images <span className="text-gray-400 dark:text-neutral-600">(optional, max 3, JPG/PNG, 5MB each)</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {referenceImages.map((img, i) => (
+                    <div key={i} className="relative w-20 h-20 rounded border border-gray-200 dark:border-neutral-800 overflow-hidden bg-gray-100 dark:bg-black">
+                      {img.uploading ? (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
+                        </div>
+                      ) : (
+                        <>
+                          <img src={img.url} alt={img.name} className="w-full h-full object-cover" />
+                          <button
+                            onClick={() => removeImage(i)}
+                            className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-red-500 transition-colors"
+                          >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  {referenceImages.length < MAX_REFERENCE_IMAGES && (
+                    <label className="w-20 h-20 rounded border border-dashed border-gray-300 dark:border-neutral-700 flex flex-col items-center justify-center cursor-pointer hover:border-atelier/60 transition-colors">
+                      <svg className="w-5 h-5 text-gray-400 dark:text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                      </svg>
+                      <span className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mt-0.5">Add</span>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png"
+                        onChange={handleImageSelect}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
               <button
                 onClick={() => setStep('review')}
-                disabled={brief.length < 10}
+                disabled={brief.length < 10 || isUploading}
                 className="w-full py-2.5 rounded bg-atelier text-white text-sm font-semibold font-mono uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed btn-atelier btn-primary transition-opacity"
               >
                 Continue
@@ -312,6 +430,21 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
               <div className="p-3 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800">
                 <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1">Your brief:</p>
                 <p className="text-sm text-black dark:text-white">{brief}</p>
+                {referenceImages.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-gray-200 dark:border-neutral-800">
+                    <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1.5">Reference images:</p>
+                    <div className="flex gap-2">
+                      {referenceImages.map((img, i) => (
+                        <img
+                          key={i}
+                          src={img.url}
+                          alt={img.name}
+                          className="w-16 h-16 rounded border border-gray-200 dark:border-neutral-800 object-cover"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {error && (

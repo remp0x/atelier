@@ -12,6 +12,38 @@ function escapeLikePattern(search: string): string {
   return search.replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
+const MODEL_PATTERNS: { pattern: RegExp; model: string }[] = [
+  { pattern: /\bkling\b/i, model: 'Kling' },
+  { pattern: /\bnano\s*banana/i, model: 'Nano Banana 2' },
+  { pattern: /\brunway\b/i, model: 'Runway' },
+  { pattern: /\bgen[-\s]?4\b/i, model: 'Runway' },
+  { pattern: /\bluma\b/i, model: 'Luma' },
+  { pattern: /\bray[-\s]?2\b/i, model: 'Luma' },
+  { pattern: /\bdream\s*machine\b/i, model: 'Luma' },
+  { pattern: /\bhiggsfield\b/i, model: 'Higgsfield' },
+  { pattern: /\bminimax\b/i, model: 'MiniMax' },
+  { pattern: /\bhailuo\b/i, model: 'Hailuo' },
+  { pattern: /\bdall[-\s]?e/i, model: 'DALL-E' },
+  { pattern: /\bmidjourney\b/i, model: 'Midjourney' },
+  { pattern: /\bstable\s*diffusion\b/i, model: 'Stable Diffusion' },
+  { pattern: /\bsdxl\b/i, model: 'Stable Diffusion' },
+  { pattern: /\bflux\b/i, model: 'Flux' },
+  { pattern: /\bsora\b/i, model: 'Sora' },
+  { pattern: /\bpika\b/i, model: 'Pika' },
+  { pattern: /\bleonardo\s*ai\b|\bleonardo\b/i, model: 'Leonardo' },
+  { pattern: /\bideogram\b/i, model: 'Ideogram' },
+  { pattern: /\bgrok\b/i, model: 'Grok' },
+  { pattern: /\brecraft\b/i, model: 'Recraft' },
+  { pattern: /\bwanx\b/i, model: 'Wanx' },
+];
+
+function inferModelFromText(text: string): string | null {
+  for (const { pattern, model } of MODEL_PATTERNS) {
+    if (pattern.test(text)) return model;
+  }
+  return null;
+}
+
 async function initAtelierDb(): Promise<void> {
   if (initialized) return;
 
@@ -235,6 +267,12 @@ async function initAtelierDb(): Promise<void> {
     await seedCommunityAgents();
   } catch (e) {
     console.error('Atelier seed failed (non-fatal):', e);
+  }
+
+  try {
+    await backfillProviderModels();
+  } catch (e) {
+    console.error('Atelier model backfill failed (non-fatal):', e);
   }
 
   initialized = true;
@@ -598,6 +636,24 @@ async function seedCommunityAgents(): Promise<void> {
               quota_limit = excluded.quota_limit`,
       args: [s.id, s.agent_id, s.category, s.title, s.description, s.price_usd, s.turnaround_hours, s.quota_limit],
     });
+  }
+}
+
+async function backfillProviderModels(): Promise<void> {
+  const result = await atelierClient.execute(`
+    SELECT s.id, s.title, s.description as svc_desc, a.name as agent_name, a.description as agent_desc
+    FROM services s
+    JOIN atelier_agents a ON a.id = s.agent_id
+    WHERE s.active = 1 AND (s.provider_model IS NULL OR s.provider_model = '')
+  `);
+
+  for (const row of result.rows) {
+    const r = row as unknown as { id: string; title: string; svc_desc: string | null; agent_name: string; agent_desc: string | null };
+    const combined = [r.agent_name, r.agent_desc, r.title, r.svc_desc].filter(Boolean).join(' ');
+    const model = inferModelFromText(combined);
+    if (model) {
+      await atelierClient.execute({ sql: 'UPDATE services SET provider_model = ? WHERE id = ?', args: [model, r.id] });
+    }
   }
 }
 
@@ -1020,7 +1076,11 @@ export async function getAtelierAgents(filters?: {
       }
     }
 
-    const provider_models = r.provider_models_str ? r.provider_models_str.split(',').filter(Boolean) : [];
+    let provider_models = r.provider_models_str ? r.provider_models_str.split(',').filter(Boolean) : [];
+    if (provider_models.length === 0 && r.description) {
+      const detected = inferModelFromText(r.description);
+      if (detected) provider_models = [detected];
+    }
 
     return {
       id: r.id, name: r.name, description: r.description, avatar_url: r.avatar_url,
@@ -1051,10 +1111,11 @@ export async function createService(data: {
 }): Promise<Service> {
   await initAtelierDb();
   const id = `svc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const detectedModel = inferModelFromText(`${data.title} ${data.description}`);
   await atelierClient.execute({
-    sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url, quota_limit)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null, data.quota_limit ?? 0],
+    sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url, quota_limit, provider_model)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null, data.quota_limit ?? 0, detectedModel],
   });
   return getServiceById(id) as Promise<Service>;
 }

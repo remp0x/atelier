@@ -299,39 +299,56 @@ export default function AtelierAgentPage() {
         {/* Portfolio */}
         {activeTab === 'portfolio' && (
           portfolio.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {portfolio.map((item, idx) => {
-                const isFeatured = idx < 2 && portfolio.length >= 4;
-                return (
-                  <div
-                    key={`${item.source_type}-${item.source_id}`}
-                    className={`group relative rounded-lg overflow-hidden bg-gray-100 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 hover:border-atelier/30 transition-colors ${
-                      isFeatured ? 'aspect-[4/3]' : 'aspect-square'
-                    }`}
-                  >
-                    {item.deliverable_media_type === 'video' ? (
-                      <video
-                        src={item.deliverable_url}
-                        className="w-full h-full object-cover"
-                        muted
-                        loop
-                        playsInline
-                        onMouseOver={(e) => (e.target as HTMLVideoElement).play()}
-                        onMouseOut={(e) => { (e.target as HTMLVideoElement).pause(); (e.target as HTMLVideoElement).currentTime = 0; }}
-                      />
-                    ) : (
-                      <img
-                        src={item.deliverable_url}
-                        alt={item.prompt || 'Portfolio piece'}
-                        className="w-full h-full object-cover"
-                        loading={idx < 6 ? 'eager' : 'lazy'}
-                      />
-                    )}
-                    {item.prompt && (
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-200">
-                        <p className="text-xs text-white/90 font-mono line-clamp-2">{item.prompt}</p>
-                      </div>
-                    )}
+            <div className="columns-2 md:columns-3 gap-3 [column-fill:_balance]">
+              {portfolio.map((item, idx) => (
+                <div
+                  key={`${item.source_type}-${item.source_id}`}
+                  className="group relative rounded-lg overflow-hidden bg-gray-100 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 hover:border-atelier/30 transition-colors mb-3 break-inside-avoid"
+                >
+                  {item.deliverable_media_type === 'video' ? (
+                    <video
+                      src={item.deliverable_url}
+                      className="w-full h-auto block"
+                      muted
+                      loop
+                      playsInline
+                      onMouseOver={(e) => (e.target as HTMLVideoElement).play()}
+                      onMouseOut={(e) => { (e.target as HTMLVideoElement).pause(); (e.target as HTMLVideoElement).currentTime = 0; }}
+                    />
+                  ) : (
+                    <img
+                      src={item.deliverable_url}
+                      alt={item.prompt || 'Portfolio piece'}
+                      className="w-full h-auto block"
+                      loading={idx < 6 ? 'eager' : 'lazy'}
+                    />
+                  )}
+                  {item.prompt && (
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-200">
+                      <p className="text-xs text-white/90 font-mono line-clamp-2">{item.prompt}</p>
+                    </div>
+                  )}
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <a
+                      href={item.deliverable_url}
+                      download
+                      onClick={(e) => {
+                        e.preventDefault();
+                        fetch(item.deliverable_url).then(r => r.blob()).then(blob => {
+                          const a = document.createElement('a');
+                          a.href = URL.createObjectURL(blob);
+                          a.download = item.prompt?.slice(0, 40) || 'download';
+                          a.click();
+                          URL.revokeObjectURL(a.href);
+                        });
+                      }}
+                      className="p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80"
+                      title="Download"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                      </svg>
+                    </a>
                     {isOwner && (
                       <button
                         onClick={async () => {
@@ -346,7 +363,7 @@ export default function AtelierAgentPage() {
                           });
                           loadAgent();
                         }}
-                        className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+                        className="p-1.5 rounded-full bg-black/60 text-white hover:bg-black/80"
                         title="Hide from portfolio"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -355,8 +372,8 @@ export default function AtelierAgentPage() {
                       </button>
                     )}
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           ) : (
             <EmptyTab message="No portfolio items yet" />

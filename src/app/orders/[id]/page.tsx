@@ -98,13 +98,18 @@ function buildTimeline(order: ServiceOrder, review: ServiceReview | null): Timel
               return (
                 <div className="flex gap-2 mt-2">
                   {images.map((url, i) => (
-                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                      <img
-                        src={url}
-                        alt={`Reference ${i + 1}`}
-                        className="w-16 h-16 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors"
-                      />
-                    </a>
+                    <div key={i} className="group relative">
+                      <a href={url} target="_blank" rel="noopener noreferrer">
+                        <img
+                          src={url}
+                          alt={`Reference ${i + 1}`}
+                          className="w-16 h-16 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors"
+                        />
+                      </a>
+                      <div className="absolute -top-1 -right-1">
+                        <DownloadButton url={url} name={`reference-${i + 1}`} />
+                      </div>
+                    </div>
                   ))}
                 </div>
               );
@@ -180,26 +185,51 @@ function buildTimeline(order: ServiceOrder, review: ServiceReview | null): Timel
   return steps;
 }
 
+function DownloadButton({ url, name }: { url: string; name?: string }) {
+  return (
+    <button
+      onClick={() => {
+        fetch(url).then(r => r.blob()).then(blob => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = name || 'download';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+      }}
+      className="p-1.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80"
+      title="Download"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+      </svg>
+    </button>
+  );
+}
+
 function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: string | null }) {
   if (!url) return null;
 
-  if (mediaType === 'video') {
-    return (
-      <video
-        src={url}
-        controls
-        playsInline
-        className="w-full max-w-md rounded-lg border border-neutral-800 mt-2"
-      />
-    );
-  }
-
   return (
-    <img
-      src={url}
-      alt="Deliverable"
-      className="w-full max-w-md rounded-lg border border-neutral-800 mt-2"
-    />
+    <div className="group relative max-w-md mt-2">
+      {mediaType === 'video' ? (
+        <video
+          src={url}
+          controls
+          playsInline
+          className="w-full rounded-lg border border-neutral-800"
+        />
+      ) : (
+        <img
+          src={url}
+          alt="Deliverable"
+          className="w-full rounded-lg border border-neutral-800"
+        />
+      )}
+      <div className="absolute top-2 right-2">
+        <DownloadButton url={url} name="deliverable" />
+      </div>
+    </div>
   );
 }
 
@@ -451,13 +481,18 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
               return (
                 <div className="flex gap-2 mt-2">
                   {images.map((url, i) => (
-                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                      <img
-                        src={url}
-                        alt={`Reference ${i + 1}`}
-                        className="w-16 h-16 rounded border border-atelier/20 object-cover hover:border-atelier transition-colors"
-                      />
-                    </a>
+                    <div key={i} className="group relative">
+                      <a href={url} target="_blank" rel="noopener noreferrer">
+                        <img
+                          src={url}
+                          alt={`Reference ${i + 1}`}
+                          className="w-16 h-16 rounded border border-atelier/20 object-cover hover:border-atelier transition-colors"
+                        />
+                      </a>
+                      <div className="absolute -top-1 -right-1">
+                        <DownloadButton url={url} name={`reference-${i + 1}`} />
+                      </div>
+                    </div>
                   ))}
                 </div>
               );
@@ -540,23 +575,28 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
             {deliverables.map((d) => (
               <div
                 key={d.id}
-                className="relative rounded-lg border border-neutral-800 overflow-hidden bg-black"
+                className="group relative rounded-lg border border-neutral-800 overflow-hidden bg-black"
               >
                 {d.status === 'completed' && d.deliverable_url ? (
-                  d.deliverable_media_type === 'video' ? (
-                    <video
-                      src={d.deliverable_url}
-                      controls
-                      playsInline
-                      className="w-full aspect-square object-cover"
-                    />
-                  ) : (
-                    <img
-                      src={d.deliverable_url}
-                      alt={d.prompt}
-                      className="w-full aspect-square object-cover"
-                    />
-                  )
+                  <>
+                    {d.deliverable_media_type === 'video' ? (
+                      <video
+                        src={d.deliverable_url}
+                        controls
+                        playsInline
+                        className="w-full aspect-square object-cover"
+                      />
+                    ) : (
+                      <img
+                        src={d.deliverable_url}
+                        alt={d.prompt}
+                        className="w-full aspect-square object-cover"
+                      />
+                    )}
+                    <div className="absolute top-2 right-2">
+                      <DownloadButton url={d.deliverable_url} name={d.prompt?.slice(0, 40) || 'deliverable'} />
+                    </div>
+                  </>
                 ) : (
                   <div className="w-full aspect-square flex items-center justify-center">
                     {d.status === 'generating' || d.status === 'pending' ? (

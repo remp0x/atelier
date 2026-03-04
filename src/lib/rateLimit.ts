@@ -152,4 +152,7 @@ export const rateLimiters = {
 
   // 60 messages per hour per IP
   messages: rateLimit(60, 60 * 60 * 1000),
+
+  // 30 file uploads per hour per IP
+  upload: rateLimit(30, 60 * 60 * 1000),
 };

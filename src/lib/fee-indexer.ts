@@ -247,8 +247,18 @@ export async function runFeeIndex(
 
   const results: IndexResult[] = [];
   for (const vault of vaults) {
-    const r = await indexVault(connection, vault, mode);
-    results.push(r);
+    try {
+      const r = await indexVault(connection, vault, mode);
+      results.push(r);
+    } catch (err) {
+      console.error(`Fee indexer: ${vault.type} vault failed:`, err);
+      results.push({
+        vault_type: vault.type,
+        signatures_processed: 0,
+        withdrawals_found: 0,
+        total_withdrawal_lamports: 0,
+      });
+    }
   }
 
   const total_indexed_lamports = await getTotalIndexedWithdrawals();

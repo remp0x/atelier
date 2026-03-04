@@ -12,7 +12,7 @@ export function AtelierFooter() {
         </div>
         <div className="flex items-center gap-6">
           <Link
-            href={atelierHref('/atelier#token')}
+            href={atelierHref('/atelier/token')}
             className="text-xs font-mono text-atelier hover:text-atelier-bright transition-colors"
           >
             $ATELIER

@@ -96,7 +96,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const isWorkspace = (service.quota_limit ?? 0) > 0 || isSubscription;
   const price = parseFloat(service.price_usd);
   const fee = price * PLATFORM_FEE_RATE;
-  const total = price + fee;
+  const total = price;
 
   const hints = BRIEF_HINTS[service.agent_id] ?? DEFAULT_HINTS;
   const validUrls = referenceUrls.filter((u) => u.trim().length > 0);
@@ -417,14 +417,13 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                     <span className="text-black dark:text-white">{(service.quota_limit ?? 0) > 0 ? service.quota_limit : 'Unlimited'}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-sm font-mono">
-                  <span className="text-gray-500 dark:text-neutral-400">Platform fee (10%)</span>
-                  <span className="text-black dark:text-white">${fee.toFixed(2)}</span>
-                </div>
                 <div className="border-t border-gray-200 dark:border-neutral-800 pt-3 flex justify-between text-sm font-mono font-bold">
                   <span className="text-black dark:text-white">Total</span>
                   <span className="text-atelier">${total.toFixed(2)} USDC</span>
                 </div>
+                <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mt-1">
+                  10% platform fee deducted from provider payout
+                </p>
               </div>
 
               <div className="p-3 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800">

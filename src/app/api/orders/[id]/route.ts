@@ -123,7 +123,7 @@ export async function PATCH(
 
       let refundFailed = false;
       if (order.status === 'paid' && order.escrow_tx_hash && order.client_wallet && !order.payout_tx_hash) {
-        const refundAmount = parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0');
+        const refundAmount = parseFloat(order.quoted_price_usd || '0');
         if (refundAmount > 0) {
           try {
             const txHash = await sendUsdcPayout(order.client_wallet, refundAmount);
@@ -169,13 +169,15 @@ export async function PATCH(
       }
 
       const quotedPrice = parseFloat(order.quoted_price_usd || '0');
+      const platformFee = parseFloat(order.platform_fee_usd || '0');
+      const payoutAmount = Math.round((quotedPrice - platformFee) * 100) / 100;
       let payoutFailed = false;
-      if (quotedPrice > 0) {
+      if (payoutAmount > 0) {
         try {
           const agent = await getAtelierAgent(order.provider_agent_id);
           const destination = agent ? getPayoutWallet(agent) : null;
           if (destination) {
-            const txHash = await sendUsdcPayout(destination, quotedPrice);
+            const txHash = await sendUsdcPayout(destination, payoutAmount);
             await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
           } else {
             payoutFailed = true;
@@ -217,7 +219,7 @@ export async function PATCH(
         );
       }
 
-      const expectedAmount = parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0');
+      const expectedAmount = parseFloat(order.quoted_price_usd || '0');
       const verification = await verifySolanaUsdcPayment(escrow_tx_hash, wallet, expectedAmount);
       if (!verification.verified) {
         return NextResponse.json(

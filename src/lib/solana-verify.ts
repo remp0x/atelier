@@ -43,7 +43,7 @@ export async function verifySolanaUsdcPayment(
   const postAmount = findTokenBalance(postBalances, treasuryAtaStr, usdcMintStr, tx.transaction.message);
 
   const delta = postAmount - preAmount;
-  const expectedRaw = expectedAmountUsd * 10 ** USDC_DECIMALS;
+  const expectedRaw = Math.round(expectedAmountUsd * 10 ** USDC_DECIMALS);
 
   if (delta < expectedRaw) {
     return {

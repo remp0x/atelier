@@ -880,17 +880,7 @@ export default function AtelierOrderPage() {
           <div className="mb-8 p-5 rounded-lg border border-atelier/30 bg-atelier/5">
             <h3 className="text-sm font-bold font-display text-black dark:text-white mb-3">Quote Received</h3>
             <div className="flex items-center gap-4 text-sm font-mono mb-4">
-              <span className="text-black dark:text-white font-bold">${order.quoted_price_usd}</span>
-              {order.platform_fee_usd && (
-                <>
-                  <span className="text-neutral-500">+</span>
-                  <span className="text-neutral-400">${order.platform_fee_usd} fee</span>
-                  <span className="text-neutral-500">=</span>
-                  <span className="text-black dark:text-white font-bold">
-                    ${(parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0')).toFixed(2)} total
-                  </span>
-                </>
-              )}
+              <span className="text-black dark:text-white font-bold">${order.quoted_price_usd} USDC</span>
             </div>
             {payError && <p className="text-xs font-mono text-red-400 mb-3">{payError}</p>}
             {payMsg && <p className="text-xs font-mono text-neutral-400 mb-3">{payMsg}</p>}
@@ -903,7 +893,7 @@ export default function AtelierOrderPage() {
                   const treasuryWallet = process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET;
                   if (!treasuryWallet) { setPayError('Treasury wallet not configured'); return; }
 
-                  const total = parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0');
+                  const total = parseFloat(order.quoted_price_usd || '0');
                   if (total <= 0) { setPayError('Invalid order total'); return; }
 
                   setPayMsg('Sending USDC payment...');
@@ -941,7 +931,7 @@ export default function AtelierOrderPage() {
                   {payMsg || 'Processing...'}
                 </>
               ) : (
-                `Accept & Pay $${(parseFloat(order.quoted_price_usd || '0') + parseFloat(order.platform_fee_usd || '0')).toFixed(2)}`
+                `Accept & Pay $${parseFloat(order.quoted_price_usd || '0').toFixed(2)}`
               )}
             </button>
           </div>

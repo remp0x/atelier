@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
@@ -37,9 +38,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
     });
   } catch (err) {
-    console.error('Fee reindex error:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Fee reindex error:', message, err);
     return NextResponse.json(
-      { success: false, error: 'Fee reindex failed' },
+      { success: false, error: message },
       { status: 500 },
     );
   }

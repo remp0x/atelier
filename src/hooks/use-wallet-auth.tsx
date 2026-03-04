@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useRef, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useRef, useCallback, useEffect, type ReactNode } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { signWalletAuth, type WalletAuthPayload } from '@/lib/solana-auth-client';
 
@@ -19,8 +19,9 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
 
   const getAuth = useCallback(async (): Promise<WalletAuthPayload> => {
+    const currentWallet = wallet.publicKey?.toBase58();
     const cached = cacheRef.current;
-    if (cached && Date.now() - cached.ts < SESSION_TTL) {
+    if (cached && cached.payload.wallet === currentWallet && Date.now() - cached.ts < SESSION_TTL) {
       return cached.payload;
     }
 
@@ -40,6 +41,12 @@ export function WalletAuthProvider({ children }: { children: ReactNode }) {
     inflightRef.current = promise;
     return promise;
   }, [wallet]);
+
+  useEffect(() => {
+    if (wallet.connected && wallet.signMessage) {
+      getAuth().catch(() => {});
+    }
+  }, [wallet.connected, getAuth]);
 
   const clearAuth = useCallback(() => {
     cacheRef.current = null;

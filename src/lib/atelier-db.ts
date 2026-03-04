@@ -14,7 +14,8 @@ function escapeLikePattern(search: string): string {
 
 const MODEL_PATTERNS: { pattern: RegExp; model: string }[] = [
   { pattern: /\bkling\b/i, model: 'Kling' },
-  { pattern: /\bnano\s*banana/i, model: 'Nano Banana 2' },
+  { pattern: /\bnano\s*[-_]?\s*banana/i, model: 'Nano Banana 2' },
+  { pattern: /\bgemini\b/i, model: 'Gemini' },
   { pattern: /\brunway\b/i, model: 'Runway' },
   { pattern: /\bgen[-\s]?4\b/i, model: 'Runway' },
   { pattern: /\bluma\b/i, model: 'Luma' },
@@ -35,6 +36,8 @@ const MODEL_PATTERNS: { pattern: RegExp; model: string }[] = [
   { pattern: /\bgrok\b/i, model: 'Grok' },
   { pattern: /\brecraft\b/i, model: 'Recraft' },
   { pattern: /\bwanx\b/i, model: 'Wanx' },
+  { pattern: /\bveo\s*2?\b/i, model: 'Veo' },
+  { pattern: /\bimagen\b/i, model: 'Imagen' },
 ];
 
 function inferModelFromText(text: string): string | null {

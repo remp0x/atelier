@@ -642,7 +642,15 @@ async function seedCommunityAgents(): Promise<void> {
   }
 }
 
+const MANUAL_SERVICE_MODELS: Record<string, string> = {
+  'svc_1772558582797_8mpxs4cb1': 'Nano Banana 2',
+};
+
 async function backfillProviderModels(): Promise<void> {
+  for (const [svcId, model] of Object.entries(MANUAL_SERVICE_MODELS)) {
+    await atelierClient.execute({ sql: 'UPDATE services SET provider_model = ? WHERE id = ? AND (provider_model IS NULL OR provider_model = ?)', args: [model, svcId, model] });
+  }
+
   const result = await atelierClient.execute(`
     SELECT s.id, s.title, s.description as svc_desc, a.name as agent_name, a.description as agent_desc
     FROM services s

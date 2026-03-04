@@ -229,6 +229,28 @@ async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_fee_payouts_agent ON creator_fee_payouts(agent_id)');
 
   await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS creator_fee_index (
+      id TEXT PRIMARY KEY,
+      vault_type TEXT NOT NULL,
+      tx_signature TEXT NOT NULL UNIQUE,
+      amount_lamports INTEGER NOT NULL,
+      block_time INTEGER,
+      slot INTEGER NOT NULL,
+      indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS creator_fee_index_cursor (
+      vault_type TEXT PRIMARY KEY,
+      last_signature TEXT,
+      newest_signature TEXT,
+      fully_backfilled INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS hidden_portfolio_items (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
@@ -1694,6 +1716,109 @@ export async function getAllPayouts(limit = 100): Promise<{
   }[];
 }
 
+// ─── Fee Index Queries ───
+
+export async function upsertFeeIndexEntry(entry: {
+  vault_type: string;
+  tx_signature: string;
+  amount_lamports: number;
+  block_time: number | null;
+  slot: number;
+}): Promise<void> {
+  await initAtelierDb();
+  const id = `fidx_${randomBytes(12).toString('hex')}`;
+  await atelierClient.execute({
+    sql: `INSERT INTO creator_fee_index (id, vault_type, tx_signature, amount_lamports, block_time, slot)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(tx_signature) DO NOTHING`,
+    args: [id, entry.vault_type, entry.tx_signature, entry.amount_lamports, entry.block_time, entry.slot],
+  });
+}
+
+export async function getTotalIndexedWithdrawals(): Promise<number> {
+  await initAtelierDb();
+  const result = await atelierClient.execute(
+    'SELECT COALESCE(SUM(amount_lamports), 0) as total FROM creator_fee_index',
+  );
+  return Number(result.rows[0]?.total ?? 0);
+}
+
+export async function getIndexCursor(vaultType: string): Promise<{
+  last_signature: string | null;
+  newest_signature: string | null;
+  fully_backfilled: boolean;
+} | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM creator_fee_index_cursor WHERE vault_type = ?',
+    args: [vaultType],
+  });
+  if (!result.rows[0]) return null;
+  const row = result.rows[0];
+  return {
+    last_signature: row.last_signature ? String(row.last_signature) : null,
+    newest_signature: row.newest_signature ? String(row.newest_signature) : null,
+    fully_backfilled: Number(row.fully_backfilled) === 1,
+  };
+}
+
+export async function upsertIndexCursor(cursor: {
+  vault_type: string;
+  last_signature?: string | null;
+  newest_signature?: string | null;
+  fully_backfilled?: boolean;
+}): Promise<void> {
+  await initAtelierDb();
+  const existing = await getIndexCursor(cursor.vault_type);
+  if (!existing) {
+    await atelierClient.execute({
+      sql: `INSERT INTO creator_fee_index_cursor (vault_type, last_signature, newest_signature, fully_backfilled)
+            VALUES (?, ?, ?, ?)`,
+      args: [
+        cursor.vault_type,
+        cursor.last_signature ?? null,
+        cursor.newest_signature ?? null,
+        cursor.fully_backfilled ? 1 : 0,
+      ],
+    });
+  } else {
+    const sets: string[] = ['updated_at = CURRENT_TIMESTAMP'];
+    const args: (string | number | null)[] = [];
+    if (cursor.last_signature !== undefined) {
+      sets.push('last_signature = ?');
+      args.push(cursor.last_signature);
+    }
+    if (cursor.newest_signature !== undefined) {
+      sets.push('newest_signature = ?');
+      args.push(cursor.newest_signature);
+    }
+    if (cursor.fully_backfilled !== undefined) {
+      sets.push('fully_backfilled = ?');
+      args.push(cursor.fully_backfilled ? 1 : 0);
+    }
+    args.push(cursor.vault_type);
+    await atelierClient.execute({
+      sql: `UPDATE creator_fee_index_cursor SET ${sets.join(', ')} WHERE vault_type = ?`,
+      args,
+    });
+  }
+}
+
+export async function getIndexedWithdrawals(limit = 100): Promise<{
+  id: string; vault_type: string; tx_signature: string;
+  amount_lamports: number; block_time: number | null; slot: number;
+}[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM creator_fee_index ORDER BY slot DESC LIMIT ?',
+    args: [limit],
+  });
+  return result.rows as unknown as {
+    id: string; vault_type: string; tx_signature: string;
+    amount_lamports: number; block_time: number | null; slot: number;
+  }[];
+}
+
 // ─── Token Queries ───
 
 export async function updateAgentToken(
@@ -1955,7 +2080,6 @@ export async function getMetricsData(): Promise<MetricsData> {
   const [
     revenueResult,
     gmvResult,
-    sweptLamports,
     totalOrdersResult,
     ordersByStatusResult,
     totalAgentsResult,
@@ -1973,7 +2097,6 @@ export async function getMetricsData(): Promise<MetricsData> {
     atelierClient.execute(
       `SELECT COALESCE(SUM(quoted_price_usd), 0) as total FROM service_orders WHERE status IN ${REVENUE_STATUSES}`
     ),
-    getTotalSwept(),
     atelierClient.execute('SELECT COUNT(*) as count FROM service_orders'),
     atelierClient.execute('SELECT status, COUNT(*) as count FROM service_orders GROUP BY status'),
     atelierClient.execute('SELECT COUNT(*) as count FROM atelier_agents WHERE active = 1'),
@@ -2045,7 +2168,7 @@ export async function getMetricsData(): Promise<MetricsData> {
   return {
     totalRevenue: Number(revenueResult.rows[0].total),
     totalGmv: Number(gmvResult.rows[0].total),
-    creatorFeeSol: sweptLamports / 1e9,
+    creatorFeeSol: 0,
     totalOrders: Number(totalOrdersResult.rows[0].count),
     ordersByStatus,
     totalAgents: Number(totalAgentsResult.rows[0].count),

@@ -2,26 +2,25 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { OnlinePumpSdk } from '@pump-fun/pump-sdk';
-import { getPlatformStats, getPlatformRevenue, getTotalSwept } from '@/lib/atelier-db';
+import { getPlatformStats, getPlatformRevenue } from '@/lib/atelier-db';
+import { getTotalIndexedWithdrawals } from '@/lib/fee-indexer';
 import { getServerConnection, ATELIER_PUBKEY } from '@/lib/solana-server';
 import { getSolPriceUsd } from '@/lib/sol-price';
-
-const BASELINE_LAMPORTS = Number(process.env.CREATOR_FEE_BASELINE_LAMPORTS ?? '0');
 
 export async function GET(): Promise<NextResponse> {
   try {
     const connection = getServerConnection();
     const sdk = new OnlinePumpSdk(connection);
 
-    const [stats, revenue, vaultBalance, sweptLamports, solPrice] = await Promise.all([
+    const [stats, revenue, vaultBalance, indexedWithdrawals, solPrice] = await Promise.all([
       getPlatformStats(),
       getPlatformRevenue(),
       sdk.getCreatorVaultBalanceBothPrograms(ATELIER_PUBKEY),
-      getTotalSwept(),
+      getTotalIndexedWithdrawals(),
       getSolPriceUsd(),
     ]);
 
-    const creatorFeeSol = (BASELINE_LAMPORTS + vaultBalance.toNumber() + sweptLamports) / 1e9;
+    const creatorFeeSol = (indexedWithdrawals + vaultBalance.toNumber()) / 1e9;
     const creatorFeeUsd = creatorFeeSol * solPrice;
     const totalRevenueUsd = revenue + creatorFeeUsd;
 

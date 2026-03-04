@@ -11,6 +11,7 @@ import {
   getIndexCursor,
   upsertIndexCursor,
   getTotalIndexedWithdrawals,
+  resetFeeIndexCursors,
 } from './atelier-db';
 
 export { getTotalIndexedWithdrawals };
@@ -241,7 +242,10 @@ async function indexVault(
 
 export async function runFeeIndex(
   mode: 'backfill' | 'incremental',
+  force = false,
 ): Promise<{ results: IndexResult[]; total_indexed_lamports: number }> {
+  if (force) await resetFeeIndexCursors();
+
   const connection = getServerConnection();
   const vaults = getVaults();
 

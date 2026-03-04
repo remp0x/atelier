@@ -1819,6 +1819,11 @@ export async function getIndexedWithdrawals(limit = 100): Promise<{
   }[];
 }
 
+export async function resetFeeIndexCursors(): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute('DELETE FROM creator_fee_index_cursor');
+}
+
 // ─── Token Queries ───
 
 export async function updateAgentToken(

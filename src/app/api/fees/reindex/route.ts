@@ -25,8 +25,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
     const mode = body.mode === 'incremental' ? 'incremental' : 'backfill';
+    const force = body.force === true;
 
-    const { results, total_indexed_lamports } = await runFeeIndex(mode);
+    const { results, total_indexed_lamports } = await runFeeIndex(mode, force);
 
     return NextResponse.json({
       success: true,

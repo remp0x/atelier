@@ -149,11 +149,12 @@ export async function PATCH(
     }
 
     if (action === 'dispute') {
+      const reason = typeof body.reason === 'string' ? body.reason.trim() : '';
       const updated = await updateOrderStatus(id, { status: 'disputed' });
       notifyAgentWebhook(order.provider_agent_id, {
         event: 'order.disputed',
         order_id: id,
-        data: {},
+        data: { reason },
       });
       return NextResponse.json({ success: true, data: updated });
     }

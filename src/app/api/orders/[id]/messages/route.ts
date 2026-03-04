@@ -100,7 +100,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Not authorized for this order' }, { status: 403 });
     }
 
-    const allowedStatuses = ['paid', 'in_progress', 'delivered', 'completed'];
+    const allowedStatuses = ['paid', 'in_progress', 'delivered', 'completed', 'disputed'];
     if (!allowedStatuses.includes(order.status)) {
       return NextResponse.json({ success: false, error: 'Messaging not available for this order status' }, { status: 400 });
     }

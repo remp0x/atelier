@@ -711,6 +711,8 @@ export default function AtelierOrderPage() {
   const [error, setError] = useState<string | null>(null);
   const [approving, setApproving] = useState(false);
   const [disputing, setDisputing] = useState(false);
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [payMsg, setPayMsg] = useState<string | null>(null);
@@ -982,33 +984,79 @@ export default function AtelierOrderPage() {
                   )}
                 </button>
                 <button
-                  onClick={async () => {
-                    if (!confirm('Are you sure you want to dispute this order?')) return;
-                    setDisputing(true);
-                    try {
-                      const auth = await getAuth();
-                      const res = await fetch(`/api/orders/${order.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...auth, action: 'dispute' }),
-                      });
-                      const json = await res.json();
-                      if (json.success) load();
-                    } finally {
-                      setDisputing(false);
-                    }
-                  }}
-                  disabled={approving || disputing}
+                  onClick={() => setShowDisputeForm(true)}
+                  disabled={approving || disputing || showDisputeForm}
                   className="px-4 py-3 rounded-lg border border-red-400/30 text-red-400 text-sm font-mono hover:bg-red-400/10 disabled:opacity-60 transition-colors"
                 >
-                  {disputing ? 'Disputing...' : 'Dispute'}
+                  Dispute
                 </button>
+              </div>
+            )}
+
+            {showDisputeForm && order.status === 'delivered' && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
+              <div className="mt-4 p-4 rounded-lg border border-red-400/20 bg-red-400/5">
+                <p className="text-sm font-mono text-red-400 mb-3">Why are you disputing this order?</p>
+                <textarea
+                  value={disputeReason}
+                  onChange={(e) => setDisputeReason(e.target.value)}
+                  placeholder="Describe the issue with the delivery..."
+                  rows={3}
+                  maxLength={2000}
+                  className="w-full px-3 py-2 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-red-400 resize-none mb-3"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      if (!disputeReason.trim()) return;
+                      setDisputing(true);
+                      try {
+                        const auth = await getAuth();
+                        const res = await fetch(`/api/orders/${order.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ ...auth, action: 'dispute', reason: disputeReason.trim() }),
+                        });
+                        const json = await res.json();
+                        if (json.success) {
+                          await fetch(`/api/orders/${order.id}/messages`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...auth, content: `Dispute: ${disputeReason.trim()}` }),
+                          });
+                          setShowDisputeForm(false);
+                          setDisputeReason('');
+                          load();
+                        }
+                      } finally {
+                        setDisputing(false);
+                      }
+                    }}
+                    disabled={!disputeReason.trim() || disputing}
+                    className="flex-1 py-2 rounded bg-red-500 text-white text-sm font-mono font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-opacity flex items-center justify-center gap-2"
+                  >
+                    {disputing ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      'Submit Dispute'
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setShowDisputeForm(false); setDisputeReason(''); }}
+                    disabled={disputing}
+                    className="px-4 py-2 rounded border border-neutral-300 dark:border-neutral-700 text-neutral-500 text-sm font-mono hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             )}
           </>
         )}
 
-        {wallet.publicKey && ['paid', 'in_progress', 'delivered', 'completed'].includes(order.status) && (
+        {wallet.publicKey && ['paid', 'in_progress', 'delivered', 'completed', 'disputed'].includes(order.status) && (
           <OrderChat orderId={order.id} wallet={wallet.publicKey.toBase58()} />
         )}
 

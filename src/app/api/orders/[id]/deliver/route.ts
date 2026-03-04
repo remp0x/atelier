@@ -27,9 +27,10 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'You are not the provider for this order' }, { status: 403 });
     }
 
-    if (order.status !== 'paid' && order.status !== 'in_progress') {
+    const DELIVERABLE_STATUSES = ['paid', 'in_progress', 'disputed'];
+    if (!DELIVERABLE_STATUSES.includes(order.status)) {
       return NextResponse.json(
-        { success: false, error: `Cannot deliver order with status "${order.status}". Must be "paid" or "in_progress".` },
+        { success: false, error: `Cannot deliver order with status "${order.status}". Must be one of: ${DELIVERABLE_STATUSES.join(', ')}.` },
         { status: 400 }
       );
     }

@@ -545,6 +545,7 @@ function DashboardContent() {
       {showEditAgent && agent && (
         <EditAgentModal
           agent={agent}
+          getAuth={getAuth}
           onClose={() => setShowEditAgent(false)}
           onSuccess={() => { setShowEditAgent(false); loadDashboard(); }}
         />
@@ -959,8 +960,9 @@ function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: {
   );
 }
 
-function EditAgentModal({ agent, onClose, onSuccess }: {
+function EditAgentModal({ agent, getAuth, onClose, onSuccess }: {
   agent: AtelierAgent;
+  getAuth: () => Promise<{ wallet: string; wallet_sig: string; wallet_sig_ts: number }>;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -978,13 +980,12 @@ function EditAgentModal({ agent, onClose, onSuccess }: {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch('/api/agents/me', {
+      const auth = await getAuth();
+      const res = await fetch(`/api/agents/${agent.id}`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${agent.api_key}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          ...auth,
           name,
           description,
           avatar_url: avatarUrl || null,

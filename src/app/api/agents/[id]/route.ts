@@ -3,12 +3,16 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getAtelierAgent,
+  updateAtelierAgent,
   getServicesByAgent,
   getServiceReviews,
   getRecentOrdersForAgent,
   getAgentPortfolio,
   getAgentOrderCounts,
+  type ServiceCategory,
 } from '@/lib/atelier-db';
+import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { validateExternalUrl } from '@/lib/url-validation';
 
 export async function GET(
   _request: NextRequest,
@@ -137,5 +141,111 @@ export async function GET(
       { success: false, error: 'Internal server error' },
       { status: 500 }
     );
+  }
+}
+
+const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
+const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id } = params;
+    const body = await request.json();
+
+    const { wallet, wallet_sig, wallet_sig_ts } = body;
+    if (!wallet || !wallet_sig || !wallet_sig_ts) {
+      return NextResponse.json(
+        { success: false, error: 'wallet, wallet_sig, and wallet_sig_ts are required' },
+        { status: 401 },
+      );
+    }
+
+    try {
+      requireWalletAuth({ wallet, wallet_sig, wallet_sig_ts: Number(wallet_sig_ts) });
+    } catch (e) {
+      if (e instanceof WalletAuthError) {
+        return NextResponse.json({ success: false, error: e.message }, { status: 401 });
+      }
+      throw e;
+    }
+
+    const agent = await getAtelierAgent(id);
+    if (!agent) {
+      return NextResponse.json({ success: false, error: 'Agent not found' }, { status: 404 });
+    }
+    if (agent.owner_wallet !== wallet) {
+      return NextResponse.json({ success: false, error: 'Not authorized to edit this agent' }, { status: 403 });
+    }
+
+    const { name, description, avatar_url, endpoint_url, capabilities, payout_wallet } = body;
+
+    if (name !== undefined) {
+      if (typeof name !== 'string' || name.length < 2 || name.length > 50) {
+        return NextResponse.json({ success: false, error: 'Name must be between 2 and 50 characters' }, { status: 400 });
+      }
+    }
+
+    if (description !== undefined) {
+      if (typeof description !== 'string' || description.length < 10 || description.length > 500) {
+        return NextResponse.json({ success: false, error: 'Description must be between 10 and 500 characters' }, { status: 400 });
+      }
+    }
+
+    if (avatar_url !== undefined && avatar_url !== null) {
+      const avatarCheck = validateExternalUrl(avatar_url);
+      if (!avatarCheck.valid) {
+        return NextResponse.json({ success: false, error: `Invalid avatar_url: ${avatarCheck.error}` }, { status: 400 });
+      }
+    }
+
+    if (endpoint_url !== undefined) {
+      const endpointCheck = validateExternalUrl(endpoint_url);
+      if (!endpointCheck.valid) {
+        return NextResponse.json({ success: false, error: `Invalid endpoint_url: ${endpointCheck.error}` }, { status: 400 });
+      }
+    }
+
+    if (capabilities !== undefined) {
+      if (!Array.isArray(capabilities)) {
+        return NextResponse.json({ success: false, error: 'capabilities must be an array' }, { status: 400 });
+      }
+      const invalid = capabilities.filter((c: string) => !VALID_CAPABILITIES.includes(c as ServiceCategory));
+      if (invalid.length > 0) {
+        return NextResponse.json(
+          { success: false, error: `Invalid capabilities: ${invalid.join(', ')}. Valid: ${VALID_CAPABILITIES.join(', ')}` },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (payout_wallet !== undefined && payout_wallet !== null) {
+      if (typeof payout_wallet !== 'string' || !BASE58_REGEX.test(payout_wallet)) {
+        return NextResponse.json(
+          { success: false, error: 'payout_wallet must be a valid base58 Solana address' },
+          { status: 400 },
+        );
+      }
+    }
+
+    const updates: Record<string, string | null> = {};
+    if (name !== undefined) updates.name = name;
+    if (description !== undefined) updates.description = description;
+    if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+    if (endpoint_url !== undefined) updates.endpoint_url = endpoint_url;
+    if (capabilities !== undefined) updates.capabilities = JSON.stringify(capabilities);
+    if (payout_wallet !== undefined) updates.payout_wallet = payout_wallet;
+
+    const updated = await updateAtelierAgent(id, updates);
+    if (!updated) {
+      return NextResponse.json({ success: false, error: 'Agent not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, data: updated });
+  } catch (error) {
+    console.error('PATCH /api/agents/[id] error:', error);
+    return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });
   }
 }

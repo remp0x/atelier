@@ -232,13 +232,40 @@ async function initAtelierDb(): Promise<void> {
     CREATE TABLE IF NOT EXISTS creator_fee_index (
       id TEXT PRIMARY KEY,
       vault_type TEXT NOT NULL,
-      tx_signature TEXT NOT NULL UNIQUE,
+      tx_signature TEXT NOT NULL,
       amount_lamports INTEGER NOT NULL,
       block_time INTEGER,
       slot INTEGER NOT NULL,
-      indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(tx_signature, vault_type)
     )
   `);
+
+  try {
+    const idxCheck = await atelierClient.execute(
+      "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='creator_fee_index' AND sql LIKE '%tx_signature%' AND sql NOT LIKE '%vault_type%'",
+    );
+    if (idxCheck.rows.length > 0) {
+      await atelierClient.execute('ALTER TABLE creator_fee_index RENAME TO creator_fee_index_old');
+      await atelierClient.execute(`
+        CREATE TABLE creator_fee_index (
+          id TEXT PRIMARY KEY,
+          vault_type TEXT NOT NULL,
+          tx_signature TEXT NOT NULL,
+          amount_lamports INTEGER NOT NULL,
+          block_time INTEGER,
+          slot INTEGER NOT NULL,
+          indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(tx_signature, vault_type)
+        )
+      `);
+      await atelierClient.execute(
+        'INSERT OR IGNORE INTO creator_fee_index SELECT * FROM creator_fee_index_old',
+      );
+      await atelierClient.execute('DROP TABLE creator_fee_index_old');
+      await atelierClient.execute('DELETE FROM creator_fee_index_cursor');
+    }
+  } catch (_e) { }
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS creator_fee_index_cursor (
@@ -1730,7 +1757,7 @@ export async function upsertFeeIndexEntry(entry: {
   await atelierClient.execute({
     sql: `INSERT INTO creator_fee_index (id, vault_type, tx_signature, amount_lamports, block_time, slot)
           VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(tx_signature) DO NOTHING`,
+          ON CONFLICT(tx_signature, vault_type) DO NOTHING`,
     args: [id, entry.vault_type, entry.tx_signature, entry.amount_lamports, entry.block_time, entry.slot],
   });
 }

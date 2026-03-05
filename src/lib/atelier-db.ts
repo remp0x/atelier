@@ -1081,7 +1081,7 @@ export async function getAtelierAgents(filters?: {
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
             a.created_at
           FROM atelier_agents a
-          INNER JOIN services s ON s.agent_id = a.id AND s.active = 1
+          LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
           WHERE ${conditions.join(' AND ')}
           GROUP BY a.id
           ORDER BY ${orderClause}

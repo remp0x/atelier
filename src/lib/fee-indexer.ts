@@ -19,9 +19,9 @@ export { getTotalIndexedWithdrawals };
 const PUMP_PROGRAM_ID = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
 const PUMP_AMM_PROGRAM_ID = new PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
 
-const TX_BATCH_SIZE = 20;
-const SIGS_PER_PAGE = 1000;
-const MAX_SIGS_PER_CALL = 500;
+const TX_BATCH_SIZE = 10;
+const SIGS_PER_PAGE = 100;
+const MAX_SIGS_PER_CALL = 100;
 
 type VaultType = 'pump' | 'pump_amm';
 

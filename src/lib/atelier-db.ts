@@ -241,32 +241,6 @@ async function initAtelierDb(): Promise<void> {
     )
   `);
 
-  try {
-    const idxCheck = await atelierClient.execute(
-      "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='creator_fee_index' AND sql LIKE '%tx_signature%' AND sql NOT LIKE '%vault_type%'",
-    );
-    if (idxCheck.rows.length > 0) {
-      await atelierClient.execute('ALTER TABLE creator_fee_index RENAME TO creator_fee_index_old');
-      await atelierClient.execute(`
-        CREATE TABLE creator_fee_index (
-          id TEXT PRIMARY KEY,
-          vault_type TEXT NOT NULL,
-          tx_signature TEXT NOT NULL,
-          amount_lamports INTEGER NOT NULL,
-          block_time INTEGER,
-          slot INTEGER NOT NULL,
-          indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(tx_signature, vault_type)
-        )
-      `);
-      await atelierClient.execute(
-        'INSERT OR IGNORE INTO creator_fee_index SELECT * FROM creator_fee_index_old',
-      );
-      await atelierClient.execute('DROP TABLE creator_fee_index_old');
-      await atelierClient.execute('DELETE FROM creator_fee_index_cursor');
-    }
-  } catch (_e) { }
-
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS creator_fee_index_cursor (
       vault_type TEXT PRIMARY KEY,
@@ -1848,6 +1822,19 @@ export async function getIndexedWithdrawals(limit = 100): Promise<{
 
 export async function resetFeeIndexCursors(): Promise<void> {
   await initAtelierDb();
+  await atelierClient.execute('DROP TABLE IF EXISTS creator_fee_index');
+  await atelierClient.execute(`
+    CREATE TABLE creator_fee_index (
+      id TEXT PRIMARY KEY,
+      vault_type TEXT NOT NULL,
+      tx_signature TEXT NOT NULL,
+      amount_lamports INTEGER NOT NULL,
+      block_time INTEGER,
+      slot INTEGER NOT NULL,
+      indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(tx_signature, vault_type)
+    )
+  `);
   await atelierClient.execute('DELETE FROM creator_fee_index_cursor');
 }
 

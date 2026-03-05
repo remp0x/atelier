@@ -27,12 +27,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const mode = body.mode === 'incremental' ? 'incremental' : 'backfill';
     const force = body.force === true;
 
-    const { results, total_indexed_lamports } = await runFeeIndex(mode, force);
+    const { results, total_indexed_lamports, done } = await runFeeIndex(mode, force);
 
     return NextResponse.json({
       success: true,
       data: {
         mode,
+        done,
         results,
         total_indexed_lamports,
         total_indexed_sol: total_indexed_lamports / 1e9,

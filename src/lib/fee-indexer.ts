@@ -21,6 +21,7 @@ const PUMP_AMM_PROGRAM_ID = new PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52
 
 const TX_BATCH_SIZE = 20;
 const SIGS_PER_PAGE = 1000;
+const MAX_SIGS_PER_CALL = 500;
 
 type VaultType = 'pump' | 'pump_amm';
 
@@ -125,6 +126,7 @@ interface IndexResult {
   signatures_processed: number;
   withdrawals_found: number;
   total_withdrawal_lamports: number;
+  done: boolean;
 }
 
 async function indexVault(
@@ -138,15 +140,16 @@ async function indexVault(
     signatures_processed: 0,
     withdrawals_found: 0,
     total_withdrawal_lamports: 0,
+    done: false,
   };
 
   if (mode === 'backfill') {
-    if (cursor?.fully_backfilled) return result;
+    if (cursor?.fully_backfilled) { result.done = true; return result; }
 
     let before = cursor?.last_signature ?? undefined;
     let newestSig = cursor?.newest_signature ?? undefined;
 
-    while (true) {
+    while (result.signatures_processed < MAX_SIGS_PER_CALL) {
       const sigs = await fetchSignaturesPage(connection, vault.address, before);
       if (sigs.length === 0) {
         await upsertIndexCursor({
@@ -154,6 +157,7 @@ async function indexVault(
           fully_backfilled: true,
           ...(newestSig ? { newest_signature: newestSig } : {}),
         });
+        result.done = true;
         break;
       }
 
@@ -191,6 +195,7 @@ async function indexVault(
 
       if (sigs.length < SIGS_PER_PAGE) {
         await upsertIndexCursor({ vault_type: vault.type, fully_backfilled: true });
+        result.done = true;
         break;
       }
     }
@@ -199,9 +204,9 @@ async function indexVault(
     let before: string | undefined;
     let newestSig: string | undefined;
 
-    while (true) {
+    while (result.signatures_processed < MAX_SIGS_PER_CALL) {
       const sigs = await fetchSignaturesPage(connection, vault.address, before, until);
-      if (sigs.length === 0) break;
+      if (sigs.length === 0) { result.done = true; break; }
 
       if (!newestSig) newestSig = sigs[0].signature;
 
@@ -229,7 +234,7 @@ async function indexVault(
       result.signatures_processed += sigs.length;
       before = sigs[sigs.length - 1].signature;
 
-      if (sigs.length < SIGS_PER_PAGE) break;
+      if (sigs.length < SIGS_PER_PAGE) { result.done = true; break; }
     }
 
     if (newestSig) {
@@ -243,7 +248,7 @@ async function indexVault(
 export async function runFeeIndex(
   mode: 'backfill' | 'incremental',
   force = false,
-): Promise<{ results: IndexResult[]; total_indexed_lamports: number }> {
+): Promise<{ results: IndexResult[]; total_indexed_lamports: number; done: boolean }> {
   if (force) await resetFeeIndexCursors();
 
   const connection = getServerConnection();
@@ -261,10 +266,12 @@ export async function runFeeIndex(
         signatures_processed: 0,
         withdrawals_found: 0,
         total_withdrawal_lamports: 0,
+        done: false,
       });
     }
   }
 
+  const done = results.every((r) => r.done);
   const total_indexed_lamports = await getTotalIndexedWithdrawals();
-  return { results, total_indexed_lamports };
+  return { results, total_indexed_lamports, done };
 }

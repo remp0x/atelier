@@ -138,57 +138,32 @@ export function TokenLaunchSection({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* PumpFun – "P" lettermark derived from brand */}
             <a
               href={`https://pump.fun/coin/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-green-500/15 text-neutral-500 hover:text-green-400 transition-colors"
+              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-700/60 transition-colors"
               title="PumpFun"
             >
-              <svg className="w-4 h-4" viewBox="0 0 48 48" fill="currentColor">
-                <rect x="2" y="2" width="44" height="44" rx="12" fillOpacity="0.15" />
-                <path d="M16 34V14h9.2c4.4 0 7 2.4 7 6s-2.5 6-6.9 6H20v8h-4zm8.7-10c2.2 0 3.5-1.1 3.5-3s-1.3-2.9-3.5-2.9H20v5.9h4.7z" />
-              </svg>
+              <img src="/pumpfun.svg" alt="PumpFun" className="w-4 h-4" />
             </a>
-            {/* DexScreener – "D" + slash from brand mark */}
             <a
               href={`https://dexscreener.com/solana/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-blue-500/15 text-neutral-500 hover:text-blue-400 transition-colors"
+              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-700/60 transition-colors"
               title="DexScreener"
             >
-              <svg className="w-4 h-4" viewBox="0 0 48 48" fill="currentColor">
-                <rect x="2" y="2" width="44" height="44" rx="10" fillOpacity="0.15" />
-                <path d="M14 32V16h7.2c4.6 0 7.3 2.6 7.3 6.9s-2.7 7.1-7.3 7.1H18.2V32H14zm5.6-4.6c2.6 0 4.1-1.5 4.1-4s-1.5-3.8-4.1-3.8H18.2v7.8h1.4z" />
-                <path d="M33.8 32h-3.4l6.8-16h3.4l-6.8 16z" fillOpacity="0.85" />
-              </svg>
+              <img src="/dexscreener.svg" alt="DexScreener" className="w-4 h-4" />
             </a>
-            {/* GeckoTerminal – gecko silhouette derived from CoinGecko brand */}
-            <a
-              href={`https://www.geckoterminal.com/solana/pools/${token.mint}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-emerald-500/15 text-neutral-500 hover:text-emerald-400 transition-colors"
-              title="GeckoTerminal"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2.5 6.5a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm5 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zM12 17.5c-2.33 0-4.3-1.46-5.08-3.5h10.16c-.78 2.04-2.75 3.5-5.08 3.5z" />
-              </svg>
-            </a>
-            {/* Solscan – derived from Solscan brand (circle + scanner arc) */}
             <a
               href={`https://solscan.io/token/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-purple-500/15 text-neutral-500 hover:text-purple-400 transition-colors"
+              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-700/60 transition-colors"
               title="Solscan"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <circle cx="12" cy="13" r="4" />
-                <path d="M18.36 19.61c-3.67 2.96-10.22 1.9-13.62-2.08C1.01 13.16 1.44 6.6 5.73 3.06a10.66 10.66 0 0114.77.48c3.87 3.98 4.05 10.6.42 14.33l-2.58-2.7c1.37-1.93 1.8-4.13.98-6.49-1.23-3.53-5.12-5.39-8.66-4.19-3.5 1.19-5.42 4.96-4.33 8.51 1.11 3.59 4.86 5.63 8.46 4.53.72-.22 1.12-.09 1.58.44.61.71 1.32 1.33 2 2z" />
-              </svg>
+              <img src="/solscan.svg" alt="Solscan" className="w-4 h-4" />
             </a>
           </div>
         </div>

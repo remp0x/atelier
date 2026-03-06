@@ -21,10 +21,10 @@ interface NavItem {
 
 const ICON_CLASS = 'w-5 h-5 flex-shrink-0';
 
-const navItems: NavItem[] = [
+const mainNavItems: NavItem[] = [
   {
     href: '/atelier/browse',
-    label: 'Browse',
+    label: 'Agents',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
@@ -32,20 +32,20 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    href: '/atelier/token',
-    label: 'Token',
+    href: '/atelier/services',
+    label: 'Services',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
       </svg>
     ),
   },
   {
-    href: '/atelier/leaderboard',
-    label: 'Leaderboard',
+    href: '/atelier/token',
+    label: '$ATELIER',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-4.5A3.375 3.375 0 0012.75 10.5h-1.5A3.375 3.375 0 007.5 14.25v4.5m9 0h-9M12 3.75l2.25 4.5 4.5.75-3.375 3L16.5 16.5 12 14.25 7.5 16.5l1.125-4.5L5.25 9l4.5-.75L12 3.75z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
   },
@@ -58,12 +58,15 @@ const navItems: NavItem[] = [
       </svg>
     ),
   },
+];
+
+const userNavItems: NavItem[] = [
   {
-    href: '/atelier/services',
-    label: 'Services',
+    href: '/atelier/dashboard',
+    label: 'Dashboard',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
       </svg>
     ),
   },
@@ -85,25 +88,17 @@ const navItems: NavItem[] = [
       </svg>
     ),
   },
-  {
-    href: '/atelier/dashboard',
-    label: 'Dashboard',
-    icon: (
-      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-      </svg>
-    ),
-  },
-  {
-    href: '/atelier/docs',
-    label: 'API Docs',
-    icon: (
-      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-      </svg>
-    ),
-  },
 ];
+
+const docsNavItem: NavItem = {
+  href: '/atelier/docs',
+  label: 'API Docs',
+  icon: (
+    <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>
+  ),
+};
 
 export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
@@ -141,6 +136,41 @@ export function AtelierSidebar() {
     return pathname.startsWith(resolved);
   };
 
+  const renderNavLink = (item: NavItem) => {
+    const active = isActive(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={atelierHref(item.href)}
+        className={`flex items-center gap-3 h-10 rounded-lg transition-all ${
+          expanded ? 'px-3' : 'justify-center px-0'
+        } ${
+          active
+            ? 'bg-atelier/10 text-atelier'
+            : 'text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white'
+        }`}
+        title={!expanded ? item.label : undefined}
+      >
+        {item.icon}
+        <span
+          className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${
+            expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
+          }`}
+        >
+          {item.label}
+        </span>
+        {item.badge && expanded && (
+          <span className="text-[9px] font-bold font-mono text-atelier bg-atelier/10 px-1.5 py-0.5 rounded flex-shrink-0 ml-auto">
+            {item.badge}
+          </span>
+        )}
+        {active && !item.badge && (
+          <span className={`w-1.5 h-1.5 rounded-full bg-atelier flex-shrink-0 ${expanded ? 'ml-auto' : 'hidden'}`} />
+        )}
+      </Link>
+    );
+  };
+
   return (
     <aside
       className={`hidden md:flex flex-col h-screen sticky top-0 bg-white dark:bg-black border-r border-gray-200 dark:border-neutral-800 transition-all duration-300 ease-in-out z-40 overflow-x-hidden ${
@@ -156,7 +186,7 @@ export function AtelierSidebar() {
               expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
             }`}
           >
-            Ate<span className="text-gradient-atelier">lier</span>
+            Atelier
           </span>
         </Link>
       </div>
@@ -178,155 +208,109 @@ export function AtelierSidebar() {
         </svg>
       </button>
 
-      {/* Live Stats */}
-      {stats && (
-        <div className={`flex-shrink-0 border-b border-gray-200 dark:border-neutral-800 ${expanded ? 'px-4 pb-3' : 'px-2 pb-3 flex flex-col items-center'}`}>
-          {expanded ? (
-            <div className="space-y-1">
-              <div className="flex items-center gap-3 font-mono text-[11px] text-gray-500 dark:text-neutral-500">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-atelier animate-pulse-atelier" />
-                  {stats.agents} agents
-                </span>
-                <span className="text-gray-300 dark:text-neutral-700">|</span>
-                <span>{stats.orders} orders</span>
-              </div>
-              {stats.totalRevenueUsd > 0 && (
-                <div className="font-mono text-[11px] text-gray-500 dark:text-neutral-500 pl-3">
-                  rev: {stats.totalRevenueUsd >= 1000 ? `$${(stats.totalRevenueUsd / 1000).toFixed(1)}k` : `$${stats.totalRevenueUsd.toFixed(2)}`}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-1" title={`${stats.agents} agents · ${stats.orders} orders`}>
-              <span className="w-1.5 h-1.5 rounded-full bg-atelier animate-pulse-atelier" />
-              <span className="font-mono text-[9px] text-gray-500 dark:text-neutral-500">{stats.agents}</span>
-            </div>
+      {/* Main Nav */}
+      <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
+        {mainNavItems.map(renderNavLink)}
+
+        {/* User Section */}
+        <div className="pt-3 pb-1">
+          {expanded && (
+            <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
+              Account
+            </span>
+          )}
+          {!expanded && (
+            <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
           )}
         </div>
-      )}
+        {userNavItems.map(renderNavLink)}
 
-      {/* Nav */}
-      <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
-        {navItems.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={atelierHref(item.href)}
-              className={`flex items-center gap-3 h-10 rounded-lg transition-all ${
-                expanded ? 'px-3' : 'justify-center px-0'
-              } ${
-                active
-                  ? 'bg-atelier/10 text-atelier'
-                  : 'text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white'
-              }`}
-              title={!expanded ? item.label : undefined}
-            >
-              {item.icon}
-              <span
-                className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${
-                  expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
-                }`}
-              >
-                {item.label}
-              </span>
-              {item.badge && expanded && (
-                <span className="text-[9px] font-bold font-mono text-atelier bg-atelier/10 px-1.5 py-0.5 rounded flex-shrink-0 ml-auto">
-                  {item.badge}
-                </span>
-              )}
-              {active && !item.badge && (
-                <span className={`w-1.5 h-1.5 rounded-full bg-atelier flex-shrink-0 ${expanded ? 'ml-auto' : 'hidden'}`} />
-              )}
-            </Link>
-          );
-        })}
+        {/* API Docs */}
+        <div className="pt-3 pb-1">
+          {!expanded && (
+            <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
+          )}
+        </div>
+        {renderNavLink(docsNavItem)}
+
+        {/* Live Stats + Revenue */}
+        {stats && (
+          <div className={`mt-3 flex-shrink-0 rounded-lg border border-gray-200 dark:border-neutral-800 ${expanded ? 'p-3' : 'p-2 flex flex-col items-center'}`}>
+            {expanded ? (
+              <div className="space-y-1">
+                <div className="flex items-center gap-3 font-mono text-[11px] text-gray-500 dark:text-neutral-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-atelier animate-pulse-atelier" />
+                    {stats.agents} agents
+                  </span>
+                  <span className="text-gray-300 dark:text-neutral-700">|</span>
+                  <span>{stats.orders} orders</span>
+                </div>
+                {stats.totalRevenueUsd > 0 && (
+                  <div className="font-mono text-[11px] text-gray-500 dark:text-neutral-500 pl-3">
+                    rev: {stats.totalRevenueUsd >= 1000 ? `$${(stats.totalRevenueUsd / 1000).toFixed(1)}k` : `$${stats.totalRevenueUsd.toFixed(2)}`}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1" title={`${stats.agents} agents · ${stats.orders} orders · rev: $${stats.totalRevenueUsd.toFixed(2)}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-atelier animate-pulse-atelier" />
+                <span className="font-mono text-[9px] text-gray-500 dark:text-neutral-500">{stats.agents}</span>
+              </div>
+            )}
+          </div>
+        )}
       </nav>
 
-      {/* Divider */}
-      <div className="mx-3 border-t border-gray-200 dark:border-neutral-800 flex-shrink-0" />
-
       {/* Bottom */}
-      <div className="py-3 px-2 space-y-0.5 flex-shrink-0">
-        {/* Theme */}
-        <button
-          onClick={toggleTheme}
-          className={`w-full flex items-center gap-3 h-10 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white ${
-            expanded ? 'px-3' : 'justify-center px-0'
-          }`}
-          title={!expanded ? (theme === 'dark' ? 'Light mode' : 'Dark mode') : undefined}
-        >
-          {theme === 'dark' ? (
-            <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+      <div className="py-3 px-2 flex-shrink-0">
+        <div className={`flex items-center ${expanded ? 'justify-between px-1' : 'justify-center gap-0 flex-col'}`}>
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          >
+            {theme === 'dark' ? (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
+
+          {/* X */}
+          <a
+            href="https://x.com/useAtelier"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
+            title="X"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
-          ) : (
-            <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </a>
+
+          {/* Product Hunt */}
+          <a
+            href="https://www.producthunt.com/products/atelier-3?utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-atelier-3"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
+            title="Product Hunt"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13.604 8.4h-3.405V12h3.405a1.8 1.8 0 001.8-1.8 1.8 1.8 0 00-1.8-1.8zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804a4.2 4.2 0 014.199 4.2 4.2 4.2 0 01-4.2 4.2z" />
             </svg>
-          )}
-          <span className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-            {theme === 'dark' ? 'Light' : 'Dark'}
-          </span>
-        </button>
-
-        {/* X/Twitter */}
-        <a
-          href="https://x.com/useAtelier"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`w-full flex items-center gap-3 h-10 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white ${
-            expanded ? 'px-3' : 'justify-center px-0'
-          }`}
-          title={!expanded ? 'Twitter / X' : undefined}
-        >
-          <svg className={ICON_CLASS} fill="currentColor" viewBox="0 0 24 24">
-            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-          </svg>
-          <span className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-            Twitter / X
-          </span>
-        </a>
-
-        {/* Product Hunt */}
-        <a
-          href="https://www.producthunt.com/products/atelier-3?utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-atelier-3"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`w-full flex items-center gap-3 h-10 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white ${
-            expanded ? 'px-3' : 'justify-center px-0'
-          }`}
-          title={!expanded ? 'Product Hunt' : undefined}
-        >
-          <svg className={ICON_CLASS} viewBox="0 0 24 24" fill="currentColor">
-            <path d="M13.604 8.4h-3.405V12h3.405a1.8 1.8 0 001.8-1.8 1.8 1.8 0 00-1.8-1.8zM12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm1.604 14.4h-3.405V18H7.801V6h5.804a4.2 4.2 0 014.199 4.2 4.2 4.2 0 01-4.2 4.2z" />
-          </svg>
-          <span className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-            Product Hunt
-          </span>
-        </a>
-
-        {/* $ATELIER */}
-        <a
-          href="https://pump.fun/coin/7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump"
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`w-full flex items-center gap-3 h-10 rounded-lg transition-all text-atelier hover:bg-atelier/10 ${
-            expanded ? 'px-3' : 'justify-center px-0'
-          }`}
-          title={!expanded ? '$ATELIER' : undefined}
-        >
-          <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className={`text-sm font-mono font-semibold whitespace-nowrap transition-opacity duration-200 ${expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'}`}>
-            $ATELIER
-          </span>
-        </a>
+          </a>
+        </div>
 
         {/* Wallet */}
-        <div className={`atelier-wallet-btn ${expanded ? '' : 'flex justify-center'}`}>
+        <div className={`mt-2 atelier-wallet-btn ${expanded ? '' : 'flex justify-center'}`}>
           <WalletMultiButton
             style={{
               background: '#8B5CF6',

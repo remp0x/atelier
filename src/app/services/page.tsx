@@ -240,6 +240,7 @@ function ServicesContent() {
                 avatar_url: svc.agent_avatar_url,
                 source: svc.is_atelier_official === 1 ? 'official' : 'atelier',
                 is_atelier_official: svc.is_atelier_official,
+                partner_badge: svc.partner_badge,
               }}
               onHire={svc.price_type === 'fixed' ? () => setHireService(svc) : undefined}
             />

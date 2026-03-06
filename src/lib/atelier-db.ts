@@ -80,6 +80,7 @@ async function initAtelierDb(): Promise<void> {
       token_tx_hash TEXT,
       token_created_at DATETIME,
       payout_wallet TEXT,
+      partner_badge TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -286,6 +287,7 @@ async function initAtelierDb(): Promise<void> {
   `);
 
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_wallet TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN partner_badge TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN reference_images TEXT'); } catch (_e) { }
 
   try {
@@ -718,6 +720,7 @@ export interface AtelierAgent {
   bankr_wallet: string | null;
   owner_wallet: string | null;
   payout_wallet: string | null;
+  partner_badge: string | null;
   token_mint: string | null;
   token_name: string | null;
   token_symbol: string | null;
@@ -742,6 +745,7 @@ export interface AtelierAgentListItem {
   verified: number;
   blue_check: number;
   is_atelier_official: number;
+  partner_badge: string | null;
   services_count: number;
   avg_rating: number | null;
   total_orders: number;
@@ -780,6 +784,7 @@ export interface Service {
   system_prompt: string | null;
   quota_limit: number;
   is_atelier_official: number;
+  partner_badge: string | null;
   created_at: string;
 }
 
@@ -1072,7 +1077,7 @@ export async function getAtelierAgents(filters?: {
   const result = await atelierClient.execute({
     sql: `SELECT
             a.id, a.name, a.description, a.avatar_url, a.source,
-            a.verified, a.blue_check, a.is_atelier_official,
+            a.verified, a.blue_check, a.is_atelier_official, a.partner_badge,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id) as total_orders,
@@ -1094,7 +1099,7 @@ export async function getAtelierAgents(filters?: {
     const r = row as unknown as {
       id: string; name: string; description: string | null; avatar_url: string | null;
       source: 'atelier' | 'external' | 'official';
-      verified: number; blue_check: number; is_atelier_official: number;
+      verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       categories_str: string | null;
       provider_models_str: string | null;
@@ -1119,7 +1124,8 @@ export async function getAtelierAgents(filters?: {
     return {
       id: r.id, name: r.name, description: r.description, avatar_url: r.avatar_url,
       source: r.source, verified: r.verified, blue_check: r.blue_check,
-      is_atelier_official: r.is_atelier_official, services_count: r.services_count,
+      is_atelier_official: r.is_atelier_official, partner_badge: r.partner_badge,
+      services_count: r.services_count,
       avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders,
       categories, provider_models,
       token_mint: r.token_mint, token_symbol: r.token_symbol,
@@ -1195,7 +1201,8 @@ export async function getServices(filters?: {
             a.verified,
             a.blue_check,
             (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
-            a.is_atelier_official
+            a.is_atelier_official,
+            a.partner_badge
           FROM services s
           LEFT JOIN atelier_agents a ON s.agent_id = a.id
           WHERE ${conditions.join(' AND ')}
@@ -1215,7 +1222,8 @@ export async function getFeaturedServices(limit = 6): Promise<Service[]> {
             a.verified,
             a.blue_check,
             (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
-            a.is_atelier_official
+            a.is_atelier_official,
+            a.partner_badge
           FROM services s
           LEFT JOIN atelier_agents a ON s.agent_id = a.id
           WHERE s.active = 1
@@ -1235,7 +1243,8 @@ export async function getServiceById(id: string): Promise<Service | null> {
             a.verified,
             a.blue_check,
             (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
-            a.is_atelier_official
+            a.is_atelier_official,
+            a.partner_badge
           FROM services s
           LEFT JOIN atelier_agents a ON s.agent_id = a.id
           WHERE s.id = ?`,
@@ -1253,7 +1262,8 @@ export async function getServicesByAgent(agentId: string): Promise<Service[]> {
             a.verified,
             a.blue_check,
             (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
-            a.is_atelier_official
+            a.is_atelier_official,
+            a.partner_badge
           FROM services s
           LEFT JOIN atelier_agents a ON s.agent_id = a.id
           WHERE s.agent_id = ? AND s.active = 1

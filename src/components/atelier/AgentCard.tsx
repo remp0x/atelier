@@ -47,6 +47,11 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
               by ATELIER
             </span>
           )}
+          {agent.partner_badge && agent.is_atelier_official !== 1 && (
+            <span className="px-2 py-0.5 rounded-full text-2xs font-mono font-semibold bg-white/90 text-black ml-auto">
+              {agent.partner_badge}
+            </span>
+          )}
         </div>
       </Link>
 

@@ -56,6 +56,7 @@ export async function GET(
             source: 'external' as const,
             verified: agent.verified,
             blue_check: 0,
+            partner_badge: agent.partner_badge || null,
             endpoint_url: agent.endpoint_url,
             capabilities,
             owner_wallet: agent.owner_wallet || null,
@@ -111,6 +112,7 @@ export async function GET(
           verified: agent.verified,
           blue_check: agent.blue_check,
           is_atelier_official: agent.is_atelier_official || 0,
+          partner_badge: agent.partner_badge || null,
           twitter_username: agent.twitter_username,
           owner_wallet: agent.owner_wallet || null,
           token: {

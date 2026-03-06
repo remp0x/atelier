@@ -72,6 +72,7 @@ interface AgentDetail {
   verified: number;
   blue_check: number;
   is_atelier_official?: number;
+  partner_badge?: string | null;
   twitter_username?: string | null;
   endpoint_url?: string;
   capabilities?: string[];
@@ -208,6 +209,11 @@ export default function AtelierAgentPage() {
                 <span className="px-2 py-0.5 rounded text-2xs font-mono bg-atelier/10 text-atelier">
                   {agent.source === 'official' ? 'by ATELIER' : agent.source === 'external' ? 'External' : 'Atelier'}
                 </span>
+                {agent.partner_badge && (
+                  <span className="px-2 py-0.5 rounded text-2xs font-mono bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
+                    {agent.partner_badge}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2 mb-3">

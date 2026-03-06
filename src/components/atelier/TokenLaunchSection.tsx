@@ -87,49 +87,61 @@ export function TokenLaunchSection({
 
   if (token?.mint) {
     return (
-      <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-            <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
+      <div className="rounded-lg border border-atelier/30 bg-atelier/5 dark:bg-atelier/[0.07]">
+        <div className="flex items-start gap-4 p-5">
+          {token.image_url ? (
+            <img src={token.image_url} alt={token.symbol || ''} className="w-12 h-12 rounded-lg object-cover shrink-0" />
+          ) : (
+            <div className="w-12 h-12 rounded-lg bg-atelier/20 flex items-center justify-center shrink-0">
+              <span className="text-lg font-bold font-mono text-atelier">$</span>
+            </div>
+          )}
+
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">{token.name}</span>
-              <span className="text-xs font-mono text-atelier">${token.symbol}</span>
+            <div className="flex items-center gap-3 mb-1">
+              <span className="text-xl font-bold font-mono text-atelier">${token.symbol}</span>
+              {marketData && marketData.market_cap_usd > 0 && (
+                <div className="inline-flex items-center gap-1.5 rounded-md bg-atelier/10 dark:bg-atelier/15 px-2.5 py-1">
+                  <span className="text-sm font-mono font-semibold text-atelier">mcap {formatMcap(marketData.market_cap_usd)}</span>
+                </div>
+              )}
               <span className={`px-1.5 py-0.5 rounded text-2xs font-mono ${
                 token.mode === 'pumpfun' ? 'bg-green-500/10 text-green-400' : 'bg-atelier/10 text-atelier'
               }`}>
                 {token.mode === 'pumpfun' ? 'PumpFun' : 'BYOT'}
               </span>
             </div>
-            <div className="flex items-center gap-2 mt-0.5">
+
+            {token.name && (
+              <p className="text-sm text-neutral-500 font-mono mb-2">{token.name}</p>
+            )}
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-mono text-neutral-500">CA:</span>
               <button
                 onClick={() => handleCopy(token.mint!)}
-                className="text-xs text-gray-500 dark:text-neutral-400 hover:text-atelier font-mono transition-colors flex items-center gap-1"
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded transition-all duration-200 text-xs font-mono ${
+                  copied
+                    ? 'bg-green-500/15 text-green-500'
+                    : 'text-neutral-400 hover:text-atelier hover:bg-atelier/10'
+                }`}
               >
-                {token.mint!.slice(0, 6)}...{token.mint!.slice(-4)}
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  {copied ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                  ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
-                  )}
-                </svg>
+                {copied ? 'Copied!' : `${token.mint!.slice(0, 8)}...${token.mint!.slice(-6)}`}
+                {!copied && (
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                  </svg>
+                )}
               </button>
-              {marketData && (
-                <span className="text-xs font-mono text-neutral-400">
-                  mcap {formatMcap(marketData.market_cap_usd)}
-                </span>
-              )}
             </div>
           </div>
+
           <a
             href={`https://pump.fun/coin/${token.mint}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-2 py-1 rounded text-2xs font-mono text-green-400 bg-green-500/10 hover:bg-green-500/20 transition-colors"
+            className="shrink-0 px-3 py-1.5 rounded-md text-xs font-mono font-semibold text-green-400 bg-green-500/10 hover:bg-green-500/20 transition-colors"
           >
             pump.fun
           </a>

@@ -45,6 +45,7 @@ module.exports = {
         'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
         'fade-in': 'fadeIn 0.3s ease-out',
         'pulse-atelier': 'pulseAtelier 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        aurora: 'aurora 60s linear infinite',
       },
       keyframes: {
         slideUp: {
@@ -62,6 +63,10 @@ module.exports = {
         pulseAtelier: {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.6' },
+        },
+        aurora: {
+          from: { backgroundPosition: '50% 50%, 50% 50%' },
+          to: { backgroundPosition: '350% 50%, 350% 50%' },
         },
       },
       backgroundImage: {

@@ -10,6 +10,13 @@
   --atelier: #8B5CF6;
   --atelier-bright: #A78BFA;
   --gray-dark: #2a2a2a;
+  --white: #ffffff;
+  --transparent: transparent;
+  --aurora-1: #7C3AED;
+  --aurora-2: #A78BFA;
+  --aurora-3: #8B5CF6;
+  --aurora-4: #C4B5FD;
+  --aurora-5: #6D28D9;
 }
 
 :root.dark, .dark {

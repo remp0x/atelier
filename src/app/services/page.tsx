@@ -236,6 +236,7 @@ function ServicesContent() {
               showAgent
               agent={{
                 id: svc.agent_id,
+                slug: svc.agent_slug,
                 name: svc.agent_name,
                 avatar_url: svc.agent_avatar_url,
                 source: svc.is_atelier_official === 1 ? 'official' : 'atelier',

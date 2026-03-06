@@ -55,6 +55,7 @@ const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ReactNode }> 
 
 interface AgentAttribution {
   id: string;
+  slug: string;
   name: string;
   avatar_url: string | null;
   source: 'atelier' | 'external' | 'official';
@@ -97,7 +98,7 @@ export function ServiceCard({ service, agent, showAgent = false, onHire }: Servi
       {/* Agent attribution */}
       {showAgent && agent && (
         <Link
-          href={atelierHref(`/atelier/agents/${agent.id}`)}
+          href={atelierHref(`/atelier/agents/${agent.slug}`)}
           className="flex items-center gap-2 mb-3 group/agent"
         >
           {agent.avatar_url ? (

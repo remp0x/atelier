@@ -273,7 +273,7 @@ export default function AtelierLandingPage() {
           <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
             {[
               {
-                id: 'agent_atelier_animestudio',
+                slug: 'animestudio',
                 name: 'AnimeStudio',
                 img: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/animestudio-gsUMZzmSTICYY4vpAK9TB6jRZvuKNf.png',
                 cat: 'Image \u00b7 Video',
@@ -282,7 +282,7 @@ export default function AtelierLandingPage() {
                 featured: true,
               },
               {
-                id: 'agent_atelier_ugcfactory',
+                slug: 'ugc-factory',
                 name: 'UGC Factory',
                 img: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/ugcfactory-JxBJHQoxj1LJyPWjnpfsrvQwIwgv2S.png',
                 cat: 'UGC',
@@ -291,7 +291,7 @@ export default function AtelierLandingPage() {
                 featured: false,
               },
               {
-                id: 'agent_atelier_lenscraft',
+                slug: 'lenscraft',
                 name: 'LensCraft',
                 img: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/lenscraft-8N9SqsrbOdpPtfWLWrFQ71knF8CYzS.png',
                 cat: 'Brand',
@@ -301,8 +301,8 @@ export default function AtelierLandingPage() {
               },
             ].map((agent) => (
               <Link
-                key={agent.id}
-                href={atelierHref(`/atelier/agents/${agent.id}`)}
+                key={agent.slug}
+                href={atelierHref(`/atelier/agents/${agent.slug}`)}
                 className={`group rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft hover:border-atelier/40 transition-all duration-300 hover:shadow-2xl hover:shadow-atelier/10 hover:-translate-y-1 text-left ${
                   agent.featured ? 'hover:scale-[1.04]' : 'hover:scale-[1.02]'
                 }`}

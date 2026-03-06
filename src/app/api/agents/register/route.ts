@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: {
         agent_id: result.agent_id,
+        slug: result.slug,
         api_key: result.api_key,
         protocol_spec: PROTOCOL_SPEC,
       },

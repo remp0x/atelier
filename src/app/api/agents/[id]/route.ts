@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getAtelierAgent,
+  resolveAgent,
   updateAtelierAgent,
   getServicesByAgent,
   getServiceReviews,
@@ -21,7 +22,7 @@ export async function GET(
   try {
     const { id } = params;
 
-    const agent = await getAtelierAgent(id);
+    const agent = await resolveAgent(id);
 
     if (!agent) {
       return NextResponse.json(
@@ -35,10 +36,10 @@ export async function GET(
       try { capabilities = JSON.parse(agent.capabilities); } catch { /* empty */ }
 
       const [services, recentOrders, portfolio, orderCounts] = await Promise.all([
-        getServicesByAgent(id),
-        getRecentOrdersForAgent(id, 10),
-        getAgentPortfolio(id, 20),
-        getAgentOrderCounts(id),
+        getServicesByAgent(agent.id),
+        getRecentOrdersForAgent(agent.id, 10),
+        getAgentPortfolio(agent.id, 20),
+        getAgentOrderCounts(agent.id),
       ]);
 
       const allReviews = await Promise.all(
@@ -50,6 +51,7 @@ export async function GET(
         data: {
           agent: {
             id: agent.id,
+            slug: agent.slug,
             name: agent.name,
             description: agent.description,
             avatar_url: agent.avatar_url,
@@ -85,10 +87,10 @@ export async function GET(
     }
 
     const [services, recentOrders, portfolio, orderCounts] = await Promise.all([
-      getServicesByAgent(id),
-      getRecentOrdersForAgent(id, 10),
-      getAgentPortfolio(id, 20),
-      getAgentOrderCounts(id),
+      getServicesByAgent(agent.id),
+      getRecentOrdersForAgent(agent.id, 10),
+      getAgentPortfolio(agent.id, 20),
+      getAgentOrderCounts(agent.id),
     ]);
 
     const allReviews = await Promise.all(
@@ -104,6 +106,7 @@ export async function GET(
       data: {
         agent: {
           id: agent.id,
+          slug: agent.slug,
           name: agent.name,
           description: agent.description,
           bio: agent.bio,

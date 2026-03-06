@@ -64,6 +64,7 @@ interface AgentTokenInfo {
 
 interface AgentDetail {
   id: string;
+  slug: string;
   name: string;
   description: string | null;
   bio?: string | null;

@@ -47,12 +47,22 @@ function inferModelFromText(text: string): string | null {
   return null;
 }
 
+export function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[\s-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}
+
 async function initAtelierDb(): Promise<void> {
   if (initialized) return;
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS atelier_agents (
       id TEXT PRIMARY KEY,
+      slug TEXT UNIQUE,
       name TEXT NOT NULL,
       description TEXT,
       avatar_url TEXT,
@@ -288,7 +298,10 @@ async function initAtelierDb(): Promise<void> {
 
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_wallet TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN partner_badge TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN slug TEXT UNIQUE'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN reference_images TEXT'); } catch (_e) { }
+
+  try { await backfillSlugs(); } catch (e) { console.error('Slug backfill failed (non-fatal):', e); }
 
   try {
     await seedAtelierOfficialAgents();
@@ -306,24 +319,44 @@ async function initAtelierDb(): Promise<void> {
   initialized = true;
 }
 
+async function backfillSlugs(): Promise<void> {
+  const result = await atelierClient.execute('SELECT id, name FROM atelier_agents WHERE slug IS NULL');
+  for (const row of result.rows) {
+    const r = row as unknown as { id: string; name: string };
+    let base = slugify(r.name);
+    if (!base) base = r.id;
+    let slug = base;
+    let suffix = 1;
+    while (true) {
+      const existing = await atelierClient.execute({ sql: 'SELECT id FROM atelier_agents WHERE slug = ? AND id != ?', args: [slug, r.id] });
+      if (existing.rows.length === 0) break;
+      slug = `${base}-${suffix++}`;
+    }
+    await atelierClient.execute({ sql: 'UPDATE atelier_agents SET slug = ? WHERE id = ?', args: [slug, r.id] });
+  }
+}
+
 // ─── Seed Official Agents ───
 
 async function seedAtelierOfficialAgents(): Promise<void> {
   const agents = [
     {
       id: 'agent_atelier_animestudio',
+      slug: 'animestudio',
       name: 'AnimeStudio',
       description: 'On-demand anime-style images and videos. Consistent character design, manga panels, and vibrant anime aesthetics — generate exactly what you need, when you need it.',
       avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/animestudio-gsUMZzmSTICYY4vpAK9TB6jRZvuKNf.png',
     },
     {
       id: 'agent_atelier_ugcfactory',
+      slug: 'ugc-factory',
       name: 'UGC Factory',
       description: 'Scroll-stopping UGC content for brands. Product unboxings, lifestyle shots, testimonial-style visuals — authentic creator aesthetics, all on-brand, all day.',
       avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/ugcfactory-JxBJHQoxj1LJyPWjnpfsrvQwIwgv2S.png',
     },
     {
       id: 'agent_atelier_lenscraft',
+      slug: 'lenscraft',
       name: 'LensCraft',
       description: 'Studio-quality product photography on demand. Clean backgrounds, lifestyle flatlays, hero shots, and detail close-ups — unlimited renders in a consistent premium style.',
       avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/lenscraft-8N9SqsrbOdpPtfWLWrFQ71knF8CYzS.png',
@@ -334,10 +367,10 @@ async function seedAtelierOfficialAgents(): Promise<void> {
 
   for (const a of agents) {
     await atelierClient.execute({
-      sql: `INSERT INTO atelier_agents (id, name, description, avatar_url, source, verified, blue_check, is_atelier_official, owner_wallet)
-            VALUES (?, ?, ?, ?, 'official', 1, 1, 1, ?)
-            ON CONFLICT(id) DO UPDATE SET description = ?, avatar_url = ?, owner_wallet = ?`,
-      args: [a.id, a.name, a.description, a.avatar_url, ATELIER_OWNER_WALLET, a.description, a.avatar_url, ATELIER_OWNER_WALLET],
+      sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, verified, blue_check, is_atelier_official, owner_wallet)
+            VALUES (?, ?, ?, ?, ?, 'official', 1, 1, 1, ?)
+            ON CONFLICT(id) DO UPDATE SET slug = COALESCE(atelier_agents.slug, ?), description = ?, avatar_url = ?, owner_wallet = ?`,
+      args: [a.id, a.slug, a.name, a.description, a.avatar_url, ATELIER_OWNER_WALLET, a.slug, a.description, a.avatar_url, ATELIER_OWNER_WALLET],
     });
   }
 
@@ -572,6 +605,7 @@ async function seedCommunityAgents(): Promise<void> {
   const agents = [
     {
       id: 'ext_community_godpixel',
+      slug: 'g0d-pixel',
       name: 'g0d_pixel',
       description: 'pixel art but actually good. sprites, pfps, banners, whatever. no anime garbage.',
       avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/community/g0d_pixel-1772232994871.png',
@@ -579,6 +613,7 @@ async function seedCommunityAgents(): Promise<void> {
     },
     {
       id: 'ext_community_brandooor',
+      slug: 'brandooor',
       name: 'BRANDOOOR',
       description: 'logos and brand visuals that dont look like they came from fiverr. clean mockups, identity systems, the works.',
       avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/community/BRANDOOOR-1772232995494.png',
@@ -586,6 +621,7 @@ async function seedCommunityAgents(): Promise<void> {
     },
     {
       id: 'ext_community_clipmaxxing',
+      slug: 'clipmaxxing',
       name: 'clipmaxxing',
       description: 'short form content that actually converts. hooks, cuts, transitions — optimized for the algo.',
       avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/community/clipmaxxing-1772232996329.png',
@@ -593,6 +629,7 @@ async function seedCommunityAgents(): Promise<void> {
     },
     {
       id: 'ext_community_moodboardwitch',
+      slug: 'moodboard-witch',
       name: 'moodboard_witch',
       description: 'aesthetic moodboards and influencer visuals. pinterest-core, fashion, beauty, lifestyle. dm for custom palettes.',
       avatar_url: 'https://awbojlikpadohvp1.public.blob.vercel-storage.com/atelier-avatars/community/moodboard_witch-1772232997045.png',
@@ -645,10 +682,10 @@ async function seedCommunityAgents(): Promise<void> {
 
   for (const a of agents) {
     await atelierClient.execute({
-      sql: `INSERT INTO atelier_agents (id, name, description, avatar_url, source, verified, blue_check, is_atelier_official, owner_wallet)
-            VALUES (?, ?, ?, ?, 'external', 0, 0, 0, ?)
-            ON CONFLICT(id) DO UPDATE SET description = ?, avatar_url = ?`,
-      args: [a.id, a.name, a.description, a.avatar_url, a.owner_wallet, a.description, a.avatar_url],
+      sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, verified, blue_check, is_atelier_official, owner_wallet)
+            VALUES (?, ?, ?, ?, ?, 'external', 0, 0, 0, ?)
+            ON CONFLICT(id) DO UPDATE SET slug = COALESCE(atelier_agents.slug, ?), description = ?, avatar_url = ?`,
+      args: [a.id, a.slug, a.name, a.description, a.avatar_url, a.owner_wallet, a.slug, a.description, a.avatar_url],
     });
   }
 
@@ -701,6 +738,7 @@ export type OrderStatus = 'pending_quote' | 'quoted' | 'accepted' | 'paid' | 'in
 
 export interface AtelierAgent {
   id: string;
+  slug: string;
   name: string;
   description: string | null;
   avatar_url: string | null;
@@ -738,6 +776,7 @@ export function getPayoutWallet(agent: AtelierAgent): string | null {
 
 export interface AtelierAgentListItem {
   id: string;
+  slug: string;
   name: string;
   description: string | null;
   avatar_url: string | null;
@@ -762,6 +801,7 @@ export interface Service {
   id: string;
   agent_id: string;
   agent_name: string;
+  agent_slug: string;
   agent_avatar_url: string | null;
   category: ServiceCategory;
   title: string;
@@ -897,10 +937,21 @@ export async function ensureAtelierAgent(coreAgent: {
   await initAtelierDb();
   const source = coreAgent.is_atelier_official ? 'official' : 'atelier';
 
+  let base = slugify(coreAgent.name);
+  if (!base) base = coreAgent.id;
+  let slug = base;
+  let suffix = 1;
+  while (true) {
+    const existing = await atelierClient.execute({ sql: 'SELECT id FROM atelier_agents WHERE slug = ? AND id != ?', args: [slug, coreAgent.id] });
+    if (existing.rows.length === 0) break;
+    slug = `${base}-${suffix++}`;
+  }
+
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, name, description, avatar_url, bio, source, verified, blue_check, is_atelier_official, twitter_username, bankr_wallet, owner_wallet, token_mint, token_name, token_symbol, token_image_url, token_mode, token_creator_wallet, token_tx_hash, token_created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, bio, source, verified, blue_check, is_atelier_official, twitter_username, bankr_wallet, owner_wallet, token_mint, token_name, token_symbol, token_image_url, token_mode, token_creator_wallet, token_tx_hash, token_created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
+            slug = COALESCE(atelier_agents.slug, ?),
             name = ?, description = ?, avatar_url = ?, bio = ?, source = ?,
             verified = ?, blue_check = ?, is_atelier_official = ?,
             twitter_username = ?, bankr_wallet = ?, owner_wallet = ?,
@@ -913,13 +964,14 @@ export async function ensureAtelierAgent(coreAgent: {
             token_tx_hash = COALESCE(atelier_agents.token_tx_hash, ?),
             token_created_at = COALESCE(atelier_agents.token_created_at, ?)`,
     args: [
-      coreAgent.id, coreAgent.name, coreAgent.description, coreAgent.avatar_url,
+      coreAgent.id, slug, coreAgent.name, coreAgent.description, coreAgent.avatar_url,
       coreAgent.bio, source, coreAgent.verified, coreAgent.blue_check,
       coreAgent.is_atelier_official, coreAgent.twitter_username, coreAgent.bankr_wallet,
       coreAgent.owner_wallet, coreAgent.token_mint, coreAgent.token_name,
       coreAgent.token_symbol, coreAgent.token_image_url, coreAgent.token_mode,
       coreAgent.token_creator_wallet, coreAgent.token_tx_hash, coreAgent.token_created_at,
       // ON CONFLICT update values
+      slug,
       coreAgent.name, coreAgent.description, coreAgent.avatar_url, coreAgent.bio, source,
       coreAgent.verified, coreAgent.blue_check, coreAgent.is_atelier_official,
       coreAgent.twitter_username, coreAgent.bankr_wallet, coreAgent.owner_wallet,
@@ -941,6 +993,19 @@ export async function getAtelierAgent(id: string): Promise<AtelierAgent | null> 
     args: [id],
   });
   return result.rows[0] ? (result.rows[0] as unknown as AtelierAgent) : null;
+}
+
+export async function getAtelierAgentBySlug(slug: string): Promise<AtelierAgent | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM atelier_agents WHERE slug = ? AND active = 1',
+    args: [slug],
+  });
+  return result.rows[0] ? (result.rows[0] as unknown as AtelierAgent) : null;
+}
+
+export async function resolveAgent(idOrSlug: string): Promise<AtelierAgent | null> {
+  return (await getAtelierAgentBySlug(idOrSlug)) ?? (await getAtelierAgent(idOrSlug));
 }
 
 export async function getAtelierAgentByApiKey(apiKey: string): Promise<AtelierAgent | null> {
@@ -968,19 +1033,29 @@ export async function registerAtelierAgent(data: {
   endpoint_url?: string;
   capabilities?: string[];
   owner_wallet?: string;
-}): Promise<{ agent_id: string; api_key: string }> {
+}): Promise<{ agent_id: string; api_key: string; slug: string }> {
   await initAtelierDb();
   const id = `ext_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const apiKey = `atelier_${randomBytes(24).toString('hex')}`;
   const capabilities = JSON.stringify(data.capabilities || []);
 
+  let base = slugify(data.name);
+  if (!base) base = id;
+  let slug = base;
+  let suffix = 1;
+  while (true) {
+    const existing = await atelierClient.execute({ sql: 'SELECT id FROM atelier_agents WHERE slug = ?', args: [slug] });
+    if (existing.rows.length === 0) break;
+    slug = `${base}-${suffix++}`;
+  }
+
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet)
-          VALUES (?, ?, ?, ?, 'external', ?, ?, ?, ?)`,
-    args: [id, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null],
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet)
+          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?)`,
+    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null],
   });
 
-  return { agent_id: id, api_key: apiKey };
+  return { agent_id: id, api_key: apiKey, slug };
 }
 
 export async function updateAtelierAgent(
@@ -1076,7 +1151,7 @@ export async function getAtelierAgents(filters?: {
 
   const result = await atelierClient.execute({
     sql: `SELECT
-            a.id, a.name, a.description, a.avatar_url, a.source,
+            a.id, a.slug, a.name, a.description, a.avatar_url, a.source,
             a.verified, a.blue_check, a.is_atelier_official, a.partner_badge,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
@@ -1097,7 +1172,7 @@ export async function getAtelierAgents(filters?: {
 
   return result.rows.map((row) => {
     const r = row as unknown as {
-      id: string; name: string; description: string | null; avatar_url: string | null;
+      id: string; slug: string; name: string; description: string | null; avatar_url: string | null;
       source: 'atelier' | 'external' | 'official';
       verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
@@ -1122,7 +1197,7 @@ export async function getAtelierAgents(filters?: {
     }
 
     return {
-      id: r.id, name: r.name, description: r.description, avatar_url: r.avatar_url,
+      id: r.id, slug: r.slug, name: r.name, description: r.description, avatar_url: r.avatar_url,
       source: r.source, verified: r.verified, blue_check: r.blue_check,
       is_atelier_official: r.is_atelier_official, partner_badge: r.partner_badge,
       services_count: r.services_count,
@@ -1197,6 +1272,7 @@ export async function getServices(filters?: {
   const result = await atelierClient.execute({
     sql: `SELECT s.*,
             a.name as agent_name,
+            a.slug as agent_slug,
             a.avatar_url as agent_avatar_url,
             a.verified,
             a.blue_check,
@@ -1218,6 +1294,7 @@ export async function getFeaturedServices(limit = 6): Promise<Service[]> {
   const result = await atelierClient.execute({
     sql: `SELECT s.*,
             a.name as agent_name,
+            a.slug as agent_slug,
             a.avatar_url as agent_avatar_url,
             a.verified,
             a.blue_check,
@@ -1239,6 +1316,7 @@ export async function getServiceById(id: string): Promise<Service | null> {
   const result = await atelierClient.execute({
     sql: `SELECT s.*,
             a.name as agent_name,
+            a.slug as agent_slug,
             a.avatar_url as agent_avatar_url,
             a.verified,
             a.blue_check,
@@ -1258,6 +1336,7 @@ export async function getServicesByAgent(agentId: string): Promise<Service[]> {
   const result = await atelierClient.execute({
     sql: `SELECT s.*,
             a.name as agent_name,
+            a.slug as agent_slug,
             a.avatar_url as agent_avatar_url,
             a.verified,
             a.blue_check,

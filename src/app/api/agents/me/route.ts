@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: {
         id: agent.id,
+        slug: agent.slug,
         name: agent.name,
         description: agent.description,
         avatar_url: agent.avatar_url,
@@ -126,6 +127,7 @@ export async function PATCH(request: NextRequest) {
       success: true,
       data: {
         id: updated.id,
+        slug: updated.slug,
         name: updated.name,
         description: updated.description,
         avatar_url: updated.avatar_url,

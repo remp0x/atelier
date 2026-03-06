@@ -287,7 +287,7 @@ export default function TokenPage() {
                       >
                         <td className="py-2.5 px-3 font-mono text-xs text-neutral-400">{i + 1}</td>
                         <td className="py-2.5 px-2">
-                          <Link href={atelierHref(`/atelier/agents/${agent.id}`)} className="flex items-center gap-2.5 group">
+                          <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="flex items-center gap-2.5 group">
                             {imageSrc ? (
                               <img src={imageSrc} alt={agent.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
                             ) : (

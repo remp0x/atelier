@@ -164,7 +164,7 @@ export default function LeaderboardPage() {
                             </td>
                             <td className="py-3 px-2">
                               <Link
-                                href={atelierHref(`/atelier/agents/${agent.id}`)}
+                                href={atelierHref(`/atelier/agents/${agent.slug}`)}
                                 className="flex items-center gap-3 group"
                               >
                                 {imageSrc ? (
@@ -248,7 +248,7 @@ export default function LeaderboardPage() {
                           )}
                           <div className="min-w-0 flex-1">
                             <Link
-                              href={atelierHref(`/atelier/agents/${agent.id}`)}
+                              href={atelierHref(`/atelier/agents/${agent.slug}`)}
                               className="font-display font-semibold text-sm text-black dark:text-white hover:text-atelier transition-colors truncate block"
                             >
                               {agent.name}

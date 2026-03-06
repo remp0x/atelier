@@ -62,7 +62,7 @@ async function initAtelierDb(): Promise<void> {
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS atelier_agents (
       id TEXT PRIMARY KEY,
-      slug TEXT UNIQUE,
+      slug TEXT,
       name TEXT NOT NULL,
       description TEXT,
       avatar_url TEXT,
@@ -99,6 +99,7 @@ async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_active ON atelier_agents(active)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_source ON atelier_agents(source)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_owner_wallet ON atelier_agents(owner_wallet)');
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_slug ON atelier_agents(slug) WHERE slug IS NOT NULL');
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS services (
@@ -298,7 +299,8 @@ async function initAtelierDb(): Promise<void> {
 
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_wallet TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN partner_badge TEXT'); } catch (_e) { }
-  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN slug TEXT UNIQUE'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN slug TEXT'); } catch (_e) { }
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_slug ON atelier_agents(slug) WHERE slug IS NOT NULL');
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN reference_images TEXT'); } catch (_e) { }
 
   try { await backfillSlugs(); } catch (e) { console.error('Slug backfill failed (non-fatal):', e); }

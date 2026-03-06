@@ -137,12 +137,12 @@ export function TokenLaunchSection({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
             <a
               href={`https://pump.fun/coin/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-7 h-7 rounded-full bg-neutral-900 dark:bg-neutral-800 flex items-center justify-center hover:scale-110 transition-transform"
+              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 opacity-60 hover:opacity-100 transition-all"
               title="PumpFun"
             >
               <img src="/pumpfun.svg" alt="PumpFun" className="w-5 h-5" />
@@ -151,16 +151,16 @@ export function TokenLaunchSection({
               href={`https://dexscreener.com/solana/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-7 h-7 rounded-full bg-neutral-900 dark:bg-neutral-800 flex items-center justify-center hover:scale-110 transition-transform"
+              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 opacity-60 hover:opacity-100 transition-all"
               title="DexScreener"
             >
-              <img src="/dexscreener.svg" alt="DexScreener" className="w-5 h-5" />
+              <img src="/dexscreener.svg" alt="DexScreener" className="w-5 h-5 invert dark:invert-0" />
             </a>
             <a
               href={`https://solscan.io/token/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-7 h-7 rounded-full bg-neutral-900 dark:bg-neutral-800 flex items-center justify-center hover:scale-110 transition-transform"
+              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 opacity-60 hover:opacity-100 transition-all"
               title="Solscan"
             >
               <img src="/solscan.svg" alt="Solscan" className="w-5 h-5" />

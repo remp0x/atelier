@@ -137,33 +137,33 @@ export function TokenLaunchSection({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <a
               href={`https://pump.fun/coin/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-700/60 transition-colors"
+              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors opacity-70 hover:opacity-100"
               title="PumpFun"
             >
-              <img src="/pumpfun.svg" alt="PumpFun" className="w-4 h-4" />
+              <img src="/pumpfun.svg" alt="PumpFun" className="w-6 h-6" />
             </a>
             <a
               href={`https://dexscreener.com/solana/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-700/60 transition-colors"
+              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors opacity-70 hover:opacity-100"
               title="DexScreener"
             >
-              <img src="/dexscreener.svg" alt="DexScreener" className="w-4 h-4" />
+              <img src="/dexscreener.svg" alt="DexScreener" className="w-6 h-6 dark:invert" />
             </a>
             <a
               href={`https://solscan.io/token/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-neutral-200 dark:hover:bg-neutral-700/60 transition-colors"
+              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors opacity-70 hover:opacity-100"
               title="Solscan"
             >
-              <img src="/solscan.svg" alt="Solscan" className="w-4 h-4" />
+              <img src="/solscan.svg" alt="Solscan" className="w-6 h-6" />
             </a>
           </div>
         </div>

@@ -260,7 +260,7 @@ export function AtelierSidebar() {
                 </div>
                 {stats.totalRevenueUsd > 0 && (
                   <div className="font-mono text-[11px] text-gray-500 dark:text-neutral-500 pl-3">
-                    rev: {stats.totalRevenueUsd >= 1000 ? `$${(stats.totalRevenueUsd / 1000).toFixed(1)}k` : `$${stats.totalRevenueUsd.toFixed(2)}`}
+                    Revenue: {stats.totalRevenueUsd >= 1000 ? `$${(stats.totalRevenueUsd / 1000).toFixed(1)}k` : `$${stats.totalRevenueUsd.toFixed(2)}`}
                   </div>
                 )}
               </div>

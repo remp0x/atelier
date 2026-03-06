@@ -12,12 +12,6 @@ import { formatMcap } from '@/lib/format';
 
 const ATELIER_MINT = '7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump';
 
-const SOURCE_OPTIONS = [
-  { value: 'all', label: 'All' },
-  { value: 'official', label: 'Official' },
-  { value: 'community', label: 'Community' },
-] as const;
-
 const SORT_OPTIONS = [
   { value: 'marketcap', label: 'Marketcap' },
   { value: 'popular', label: 'Popular' },
@@ -57,7 +51,7 @@ function BrowseContent() {
   const searchParams = useSearchParams();
 
   const [category, setCategory] = useState(searchParams.get('category') || 'all');
-  const [source, setSource] = useState(searchParams.get('source') || 'all');
+
   const [sort, setSort] = useState(searchParams.get('sort') || 'marketcap');
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [pricing, setPricing] = useState('all');
@@ -76,7 +70,7 @@ function BrowseContent() {
   useEffect(() => {
     const params = new URLSearchParams();
     if (category !== 'all') params.set('category', category);
-    if (source !== 'all') params.set('source', source);
+
     if (sort !== 'marketcap') params.set('sort', sort);
     if (search) params.set('search', search);
     if (pricing !== 'all') params.set('pricing', pricing);
@@ -84,7 +78,7 @@ function BrowseContent() {
     const qs = params.toString();
     const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
     window.history.replaceState(null, '', url);
-  }, [category, source, sort, search, pricing, model]);
+  }, [category, sort, search, pricing, model]);
 
   const PAGE_SIZE = 48;
 
@@ -93,7 +87,7 @@ function BrowseContent() {
     try {
       const params = new URLSearchParams();
       if (category !== 'all') params.set('category', category);
-      if (source === 'official') params.set('source', 'official');
+
       const backendSort = sort === 'marketcap' ? 'popular' : sort;
       if (backendSort !== 'popular') params.set('sortBy', backendSort);
       if (search) params.set('search', search);
@@ -108,9 +102,6 @@ function BrowseContent() {
       const agentsList: AtelierAgentListItem[] = json.data;
 
       let filtered = agentsList;
-      if (source === 'community') {
-        filtered = agentsList.filter((a) => a.is_atelier_official !== 1);
-      }
 
       setHasMore(agentsList.length >= PAGE_SIZE);
 
@@ -141,7 +132,7 @@ function BrowseContent() {
     } finally {
       if (append) setLoadingMore(false); else setLoading(false);
     }
-  }, [category, source, sort, search, model]);
+  }, [category, sort, search, model]);
 
   useEffect(() => {
     fetch('/api/models').then(r => r.json()).then(json => {
@@ -191,96 +182,84 @@ function BrowseContent() {
 
       {/* Search */}
       <div className="mb-6">
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search agents..."
-          className="w-full max-w-md px-4 py-2 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
-        />
+        <div className="relative max-w-sm">
+          <svg className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search agents..."
+            className="w-full pl-6 pr-2 py-1.5 bg-transparent border-b border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier transition-colors"
+          />
+        </div>
       </div>
 
-      {/* Filter row */}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-8">
-        {/* Source filter */}
-        <div className="flex items-center gap-1.5">
-          {SOURCE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setSource(opt.value)}
-              className={`px-3 py-1.5 rounded-full text-xs font-mono transition-colors ${
-                source === opt.value
-                  ? 'border border-atelier text-atelier bg-atelier/10'
-                  : 'border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier/50 hover:text-atelier'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Category filter */}
-        <div className="flex items-center gap-1.5">
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-y-3 mb-8 border-b border-gray-100 dark:border-neutral-800/50">
+        <div className="flex items-center gap-x-1 mr-6">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               onClick={() => setCategory(cat)}
-              className={`px-3 py-1.5 rounded-full text-xs font-mono transition-colors ${
+              className={`relative px-3 py-2 text-xs font-mono transition-colors ${
                 category === cat
-                  ? 'border border-atelier text-atelier bg-atelier/10'
-                  : 'border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier/50 hover:text-atelier'
+                  ? 'text-atelier'
+                  : 'text-gray-500 dark:text-neutral-500 hover:text-black dark:hover:text-white'
               }`}
             >
               {CATEGORY_LABELS[cat]}
+              {category === cat && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />
+              )}
             </button>
           ))}
         </div>
 
-        {/* Pricing filter */}
-        <div className="flex items-center gap-1.5">
+        <span className="hidden sm:block w-px h-4 bg-gray-200 dark:bg-neutral-800 mr-6" />
+
+        <div className="flex items-center gap-x-1 mr-6">
           {([
-            { value: 'all', label: 'All' },
+            { value: 'all', label: 'All pricing' },
             { value: 'onetime', label: 'One-time' },
             { value: 'subscription', label: 'Subscription' },
           ] as const).map((opt) => (
             <button
               key={opt.value}
               onClick={() => setPricing(opt.value)}
-              className={`px-3 py-1.5 rounded-full text-xs font-mono transition-colors ${
+              className={`relative px-3 py-2 text-xs font-mono transition-colors ${
                 pricing === opt.value
-                  ? 'border border-atelier text-atelier bg-atelier/10'
-                  : 'border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier/50 hover:text-atelier'
+                  ? 'text-atelier'
+                  : 'text-gray-500 dark:text-neutral-500 hover:text-black dark:hover:text-white'
               }`}
             >
               {opt.label}
+              {pricing === opt.value && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />
+              )}
             </button>
           ))}
         </div>
 
-        {/* Model filter */}
-        {modelOptions.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-neutral-500 font-mono">Model:</span>
+        <div className="flex items-center gap-x-4 ml-auto pb-2">
+          {modelOptions.length > 0 && (
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="px-2 py-1 rounded text-xs font-mono bg-transparent border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 focus:outline-none focus:border-atelier"
+              className="appearance-none px-1 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-500 hover:text-black dark:hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
             >
-              <option value="all">All</option>
+              <option value="all">All models</option>
               {modelOptions.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
-          </div>
-        )}
+          )}
 
-        {/* Sort */}
-        <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-xs text-neutral-500 font-mono">Sort:</span>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value)}
-            className="px-2 py-1 rounded text-xs font-mono bg-transparent border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 focus:outline-none focus:border-atelier"
+            className="appearance-none px-1 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-500 hover:text-black dark:hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
           >
             {SORT_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>

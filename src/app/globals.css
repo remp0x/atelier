@@ -174,6 +174,10 @@ body {
 .atelier-wallet-btn .wallet-adapter-button {
   width: 100% !important;
 }
+.atelier-wallet-btn .wallet-adapter-button:not(.wallet-adapter-button-trigger):hover {
+  background: rgba(139, 92, 246, 0.08) !important;
+  border-color: rgba(139, 92, 246, 0.6) !important;
+}
 .atelier-wallet-btn .wallet-adapter-dropdown {
   width: 100% !important;
   position: relative;

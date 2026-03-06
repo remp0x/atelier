@@ -260,14 +260,14 @@ export function TokenLaunchSection({
           <button
             onClick={() => { setMode('pumpfun'); setName(agentName); setDescription(agentDescription || ''); }}
             disabled={busy}
-            className="flex-1 px-3 py-2 rounded bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-mono btn-atelier btn-green hover:bg-green-500/20 disabled:opacity-50"
+            className="flex-1 px-3 py-2 rounded border border-green-500/30 text-green-400 text-xs font-mono transition-all duration-200 hover:bg-green-500 hover:text-black hover:border-green-500 disabled:opacity-50"
           >
             Launch on PumpFun
           </button>
           <button
             onClick={() => setMode('byot')}
             disabled={busy}
-            className="flex-1 px-3 py-2 rounded bg-atelier/10 border border-atelier/20 text-atelier text-xs font-mono btn-atelier btn-secondary hover:bg-atelier/20 disabled:opacity-50"
+            className="flex-1 px-3 py-2 rounded border border-atelier/30 text-atelier text-xs font-mono transition-all duration-200 hover:bg-atelier/10 hover:border-atelier/50 disabled:opacity-50"
           >
             Link Existing Token
           </button>
@@ -324,14 +324,14 @@ export function TokenLaunchSection({
             <button
               onClick={handlePumpFunLaunch}
               disabled={busy || !name || !symbol}
-              className="flex-1 px-3 py-2 rounded bg-green-500 text-black text-xs font-bold font-mono uppercase tracking-wide btn-atelier btn-green hover:bg-green-400 disabled:opacity-50 disabled:hover:bg-green-500"
+              className="flex-1 px-3 py-2 rounded border border-green-500/50 text-green-400 text-xs font-medium font-mono transition-all duration-200 hover:bg-green-500 hover:text-black hover:border-green-500 disabled:opacity-50"
             >
               Launch Token
             </button>
             <button
               onClick={() => { setMode('none'); setError(null); setStep('idle'); }}
               disabled={busy}
-              className="px-3 py-2 rounded border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 btn-atelier btn-secondary hover:border-neutral-500 disabled:opacity-50"
+              className="px-3 py-2 rounded border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 hover:text-atelier hover:border-atelier/40 transition-all duration-200 disabled:opacity-50"
             >
               Cancel
             </button>
@@ -392,14 +392,14 @@ export function TokenLaunchSection({
             <button
               onClick={handleByotLink}
               disabled={busy || !byotMint || !byotName || !byotSymbol}
-              className="flex-1 px-3 py-2 rounded bg-atelier text-white text-xs font-bold font-mono uppercase tracking-wide btn-atelier btn-primary hover:bg-atelier-bright disabled:opacity-50 disabled:hover:bg-atelier"
+              className="flex-1 px-3 py-2 rounded border border-atelier/60 text-atelier text-xs font-medium font-mono transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-50"
             >
               Link Token
             </button>
             <button
               onClick={() => { setMode('none'); setError(null); setStep('idle'); }}
               disabled={busy}
-              className="px-3 py-2 rounded border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 btn-atelier btn-secondary hover:border-neutral-500 disabled:opacity-50"
+              className="px-3 py-2 rounded border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 hover:text-atelier hover:border-atelier/40 transition-all duration-200 disabled:opacity-50"
             >
               Cancel
             </button>

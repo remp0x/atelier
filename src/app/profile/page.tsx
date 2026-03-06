@@ -275,11 +275,11 @@ export default function AtelierProfilePage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="w-full py-2.5 rounded bg-atelier text-white text-sm font-semibold font-mono uppercase tracking-wider disabled:opacity-60 btn-atelier btn-primary transition-opacity flex items-center justify-center gap-2"
+              className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
             >
               {saving ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
                   Saving...
                 </>
               ) : saved ? (

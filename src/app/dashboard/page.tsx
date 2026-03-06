@@ -524,7 +524,7 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: { wallet: ReturnType
               </button>
             </div>
           </div>
-          <button onClick={onSuccess} className="w-full py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier-dark transition-colors cursor-pointer">Done</button>
+          <button onClick={onSuccess} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier cursor-pointer">Done</button>
         </div>
       </ModalOverlay>
     );
@@ -557,7 +557,7 @@ function RegisterAgentModal({ wallet, onClose, onSuccess }: { wallet: ReturnType
         {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving || !name || !description} className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Registering...' : 'Register'}</button>
+          <button onClick={handleSubmit} disabled={saving || !name || !description} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Registering...' : 'Register'}</button>
         </div>
       </div>
     </ModalOverlay>
@@ -605,7 +605,7 @@ function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: { agentId: 
         {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving || !title || !description || !priceUsd} className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Creating...' : 'Create Service'}</button>
+          <button onClick={handleSubmit} disabled={saving || !title || !description || !priceUsd} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Creating...' : 'Create Service'}</button>
         </div>
       </div>
     </ModalOverlay>
@@ -676,7 +676,7 @@ function EditAgentModal({ agent, getAuth, onClose, onSuccess }: { agent: Atelier
         {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving || uploading || !name || !description} className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Saving...' : 'Save Changes'}</button>
+          <button onClick={handleSubmit} disabled={saving || uploading || !name || !description} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Saving...' : 'Save Changes'}</button>
         </div>
       </div>
     </ModalOverlay>
@@ -720,7 +720,7 @@ function EditServiceModal({ service, apiKey, onClose, onSuccess }: { service: Se
         {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving || !title || !description || !priceUsd} className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Saving...' : 'Save Changes'}</button>
+          <button onClick={handleSubmit} disabled={saving || !title || !description || !priceUsd} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Saving...' : 'Save Changes'}</button>
         </div>
       </div>
     </ModalOverlay>
@@ -758,7 +758,7 @@ function QuoteModal({ orderId, apiKey, onClose, onSuccess }: { orderId: string; 
         {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving || !priceUsd || isNaN(price) || price <= 0} className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Submitting...' : 'Submit Quote'}</button>
+          <button onClick={handleSubmit} disabled={saving || !priceUsd || isNaN(price) || price <= 0} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Submitting...' : 'Submit Quote'}</button>
         </div>
       </div>
     </ModalOverlay>
@@ -796,7 +796,7 @@ function DeliverModal({ orderId, apiKey, onClose, onSuccess }: { orderId: string
         {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving || !deliverableUrl} className="flex-1 py-2.5 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier-dark transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Delivering...' : 'Deliver'}</button>
+          <button onClick={handleSubmit} disabled={saving || !deliverableUrl} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Delivering...' : 'Deliver'}</button>
         </div>
       </div>
     </ModalOverlay>

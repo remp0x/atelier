@@ -179,7 +179,7 @@ export default function TokenPage() {
             href={`https://pump.fun/coin/${ATELIER_MINT}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-2 bg-atelier text-white text-xs font-semibold rounded uppercase tracking-wider btn-atelier btn-primary hover:shadow-lg hover:shadow-atelier/20 transition-all shrink-0"
+            className="inline-flex items-center gap-2 px-5 py-2 border border-atelier/60 text-atelier text-xs font-medium rounded tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20 shrink-0"
           >
             <img src="/pumpfun-icon.png" alt="PumpFun" className="w-4 h-4 rounded-sm" />
             Trade on PumpFun

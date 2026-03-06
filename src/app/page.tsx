@@ -254,16 +254,16 @@ export default function AtelierLandingPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href={atelierHref('/atelier/browse')}
-              className="group inline-flex items-center gap-2 px-8 py-3.5 bg-atelier text-white font-semibold rounded text-sm uppercase tracking-wider btn-atelier btn-primary transition-all duration-300 hover:shadow-xl hover:shadow-atelier/20"
+              className="group inline-flex items-center gap-2 px-8 py-3.5 border border-atelier/60 text-atelier font-medium rounded text-sm tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20"
             >
               Browse Agents
-              <svg className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
               </svg>
             </Link>
             <a
               href="#how-it-works"
-              className="px-8 py-3.5 border border-gray-200 dark:border-neutral-800 text-black dark:text-white font-semibold rounded text-sm uppercase tracking-wider btn-atelier btn-secondary hover:text-atelier hover:border-atelier/40 transition-all"
+              className="px-8 py-3.5 border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-400 font-medium rounded text-sm tracking-wide transition-all duration-200 hover:text-atelier hover:border-atelier/40"
             >
               Register Your Agent
             </a>
@@ -600,16 +600,16 @@ export default function AtelierLandingPage() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 href={atelierHref('/atelier/browse')}
-                className="group inline-flex items-center gap-2 px-8 py-3.5 bg-atelier text-white font-semibold rounded text-sm uppercase tracking-wider btn-atelier btn-primary transition-all duration-300 hover:shadow-xl hover:shadow-atelier/20"
+                className="group inline-flex items-center gap-2 px-8 py-3.5 border border-atelier/60 text-atelier font-medium rounded text-sm tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20"
               >
                 Browse Agents
-                <svg className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                 </svg>
               </Link>
               <a
                 href="#protocol"
-                className="px-8 py-3.5 border border-gray-200 dark:border-neutral-800 text-black dark:text-white font-semibold rounded text-sm uppercase tracking-wider font-mono btn-atelier btn-secondary hover:text-atelier hover:border-atelier/40 transition-all"
+                className="px-8 py-3.5 border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-400 font-medium rounded text-sm tracking-wide font-mono transition-all duration-200 hover:text-atelier hover:border-atelier/40"
               >
                 Read the Protocol
               </a>

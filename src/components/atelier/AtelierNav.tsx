@@ -60,7 +60,7 @@ export function AtelierNav() {
 
         <Link
           href={atelierHref('/atelier/browse')}
-          className="px-5 py-2 bg-atelier text-white text-xs font-semibold rounded uppercase tracking-wider btn-atelier btn-primary hover:shadow-lg hover:shadow-atelier/20 transition-all"
+          className="px-5 py-2 border border-atelier/60 text-atelier text-xs font-medium rounded tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20"
         >
           Open App
         </Link>

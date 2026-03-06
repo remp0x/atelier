@@ -308,7 +308,7 @@ function FeesContent() {
           <button
             onClick={handlePayout}
             disabled={payingOut || !payoutWallet || !payoutAgentId || !payoutMint || !payoutAmount}
-            className="px-4 py-2 rounded-lg bg-atelier text-white text-xs font-bold font-mono hover:bg-atelier-bright transition-colors disabled:opacity-50"
+            className="px-4 py-2 rounded border border-atelier/60 text-atelier text-xs font-medium font-mono transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-50"
           >
             {payingOut ? 'Sending...' : 'Send Payout'}
           </button>

@@ -385,7 +385,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
               <button
                 onClick={() => setStep('review')}
                 disabled={brief.length < 10 || isUploading}
-                className="w-full py-2.5 rounded bg-atelier text-white text-sm font-semibold font-mono uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed btn-atelier btn-primary transition-opacity"
+                className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white"
               >
                 Continue
               </button>
@@ -453,18 +453,18 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
               <div className="flex gap-3">
                 <button
                   onClick={() => setStep('brief')}
-                  className="px-4 py-2.5 rounded border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400 text-sm font-mono btn-atelier btn-secondary hover:text-atelier hover:border-atelier/40 transition-colors"
+                  className="px-4 py-2.5 rounded border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400 text-sm font-mono hover:text-atelier hover:border-atelier/40 transition-colors duration-200"
                 >
                   Back
                 </button>
                 <button
                   onClick={handlePay}
                   disabled={loading}
-                  className="flex-1 py-2.5 rounded bg-atelier text-white text-sm font-semibold font-mono uppercase tracking-wider disabled:opacity-60 btn-atelier btn-primary transition-opacity flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
                 >
                   {loading ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
                       {loadingMsg}
                     </>
                   ) : !wallet.publicKey ? (

@@ -310,11 +310,11 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
       <button
         onClick={handleSubmit}
         disabled={rating === 0 || submitting}
-        className="w-full py-2 rounded bg-atelier text-white text-xs font-semibold font-mono uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed btn-atelier btn-primary transition-opacity flex items-center justify-center gap-2"
+        className="w-full py-2 rounded border border-atelier text-atelier text-xs font-medium font-mono tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
       >
         {submitting ? (
           <>
-            <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            <div className="w-3 h-3 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
             Submitting...
           </>
         ) : (
@@ -533,11 +533,11 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
           <button
             onClick={handleGenerate}
             disabled={!prompt.trim() || generating}
-            className="w-full py-2.5 rounded bg-atelier text-white text-sm font-semibold font-mono uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed btn-atelier btn-primary transition-opacity flex items-center justify-center gap-2"
+            className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
           >
             {generating ? (
               <>
-                <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
                 Generating...
               </>
             ) : (
@@ -552,11 +552,11 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
         <button
           onClick={handleApprove}
           disabled={approving}
-          className="w-full py-2.5 rounded bg-emerald-500 text-white text-sm font-semibold font-mono uppercase tracking-wider disabled:opacity-60 btn-atelier btn-green transition-opacity flex items-center justify-center gap-2"
+          className="w-full py-2.5 rounded border border-emerald-500/50 text-emerald-500 text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all duration-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 flex items-center justify-center gap-2"
         >
           {approving ? (
             <>
-              <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-emerald-500/40 border-t-emerald-500 rounded-full animate-spin" />
               Approving...
             </>
           ) : (
@@ -732,7 +732,7 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
         <button
           onClick={handleSend}
           disabled={!input.trim() || sending}
-          className="px-4 py-2 rounded bg-atelier text-white text-sm font-mono font-semibold disabled:opacity-40 disabled:cursor-not-allowed btn-atelier btn-primary transition-opacity"
+          className="px-4 py-2 rounded border border-atelier/60 text-atelier text-sm font-mono font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier"
         >
           {sending ? '...' : 'Send'}
         </button>
@@ -923,11 +923,11 @@ export default function AtelierOrderPage() {
                 }
               }}
               disabled={paying}
-              className="w-full py-3 rounded-lg bg-atelier text-white font-mono font-semibold text-sm hover:bg-atelier/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-3 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {paying ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
                   {payMsg || 'Processing...'}
                 </>
               ) : (
@@ -1002,11 +1002,11 @@ export default function AtelierOrderPage() {
                     }
                   }}
                   disabled={approving || disputing}
-                  className="flex-1 py-3 rounded-lg bg-emerald-500 text-white text-sm font-semibold font-mono uppercase tracking-wider disabled:opacity-60 hover:bg-emerald-400 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 rounded border border-emerald-500/50 text-emerald-500 text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all duration-200 hover:bg-emerald-500 hover:text-white hover:border-emerald-500 flex items-center justify-center gap-2"
                 >
                   {approving ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-emerald-500/40 border-t-emerald-500 rounded-full animate-spin" />
                       Approving...
                     </>
                   ) : (

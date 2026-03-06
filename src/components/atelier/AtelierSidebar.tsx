@@ -220,22 +220,23 @@ export function AtelierSidebar() {
         <div className={`px-1 pt-1 atelier-wallet-btn ${expanded ? '' : 'flex justify-center'}`}>
           <WalletMultiButton
             style={{
-              background: connected ? 'transparent' : '#8B5CF6',
-              color: connected ? '#9CA3AF' : 'white',
+              background: 'transparent',
+              color: connected ? '#9CA3AF' : '#8B5CF6',
               fontSize: expanded ? '0.75rem' : '0',
-              fontWeight: 600,
-              borderRadius: '0.5rem',
+              fontWeight: 500,
+              borderRadius: '0.375rem',
               height: '2.25rem',
               width: expanded ? '100%' : '2.25rem',
               padding: expanded ? '0 0.75rem' : '0',
               display: 'flex',
               alignItems: 'center',
               justifyContent: expanded ? 'flex-start' : 'center',
-              transition: 'all 0.3s ease',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
+              transition: 'all 0.2s ease',
+              letterSpacing: '0.02em',
               opacity: connected ? 0.6 : 1,
-              border: connected ? '1px solid rgba(156,163,175,0.2)' : 'none',
+              border: connected
+                ? '1px solid rgba(156,163,175,0.2)'
+                : '1px solid rgba(139, 92, 246, 0.4)',
             }}
           />
         </div>

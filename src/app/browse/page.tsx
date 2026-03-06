@@ -244,27 +244,37 @@ function BrowseContent() {
 
         <div className="flex items-center gap-x-4 ml-auto pb-2">
           {modelOptions.length > 0 && (
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="appearance-none px-1 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-500 hover:text-black dark:hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
-            >
-              <option value="all">All models</option>
-              {modelOptions.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
+            <label className="relative inline-flex items-center gap-1 cursor-pointer group">
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-500 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
+              >
+                <option value="all">All models</option>
+                {modelOptions.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-600 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </label>
           )}
 
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="appearance-none px-1 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-500 hover:text-black dark:hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+          <label className="relative inline-flex items-center gap-1 cursor-pointer group">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-500 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-600 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </label>
         </div>
       </div>
 

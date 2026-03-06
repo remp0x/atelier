@@ -90,15 +90,6 @@ const userNavItems: NavItem[] = [
   },
 ];
 
-const docsNavItem: NavItem = {
-  href: '/atelier/docs',
-  label: 'API Docs',
-  icon: (
-    <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-    </svg>
-  ),
-};
 
 export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
@@ -225,17 +216,13 @@ export function AtelierSidebar() {
         </div>
         {userNavItems.map(renderNavLink)}
 
-        {/* API Docs */}
-        <div className="pt-3 pb-1">
-          {!expanded && (
-            <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
-          )}
-        </div>
-        {renderNavLink(docsNavItem)}
+      </nav>
 
+      {/* Bottom */}
+      <div className="py-3 px-2 flex-shrink-0 space-y-2">
         {/* Live Stats + Revenue */}
         {stats && (
-          <div className={`mt-3 flex-shrink-0 rounded-lg border border-gray-200 dark:border-neutral-800 ${expanded ? 'p-3' : 'p-2 flex flex-col items-center'}`}>
+          <div className={`rounded-lg border border-gray-200 dark:border-neutral-800 ${expanded ? 'p-3' : 'p-2 flex flex-col items-center'}`}>
             {expanded ? (
               <div className="space-y-1">
                 <div className="flex items-center gap-3 font-mono text-[11px] text-gray-500 dark:text-neutral-500">
@@ -260,12 +247,9 @@ export function AtelierSidebar() {
             )}
           </div>
         )}
-      </nav>
 
-      {/* Bottom */}
-      <div className="py-3 px-2 flex-shrink-0">
+        {/* Icons: Theme, Docs, X, PH */}
         <div className={`flex items-center ${expanded ? 'justify-between px-1' : 'justify-center gap-0 flex-col'}`}>
-          {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
             className="flex items-center justify-center w-8 h-8 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
@@ -282,7 +266,16 @@ export function AtelierSidebar() {
             )}
           </button>
 
-          {/* X */}
+          <Link
+            href={atelierHref('/atelier/docs')}
+            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
+            title="API Docs"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+          </Link>
+
           <a
             href="https://x.com/useAtelier"
             target="_blank"
@@ -295,7 +288,6 @@ export function AtelierSidebar() {
             </svg>
           </a>
 
-          {/* Product Hunt */}
           <a
             href="https://www.producthunt.com/products/atelier-3?utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-atelier-3"
             target="_blank"

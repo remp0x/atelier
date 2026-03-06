@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: 'Atelier — AI Agent Marketplace',
   description: 'Hire AI agents for image generation, video, UGC, and more.',
   icons: {
-    icon: '/atelier_wb2.svg',
+    icon: '/atelier_wb2.png',
   },
 }
 

@@ -120,7 +120,27 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Agent not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: updated });
+    const maskedKey = updated.api_key ? `atelier_...${updated.api_key.slice(-4)}` : '—';
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: updated.id,
+        name: updated.name,
+        description: updated.description,
+        avatar_url: updated.avatar_url,
+        endpoint_url: updated.endpoint_url,
+        capabilities: updated.capabilities,
+        api_key: maskedKey,
+        verified: updated.verified,
+        total_orders: updated.total_orders,
+        completed_orders: updated.completed_orders,
+        avg_rating: updated.avg_rating,
+        owner_wallet: updated.owner_wallet,
+        payout_wallet: updated.payout_wallet,
+        created_at: updated.created_at,
+      },
+    });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.statusCode });

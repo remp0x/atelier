@@ -19,7 +19,7 @@ export function middleware(request: NextRequest) {
       response.headers.set('Access-Control-Allow-Credentials', 'true');
       response.headers.set(
         'Access-Control-Allow-Methods',
-        'GET, POST, PUT, DELETE, OPTIONS'
+        'GET, POST, PUT, PATCH, DELETE, OPTIONS'
       );
       response.headers.set(
         'Access-Control-Allow-Headers',
@@ -33,7 +33,7 @@ export function middleware(request: NextRequest) {
         status: 204,
         headers: {
           'Access-Control-Allow-Origin': origin && allowedOrigins.includes(origin) ? origin : '',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type, Authorization',
           'Access-Control-Max-Age': '86400',
         },

@@ -73,51 +73,25 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
 
       {/* Token info block */}
       <div className="px-3 pt-2">
-        {hasToken ? (
-          <div className="flex flex-col gap-1.5">
-            <div className="inline-flex items-center gap-2 rounded-md bg-atelier/10 dark:bg-atelier/15 px-2.5 py-1.5 self-start">
-              <span className="text-sm font-mono font-bold text-atelier">${agent.token_symbol}</span>
-              {marketData && marketData.market_cap_usd > 0 && (
-                <>
-                  <span className="w-px h-3.5 bg-atelier/30" />
-                  <span className="text-xs font-mono font-medium text-atelier/80">mcap {formatMcap(marketData.market_cap_usd)}</span>
-                </>
-              )}
-            </div>
-            {agent.token_mint && (
-              <div className="flex items-center gap-1">
-                <a
-                  href={`https://pump.fun/coin/${agent.token_mint}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-2xs font-mono text-neutral-400 hover:text-atelier transition-colors inline-flex items-center gap-1"
-                >
-                  <span className="text-neutral-500">CA:</span> {agent.token_mint.slice(0, 6)}...{agent.token_mint.slice(-4)}
-                </a>
-                <button
-                  onClick={copyCA}
-                  className="relative p-0.5 rounded text-neutral-400 hover:text-atelier transition-colors"
-                  title="Copy contract address"
-                >
-                  {copied ? (
-                    <svg className="w-3 h-3 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                    </svg>
-                  )}
-                  {copied && (
-                    <span className="absolute -top-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-2xs font-mono bg-black dark:bg-white text-white dark:text-black whitespace-nowrap animate-fade-in">
-                      Copied!
-                    </span>
-                  )}
-                </button>
-              </div>
+        {hasToken && agent.token_mint ? (
+          <button
+            onClick={copyCA}
+            className={`relative inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 cursor-pointer transition-all duration-200 ${
+              copied
+                ? 'bg-green-500/15 dark:bg-green-500/20 scale-[1.03]'
+                : 'bg-atelier/10 dark:bg-atelier/15 hover:bg-atelier/20 dark:hover:bg-atelier/25 active:scale-95'
+            }`}
+          >
+            <span className={`text-sm font-mono font-bold transition-colors duration-200 ${copied ? 'text-green-500' : 'text-atelier'}`}>
+              {copied ? 'Copied!' : `$${agent.token_symbol}`}
+            </span>
+            {!copied && marketData && marketData.market_cap_usd > 0 && (
+              <>
+                <span className="w-px h-3.5 bg-atelier/30" />
+                <span className="text-xs font-mono font-medium text-atelier/80">mcap {formatMcap(marketData.market_cap_usd)}</span>
+              </>
             )}
-          </div>
+          </button>
         ) : (
           <span className="inline-flex items-center rounded-md bg-gray-100 dark:bg-neutral-800/50 px-2 py-1 text-2xs font-mono text-neutral-400">
             No Token

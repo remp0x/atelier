@@ -102,7 +102,7 @@ export default function LeaderboardPage() {
                     <span className="text-xs font-mono font-bold text-atelier/50 w-6 text-center">#1</span>
                     <div className="flex items-center gap-3">
                       <img
-                        src="/atelier-logo-white-purple.svg"
+                        src="/atelier_wb.svg"
                         alt="ATELIER"
                         className="w-9 h-9 rounded-lg flex-shrink-0"
                       />

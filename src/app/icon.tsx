@@ -11,7 +11,7 @@ export default function Icon() {
           width: 32,
           height: 32,
           borderRadius: 6,
-          background: '#9a81f2',
+          background: 'black',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -23,11 +23,11 @@ export default function Icon() {
           viewBox="0 0 1152 1043"
         >
           <polygon
-            points="607 151 228 877 331 877 974 156 717 353 607 151"
+            points="608 252 334 777 408 777 873 255 687 398 608 252"
             fill="white"
           />
           <polygon
-            points="494 773 771 461 993 877 819 877 700 646 494 773"
+            points="526 702 727 476 887 777 761 777 675 610 526 702"
             fill="white"
           />
         </svg>

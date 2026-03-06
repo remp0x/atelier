@@ -19,10 +19,25 @@ const SOURCE_OPTIONS = [
 ] as const;
 
 const SORT_OPTIONS = [
+  { value: 'marketcap', label: 'Marketcap' },
   { value: 'popular', label: 'Popular' },
   { value: 'newest', label: 'Newest' },
   { value: 'rating', label: 'Top Rated' },
 ] as const;
+
+function sortByMarketcap(
+  agents: AtelierAgentListItem[],
+  market: Record<string, MarketData | null>,
+): AtelierAgentListItem[] {
+  return [...agents].sort((a, b) => {
+    const mcA = a.token_mint ? market[a.token_mint]?.market_cap_usd ?? -1 : -1;
+    const mcB = b.token_mint ? market[b.token_mint]?.market_cap_usd ?? -1 : -1;
+    if (mcA >= 0 && mcB < 0) return -1;
+    if (mcA < 0 && mcB >= 0) return 1;
+    if (mcA >= 0 && mcB >= 0) return mcB - mcA;
+    return 0;
+  });
+}
 
 export default function AtelierBrowsePage() {
   return (
@@ -43,7 +58,7 @@ function BrowseContent() {
 
   const [category, setCategory] = useState(searchParams.get('category') || 'all');
   const [source, setSource] = useState(searchParams.get('source') || 'all');
-  const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
+  const [sort, setSort] = useState(searchParams.get('sort') || 'marketcap');
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [pricing, setPricing] = useState('all');
   const [model, setModel] = useState(searchParams.get('model') || 'all');
@@ -62,7 +77,7 @@ function BrowseContent() {
     const params = new URLSearchParams();
     if (category !== 'all') params.set('category', category);
     if (source !== 'all') params.set('source', source);
-    if (sort !== 'popular') params.set('sort', sort);
+    if (sort !== 'marketcap') params.set('sort', sort);
     if (search) params.set('search', search);
     if (pricing !== 'all') params.set('pricing', pricing);
     if (model !== 'all') params.set('model', model);
@@ -79,7 +94,8 @@ function BrowseContent() {
       const params = new URLSearchParams();
       if (category !== 'all') params.set('category', category);
       if (source === 'official') params.set('source', 'official');
-      if (sort !== 'popular') params.set('sortBy', sort);
+      const backendSort = sort === 'marketcap' ? 'popular' : sort;
+      if (backendSort !== 'popular') params.set('sortBy', backendSort);
       if (search) params.set('search', search);
       if (model !== 'all') params.set('model', model);
       params.set('limit', String(PAGE_SIZE));
@@ -96,11 +112,11 @@ function BrowseContent() {
         filtered = agentsList.filter((a) => a.is_atelier_official !== 1);
       }
 
-      setAgents(prev => append ? [...prev, ...filtered] : filtered);
       setHasMore(agentsList.length >= PAGE_SIZE);
 
       const agentMints = filtered.map((a) => a.token_mint).filter(Boolean) as string[];
       const mints = Array.from(new Set([ATELIER_MINT, ...agentMints]));
+      let newMarketData: Record<string, MarketData | null> = {};
       try {
         const marketRes = await fetch('/api/market', {
           method: 'POST',
@@ -108,10 +124,18 @@ function BrowseContent() {
           body: JSON.stringify({ mints }),
         });
         const marketJson = await marketRes.json();
-        if (marketJson.success) setMarketMap(prev => ({ ...prev, ...marketJson.data }));
+        if (marketJson.success) newMarketData = marketJson.data;
       } catch {
         // market data is non-critical
       }
+
+      setMarketMap(prev => ({ ...prev, ...newMarketData }));
+
+      if (sort === 'marketcap') {
+        filtered = sortByMarketcap(filtered, newMarketData);
+      }
+
+      setAgents(prev => append ? [...prev, ...filtered] : filtered);
     } catch {
       // silent
     } finally {

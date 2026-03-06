@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { AtelierAgentListItem, ServiceCategory } from '@/lib/atelier-db';
@@ -12,10 +13,18 @@ interface AgentCardProps {
 }
 
 export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
+  const [copied, setCopied] = useState(false);
   const avatarLetter = agent.name.charAt(0).toUpperCase();
   const imageSrc = agent.token_image_url || agent.avatar_url;
   const primaryCategory = agent.categories[0];
   const hasToken = !!agent.token_symbol;
+
+  function copyCA() {
+    if (!agent.token_mint) return;
+    navigator.clipboard.writeText(agent.token_mint);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
 
   return (
     <div className={`overflow-hidden rounded-lg bg-gray-50 dark:bg-black-soft transition-all duration-200 hover:shadow-lg flex flex-col ${
@@ -24,7 +33,7 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
         : 'border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 hover:shadow-atelier/5'
     }`}>
       {/* Image */}
-      <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="relative block aspect-square bg-neutral-900 overflow-hidden">
+      <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="relative block aspect-[4/3] bg-neutral-900 overflow-hidden">
         {imageSrc ? (
           <img
             src={imageSrc}
@@ -63,31 +72,56 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
       </div>
 
       {/* Token info block */}
-      <div className="px-3 pt-1.5">
+      <div className="px-3 pt-2">
         {hasToken ? (
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-mono font-semibold text-atelier">${agent.token_symbol}</span>
+          <div className="flex flex-col gap-1.5">
+            <div className="inline-flex items-center gap-2 rounded-md bg-atelier/10 dark:bg-atelier/15 px-2.5 py-1.5 self-start">
+              <span className="text-sm font-mono font-bold text-atelier">${agent.token_symbol}</span>
               {marketData && marketData.market_cap_usd > 0 && (
                 <>
-                  <span className="text-neutral-600 dark:text-neutral-500 text-2xs">·</span>
-                  <span className="text-2xs font-mono text-neutral-500">mcap {formatMcap(marketData.market_cap_usd)}</span>
+                  <span className="w-px h-3.5 bg-atelier/30" />
+                  <span className="text-xs font-mono font-medium text-atelier/80">mcap {formatMcap(marketData.market_cap_usd)}</span>
                 </>
               )}
             </div>
             {agent.token_mint && (
-              <a
-                href={`https://pump.fun/coin/${agent.token_mint}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-2xs font-mono text-neutral-400 hover:text-atelier transition-colors inline-flex items-center gap-1"
-              >
-                <span className="text-neutral-500">CA:</span> {agent.token_mint.slice(0, 6)}...{agent.token_mint.slice(-4)}
-              </a>
+              <div className="flex items-center gap-1">
+                <a
+                  href={`https://pump.fun/coin/${agent.token_mint}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-2xs font-mono text-neutral-400 hover:text-atelier transition-colors inline-flex items-center gap-1"
+                >
+                  <span className="text-neutral-500">CA:</span> {agent.token_mint.slice(0, 6)}...{agent.token_mint.slice(-4)}
+                </a>
+                <button
+                  onClick={copyCA}
+                  className="relative p-0.5 rounded text-neutral-400 hover:text-atelier transition-colors"
+                  title="Copy contract address"
+                >
+                  {copied ? (
+                    <svg className="w-3 h-3 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                    </svg>
+                  )}
+                  {copied && (
+                    <span className="absolute -top-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-2xs font-mono bg-black dark:bg-white text-white dark:text-black whitespace-nowrap animate-fade-in">
+                      Copied!
+                    </span>
+                  )}
+                </button>
+              </div>
             )}
           </div>
         ) : (
-          <span className="text-2xs font-mono text-neutral-400">No token</span>
+          <span className="inline-flex items-center rounded-md bg-gray-100 dark:bg-neutral-800/50 px-2 py-1 text-2xs font-mono text-neutral-400">
+            No Token
+          </span>
         )}
       </div>
 

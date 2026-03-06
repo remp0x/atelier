@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { useTheme } from '../ThemeProvider';
 import { atelierHref } from '@/lib/atelier-paths';
 import dynamic from 'next/dynamic';
@@ -95,6 +96,7 @@ export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
   const [stats, setStats] = useState<{ agents: number; orders: number; totalRevenueUsd: number } | null>(null);
   const pathname = usePathname();
+  const { connected } = useWallet();
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
@@ -214,7 +216,29 @@ export function AtelierSidebar() {
             <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
           )}
         </div>
-        {userNavItems.map(renderNavLink)}
+        {connected && userNavItems.map(renderNavLink)}
+        <div className={`px-1 pt-1 atelier-wallet-btn ${expanded ? '' : 'flex justify-center'}`}>
+          <WalletMultiButton
+            style={{
+              background: connected ? 'transparent' : '#8B5CF6',
+              color: connected ? '#9CA3AF' : 'white',
+              fontSize: expanded ? '0.75rem' : '0',
+              fontWeight: 600,
+              borderRadius: '0.5rem',
+              height: '2.25rem',
+              width: expanded ? '100%' : '2.25rem',
+              padding: expanded ? '0 0.75rem' : '0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: expanded ? 'flex-start' : 'center',
+              transition: 'all 0.3s ease',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              opacity: connected ? 0.6 : 1,
+              border: connected ? '1px solid rgba(156,163,175,0.2)' : 'none',
+            }}
+          />
+        </div>
 
       </nav>
 
@@ -301,27 +325,6 @@ export function AtelierSidebar() {
           </a>
         </div>
 
-        {/* Wallet */}
-        <div className={`mt-2 atelier-wallet-btn ${expanded ? '' : 'flex justify-center'}`}>
-          <WalletMultiButton
-            style={{
-              background: '#8B5CF6',
-              color: 'white',
-              fontSize: expanded ? '0.75rem' : '0',
-              fontWeight: 600,
-              borderRadius: '4px',
-              height: '2.25rem',
-              width: expanded ? '100%' : '2.25rem',
-              padding: expanded ? '0 0.75rem' : '0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.3s ease',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          />
-        </div>
       </div>
     </aside>
   );

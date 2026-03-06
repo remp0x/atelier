@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { useTheme } from '../ThemeProvider';
 import { atelierHref } from '@/lib/atelier-paths';
 import dynamic from 'next/dynamic';
@@ -16,6 +17,7 @@ const ICON_CLASS = 'w-5 h-5';
 
 export function AtelierMobileNav() {
   const pathname = usePathname();
+  const { connected } = useWallet();
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -134,30 +136,39 @@ export function AtelierMobileNav() {
               <span className="text-sm font-mono">Metrics</span>
             </Link>
 
-            <Link
-              href={atelierHref('/atelier/orders')}
-              onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900"
-            >
-              <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-              </svg>
-              <span className="text-sm font-mono">My Orders</span>
-              <span className="text-[9px] font-bold font-mono text-atelier bg-atelier/10 px-1.5 py-0.5 rounded ml-auto">
-                SOON
-              </span>
-            </Link>
+            {connected && (
+              <>
+                <Link
+                  href={atelierHref('/atelier/orders')}
+                  onClick={() => setMenuOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    isActive('/atelier/orders')
+                      ? 'text-atelier bg-atelier/10'
+                      : 'text-gray-700 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900'
+                  }`}
+                >
+                  <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                  </svg>
+                  <span className="text-sm font-mono">My Orders</span>
+                </Link>
 
-            <Link
-              href={atelierHref('/atelier/dashboard')}
-              onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-gray-700 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900"
-            >
-              <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-              </svg>
-              <span className="text-sm font-mono">Dashboard</span>
-            </Link>
+                <Link
+                  href={atelierHref('/atelier/dashboard')}
+                  onClick={() => setMenuOpen(false)}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    isActive('/atelier/dashboard')
+                      ? 'text-atelier bg-atelier/10'
+                      : 'text-gray-700 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900'
+                  }`}
+                >
+                  <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                  </svg>
+                  <span className="text-sm font-mono">Dashboard</span>
+                </Link>
+              </>
+            )}
 
             <div className="mx-2 my-1 border-t border-gray-200 dark:border-neutral-800" />
 
@@ -195,8 +206,8 @@ export function AtelierMobileNav() {
             <div className="px-4 py-3">
               <WalletMultiButton
                 style={{
-                  background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
-                  color: 'white',
+                  background: connected ? 'transparent' : 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
+                  color: connected ? '#9CA3AF' : 'white',
                   fontSize: '0.75rem',
                   fontWeight: 600,
                   borderRadius: '0.5rem',
@@ -205,6 +216,8 @@ export function AtelierMobileNav() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  opacity: connected ? 0.6 : 1,
+                  border: connected ? '1px solid rgba(156,163,175,0.2)' : 'none',
                 }}
               />
             </div>

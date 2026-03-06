@@ -137,14 +137,54 @@ export function TokenLaunchSection({
             </div>
           </div>
 
-          <a
-            href={`https://pump.fun/coin/${token.mint}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 px-3 py-1.5 rounded-md text-xs font-mono font-semibold text-green-400 bg-green-500/10 hover:bg-green-500/20 transition-colors"
-          >
-            pump.fun
-          </a>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <a
+              href={`https://pump.fun/coin/${token.mint}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-green-500/15 text-neutral-500 hover:text-green-400 transition-colors"
+              title="PumpFun"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15.5v-2.2l-3.5-3.5 1.4-1.4L12 13.8l3.1-3.4 1.4 1.4-3.5 3.5v2.2h-2zM12 4.5c1.38 0 2.5 1.12 2.5 2.5S13.38 9.5 12 9.5 9.5 8.38 9.5 7 10.62 4.5 12 4.5z" />
+              </svg>
+            </a>
+            <a
+              href={`https://dexscreener.com/solana/${token.mint}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-blue-500/15 text-neutral-500 hover:text-blue-400 transition-colors"
+              title="DexScreener"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.5l4-4 3 3 4-4 4 4" />
+                <path strokeLinecap="round" d="M3 19h18" />
+              </svg>
+            </a>
+            <a
+              href={`https://www.geckoterminal.com/solana/pools/${token.mint}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-emerald-500/15 text-neutral-500 hover:text-emerald-400 transition-colors"
+              title="GeckoTerminal"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm-1.5 5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm3 0a1.5 1.5 0 110 3 1.5 1.5 0 010-3zM8.5 13h7a3.5 3.5 0 01-7 0z" />
+              </svg>
+            </a>
+            <a
+              href={`https://solscan.io/token/${token.mint}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 rounded-md bg-neutral-100 dark:bg-neutral-800/60 hover:bg-purple-500/15 text-neutral-500 hover:text-purple-400 transition-colors"
+              title="Solscan"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <path strokeLinecap="round" d="M8 12h8M12 8v8" />
+              </svg>
+            </a>
+          </div>
         </div>
       </div>
     );

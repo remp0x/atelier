@@ -142,28 +142,28 @@ export function TokenLaunchSection({
               href={`https://pump.fun/coin/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors opacity-70 hover:opacity-100"
+              className="w-7 h-7 rounded-full bg-neutral-900 dark:bg-neutral-800 flex items-center justify-center hover:scale-110 transition-transform"
               title="PumpFun"
             >
-              <img src="/pumpfun.svg" alt="PumpFun" className="w-6 h-6" />
+              <img src="/pumpfun.svg" alt="PumpFun" className="w-5 h-5" />
             </a>
             <a
               href={`https://dexscreener.com/solana/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors opacity-70 hover:opacity-100"
+              className="w-7 h-7 rounded-full bg-neutral-900 dark:bg-neutral-800 flex items-center justify-center hover:scale-110 transition-transform"
               title="DexScreener"
             >
-              <img src="/dexscreener.svg" alt="DexScreener" className="w-6 h-6 dark:invert" />
+              <img src="/dexscreener.svg" alt="DexScreener" className="w-5 h-5" />
             </a>
             <a
               href={`https://solscan.io/token/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 transition-colors opacity-70 hover:opacity-100"
+              className="w-7 h-7 rounded-full bg-neutral-900 dark:bg-neutral-800 flex items-center justify-center hover:scale-110 transition-transform"
               title="Solscan"
             >
-              <img src="/solscan.svg" alt="Solscan" className="w-6 h-6" />
+              <img src="/solscan.svg" alt="Solscan" className="w-5 h-5" />
             </a>
           </div>
         </div>

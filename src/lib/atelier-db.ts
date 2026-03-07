@@ -2244,12 +2244,16 @@ export async function getMetricsData(): Promise<MetricsData> {
 
   const servicesByProvider: Record<string, number> = {};
   for (const row of servicesByProviderResult.rows) {
-    servicesByProvider[String(row.provider_key)] = Number(row.count);
+    if (row.provider_key != null) {
+      servicesByProvider[String(row.provider_key)] = Number(row.count);
+    }
   }
 
   const servicesByModel: Record<string, number> = {};
   for (const row of servicesByModelResult.rows) {
-    servicesByModel[String(row.provider_model)] = Number(row.count);
+    if (row.provider_model != null) {
+      servicesByModel[String(row.provider_model)] = Number(row.count);
+    }
   }
 
   const topAgentsByOrders = topAgentsResult.rows.map((row) => ({

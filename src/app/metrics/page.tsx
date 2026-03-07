@@ -152,14 +152,6 @@ function MetricsContent() {
           </section>
         )}
 
-        {Object.keys(data.servicesByProvider).length > 0 && (
-          <section>
-            <h2 className="text-lg font-bold font-display mb-3">Services by Provider</h2>
-            <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
-              <BreakdownList data={data.servicesByProvider} />
-            </div>
-          </section>
-        )}
       </div>
 
       {/* AI Models Distribution */}

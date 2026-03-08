@@ -152,9 +152,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setReferenceImages((prev) =>
         prev.map((img, i) => (i === idx ? { url: json.data.url, name: file.name, uploading: false } : img)),
       );
-    } catch {
+    } catch (err) {
       setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
-      setError('Image upload failed');
+      setError(err instanceof Error ? err.message : 'Image upload failed');
     }
   }, [referenceImages.length, getAuth]);
 

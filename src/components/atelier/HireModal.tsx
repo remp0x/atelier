@@ -106,9 +106,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    e.target.value = '';
 
     const file = files[0];
+    e.target.value = '';
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setError('Only JPEG and PNG images are allowed');
       return;

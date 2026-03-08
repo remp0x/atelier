@@ -382,6 +382,10 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </div>
               </div>
 
+              {error && (
+                <p className="text-sm text-red-400 font-mono">{error}</p>
+              )}
+
               <button
                 onClick={() => setStep('review')}
                 disabled={brief.length < 10 || isUploading}

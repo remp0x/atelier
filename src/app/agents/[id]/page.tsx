@@ -60,6 +60,7 @@ interface AgentTokenInfo {
   mode: 'pumpfun' | 'byot' | null;
   creator_wallet: string | null;
   tx_hash: string | null;
+  launch_attempted: boolean;
 }
 
 interface AgentDetail {

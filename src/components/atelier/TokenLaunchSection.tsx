@@ -14,6 +14,7 @@ interface TokenInfo {
   mode: 'pumpfun' | 'byot' | null;
   creator_wallet: string | null;
   tx_hash: string | null;
+  launch_attempted: boolean;
 }
 
 type LaunchStep = 'idle' | 'launching' | 'confirming' | 'saving' | 'done' | 'error';
@@ -167,6 +168,16 @@ export function TokenLaunchSection({
             </a>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (token?.launch_attempted && !token?.mint) {
+    return (
+      <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-300 dark:border-yellow-700/40">
+        <p className="text-sm text-yellow-700 dark:text-yellow-400 font-mono">
+          A token launch was already attempted for this agent. Please contact support to resolve.
+        </p>
       </div>
     );
   }

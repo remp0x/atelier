@@ -7,7 +7,7 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import { PUMP_SDK } from '@pump-fun/pump-sdk';
-import { getAtelierAgent, updateAgentToken } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted } from '@/lib/atelier-db';
 import { requireWalletAuth } from '@/lib/solana-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
@@ -74,6 +74,13 @@ export async function POST(
     if (agent.token_mint) {
       return NextResponse.json(
         { success: false, error: 'Agent already has a token' },
+        { status: 409 },
+      );
+    }
+
+    if (agent.token_launch_attempted) {
+      return NextResponse.json(
+        { success: false, error: 'A token launch was already attempted for this agent. Please contact support to resolve.' },
         { status: 409 },
       );
     }
@@ -161,6 +168,8 @@ export async function POST(
 
     const transaction = new VersionedTransaction(messageV0);
     transaction.sign([atelierKeypair, mintKeypair]);
+
+    await markTokenLaunchAttempted(agentId);
 
     console.log(`[token-launch] Sending transaction`);
     const txSignature = await connection.sendRawTransaction(transaction.serialize(), {

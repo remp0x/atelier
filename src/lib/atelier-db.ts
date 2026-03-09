@@ -89,6 +89,7 @@ async function initAtelierDb(): Promise<void> {
       token_creator_wallet TEXT,
       token_tx_hash TEXT,
       token_created_at DATETIME,
+      token_launch_attempted INTEGER DEFAULT 0,
       payout_wallet TEXT,
       partner_badge TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -100,6 +101,8 @@ async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_source ON atelier_agents(source)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_owner_wallet ON atelier_agents(owner_wallet)');
   await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_slug ON atelier_agents(slug) WHERE slug IS NOT NULL');
+
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN token_launch_attempted INTEGER DEFAULT 0`).catch(() => {});
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS services (
@@ -370,8 +373,8 @@ async function seedAtelierOfficialAgents(): Promise<void> {
   for (const a of agents) {
     await atelierClient.execute({
       sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, verified, blue_check, is_atelier_official, owner_wallet)
-            VALUES (?, ?, ?, ?, ?, 'official', 1, 1, 1, ?)
-            ON CONFLICT(id) DO UPDATE SET slug = COALESCE(atelier_agents.slug, ?), description = ?, avatar_url = ?, owner_wallet = ?`,
+            VALUES (?, ?, ?, ?, ?, 'atelier', 1, 1, 0, ?)
+            ON CONFLICT(id) DO UPDATE SET slug = COALESCE(atelier_agents.slug, ?), description = ?, avatar_url = ?, owner_wallet = ?, source = 'atelier', is_atelier_official = 0`,
       args: [a.id, a.slug, a.name, a.description, a.avatar_url, ATELIER_OWNER_WALLET, a.slug, a.description, a.avatar_url, ATELIER_OWNER_WALLET],
     });
   }
@@ -769,6 +772,7 @@ export interface AtelierAgent {
   token_creator_wallet: string | null;
   token_tx_hash: string | null;
   token_created_at: string | null;
+  token_launch_attempted: number;
   created_at: string;
 }
 
@@ -901,6 +905,7 @@ export interface AgentTokenInfo {
   token_creator_wallet: string | null;
   token_tx_hash: string | null;
   token_created_at: string | null;
+  token_launch_attempted: number;
 }
 
 export interface RecentAgentOrder {
@@ -1931,6 +1936,15 @@ export async function resetFeeIndexCursors(): Promise<void> {
 
 // ─── Token Queries ───
 
+export async function markTokenLaunchAttempted(agentId: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'UPDATE atelier_agents SET token_launch_attempted = 1 WHERE id = ? AND token_launch_attempted = 0',
+    args: [agentId],
+  });
+  return result.rowsAffected > 0;
+}
+
 export async function updateAgentToken(
   agentId: string,
   tokenData: {
@@ -1963,7 +1977,8 @@ export async function clearAgentToken(agentId: string): Promise<boolean> {
   const result = await atelierClient.execute({
     sql: `UPDATE atelier_agents SET
       token_mint = NULL, token_name = NULL, token_symbol = NULL, token_image_url = NULL,
-      token_mode = NULL, token_creator_wallet = NULL, token_tx_hash = NULL, token_created_at = NULL
+      token_mode = NULL, token_creator_wallet = NULL, token_tx_hash = NULL, token_created_at = NULL,
+      token_launch_attempted = 0
       WHERE id = ?`,
     args: [agentId],
   });
@@ -1995,7 +2010,7 @@ export async function getPlatformRevenue(): Promise<number> {
 export async function getAgentTokenInfo(agentId: string): Promise<AgentTokenInfo | null> {
   await initAtelierDb();
   const result = await atelierClient.execute({
-    sql: `SELECT token_mint, token_name, token_symbol, token_image_url, token_mode, token_creator_wallet, token_tx_hash, token_created_at
+    sql: `SELECT token_mint, token_name, token_symbol, token_image_url, token_mode, token_creator_wallet, token_tx_hash, token_created_at, token_launch_attempted
           FROM atelier_agents WHERE id = ?`,
     args: [agentId],
   });

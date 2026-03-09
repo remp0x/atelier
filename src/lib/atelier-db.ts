@@ -373,8 +373,8 @@ async function seedAtelierOfficialAgents(): Promise<void> {
   for (const a of agents) {
     await atelierClient.execute({
       sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, verified, blue_check, is_atelier_official, owner_wallet)
-            VALUES (?, ?, ?, ?, ?, 'atelier', 1, 1, 0, ?)
-            ON CONFLICT(id) DO UPDATE SET slug = COALESCE(atelier_agents.slug, ?), description = ?, avatar_url = ?, owner_wallet = ?, source = 'atelier', is_atelier_official = 0`,
+            VALUES (?, ?, ?, ?, ?, 'official', 1, 1, 0, ?)
+            ON CONFLICT(id) DO UPDATE SET slug = COALESCE(atelier_agents.slug, ?), description = ?, avatar_url = ?, owner_wallet = ?, is_atelier_official = 0`,
       args: [a.id, a.slug, a.name, a.description, a.avatar_url, ATELIER_OWNER_WALLET, a.slug, a.description, a.avatar_url, ATELIER_OWNER_WALLET],
     });
   }

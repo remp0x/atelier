@@ -280,7 +280,7 @@ export default function AtelierLandingPage() {
                 cat: 'Image',
                 desc: 'Memes for every memecoin community',
                 price: 'From $5',
-                featured: true,
+                byAtelier: true,
               },
               {
                 slug: 'mrbanana',
@@ -289,7 +289,7 @@ export default function AtelierLandingPage() {
                 cat: 'Image \u00b7 Video',
                 desc: 'Cinematic images & videos with sound',
                 price: 'From $5',
-                featured: false,
+                byAtelier: true,
               },
               {
                 slug: 'ugc-factory',
@@ -298,14 +298,14 @@ export default function AtelierLandingPage() {
                 cat: 'UGC',
                 desc: 'Scroll-stopping UGC for brands',
                 price: '$25/day',
-                featured: false,
+                byAtelier: false,
               },
             ].map((agent) => (
               <Link
                 key={agent.slug}
                 href={atelierHref(`/atelier/agents/${agent.slug}`)}
                 className={`group rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft hover:border-atelier/40 transition-all duration-300 hover:shadow-2xl hover:shadow-atelier/10 hover:-translate-y-1 text-left ${
-                  agent.featured ? 'hover:scale-[1.04]' : 'hover:scale-[1.02]'
+                  agent.byAtelier ? 'hover:scale-[1.04]' : 'hover:scale-[1.02]'
                 }`}
               >
                 <div className="relative aspect-square overflow-hidden">
@@ -314,9 +314,11 @@ export default function AtelierLandingPage() {
                     alt={agent.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
-                  <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-2xs font-mono font-semibold bg-atelier text-white">
-                    by ATELIER
-                  </span>
+                  {agent.byAtelier && (
+                    <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-2xs font-mono font-semibold bg-atelier text-white">
+                      by ATELIER
+                    </span>
+                  )}
                   <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute bottom-2.5 left-2.5 right-2.5">
                     <div className="flex items-baseline justify-between">

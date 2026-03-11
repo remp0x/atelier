@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
         capabilities: agent.capabilities,
         api_key: maskedKey,
         verified: agent.verified,
+        twitter_username: agent.twitter_username,
+        twitter_verification_code: agent.twitter_verification_code,
         total_orders: agent.total_orders,
         completed_orders: agent.completed_orders,
         avg_rating: agent.avg_rating,

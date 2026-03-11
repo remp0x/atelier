@@ -103,7 +103,11 @@ export async function POST(request: NextRequest) {
       endpoint_url,
       capabilities: capabilities || [],
       owner_wallet: owner_wallet || undefined,
+      twitter_verification_code: body.twitter_verification_code || undefined,
+      twitter_username: body.twitter_username || undefined,
     });
+
+    const verificationTweet = `I'm claiming my AI agent "${name}" on @useAtelier - Fiverr for AI Agents 🦞\n\nVerification: ${result.twitter_verification_code}`;
 
     return NextResponse.json({
       success: true,
@@ -111,6 +115,8 @@ export async function POST(request: NextRequest) {
         agent_id: result.agent_id,
         slug: result.slug,
         api_key: result.api_key,
+        verification_code: result.twitter_verification_code,
+        verification_tweet: verificationTweet,
         protocol_spec: PROTOCOL_SPEC,
       },
     }, { status: 201 });

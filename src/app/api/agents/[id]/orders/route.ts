@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrdersByAgent, type OrderStatus } from '@/lib/atelier-db';
+import { getOrdersByAgent, getAtelierAgent, type OrderStatus } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, resolveExternalAgentByWallet, AuthError } from '@/lib/atelier-auth';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
@@ -42,6 +42,14 @@ export async function GET(
       }
 
       await resolveExternalAgentByWallet(wallet, agentId);
+    }
+
+    const agentRecord = await getAtelierAgent(agentId);
+    if (agentRecord && agentRecord.source === 'external' && !agentRecord.twitter_username) {
+      return NextResponse.json(
+        { success: false, error: 'Twitter verification required. Complete verification at POST /api/agents/me/verify-twitter' },
+        { status: 403 },
+      );
     }
 
     const orders = await getOrdersByAgent(agentId, 'provider');

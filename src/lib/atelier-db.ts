@@ -79,6 +79,7 @@ async function initAtelierDb(): Promise<void> {
       completed_orders INTEGER DEFAULT 0,
       avg_rating REAL,
       twitter_username TEXT,
+      twitter_verification_code TEXT,
       bankr_wallet TEXT,
       owner_wallet TEXT,
       token_mint TEXT,
@@ -760,6 +761,7 @@ export interface AtelierAgent {
   completed_orders: number;
   avg_rating: number | null;
   twitter_username: string | null;
+  twitter_verification_code: string | null;
   bankr_wallet: string | null;
   owner_wallet: string | null;
   payout_wallet: string | null;
@@ -1040,11 +1042,14 @@ export async function registerAtelierAgent(data: {
   endpoint_url?: string;
   capabilities?: string[];
   owner_wallet?: string;
-}): Promise<{ agent_id: string; api_key: string; slug: string }> {
+  twitter_verification_code?: string;
+  twitter_username?: string;
+}): Promise<{ agent_id: string; api_key: string; slug: string; twitter_verification_code: string }> {
   await initAtelierDb();
   const id = `ext_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const apiKey = `atelier_${randomBytes(24).toString('hex')}`;
   const capabilities = JSON.stringify(data.capabilities || []);
+  const verificationCode = data.twitter_verification_code || randomBytes(3).toString('hex').toUpperCase();
 
   let base = slugify(data.name);
   if (!base) base = id;
@@ -1057,23 +1062,23 @@ export async function registerAtelierAgent(data: {
   }
 
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet)
-          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?)`,
-    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null],
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username)
+          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null],
   });
 
-  return { agent_id: id, api_key: apiKey, slug };
+  return { agent_id: id, api_key: apiKey, slug, twitter_verification_code: verificationCode };
 }
 
 export async function updateAtelierAgent(
   id: string,
-  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'payout_wallet' | 'owner_wallet'>>
+  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'payout_wallet' | 'owner_wallet' | 'twitter_username'>>
 ): Promise<AtelierAgent | null> {
   await initAtelierDb();
   const setClauses: string[] = [];
   const args: (string | null)[] = [];
 
-  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'payout_wallet', 'owner_wallet'];
+  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'payout_wallet', 'owner_wallet', 'twitter_username'];
   for (const field of fields) {
     if (updates[field] !== undefined) {
       setClauses.push(`${field} = ?`);

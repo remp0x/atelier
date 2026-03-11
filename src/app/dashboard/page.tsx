@@ -3,7 +3,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
+import { atelierHref } from '@/lib/atelier-paths';
 import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import type { AtelierAgent, Service, ServiceOrder, OrderStatus, ServiceCategory, ServicePriceType } from '@/lib/atelier-db';
 
@@ -90,7 +92,6 @@ function DashboardContent() {
   const [deletingService, setDeletingService] = useState<string | null>(null);
   const [showDeliver, setShowDeliver] = useState<string | null>(null);
   const [showQuote, setShowQuote] = useState<string | null>(null);
-  const [showRegister, setShowRegister] = useState(false);
   const [editingPayout, setEditingPayout] = useState(false);
   const [payoutDraft, setPayoutDraft] = useState('');
   const [payoutSaving, setPayoutSaving] = useState(false);
@@ -189,7 +190,12 @@ function DashboardContent() {
         </div>
         <h2 className="text-lg font-bold text-black dark:text-white font-display mb-2">Connect Wallet</h2>
         <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mb-6">Connect your Solana wallet to manage your agents</p>
-        <WalletMultiButton style={{ background: '#8B5CF6', color: 'white', fontSize: '0.875rem', fontWeight: 600, borderRadius: '8px', height: '2.75rem', padding: '0 1.5rem' }} />
+        <div className="flex flex-col items-center gap-3">
+          <WalletMultiButton style={{ background: '#8B5CF6', color: 'white', fontSize: '0.875rem', fontWeight: 600, borderRadius: '8px', height: '2.75rem', padding: '0 1.5rem' }} />
+          <Link href={atelierHref('/atelier/register')} className="text-sm font-mono text-atelier hover:text-atelier-bright transition-colors">
+            Register Agent
+          </Link>
+        </div>
       </div>
     );
   }
@@ -218,12 +224,12 @@ function DashboardContent() {
           <h1 className="text-2xl font-bold text-black dark:text-white font-display">Dashboard</h1>
           <p className="text-sm text-gray-400 dark:text-neutral-500 font-mono mt-1">{truncateWallet(walletAddress)}</p>
         </div>
-        <button onClick={() => setShowRegister(true)} className="text-sm font-mono font-semibold text-white bg-atelier px-4 py-2.5 rounded-lg hover:bg-atelier-dark transition-colors cursor-pointer">
+        <Link href={atelierHref('/atelier/register')} className="text-sm font-mono font-semibold text-white bg-atelier px-4 py-2.5 rounded-lg hover:bg-atelier-dark transition-colors">
           {agents.length === 0 ? 'Register Agent' : '+ New Agent'}
-        </button>
+        </Link>
       </div>
 
-      {agents.length === 0 && !showRegister ? (
+      {agents.length === 0 ? (
         <div className="text-center py-16 bg-gray-50 dark:bg-neutral-950 border border-dashed border-gray-200 dark:border-neutral-800 rounded-xl">
           <div className="w-12 h-12 rounded-xl bg-atelier/10 flex items-center justify-center mx-auto mb-4">
             <svg className="w-6 h-6 text-atelier" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -231,9 +237,9 @@ function DashboardContent() {
             </svg>
           </div>
           <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mb-4">No agents registered for this wallet.</p>
-          <button onClick={() => setShowRegister(true)} className="text-sm font-mono font-semibold text-atelier hover:text-atelier-dark dark:hover:text-atelier-bright transition-colors cursor-pointer">
+          <Link href={atelierHref('/atelier/register')} className="text-sm font-mono font-semibold text-atelier hover:text-atelier-dark dark:hover:text-atelier-bright transition-colors">
             Register your first agent
-          </button>
+          </Link>
         </div>
       ) : (
         <>
@@ -425,7 +431,6 @@ function DashboardContent() {
         </>
       )}
 
-      {showRegister && <RegisterAgentModal wallet={wallet} onClose={() => setShowRegister(false)} onSuccess={() => { setShowRegister(false); loadDashboard(); }} />}
       {showEditAgent && agent && <EditAgentModal agent={agent} getAuth={getAuth} onClose={() => setShowEditAgent(false)} onSuccess={() => { setShowEditAgent(false); loadDashboard(); }} />}
       {showEditService && agent && <EditServiceModal service={showEditService} apiKey={agent.api_key ?? ''} onClose={() => setShowEditService(null)} onSuccess={() => { setShowEditService(null); loadDashboard(); }} />}
       {showCreateService && agent && <CreateServiceModal agentId={agent.id} apiKey={agent.api_key ?? ''} onClose={() => setShowCreateService(false)} onSuccess={() => { setShowCreateService(false); loadDashboard(); }} />}
@@ -460,109 +465,6 @@ function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClos
 
 const INPUT_CLASS = 'w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier transition-colors';
 const LABEL_CLASS = 'block text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1.5 uppercase tracking-wider';
-
-function RegisterAgentModal({ wallet, onClose, onSuccess }: { wallet: ReturnType<typeof useWallet>; onClose: () => void; onSuccess: () => void }) {
-  const { getAuth } = useWalletAuth();
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [endpointUrl, setEndpointUrl] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [avatarPreview, setAvatarPreview] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [capabilities, setCapabilities] = useState<ServiceCategory[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ agent_id: string; api_key: string } | null>(null);
-  const [copiedNewKey, setCopiedNewKey] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!['image/jpeg', 'image/png'].includes(file.type)) { setError('Only JPG and PNG files are allowed'); return; }
-    if (file.size > 5 * 1024 * 1024) { setError('File too large (max 5MB)'); return; }
-    setUploading(true);
-    setError(null);
-    try {
-      const auth = await getAuth();
-      const form = new FormData();
-      form.append('file', file);
-      const params = new URLSearchParams({ wallet: auth.wallet, wallet_sig: auth.wallet_sig, wallet_sig_ts: String(auth.wallet_sig_ts) });
-      const res = await fetch(`/api/profile/avatar?${params}`, { method: 'POST', body: form });
-      const json = await res.json();
-      if (json.success) { setAvatarUrl(json.data.url); setAvatarPreview(json.data.url); } else { setError(json.error || 'Upload failed'); }
-    } catch { setError('Upload failed'); } finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
-  };
-
-  const handleSubmit = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      const auth = await getAuth();
-      const res = await fetch('/api/agents/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description, endpoint_url: endpointUrl || undefined, avatar_url: avatarUrl || undefined, capabilities, owner_wallet: auth.wallet, wallet_sig: auth.wallet_sig, wallet_sig_ts: auth.wallet_sig_ts }) });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      setResult(json.data);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Registration failed'); } finally { setSaving(false); }
-  };
-
-  if (result) {
-    return (
-      <ModalOverlay onClose={onSuccess}>
-        <h2 className="text-lg font-bold text-black dark:text-white font-display mb-4">Agent Registered</h2>
-        <div className="space-y-4">
-          <div>
-            <span className={LABEL_CLASS}>Agent ID</span>
-            <code className="text-sm font-mono text-gray-600 dark:text-neutral-300 break-all">{result.agent_id}</code>
-          </div>
-          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-            <p className="text-xs font-mono font-semibold text-amber-600 dark:text-amber-400 mb-2">Save your API key now — it won&apos;t be shown again.</p>
-            <div className="flex items-center gap-2">
-              <code className="text-sm font-mono text-black dark:text-white break-all flex-1">{result.api_key}</code>
-              <button onClick={() => { navigator.clipboard.writeText(result.api_key); setCopiedNewKey(true); }} className="text-gray-400 hover:text-atelier transition-colors flex-shrink-0 cursor-pointer">
-                {copiedNewKey ? <svg className="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg> : <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" /></svg>}
-              </button>
-            </div>
-          </div>
-          <button onClick={onSuccess} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier cursor-pointer">Done</button>
-        </div>
-      </ModalOverlay>
-    );
-  }
-
-  return (
-    <ModalOverlay onClose={onClose}>
-      <h2 className="text-lg font-bold text-black dark:text-white font-display mb-6">Register Agent</h2>
-      <div className="space-y-4">
-        <div><label className={LABEL_CLASS}>Name *</label><input value={name} onChange={e => setName(e.target.value)} maxLength={50} placeholder="My Agent" className={INPUT_CLASS} /></div>
-        <div><label className={LABEL_CLASS}>Description *</label><textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={500} rows={3} placeholder="What your agent does..." className={`${INPUT_CLASS} resize-none`} /></div>
-        <div><label className={LABEL_CLASS}>Endpoint URL</label><input value={endpointUrl} onChange={e => setEndpointUrl(e.target.value)} placeholder="https://my-agent.example.com" className={INPUT_CLASS} /></div>
-        <div>
-          <label className={LABEL_CLASS}>Avatar</label>
-          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png" onChange={handleAvatarUpload} className="hidden" />
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-800 group flex-shrink-0 cursor-pointer">
-              {avatarPreview ? <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-50 dark:bg-black flex items-center justify-center"><svg className="w-6 h-6 text-gray-300 dark:text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" /></svg></div>}
-              {uploading && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /></div>}
-            </button>
-            <span className="text-xs font-mono text-gray-400 dark:text-neutral-500">{uploading ? 'Uploading...' : 'JPG or PNG, max 5MB'}</span>
-          </div>
-        </div>
-        <div>
-          <label className={LABEL_CLASS}>Capabilities</label>
-          <div className="flex flex-wrap gap-2 mt-1">
-            {VALID_CATEGORIES.map(cap => <button key={cap} onClick={() => setCapabilities(prev => prev.includes(cap) ? prev.filter(c => c !== cap) : [...prev, cap])} className={`text-xs font-mono px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${capabilities.includes(cap) ? 'bg-atelier/10 text-atelier border-atelier/30' : 'text-gray-500 dark:text-neutral-500 border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700'}`}>{CATEGORY_LABELS[cap]}</button>)}
-          </div>
-        </div>
-        {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
-        <div className="flex gap-3 pt-2">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
-          <button onClick={handleSubmit} disabled={saving || !name || !description} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Registering...' : 'Register'}</button>
-        </div>
-      </div>
-    </ModalOverlay>
-  );
-}
 
 function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: { agentId: string; apiKey: string; onClose: () => void; onSuccess: () => void }) {
   const [title, setTitle] = useState('');

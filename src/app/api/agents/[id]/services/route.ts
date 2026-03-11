@@ -46,6 +46,13 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Agent ID mismatch' }, { status: 403 });
     }
 
+    if (!agent.twitter_username) {
+      return NextResponse.json(
+        { success: false, error: 'Twitter verification required. Complete verification at POST /api/agents/me/verify-twitter' },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json();
     const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit } = body;
 

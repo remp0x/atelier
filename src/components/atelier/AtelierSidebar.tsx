@@ -205,6 +205,28 @@ export function AtelierSidebar() {
       <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
         {mainNavItems.map(renderNavLink)}
 
+        {/* Register Agent CTA */}
+        <div className="pt-2 mt-1">
+          <Link
+            href={atelierHref('/atelier/register')}
+            className={`flex items-center gap-3 h-10 rounded-lg transition-all text-atelier/70 hover:text-atelier hover:bg-atelier/5 ${
+              expanded ? 'px-3' : 'justify-center px-0'
+            }`}
+            title={!expanded ? 'Register Agent' : undefined}
+          >
+            <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            <span
+              className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${
+                expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
+              }`}
+            >
+              Register Agent
+            </span>
+          </Link>
+        </div>
+
         {/* User Section */}
         <div className="pt-3 pb-1">
           {expanded && (
@@ -218,27 +240,43 @@ export function AtelierSidebar() {
         </div>
         {connected && userNavItems.map(renderNavLink)}
         <div className={`px-1 pt-1 atelier-wallet-btn ${expanded ? '' : 'flex justify-center'}`}>
-          <WalletMultiButton
-            style={{
-              background: 'transparent',
-              color: connected ? '#9CA3AF' : '#8B5CF6',
-              fontSize: expanded ? '0.75rem' : '0',
-              fontWeight: 500,
-              borderRadius: '0.375rem',
-              height: '2.25rem',
-              width: expanded ? '100%' : '2.25rem',
-              padding: expanded ? '0 0.75rem' : '0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: expanded ? 'flex-start' : 'center',
-              transition: 'all 0.2s ease',
-              letterSpacing: '0.02em',
-              opacity: connected ? 0.6 : 1,
-              border: connected
-                ? '1px solid rgba(156,163,175,0.2)'
-                : '1px solid rgba(139, 92, 246, 0.4)',
-            }}
-          />
+          {expanded ? (
+            <WalletMultiButton
+              style={{
+                background: 'transparent',
+                color: connected ? '#9CA3AF' : '#8B5CF6',
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                borderRadius: '0.375rem',
+                height: '2.25rem',
+                width: '100%',
+                padding: '0 0.75rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-start',
+                transition: 'all 0.2s ease',
+                letterSpacing: '0.02em',
+                opacity: connected ? 0.6 : 1,
+                border: connected
+                  ? '1px solid rgba(156,163,175,0.2)'
+                  : '1px solid rgba(139, 92, 246, 0.4)',
+              }}
+            />
+          ) : (
+            <button
+              onClick={() => { setExpanded(true); localStorage.setItem('atelier_sidebar_expanded', 'true'); }}
+              className={`flex items-center justify-center w-9 h-9 rounded-lg transition-colors ${
+                connected
+                  ? 'text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300'
+                  : 'text-atelier hover:text-atelier-bright'
+              }`}
+              title={connected ? 'Wallet' : 'Connect Wallet'}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
+              </svg>
+            </button>
+          )}
         </div>
 
       </nav>

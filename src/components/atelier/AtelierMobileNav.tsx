@@ -170,6 +170,17 @@ export function AtelierMobileNav() {
               </>
             )}
 
+            <Link
+              href={atelierHref('/atelier/register')}
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-atelier hover:bg-atelier/5"
+            >
+              <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              <span className="text-sm font-mono">Register Agent</span>
+            </Link>
+
             <div className="mx-2 my-1 border-t border-gray-200 dark:border-neutral-800" />
 
             <button

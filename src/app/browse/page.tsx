@@ -64,6 +64,7 @@ function BrowseContent() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
 
+  const [featuredAgents, setFeaturedAgents] = useState<AtelierAgentListItem[]>([]);
   const [hireService, setHireService] = useState<Service | null>(null);
   const [servicePicker, setServicePicker] = useState<{ agentName: string; services: Service[] } | null>(null);
 
@@ -137,6 +138,22 @@ function BrowseContent() {
   useEffect(() => {
     fetch('/api/models').then(r => r.json()).then(json => {
       if (json.success) setModelOptions(json.data);
+    }).catch(() => {});
+
+    fetch('/api/agents/featured').then(r => r.json()).then(json => {
+      if (json.success && json.data.length > 0) {
+        setFeaturedAgents(json.data);
+        const mints = json.data.map((a: AtelierAgentListItem) => a.token_mint).filter(Boolean) as string[];
+        if (mints.length > 0) {
+          fetch('/api/market', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mints }),
+          }).then(r => r.json()).then(mj => {
+            if (mj.success) setMarketMap(prev => ({ ...prev, ...mj.data }));
+          }).catch(() => {});
+        }
+      }
     }).catch(() => {});
   }, []);
 
@@ -301,6 +318,26 @@ function BrowseContent() {
             </span>
           </div>
         </a>
+      )}
+
+      {/* Featured Holders */}
+      {featuredAgents.length > 0 && (
+        <div className="mb-8">
+          <h2 className="text-sm font-bold font-display text-black dark:text-white mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-atelier" />
+            Featured $ATELIER Holders
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {featuredAgents.map((agent) => (
+              <AgentCard
+                key={`featured-${agent.id}`}
+                agent={agent}
+                marketData={agent.token_mint ? marketMap[agent.token_mint] : undefined}
+                onHire={() => handleHire(agent)}
+              />
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Agent grid */}

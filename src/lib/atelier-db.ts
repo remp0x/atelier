@@ -308,6 +308,8 @@ async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN reference_images TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN twitter_username TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN twitter_verification_code TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN atelier_holder INTEGER DEFAULT 0'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN holder_checked_at TEXT'); } catch (_e) { }
 
   try { await backfillSlugs(); } catch (e) { console.error('Slug backfill failed (non-fatal):', e); }
 
@@ -777,6 +779,8 @@ export interface AtelierAgent {
   token_tx_hash: string | null;
   token_created_at: string | null;
   token_launch_attempted: number;
+  atelier_holder: number;
+  holder_checked_at: string | null;
   created_at: string;
 }
 
@@ -805,6 +809,7 @@ export interface AtelierAgentListItem {
   token_symbol: string | null;
   token_name: string | null;
   token_image_url: string | null;
+  atelier_holder: number;
 }
 
 export interface Service {
@@ -1158,7 +1163,7 @@ export async function getAtelierAgents(filters?: {
   switch (filters?.sortBy) {
     case 'newest': orderClause = 'a.created_at DESC'; break;
     case 'rating': orderClause = 'avg_rating DESC NULLS LAST'; break;
-    default: orderClause = 'total_orders DESC, completed_orders DESC, services_count DESC'; break;
+    default: orderClause = 'a.atelier_holder DESC, total_orders DESC, completed_orders DESC, services_count DESC'; break;
   }
 
   args.push(limit, offset);
@@ -1174,6 +1179,7 @@ export async function getAtelierAgents(filters?: {
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
+            a.atelier_holder,
             a.created_at
           FROM atelier_agents a
           LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
@@ -1193,6 +1199,7 @@ export async function getAtelierAgents(filters?: {
       categories_str: string | null;
       provider_models_str: string | null;
       token_mint: string | null; token_symbol: string | null; token_name: string | null; token_image_url: string | null;
+      atelier_holder: number;
     };
 
     let categories: string[] = [];
@@ -1219,6 +1226,95 @@ export async function getAtelierAgents(filters?: {
       categories, provider_models,
       token_mint: r.token_mint, token_symbol: r.token_symbol,
       token_name: r.token_name, token_image_url: r.token_image_url,
+      atelier_holder: r.atelier_holder || 0,
+    };
+  });
+}
+
+// ─── Holder Functions ───
+
+export async function updateHolderStatus(agentId: string, isHolder: boolean): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `UPDATE atelier_agents
+          SET atelier_holder = ?, blue_check = CASE WHEN ? = 1 THEN 1 ELSE blue_check END, holder_checked_at = datetime('now')
+          WHERE id = ?`,
+    args: [isHolder ? 1 : 0, isHolder ? 1 : 0, agentId],
+  });
+}
+
+export async function getAgentsNeedingHolderCheck(staleMinutes: number): Promise<{ id: string; owner_wallet: string }[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT id, owner_wallet FROM atelier_agents
+          WHERE owner_wallet IS NOT NULL AND active = 1
+            AND (holder_checked_at IS NULL OR holder_checked_at < datetime('now', ?))
+          LIMIT 50`,
+    args: [`-${staleMinutes} minutes`],
+  });
+  return result.rows.map((r) => {
+    const row = r as unknown as { id: string; owner_wallet: string };
+    return { id: row.id, owner_wallet: row.owner_wallet };
+  });
+}
+
+export async function getFeaturedHolderAgents(limit: number): Promise<AtelierAgentListItem[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT
+            a.id, a.slug, a.name, a.description, a.avatar_url, a.source,
+            a.verified, a.blue_check, a.is_atelier_official, a.partner_badge,
+            COUNT(DISTINCT s.id) as services_count,
+            MAX(s.avg_rating) as avg_rating,
+            (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id) as total_orders,
+            (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
+            GROUP_CONCAT(DISTINCT s.category) as categories_str,
+            GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
+            a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
+            a.atelier_holder,
+            a.created_at
+          FROM atelier_agents a
+          LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
+          WHERE a.active = 1 AND a.atelier_holder = 1
+          GROUP BY a.id
+          ORDER BY completed_orders DESC, total_orders DESC
+          LIMIT ?`,
+    args: [limit],
+  });
+
+  return result.rows.map((row) => {
+    const r = row as unknown as {
+      id: string; slug: string; name: string; description: string | null; avatar_url: string | null;
+      source: 'atelier' | 'external' | 'official';
+      verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
+      services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
+      categories_str: string | null;
+      provider_models_str: string | null;
+      token_mint: string | null; token_symbol: string | null; token_name: string | null; token_image_url: string | null;
+      atelier_holder: number;
+    };
+
+    let categories: string[] = [];
+    if (r.categories_str) {
+      if (r.source === 'external') {
+        try { categories = JSON.parse(r.categories_str); } catch { categories = r.categories_str.split(',').filter(Boolean); }
+      } else {
+        categories = r.categories_str.split(',').filter(Boolean);
+      }
+    }
+
+    const provider_models = r.provider_models_str ? r.provider_models_str.split(',').filter(Boolean) : [];
+
+    return {
+      id: r.id, slug: r.slug, name: r.name, description: r.description, avatar_url: r.avatar_url,
+      source: r.source, verified: r.verified, blue_check: r.blue_check,
+      is_atelier_official: r.is_atelier_official, partner_badge: r.partner_badge,
+      services_count: r.services_count,
+      avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders,
+      categories, provider_models,
+      token_mint: r.token_mint, token_symbol: r.token_symbol,
+      token_name: r.token_name, token_image_url: r.token_image_url,
+      atelier_holder: r.atelier_holder || 0,
     };
   });
 }

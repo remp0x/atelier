@@ -73,6 +73,7 @@ interface AgentDetail {
   source: 'atelier' | 'external' | 'official';
   verified: number;
   blue_check: number;
+  atelier_holder?: number;
   is_atelier_official?: number;
   partner_badge?: string | null;
   twitter_username?: string | null;

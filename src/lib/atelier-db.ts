@@ -176,7 +176,7 @@ async function initAtelierDb(): Promise<void> {
     CREATE TABLE IF NOT EXISTS service_reviews (
       id TEXT PRIMARY KEY,
       order_id TEXT NOT NULL,
-      service_id TEXT NOT NULL,
+      service_id TEXT,
       reviewer_agent_id TEXT NOT NULL,
       reviewer_name TEXT NOT NULL,
       rating INTEGER NOT NULL,
@@ -447,6 +447,37 @@ async function initAtelierDb(): Promise<void> {
       await atelierClient.execute('DROP TABLE service_orders_old');
     }
   } catch (e) { console.error('service_orders recovery failed:', e); }
+
+  // Migrate service_reviews.service_id from NOT NULL to nullable (for bounty orders)
+  try {
+    const revDdl = await atelierClient.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='service_reviews'");
+    const revSql = (revDdl.rows[0] as unknown as { sql: string })?.sql;
+    if (revSql && revSql.includes('service_id TEXT NOT NULL')) {
+      await atelierClient.execute(`
+        CREATE TABLE service_reviews_new (
+          id TEXT PRIMARY KEY,
+          order_id TEXT NOT NULL,
+          service_id TEXT,
+          reviewer_agent_id TEXT NOT NULL,
+          reviewer_name TEXT NOT NULL,
+          rating INTEGER NOT NULL,
+          comment TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (order_id) REFERENCES service_orders(id),
+          FOREIGN KEY (service_id) REFERENCES services(id)
+        )
+      `);
+      await atelierClient.execute(`
+        INSERT INTO service_reviews_new (id, order_id, service_id, reviewer_agent_id, reviewer_name, rating, comment, created_at)
+        SELECT id, order_id, service_id, reviewer_agent_id, reviewer_name, rating, comment, created_at
+        FROM service_reviews
+      `);
+      await atelierClient.execute('DROP TABLE service_reviews');
+      await atelierClient.execute('ALTER TABLE service_reviews_new RENAME TO service_reviews');
+      await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_reviews_service ON service_reviews(service_id)');
+      await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_reviews_order ON service_reviews(order_id)');
+    }
+  } catch (e) { console.error('service_reviews migration failed (non-fatal):', e); }
 
   try { await backfillSlugs(); } catch (e) { console.error('Slug backfill failed (non-fatal):', e); }
 
@@ -984,8 +1015,8 @@ export interface Service {
 
 export interface ServiceOrder {
   id: string;
-  service_id: string;
-  service_title: string;
+  service_id: string | null;
+  service_title: string | null;
   client_agent_id: string | null;
   client_wallet: string | null;
   client_name: string | null;
@@ -1069,7 +1100,7 @@ export interface OrderDeliverable {
 export interface ServiceReview {
   id: string;
   order_id: string;
-  service_id: string;
+  service_id: string | null;
   reviewer_agent_id: string;
   reviewer_name: string;
   rating: number;
@@ -1830,7 +1861,7 @@ export async function updateOrderStatus(
 
   if (updates.status === 'completed') {
     const order = await getServiceOrderById(id);
-    if (order) {
+    if (order?.service_id) {
       await atelierClient.execute({
         sql: 'UPDATE services SET completed_orders = completed_orders + 1 WHERE id = ?',
         args: [order.service_id],
@@ -1932,7 +1963,7 @@ export async function incrementOrderQuotaUsed(orderId: string): Promise<number> 
 
 export async function createServiceReview(data: {
   order_id: string;
-  service_id: string;
+  service_id: string | null;
   reviewer_agent_id: string;
   reviewer_name: string;
   rating: number;
@@ -1943,9 +1974,11 @@ export async function createServiceReview(data: {
   await atelierClient.execute({
     sql: `INSERT INTO service_reviews (id, order_id, service_id, reviewer_agent_id, reviewer_name, rating, comment)
           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.order_id, data.service_id, data.reviewer_agent_id, data.reviewer_name, data.rating, data.comment || null],
+    args: [id, data.order_id, data.service_id || null, data.reviewer_agent_id, data.reviewer_name, data.rating, data.comment || null],
   });
-  await recalculateServiceRating(data.service_id);
+  if (data.service_id) {
+    await recalculateServiceRating(data.service_id);
+  }
   const result = await atelierClient.execute({ sql: 'SELECT * FROM service_reviews WHERE id = ?', args: [id] });
   return result.rows[0] as unknown as ServiceReview;
 }

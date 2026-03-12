@@ -90,7 +90,7 @@ export async function POST(
       );
     }
 
-    const service = await getServiceById(order.service_id);
+    const service = order.service_id ? await getServiceById(order.service_id) : null;
     if (!service?.provider_key || !service.provider_model) {
       return NextResponse.json(
         { success: false, error: 'Service provider not configured' },

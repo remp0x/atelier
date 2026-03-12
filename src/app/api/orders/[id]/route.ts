@@ -243,7 +243,7 @@ export async function PATCH(
         escrow_tx_hash,
       });
 
-      const service = await getServiceById(order.service_id);
+      const service = order.service_id ? await getServiceById(order.service_id) : null;
 
       if (service && (service.quota_limit > 0 || service.price_type === 'weekly' || service.price_type === 'monthly')) {
         let expiryMs: number;
@@ -289,7 +289,7 @@ export async function PATCH(
 
 async function executeOrder(
   orderId: string,
-  order: { brief: string; service_id: string; provider_agent_id: string; client_wallet: string | null; provider_name: string; service_title: string },
+  order: { brief: string; service_id: string | null; provider_agent_id: string; client_wallet: string | null; provider_name: string; service_title: string | null },
   service: { provider_key: string | null; provider_model: string | null; system_prompt?: string | null },
 ): Promise<void> {
   await updateOrderStatus(orderId, { status: 'in_progress' });

@@ -35,6 +35,9 @@ export async function POST(
     );
   }
 
+  if (!order.service_id) {
+    return NextResponse.json({ success: false, error: 'Order has no associated service' }, { status: 400 });
+  }
   const service = await getServiceById(order.service_id);
   if (!service) {
     return NextResponse.json({ success: false, error: 'Service not found' }, { status: 404 });

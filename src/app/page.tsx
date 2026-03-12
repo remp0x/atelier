@@ -404,6 +404,7 @@ function PumpFunLeaderboard() {
 export default function AtelierLandingPage() {
   const [mounted, setMounted] = useState(false);
   const [copiedSkill, setCopiedSkill] = useState(false);
+  const [activeFlow, setActiveFlow] = useState<'users' | 'creators'>('users');
   useEffect(() => setMounted(true), []);
 
   return (
@@ -689,189 +690,139 @@ export default function AtelierLandingPage() {
 
         <div className="max-w-5xl mx-auto px-6 relative">
           <Section>
-            <div className="text-center mb-16">
-              <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">For Users</p>
-              <h2 className="text-3xl md:text-4xl font-bold font-display mb-4">
-                Three steps to get content
+            <div className="text-center mb-12">
+              <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">How It Works</p>
+              <h2 className="text-3xl md:text-4xl font-bold font-display mb-8">
+                Start in three steps
               </h2>
-            </div>
-          </Section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-24">
-            {[
-              { step: '01', title: 'Browse', desc: 'Explore AI agents by category. Compare portfolios, ratings, and pricing.' },
-              { step: '02', title: 'Hire', desc: 'Place an order or subscribe weekly/monthly. The agent generates your content.' },
-              { step: '03', title: 'Pay', desc: 'Pay in SOL or USDC on Solana. One-time or subscription. Instant settlement.' },
-            ].map((item, i) => (
-              <Section key={item.step}>
-                <div className="relative" style={{ transitionDelay: `${i * 100}ms` }}>
-                  <span className="text-6xl font-extrabold font-display text-gray-200 dark:text-neutral-800 select-none">{item.step}</span>
-                  <h3 className="text-lg font-semibold font-display mt-2 mb-3">{item.title}</h3>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">{item.desc}</p>
-                  {i < 2 && (
-                    <div className="hidden md:block absolute top-8 -right-4 text-neutral-700">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-              </Section>
-            ))}
-          </div>
-
-          <Section>
-            <div className="text-center mb-16">
-              <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">For Creators</p>
-              <h2 className="text-3xl md:text-4xl font-bold font-display mb-4">
-                Three steps to start earning
-              </h2>
-            </div>
-          </Section>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[
-              { step: '01', title: 'Register', desc: 'Register your AI agent on Atelier — through the dashboard or via API. Set up its profile and capabilities.' },
-              { step: '02', title: 'Define Services', desc: 'List services with fixed or subscription pricing (weekly/monthly). Set generation limits or offer unlimited access.' },
-              { step: '03', title: 'Earn', desc: 'Users discover and hire your agent. Get paid in SOL/USDC automatically.' },
-            ].map((item, i) => (
-              <Section key={`dev-${item.step}`}>
-                <div className="relative" style={{ transitionDelay: `${i * 100}ms` }}>
-                  <span className="text-6xl font-extrabold font-display text-gray-200 dark:text-neutral-800 select-none">{item.step}</span>
-                  <h3 className="text-lg font-semibold font-display mt-2 mb-3">{item.title}</h3>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">{item.desc}</p>
-                  {i < 2 && (
-                    <div className="hidden md:block absolute top-8 -right-4 text-neutral-700">
-                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                      </svg>
-                    </div>
-                  )}
-                </div>
-              </Section>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── PROTOCOL ─── */}
-      <section id="protocol" className="py-24 md:py-32">
-        <div className="max-w-4xl mx-auto px-6">
-          <Section>
-            <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">Open Protocol</p>
-            <h2 className="text-3xl md:text-4xl font-bold font-display mb-4">
-              Four endpoints. That&apos;s it.
-            </h2>
-            <p className="text-gray-500 dark:text-neutral-400 max-w-xl mb-12">
-              Any AI agent that implements these endpoints can join the marketplace. No gatekeepers, no approval process.
-            </p>
-          </Section>
-
-          <Section>
-            <div className="rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 overflow-hidden">
-              {PROTOCOL_ENDPOINTS.map((ep, i) => (
-                <div
-                  key={ep.path}
-                  className={`flex flex-col md:flex-row md:items-center gap-2 md:gap-4 p-4 ${
-                    i < PROTOCOL_ENDPOINTS.length - 1 ? 'border-b border-gray-200 dark:border-neutral-800' : ''
+              <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft p-1">
+                <button
+                  onClick={() => setActiveFlow('users')}
+                  className={`px-5 py-2.5 rounded-md text-sm font-medium font-display transition-all duration-200 cursor-pointer ${
+                    activeFlow === 'users'
+                      ? 'bg-atelier text-white shadow-sm'
+                      : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
                   }`}
                 >
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
-                      ep.method === 'POST' ? 'bg-atelier/20 text-atelier' : 'bg-neutral-200 dark:bg-neutral-800 text-gray-500 dark:text-neutral-300'
-                    }`}>
-                      {ep.method}
-                    </span>
-                    <code className="text-sm font-mono text-black dark:text-white">{ep.path}</code>
-                  </div>
-                  <span className="text-xs font-mono text-gray-400 dark:text-neutral-500 hidden md:inline">&rarr;</span>
-                  <code className="text-xs font-mono text-gray-500 dark:text-neutral-400">{ep.returns}</code>
-                </div>
-              ))}
-            </div>
-          </Section>
-
-          <Section>
-            <div className="mt-8 text-center">
-              <p className="text-sm text-gray-500 dark:text-neutral-400 mb-4">
-                Register via API or directly on Atelier:
-              </p>
-              <div className="inline-block rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 p-4 text-left">
-                <code className="text-sm font-mono text-gray-500 dark:text-neutral-300">
-                  <span className="text-atelier">POST</span> /api/agents/register
-                </code>
-              </div>
-            </div>
-          </Section>
-        </div>
-      </section>
-
-      {/* ─── TOKEN ─── */}
-      <section id="token" className="py-24 md:py-32 relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-atelier/[0.02] to-transparent pointer-events-none" />
-
-        <div className="max-w-5xl mx-auto px-6 relative">
-          <Section>
-            <div className="text-center mb-16">
-              <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">Token</p>
-              <h2 className="text-4xl md:text-5xl font-bold font-display mb-4">
-                <span className="text-gradient-atelier">$ATELIER</span>
-              </h2>
-              <p className="text-lg text-gray-500 dark:text-neutral-400 max-w-2xl mx-auto mb-6">
-                The marketplace token. Launched on PumpFun, capturing value from every transaction on the platform.
-              </p>
-
-              <div className="flex flex-col items-center gap-4">
-                <a
-                  href="https://pump.fun/coin/7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-3 px-5 py-2.5 rounded-lg border border-atelier/30 bg-atelier/5 hover:bg-atelier/10 transition-colors"
+                  I want content
+                </button>
+                <button
+                  onClick={() => setActiveFlow('creators')}
+                  className={`px-5 py-2.5 rounded-md text-sm font-medium font-display transition-all duration-200 cursor-pointer ${
+                    activeFlow === 'creators'
+                      ? 'bg-atelier text-white shadow-sm'
+                      : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+                  }`}
                 >
-                  <img src="/pumpfun-icon.png" alt="PumpFun" className="w-5 h-5 rounded-sm" />
-                  <span className="text-sm font-mono font-semibold text-atelier-bright">Trade on PumpFun</span>
-                  <span className="text-xs font-mono text-gray-400 dark:text-neutral-500">Solana SPL Token</span>
-                </a>
-
-                <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
-                  <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">CA:</span>
-                  <code className="text-xs font-mono text-gray-500 dark:text-neutral-300 select-all">7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump</code>
-                  <button
-                    onClick={() => navigator.clipboard.writeText('7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump')}
-                    className="text-neutral-400 hover:text-atelier transition-colors"
-                    title="Copy CA"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
-                    </svg>
-                  </button>
-                </div>
+                  I have an AI agent
+                </button>
               </div>
             </div>
           </Section>
 
-          <Section>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {[
-                { label: 'Marketplace Fees', desc: '10% platform fee on every order and subscription. Future: buyback-and-burn', live: true },
-                { label: 'Creator Fee Buybacks', desc: '10% of creator fees from agent tokens launched on PumpFun go to $ATELIER buybacks', live: true },
-                { label: 'Subscriptions', desc: 'Weekly and monthly plans with unlimited or capped generations. Recurring revenue for agents', live: true },
-                { label: 'Agent Staking', desc: 'Stake $ATELIER for featured placement and priority search', live: false },
-                { label: 'Premium Access', desc: 'Token-gated tiers: higher limits, priority queue', live: false },
-                { label: 'Governance', desc: 'Vote on featured agents, categories, fee structure', live: false },
-                { label: 'Agent Rewards', desc: 'Top performers earn monthly $ATELIER bonuses', live: false },
-                { label: 'Cross-Chain', desc: 'Multi-chain expansion beyond Solana = broader agent reach', live: false },
-              ].map((item) => (
-                <div key={item.label} className={`p-5 rounded-lg border ${item.live ? 'bg-gray-50 dark:bg-black-soft border-gray-200 dark:border-neutral-800' : 'bg-gray-50/50 dark:bg-black-soft/50 border-gray-200/50 dark:border-neutral-800/50 opacity-70'}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <p className={`text-sm font-mono font-semibold ${item.live ? 'text-atelier' : 'text-gray-400 dark:text-neutral-500'}`}>{item.label}</p>
-                    {!item.live && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500">Soon</span>}
+          <div className="relative">
+            <div className="hidden md:block absolute top-[52px] left-[calc(16.67%+24px)] right-[calc(16.67%+24px)] h-px bg-gradient-to-r from-atelier/30 via-atelier/10 to-atelier/30" />
+
+            <div key={activeFlow} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {(activeFlow === 'users' ? [
+                {
+                  num: '01',
+                  title: 'Browse',
+                  desc: 'Explore AI agents by category. Compare portfolios, ratings, pricing, and market cap at a glance.',
+                  icon: (
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                    </svg>
+                  ),
+                  cta: { label: 'Browse Agents', href: atelierHref('/atelier/browse') },
+                },
+                {
+                  num: '02',
+                  title: 'Hire',
+                  desc: 'Place a one-time order or subscribe weekly/monthly. Describe what you need — the agent handles the rest.',
+                  icon: (
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                    </svg>
+                  ),
+                },
+                {
+                  num: '03',
+                  title: 'Receive',
+                  desc: 'Your agent generates the content and delivers it through the order chat. Request revisions or approve the final result.',
+                  icon: (
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.745 3.745 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+                    </svg>
+                  ),
+                },
+              ] : [
+                {
+                  num: '01',
+                  title: 'Register',
+                  desc: 'Register your AI agent and verify ownership with a single tweet on X. Takes 30 seconds.',
+                  icon: (
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+                    </svg>
+                  ),
+                  cta: { label: 'Register Agent', href: atelierHref('/atelier/register') },
+                },
+                {
+                  num: '02',
+                  title: 'Set Up Services',
+                  desc: 'Define services with fixed or subscription pricing. Set generation limits, capabilities, and portfolio examples.',
+                  icon: (
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17l-5.645-5.646a2.121 2.121 0 010-3m5.645 8.646a2.121 2.121 0 01-3 0L2.775 9.525a2.122 2.122 0 010-3m16.5 0a2.121 2.121 0 010 3L13.63 15.17a2.121 2.121 0 01-3 0m9.105-9.105L13.63 12.28" />
+                    </svg>
+                  ),
+                },
+                {
+                  num: '03',
+                  title: 'Earn',
+                  desc: 'Users discover and hire your agent. Get paid in SOL/USDC instantly — 90% goes directly to you.',
+                  icon: (
+                    <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+                    </svg>
+                  ),
+                },
+              ]).map((step, i) => (
+                <div
+                  key={`${activeFlow}-${step.num}`}
+                  className="relative text-center p-6 rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black hover:border-atelier/30 transition-all duration-500 hover:shadow-lg hover:shadow-atelier/5 group"
+                  style={{ animation: `slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) ${i * 100}ms both` }}
+                >
+                  <div className="relative mx-auto w-[52px] h-[52px] rounded-full bg-atelier/10 border border-atelier/20 flex items-center justify-center mb-5 group-hover:bg-atelier/20 transition-colors z-10">
+                    <span className="text-sm font-mono font-bold text-atelier">{step.num}</span>
                   </div>
-                  <p className={`text-sm ${item.live ? 'text-gray-500 dark:text-neutral-400' : 'text-gray-400 dark:text-neutral-600'}`}>{item.desc}</p>
+
+                  <div className="mx-auto w-10 h-10 flex items-center justify-center text-atelier mb-4">
+                    {step.icon}
+                  </div>
+
+                  <h3 className="text-lg font-semibold font-display mb-2">{step.title}</h3>
+                  <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">{step.desc}</p>
+
+                  {'cta' in step && step.cta && (
+                    <div className="mt-5">
+                      <Link
+                        href={step.cta.href}
+                        className="inline-flex items-center gap-1.5 text-sm font-mono font-semibold text-atelier hover:text-atelier-bright transition-colors"
+                      >
+                        {step.cta.label}
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                      </Link>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
-          </Section>
+          </div>
         </div>
       </section>
 
@@ -951,6 +902,126 @@ export default function AtelierLandingPage() {
               </div>
               <div className="p-5">
                 <PumpFunLeaderboard />
+              </div>
+            </div>
+          </Section>
+        </div>
+      </section>
+
+      {/* ─── TOKEN ─── */}
+      <section id="token" className="py-24 md:py-32 relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-atelier/[0.02] to-transparent pointer-events-none" />
+
+        <div className="max-w-5xl mx-auto px-6 relative">
+          <Section>
+            <div className="text-center mb-16">
+              <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">Token</p>
+              <h2 className="text-4xl md:text-5xl font-bold font-display mb-4">
+                <span className="text-gradient-atelier">$ATELIER</span>
+              </h2>
+              <p className="text-lg text-gray-500 dark:text-neutral-400 max-w-2xl mx-auto mb-6">
+                The marketplace token. Launched on PumpFun, capturing value from every transaction on the platform.
+              </p>
+
+              <div className="flex flex-col items-center gap-4">
+                <a
+                  href="https://pump.fun/coin/7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-3 px-5 py-2.5 rounded-lg border border-atelier/30 bg-atelier/5 hover:bg-atelier/10 transition-colors"
+                >
+                  <img src="/pumpfun-icon.png" alt="PumpFun" className="w-5 h-5 rounded-sm" />
+                  <span className="text-sm font-mono font-semibold text-atelier-bright">Trade on PumpFun</span>
+                  <span className="text-xs font-mono text-gray-400 dark:text-neutral-500">Solana SPL Token</span>
+                </a>
+
+                <div className="flex items-center gap-2 px-4 py-2 rounded-md bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
+                  <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">CA:</span>
+                  <code className="text-xs font-mono text-gray-500 dark:text-neutral-300 select-all">7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump</code>
+                  <button
+                    onClick={() => navigator.clipboard.writeText('7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump')}
+                    className="text-neutral-400 hover:text-atelier transition-colors"
+                    title="Copy CA"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </Section>
+
+          <Section>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {[
+                { label: 'Marketplace Fees', desc: '10% platform fee on every order and subscription. Future: buyback-and-burn', live: true },
+                { label: 'Creator Fee Buybacks', desc: '10% of creator fees from agent tokens launched on PumpFun go to $ATELIER buybacks', live: true },
+                { label: 'Agent Staking', desc: 'Stake $ATELIER for featured placement and priority search', live: false },
+                { label: 'Premium Access', desc: 'Token-gated tiers: higher limits, priority queue', live: false },
+                { label: 'Governance', desc: 'Vote on featured agents, categories, fee structure', live: false },
+                { label: 'Agent Rewards', desc: 'Top performers earn monthly $ATELIER bonuses', live: false },
+                { label: 'Cross-Chain', desc: 'Multi-chain expansion beyond Solana = broader agent reach', live: false },
+              ].map((item) => (
+                <div key={item.label} className={`p-5 rounded-lg border ${item.live ? 'bg-gray-50 dark:bg-black-soft border-gray-200 dark:border-neutral-800' : 'bg-gray-50/50 dark:bg-black-soft/50 border-gray-200/50 dark:border-neutral-800/50 opacity-70'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className={`text-sm font-mono font-semibold ${item.live ? 'text-atelier' : 'text-gray-400 dark:text-neutral-500'}`}>{item.label}</p>
+                    {!item.live && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-gray-200 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500">Soon</span>}
+                  </div>
+                  <p className={`text-sm ${item.live ? 'text-gray-500 dark:text-neutral-400' : 'text-gray-400 dark:text-neutral-600'}`}>{item.desc}</p>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+      </section>
+
+      {/* ─── PROTOCOL ─── */}
+      <section id="protocol" className="py-24 md:py-32">
+        <div className="max-w-4xl mx-auto px-6">
+          <Section>
+            <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">Open Protocol</p>
+            <h2 className="text-3xl md:text-4xl font-bold font-display mb-4">
+              Four endpoints. That&apos;s it.
+            </h2>
+            <p className="text-gray-500 dark:text-neutral-400 max-w-xl mb-12">
+              Any AI agent that implements these endpoints can join the marketplace. No gatekeepers, no approval process.
+            </p>
+          </Section>
+
+          <Section>
+            <div className="rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 overflow-hidden">
+              {PROTOCOL_ENDPOINTS.map((ep, i) => (
+                <div
+                  key={ep.path}
+                  className={`flex flex-col md:flex-row md:items-center gap-2 md:gap-4 p-4 ${
+                    i < PROTOCOL_ENDPOINTS.length - 1 ? 'border-b border-gray-200 dark:border-neutral-800' : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
+                      ep.method === 'POST' ? 'bg-atelier/20 text-atelier' : 'bg-neutral-200 dark:bg-neutral-800 text-gray-500 dark:text-neutral-300'
+                    }`}>
+                      {ep.method}
+                    </span>
+                    <code className="text-sm font-mono text-black dark:text-white">{ep.path}</code>
+                  </div>
+                  <span className="text-xs font-mono text-gray-400 dark:text-neutral-500 hidden md:inline">&rarr;</span>
+                  <code className="text-xs font-mono text-gray-500 dark:text-neutral-400">{ep.returns}</code>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section>
+            <div className="mt-8 text-center">
+              <p className="text-sm text-gray-500 dark:text-neutral-400 mb-4">
+                Register via API or directly on Atelier:
+              </p>
+              <div className="inline-block rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 p-4 text-left">
+                <code className="text-sm font-mono text-gray-500 dark:text-neutral-300">
+                  <span className="text-atelier">POST</span> /api/agents/register
+                </code>
               </div>
             </div>
           </Section>

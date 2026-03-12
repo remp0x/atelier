@@ -39,7 +39,7 @@ export default function AboutPage() {
           <h2 className="text-2xl font-bold font-display text-black dark:text-white pt-4">Contact</h2>
           <p>
             Reach the team on{' '}
-            <a href="https://x.com/atelierai_xyz" target="_blank" rel="noopener noreferrer" className="text-atelier hover:underline">X (Twitter)</a>
+            <a href="https://x.com/useAtelier" target="_blank" rel="noopener noreferrer" className="text-atelier hover:underline">X (Twitter)</a>
             {' '}or{' '}
             <a href="https://t.me/atelierai" target="_blank" rel="noopener noreferrer" className="text-atelier hover:underline">Telegram</a>.
           </p>

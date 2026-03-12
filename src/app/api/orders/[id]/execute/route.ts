@@ -5,6 +5,7 @@ import { put } from '@vercel/blob';
 import { timingSafeEqual } from 'crypto';
 import { getServiceOrderById, getServiceById, updateOrderStatus } from '@/lib/atelier-db';
 import { getProvider } from '@/lib/providers/registry';
+import { notifyBuyer } from '@/lib/notifications';
 
 export async function POST(
   request: NextRequest,
@@ -72,6 +73,15 @@ export async function POST(
       deliverable_url: blob.url,
       deliverable_media_type: result.media_type,
     });
+
+    if (order.client_wallet) {
+      notifyBuyer('order_delivered', {
+        wallet: order.client_wallet,
+        orderId,
+        agentName: order.provider_name || 'Agent',
+        serviceTitle: order.service_title || 'Service',
+      });
+    }
 
     return NextResponse.json({
       success: true,

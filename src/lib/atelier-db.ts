@@ -138,7 +138,7 @@ async function initAtelierDb(): Promise<void> {
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS service_orders (
       id TEXT PRIMARY KEY,
-      service_id TEXT NOT NULL,
+      service_id TEXT,
       client_agent_id TEXT,
       client_wallet TEXT,
       provider_agent_id TEXT NOT NULL,
@@ -301,6 +301,21 @@ async function initAtelierDb(): Promise<void> {
     )
   `);
 
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      wallet TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT,
+      order_id TEXT,
+      read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_notifications_wallet ON notifications(wallet, created_at DESC)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(wallet, read) WHERE read = 0');
+
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_wallet TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN partner_badge TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN slug TEXT'); } catch (_e) { }
@@ -315,6 +330,102 @@ async function initAtelierDb(): Promise<void> {
           WHERE owner_wallet = ?`,
     args: ['EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb'],
   });
+
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS bounties (
+      id TEXT PRIMARY KEY,
+      poster_wallet TEXT NOT NULL,
+      title TEXT NOT NULL,
+      brief TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'custom',
+      budget_usd TEXT NOT NULL,
+      deadline_hours INTEGER NOT NULL DEFAULT 24,
+      reference_urls TEXT,
+      reference_images TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      accepted_claim_id TEXT,
+      order_id TEXT,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_bounties_status ON bounties(status)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_bounties_category ON bounties(category)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_bounties_poster ON bounties(poster_wallet)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_bounties_expires ON bounties(expires_at)');
+
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS bounty_claims (
+      id TEXT PRIMARY KEY,
+      bounty_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      claimant_wallet TEXT,
+      message TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (bounty_id) REFERENCES bounties(id),
+      FOREIGN KEY (agent_id) REFERENCES atelier_agents(id)
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_bounty_claims_bounty ON bounty_claims(bounty_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_bounty_claims_agent ON bounty_claims(agent_id)');
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_bounty_claims_unique ON bounty_claims(bounty_id, agent_id)');
+
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN bounty_id TEXT REFERENCES bounties(id)'); } catch (_e) { }
+
+  // Migrate service_orders.service_id from NOT NULL to nullable (for bounty orders)
+  try {
+    const col = await atelierClient.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='service_orders'");
+    const ddl = col.rows[0]?.[0] as string | undefined;
+    if (ddl && ddl.includes('service_id TEXT NOT NULL')) {
+      await atelierClient.execute(`
+        CREATE TABLE service_orders_new AS SELECT * FROM service_orders WHERE 1=0
+      `);
+      await atelierClient.execute('DROP TABLE service_orders_new');
+      await atelierClient.execute(`
+        ALTER TABLE service_orders RENAME TO service_orders_old
+      `);
+      await atelierClient.execute(`
+        CREATE TABLE service_orders (
+          id TEXT PRIMARY KEY,
+          service_id TEXT,
+          client_agent_id TEXT,
+          client_wallet TEXT,
+          provider_agent_id TEXT NOT NULL,
+          brief TEXT NOT NULL,
+          reference_urls TEXT,
+          reference_images TEXT,
+          quoted_price_usd TEXT,
+          platform_fee_usd TEXT,
+          payment_method TEXT,
+          status TEXT NOT NULL DEFAULT 'pending_quote',
+          escrow_tx_hash TEXT,
+          payout_tx_hash TEXT,
+          deliverable_post_id INTEGER,
+          deliverable_url TEXT,
+          deliverable_media_type TEXT,
+          quota_total INTEGER DEFAULT 0,
+          quota_used INTEGER DEFAULT 0,
+          workspace_expires_at DATETIME,
+          delivered_at DATETIME,
+          review_deadline DATETIME,
+          completed_at DATETIME,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          bounty_id TEXT REFERENCES bounties(id),
+          FOREIGN KEY (service_id) REFERENCES services(id),
+          FOREIGN KEY (provider_agent_id) REFERENCES atelier_agents(id)
+        )
+      `);
+      await atelierClient.execute('INSERT INTO service_orders SELECT * FROM service_orders_old');
+      await atelierClient.execute('DROP TABLE service_orders_old');
+      await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_service_id ON service_orders(service_id)');
+      await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_client ON service_orders(client_agent_id)');
+      await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_provider ON service_orders(provider_agent_id)');
+      await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_status ON service_orders(status)');
+      await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_wallet ON service_orders(client_wallet)');
+      await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_service_orders_escrow_tx ON service_orders(escrow_tx_hash) WHERE escrow_tx_hash IS NOT NULL');
+    }
+  } catch (e) { console.error('service_orders migration failed (non-fatal):', e); }
 
   try { await backfillSlugs(); } catch (e) { console.error('Slug backfill failed (non-fatal):', e); }
 
@@ -750,6 +861,8 @@ async function backfillProviderModels(): Promise<void> {
 export type ServiceCategory = 'image_gen' | 'video_gen' | 'ugc' | 'influencer' | 'brand_content' | 'custom';
 export type ServicePriceType = 'fixed' | 'quote' | 'weekly' | 'monthly';
 export type OrderStatus = 'pending_quote' | 'quoted' | 'accepted' | 'paid' | 'in_progress' | 'delivered' | 'completed' | 'disputed' | 'cancelled';
+export type BountyStatus = 'open' | 'claimed' | 'completed' | 'expired' | 'cancelled' | 'disputed';
+export type BountyClaimStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn';
 
 export interface AtelierAgent {
   id: string;
@@ -874,8 +987,51 @@ export interface ServiceOrder {
   workspace_expires_at: string | null;
   delivered_at: string | null;
   review_deadline: string | null;
+  bounty_id: string | null;
   completed_at: string | null;
   created_at: string;
+}
+
+export interface Bounty {
+  id: string;
+  poster_wallet: string;
+  title: string;
+  brief: string;
+  category: ServiceCategory;
+  budget_usd: string;
+  deadline_hours: number;
+  reference_urls: string | null;
+  reference_images: string | null;
+  status: BountyStatus;
+  accepted_claim_id: string | null;
+  order_id: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface BountyListItem extends Bounty {
+  poster_display_name: string | null;
+  claims_count: number;
+}
+
+export interface BountyClaim {
+  id: string;
+  bounty_id: string;
+  agent_id: string;
+  claimant_wallet: string | null;
+  message: string | null;
+  status: BountyClaimStatus;
+  created_at: string;
+}
+
+export interface BountyClaimWithAgent extends BountyClaim {
+  agent_name: string;
+  agent_slug: string;
+  agent_avatar_url: string | null;
+  agent_avg_rating: number | null;
+  agent_completed_orders: number;
+  agent_token_mint: string | null;
+  agent_token_symbol: string | null;
 }
 
 export interface OrderDeliverable {
@@ -2421,3 +2577,359 @@ export async function getMetricsData(): Promise<MetricsData> {
     ordersOverTime,
   };
 }
+
+// ─── Notifications ───
+
+export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_message';
+
+export interface Notification {
+  id: string;
+  wallet: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  order_id: string | null;
+  read: number;
+  created_at: string;
+}
+
+export async function createNotification(data: {
+  wallet: string;
+  type: NotificationType;
+  title: string;
+  body?: string;
+  order_id?: string;
+}): Promise<void> {
+  await initAtelierDb();
+  const id = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  await atelierClient.execute({
+    sql: `INSERT INTO notifications (id, wallet, type, title, body, order_id) VALUES (?, ?, ?, ?, ?, ?)`,
+    args: [id, data.wallet, data.type, data.title, data.body || null, data.order_id || null],
+  });
+}
+
+export async function getNotificationsByWallet(wallet: string, limit = 30): Promise<Notification[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM notifications WHERE wallet = ? ORDER BY created_at DESC LIMIT ?',
+    args: [wallet, limit],
+  });
+  return result.rows as unknown as Notification[];
+}
+
+export async function getUnreadNotificationCount(wallet: string): Promise<number> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT COUNT(*) as count FROM notifications WHERE wallet = ? AND read = 0',
+    args: [wallet],
+  });
+  return Number(result.rows[0].count);
+}
+
+export async function markNotificationsRead(wallet: string, ids?: string[]): Promise<void> {
+  await initAtelierDb();
+  if (ids && ids.length > 0) {
+    const placeholders = ids.map(() => '?').join(',');
+    await atelierClient.execute({
+      sql: `UPDATE notifications SET read = 1 WHERE wallet = ? AND id IN (${placeholders})`,
+      args: [wallet, ...ids],
+    });
+  } else {
+    await atelierClient.execute({
+      sql: 'UPDATE notifications SET read = 1 WHERE wallet = ? AND read = 0',
+      args: [wallet],
+    });
+  }
+}
+
+// ─── Bounty Queries ───
+
+const VALID_BOUNTY_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
+const VALID_DEADLINE_HOURS = [1, 6, 12, 24, 48, 72, 168];
+const VALID_CLAIM_WINDOWS = [6, 12, 24, 48, 72, 168];
+const MAX_CLAIMS_PER_BOUNTY = 20;
+
+export async function createBounty(data: {
+  poster_wallet: string;
+  title: string;
+  brief: string;
+  category: ServiceCategory;
+  budget_usd: string;
+  deadline_hours: number;
+  claim_window_hours?: number;
+  reference_urls?: string[];
+  reference_images?: string[];
+}): Promise<Bounty> {
+  await initAtelierDb();
+  const id = `bty_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const claimWindow = data.claim_window_hours || 24;
+  const expiresAt = new Date(Date.now() + claimWindow * 60 * 60 * 1000).toISOString();
+
+  await atelierClient.execute({
+    sql: `INSERT INTO bounties (id, poster_wallet, title, brief, category, budget_usd, deadline_hours, reference_urls, reference_images, status, expires_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
+    args: [
+      id, data.poster_wallet, data.title, data.brief, data.category, data.budget_usd,
+      data.deadline_hours,
+      data.reference_urls ? JSON.stringify(data.reference_urls) : null,
+      data.reference_images ? JSON.stringify(data.reference_images) : null,
+      expiresAt,
+    ],
+  });
+
+  return getBountyById(id) as Promise<Bounty>;
+}
+
+export async function getBountyById(id: string): Promise<Bounty | null> {
+  await initAtelierDb();
+  await expireStaleBounties();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM bounties WHERE id = ?',
+    args: [id],
+  });
+  return (result.rows[0] as unknown as Bounty) || null;
+}
+
+export async function listBounties(filters: {
+  status?: string;
+  category?: ServiceCategory;
+  min_budget?: string;
+  max_budget?: string;
+  sort?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ data: BountyListItem[]; total: number }> {
+  await initAtelierDb();
+  await expireStaleBounties();
+
+  const conditions: string[] = [];
+  const args: (string | number)[] = [];
+
+  if (filters.status) {
+    const statuses = filters.status.split(',').map(s => s.trim());
+    conditions.push(`b.status IN (${statuses.map(() => '?').join(',')})`);
+    args.push(...statuses);
+  } else {
+    conditions.push("b.status = 'open'");
+  }
+
+  if (filters.category) {
+    conditions.push('b.category = ?');
+    args.push(filters.category);
+  }
+
+  if (filters.min_budget) {
+    conditions.push('CAST(b.budget_usd AS REAL) >= ?');
+    args.push(parseFloat(filters.min_budget));
+  }
+
+  if (filters.max_budget) {
+    conditions.push('CAST(b.budget_usd AS REAL) <= ?');
+    args.push(parseFloat(filters.max_budget));
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  let orderBy = 'b.created_at DESC';
+  if (filters.sort === 'budget_desc') orderBy = 'CAST(b.budget_usd AS REAL) DESC';
+  else if (filters.sort === 'deadline_asc') orderBy = 'b.expires_at ASC';
+  else if (filters.sort === 'claims_count') orderBy = 'claims_count DESC';
+
+  const limit = Math.min(filters.limit || 20, 50);
+  const offset = filters.offset || 0;
+
+  const countResult = await atelierClient.execute({
+    sql: `SELECT COUNT(*) as count FROM bounties b ${where}`,
+    args,
+  });
+  const total = Number(countResult.rows[0].count);
+
+  const result = await atelierClient.execute({
+    sql: `SELECT b.*,
+            p.display_name as poster_display_name,
+            (SELECT COUNT(*) FROM bounty_claims bc WHERE bc.bounty_id = b.id AND bc.status != 'withdrawn') as claims_count
+          FROM bounties b
+          LEFT JOIN atelier_profiles p ON p.wallet = b.poster_wallet
+          ${where}
+          ORDER BY ${orderBy}
+          LIMIT ? OFFSET ?`,
+    args: [...args, limit, offset],
+  });
+
+  return {
+    data: result.rows as unknown as BountyListItem[],
+    total,
+  };
+}
+
+export async function getBountiesByWallet(wallet: string): Promise<BountyListItem[]> {
+  await initAtelierDb();
+  await expireStaleBounties();
+  const result = await atelierClient.execute({
+    sql: `SELECT b.*,
+            p.display_name as poster_display_name,
+            (SELECT COUNT(*) FROM bounty_claims bc WHERE bc.bounty_id = b.id AND bc.status != 'withdrawn') as claims_count
+          FROM bounties b
+          LEFT JOIN atelier_profiles p ON p.wallet = b.poster_wallet
+          WHERE b.poster_wallet = ?
+          ORDER BY b.created_at DESC`,
+    args: [wallet],
+  });
+  return result.rows as unknown as BountyListItem[];
+}
+
+export async function createBountyClaim(data: {
+  bounty_id: string;
+  agent_id: string;
+  claimant_wallet?: string;
+  message?: string;
+}): Promise<BountyClaim> {
+  await initAtelierDb();
+  const id = `bcl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  await atelierClient.execute({
+    sql: `INSERT INTO bounty_claims (id, bounty_id, agent_id, claimant_wallet, message, status)
+          VALUES (?, ?, ?, ?, ?, 'pending')`,
+    args: [id, data.bounty_id, data.agent_id, data.claimant_wallet || null, data.message || null],
+  });
+
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM bounty_claims WHERE id = ?',
+    args: [id],
+  });
+  return result.rows[0] as unknown as BountyClaim;
+}
+
+export async function getClaimsForBounty(bountyId: string): Promise<BountyClaimWithAgent[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT bc.*,
+            a.name as agent_name,
+            a.slug as agent_slug,
+            a.avatar_url as agent_avatar_url,
+            a.avg_rating as agent_avg_rating,
+            a.completed_orders as agent_completed_orders,
+            a.token_mint as agent_token_mint,
+            a.token_symbol as agent_token_symbol
+          FROM bounty_claims bc
+          JOIN atelier_agents a ON a.id = bc.agent_id
+          WHERE bc.bounty_id = ?
+          ORDER BY bc.created_at ASC`,
+    args: [bountyId],
+  });
+  return result.rows as unknown as BountyClaimWithAgent[];
+}
+
+export async function getClaimById(claimId: string): Promise<BountyClaim | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM bounty_claims WHERE id = ?',
+    args: [claimId],
+  });
+  return (result.rows[0] as unknown as BountyClaim) || null;
+}
+
+export async function getClaimByBountyAndAgent(bountyId: string, agentId: string): Promise<BountyClaim | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM bounty_claims WHERE bounty_id = ? AND agent_id = ?',
+    args: [bountyId, agentId],
+  });
+  return (result.rows[0] as unknown as BountyClaim) || null;
+}
+
+export async function getClaimsCountForBounty(bountyId: string): Promise<number> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: "SELECT COUNT(*) as count FROM bounty_claims WHERE bounty_id = ? AND status != 'withdrawn'",
+    args: [bountyId],
+  });
+  return Number(result.rows[0].count);
+}
+
+export async function acceptBountyClaim(data: {
+  bounty_id: string;
+  claim_id: string;
+  escrow_tx_hash: string;
+}): Promise<{ bounty: Bounty; order: ServiceOrder; claim: BountyClaim }> {
+  await initAtelierDb();
+
+  const bounty = await getBountyById(data.bounty_id);
+  if (!bounty) throw new Error('Bounty not found');
+
+  const claim = await getClaimById(data.claim_id);
+  if (!claim) throw new Error('Claim not found');
+
+  const platformFee = (parseFloat(bounty.budget_usd) * 0.10).toFixed(2);
+  const orderId = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  await atelierClient.execute({
+    sql: `INSERT INTO service_orders (id, service_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, payment_method, status, escrow_tx_hash, bounty_id)
+          VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'usdc', 'paid', ?, ?)`,
+    args: [
+      orderId, bounty.poster_wallet, claim.agent_id, bounty.brief,
+      bounty.reference_urls, bounty.reference_images,
+      bounty.budget_usd, platformFee, data.escrow_tx_hash, bounty.id,
+    ],
+  });
+
+  await atelierClient.execute({
+    sql: "UPDATE bounty_claims SET status = 'accepted' WHERE id = ?",
+    args: [data.claim_id],
+  });
+
+  await atelierClient.execute({
+    sql: "UPDATE bounty_claims SET status = 'rejected' WHERE bounty_id = ? AND id != ? AND status = 'pending'",
+    args: [data.bounty_id, data.claim_id],
+  });
+
+  await atelierClient.execute({
+    sql: "UPDATE bounties SET status = 'claimed', accepted_claim_id = ?, order_id = ? WHERE id = ?",
+    args: [data.claim_id, orderId, data.bounty_id],
+  });
+
+  const updatedBounty = await getBountyById(data.bounty_id) as Bounty;
+  const order = await getServiceOrderById(orderId) as ServiceOrder;
+  const updatedClaim = await getClaimById(data.claim_id) as BountyClaim;
+
+  return { bounty: updatedBounty, order, claim: updatedClaim };
+}
+
+export async function cancelBounty(bountyId: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: "UPDATE bounties SET status = 'cancelled' WHERE id = ? AND status = 'open'",
+    args: [bountyId],
+  });
+  await atelierClient.execute({
+    sql: "UPDATE bounty_claims SET status = 'rejected' WHERE bounty_id = ? AND status = 'pending'",
+    args: [bountyId],
+  });
+}
+
+export async function withdrawBountyClaim(bountyId: string, agentId: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: "UPDATE bounty_claims SET status = 'withdrawn' WHERE bounty_id = ? AND agent_id = ? AND status = 'pending'",
+    args: [bountyId, agentId],
+  });
+}
+
+export async function expireStaleBounties(): Promise<void> {
+  await initAtelierDb();
+  const now = new Date().toISOString();
+  await atelierClient.execute({
+    sql: "UPDATE bounties SET status = 'expired' WHERE status = 'open' AND expires_at < ?",
+    args: [now],
+  });
+}
+
+export async function completeBountyByOrderId(orderId: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: "UPDATE bounties SET status = 'completed' WHERE order_id = ? AND status = 'claimed'",
+    args: [orderId],
+  });
+}
+
+export { VALID_BOUNTY_CATEGORIES, VALID_DEADLINE_HOURS, VALID_CLAIM_WINDOWS, MAX_CLAIMS_PER_BOUNTY };

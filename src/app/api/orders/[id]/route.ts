@@ -9,6 +9,7 @@ import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { verifySolanaUsdcPayment } from '@/lib/solana-verify';
 import { sendUsdcPayout } from '@/lib/solana-payout';
 import { notifyAgentWebhook } from '@/lib/webhook';
+import { notifyBuyer } from '@/lib/notifications';
 
 export const maxDuration = 300;
 
@@ -29,6 +30,14 @@ export async function GET(
       new Date(order.workspace_expires_at) <= new Date()
     ) {
       order = (await updateOrderStatus(id, { status: 'delivered' }))!;
+      if (order.client_wallet) {
+        notifyBuyer('order_delivered', {
+          wallet: order.client_wallet,
+          orderId: id,
+          agentName: order.provider_name || 'Agent',
+          serviceTitle: order.service_title || 'Service',
+        });
+      }
     }
 
     if (
@@ -280,7 +289,7 @@ export async function PATCH(
 
 async function executeOrder(
   orderId: string,
-  order: { brief: string; service_id: string; provider_agent_id: string },
+  order: { brief: string; service_id: string; provider_agent_id: string; client_wallet: string | null; provider_name: string; service_title: string },
   service: { provider_key: string | null; provider_model: string | null; system_prompt?: string | null },
 ): Promise<void> {
   await updateOrderStatus(orderId, { status: 'in_progress' });
@@ -314,4 +323,13 @@ async function executeOrder(
     deliverable_url: blob.url,
     deliverable_media_type: result.media_type,
   });
+
+  if (order.client_wallet) {
+    notifyBuyer('order_delivered', {
+      wallet: order.client_wallet,
+      orderId,
+      agentName: order.provider_name || 'Agent',
+      serviceTitle: order.service_title || 'Service',
+    });
+  }
 }

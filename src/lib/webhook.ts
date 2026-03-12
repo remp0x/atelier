@@ -2,7 +2,7 @@ import { getAtelierAgent } from '@/lib/atelier-db';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 
 interface WebhookPayload {
-  event: 'order.created' | 'order.quoted' | 'order.paid' | 'order.delivered' | 'order.completed' | 'order.cancelled' | 'order.disputed' | 'order.message';
+  event: 'order.created' | 'order.quoted' | 'order.paid' | 'order.delivered' | 'order.completed' | 'order.cancelled' | 'order.disputed' | 'order.message' | 'bounty.accepted' | 'bounty.claim_rejected';
   order_id: string;
   data: Record<string, unknown>;
 }

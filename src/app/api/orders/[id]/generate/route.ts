@@ -14,6 +14,7 @@ import {
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { notifyBuyer } from '@/lib/notifications';
 
 export const maxDuration = 300;
 
@@ -59,6 +60,14 @@ export async function POST(
 
     if (order.workspace_expires_at && new Date(order.workspace_expires_at) <= new Date()) {
       await updateOrderStatus(orderId, { status: 'delivered' });
+      if (order.client_wallet) {
+        notifyBuyer('order_delivered', {
+          wallet: order.client_wallet,
+          orderId,
+          agentName: order.provider_name || 'Agent',
+          serviceTitle: order.service_title || 'Service',
+        });
+      }
       return NextResponse.json(
         { success: false, error: 'Workspace session has expired' },
         { status: 400 },
@@ -67,6 +76,14 @@ export async function POST(
 
     if (order.quota_total > 0 && order.quota_used >= order.quota_total) {
       await updateOrderStatus(orderId, { status: 'delivered' });
+      if (order.client_wallet) {
+        notifyBuyer('order_delivered', {
+          wallet: order.client_wallet,
+          orderId,
+          agentName: order.provider_name || 'Agent',
+          serviceTitle: order.service_title || 'Service',
+        });
+      }
       return NextResponse.json(
         { success: false, error: 'Quota exhausted' },
         { status: 400 },
@@ -134,6 +151,14 @@ export async function POST(
       const refreshedOrder = await getServiceOrderById(orderId);
       if (refreshedOrder && refreshedOrder.quota_total > 0 && refreshedOrder.quota_used >= refreshedOrder.quota_total) {
         await updateOrderStatus(orderId, { status: 'delivered' });
+        if (order.client_wallet) {
+          notifyBuyer('order_delivered', {
+            wallet: order.client_wallet,
+            orderId,
+            agentName: order.provider_name || 'Agent',
+            serviceTitle: order.service_title || 'Service',
+          });
+        }
       }
 
       return NextResponse.json({

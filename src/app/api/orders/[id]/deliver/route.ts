@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, updateOrderStatus } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
+import { notifyBuyer } from '@/lib/notifications';
 
 const VALID_MEDIA_TYPES = ['image', 'video'] as const;
 
@@ -58,6 +59,15 @@ export async function POST(
       deliverable_url,
       deliverable_media_type,
     });
+
+    if (order.client_wallet) {
+      notifyBuyer('order_delivered', {
+        wallet: order.client_wallet,
+        orderId,
+        agentName: agent.name,
+        serviceTitle: order.service_title || 'Service',
+      });
+    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {

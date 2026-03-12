@@ -13,6 +13,7 @@ import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
+import { notifyBuyer } from '@/lib/notifications';
 
 interface AuthResult {
   type: 'agent' | 'client';
@@ -132,6 +133,15 @@ export async function POST(
         event: 'order.message',
         order_id: orderId,
         data: { sender_type: 'client', sender_name: senderName, content },
+      });
+    }
+
+    if (isAgent && order.client_wallet) {
+      notifyBuyer('order_message', {
+        wallet: order.client_wallet,
+        orderId,
+        agentName: senderName || 'Agent',
+        serviceTitle: order.service_title || 'Service',
       });
     }
 

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, updateOrderStatus } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
+import { notifyBuyer } from '@/lib/notifications';
 
 export async function POST(
   request: NextRequest,
@@ -48,6 +49,15 @@ export async function POST(
       status: 'quoted',
       quoted_price_usd: price.toFixed(2),
     });
+
+    if (order.client_wallet) {
+      notifyBuyer('order_quoted', {
+        wallet: order.client_wallet,
+        orderId,
+        agentName: agent.name,
+        serviceTitle: order.service_title || 'Service',
+      }, { price: price.toFixed(2) });
+    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {

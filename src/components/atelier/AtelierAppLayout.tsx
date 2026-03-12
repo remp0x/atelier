@@ -3,6 +3,7 @@
 import { type ReactNode } from 'react';
 import { AtelierSidebar } from './AtelierSidebar';
 import { AtelierMobileNav } from './AtelierMobileNav';
+import { NotificationBell } from './NotificationBell';
 
 export function AtelierAppLayout({ children }: { children: ReactNode }) {
   return (
@@ -30,6 +31,9 @@ export function AtelierAppLayout({ children }: { children: ReactNode }) {
       </div>
       <AtelierSidebar />
       <main className="relative flex-1 min-w-0 pt-11 md:pt-0 pb-16 md:pb-0">
+        <div className="hidden md:block fixed top-3 right-4 z-40">
+          <NotificationBell />
+        </div>
         {children}
       </main>
       <AtelierMobileNav />

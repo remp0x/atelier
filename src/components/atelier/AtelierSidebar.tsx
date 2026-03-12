@@ -7,7 +7,6 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useTheme } from '../ThemeProvider';
 import { atelierHref } from '@/lib/atelier-paths';
 import dynamic from 'next/dynamic';
-import { NotificationBell } from './NotificationBell';
 
 const WalletMultiButton = dynamic(
   () => import('@solana/wallet-adapter-react-ui').then(mod => mod.WalletMultiButton),
@@ -257,14 +256,6 @@ export function AtelierSidebar() {
             <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
           )}
         </div>
-        {connected && (
-          <div className={`flex items-center h-10 ${expanded ? 'px-3 justify-between' : 'justify-center'}`}>
-            {expanded && (
-              <span className="text-sm font-mono text-gray-500 dark:text-neutral-400">Notifications</span>
-            )}
-            <NotificationBell compact={!expanded} />
-          </div>
-        )}
         {connected && userNavItems.map(renderNavLink)}
         <div className={`px-1 pt-1 atelier-wallet-btn ${expanded ? '' : 'flex justify-center'}`}>
           {expanded ? (

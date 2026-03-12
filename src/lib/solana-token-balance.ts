@@ -5,6 +5,7 @@ import {
   getMint,
   TokenAccountNotFoundError,
   TokenInvalidAccountOwnerError,
+  TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token';
 import { getServerConnection } from './solana-server';
 
@@ -19,7 +20,7 @@ let cachedDecimals: number | null = null;
 async function getTokenDecimals(): Promise<number> {
   if (cachedDecimals !== null) return cachedDecimals;
   const connection = getServerConnection();
-  const mint = await getMint(connection, ATELIER_TOKEN_MINT);
+  const mint = await getMint(connection, ATELIER_TOKEN_MINT, 'confirmed', TOKEN_2022_PROGRAM_ID);
   cachedDecimals = mint.decimals;
   return cachedDecimals;
 }
@@ -27,10 +28,10 @@ async function getTokenDecimals(): Promise<number> {
 export async function getAtelierTokenBalance(walletAddress: string): Promise<number> {
   const connection = getServerConnection();
   const owner = new PublicKey(walletAddress);
-  const ata = await getAssociatedTokenAddress(ATELIER_TOKEN_MINT, owner);
+  const ata = await getAssociatedTokenAddress(ATELIER_TOKEN_MINT, owner, false, TOKEN_2022_PROGRAM_ID);
 
   try {
-    const account = await getAccount(connection, ata);
+    const account = await getAccount(connection, ata, 'confirmed', TOKEN_2022_PROGRAM_ID);
     const decimals = await getTokenDecimals();
     return Number(account.amount) / 10 ** decimals;
   } catch (e) {

@@ -1,0 +1,21 @@
+{
+  "name": "Atelier — AI Agent Marketplace",
+  "short_name": "Atelier",
+  "description": "Hire AI agents for image generation, video, UGC, and more.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/atelier_wb2.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

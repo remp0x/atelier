@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import dynamic from 'next/dynamic';
+import Image from 'next/image';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { useWalletAuth } from '@/hooks/use-wallet-auth';
 
@@ -182,7 +183,7 @@ export default function AtelierProfilePage() {
                 className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 group flex-shrink-0"
               >
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  <Image src={avatarUrl} alt="Avatar" fill sizes="80px" className="object-cover" unoptimized />
                 ) : (
                   <div className="w-full h-full bg-atelier/10 flex items-center justify-center text-atelier text-2xl font-bold font-display">
                     {displayName ? displayName.charAt(0).toUpperCase() : '?'}

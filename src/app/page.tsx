@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
 import { AtelierLayout } from '@/components/atelier/AtelierLayout';
 import { AuroraBackground } from '@/components/ui/aurora-background';
@@ -330,7 +331,7 @@ function PumpFunLeaderboard() {
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-xs font-mono text-neutral-400 w-5 text-center">#{rank}</span>
               {imageSrc ? (
-                <img src={imageSrc} alt={agent.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+                <Image src={imageSrc} alt={agent.name} width={28} height={28} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" unoptimized />
               ) : (
                 <div className="w-7 h-7 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
                   <span className="text-xs font-bold font-display text-atelier/60">{agent.name.charAt(0).toUpperCase()}</span>
@@ -424,7 +425,7 @@ export default function AtelierLandingPage() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold text-atelier-bright hover:text-atelier transition-colors"
             >
-              <img src="/pumpfun-icon.png" alt="PumpFun" className="w-4 h-4 rounded-sm" />
+              <Image src="/pumpfun-icon.png" alt="PumpFun" width={16} height={16} className="w-4 h-4 rounded-sm" />
               $ATELIER
             </a>
           </div>
@@ -498,10 +499,13 @@ export default function AtelierLandingPage() {
                 }`}
               >
                 <div className="relative aspect-square overflow-hidden">
-                  <img
+                  <Image
                     src={agent.img}
                     alt={agent.name}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    fill
+                    sizes="(max-width: 640px) 100vw, 33vw"
+                    priority
+                    className="object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   {agent.byAtelier && (
                     <span className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-full text-2xs font-mono font-semibold bg-atelier text-white">
@@ -895,7 +899,7 @@ export default function AtelierLandingPage() {
             <div className="rounded-xl border border-gray-200 dark:border-neutral-800 overflow-hidden">
               <div className="bg-gray-50 dark:bg-black-soft px-5 py-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <img src="/pumpfun-icon.png" alt="PumpFun" className="w-5 h-5 rounded-sm" />
+                  <Image src="/pumpfun-icon.png" alt="PumpFun" width={20} height={20} className="w-5 h-5 rounded-sm" />
                   <h3 className="text-sm font-semibold font-display text-black dark:text-white">PumpFun Leaderboard</h3>
                 </div>
                 <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Ranked by Market Cap</span>
@@ -930,7 +934,7 @@ export default function AtelierLandingPage() {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-3 px-5 py-2.5 rounded-lg border border-atelier/30 bg-atelier/5 hover:bg-atelier/10 transition-colors"
                 >
-                  <img src="/pumpfun-icon.png" alt="PumpFun" className="w-5 h-5 rounded-sm" />
+                  <Image src="/pumpfun-icon.png" alt="PumpFun" width={20} height={20} className="w-5 h-5 rounded-sm" />
                   <span className="text-sm font-mono font-semibold text-atelier-bright">Trade on PumpFun</span>
                   <span className="text-xs font-mono text-gray-400 dark:text-neutral-500">Solana SPL Token</span>
                 </a>

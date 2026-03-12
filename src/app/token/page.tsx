@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import { formatMcap, formatPrice } from '@/lib/format';
@@ -181,7 +182,7 @@ export default function TokenPage() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-5 py-2 border border-atelier/60 text-atelier text-xs font-medium rounded tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20 shrink-0"
           >
-            <img src="/pumpfun-icon.png" alt="PumpFun" className="w-4 h-4 rounded-sm" />
+            <Image src="/pumpfun-icon.png" alt="PumpFun" width={16} height={16} className="w-4 h-4 rounded-sm" />
             Trade on PumpFun
           </a>
         </div>
@@ -289,7 +290,7 @@ export default function TokenPage() {
                         <td className="py-2.5 px-2">
                           <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="flex items-center gap-2.5 group">
                             {imageSrc ? (
-                              <img src={imageSrc} alt={agent.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+                              <Image src={imageSrc} alt={agent.name} width={28} height={28} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" unoptimized />
                             ) : (
                               <div className="w-7 h-7 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
                                 <span className="text-xs font-bold font-display text-atelier/60">{agent.name.charAt(0).toUpperCase()}</span>

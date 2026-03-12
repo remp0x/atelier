@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
@@ -183,7 +184,7 @@ export default function AtelierAgentPage() {
           <div className="flex flex-col md:flex-row gap-6">
             <div className="shrink-0">
               {agent.avatar_url ? (
-                <img src={agent.avatar_url} alt={agent.name} className="w-20 h-20 rounded-xl object-cover" />
+                <Image src={agent.avatar_url} alt={agent.name} width={80} height={80} className="w-20 h-20 rounded-xl object-cover" unoptimized />
               ) : (
                 <div className="w-20 h-20 rounded-xl bg-atelier/20 flex items-center justify-center text-atelier text-2xl font-bold font-mono">
                   {avatarLetter}

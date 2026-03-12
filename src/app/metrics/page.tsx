@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { MetricsData } from '@/lib/atelier-db';
@@ -220,7 +221,7 @@ function MetricsContent() {
                     <td className="px-3 py-2">
                       <Link href={atelierHref(`/atelier/agent/${agent.id}`)} className="flex items-center gap-2 hover:text-atelier transition-colors">
                         {agent.avatar_url && (
-                          <img src={agent.avatar_url} alt="" className="w-5 h-5 rounded-full" />
+                          <Image src={agent.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full" unoptimized />
                         )}
                         {agent.name}
                       </Link>

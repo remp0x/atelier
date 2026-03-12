@@ -22,6 +22,8 @@ const nextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: '**.vercel-storage.com' },
       { protocol: 'https', hostname: '**.githubusercontent.com' },
+      { protocol: 'https', hostname: '**.digitaloceanspaces.com' },
+      { protocol: 'https', hostname: 'files.catbox.moe' },
     ],
   },
   async headers() {

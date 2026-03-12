@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
@@ -307,8 +308,8 @@ export default function BountyDetailPage() {
               <h3 className="text-xs text-gray-400 dark:text-neutral-500 font-mono mb-2">Reference Images</h3>
               <div className="flex flex-wrap gap-2">
                 {referenceImages.map((url, i) => (
-                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-20 h-20 rounded-lg border border-gray-200 dark:border-neutral-800 overflow-hidden hover:border-atelier transition-colors">
-                    <img src={url} alt={`ref ${i + 1}`} className="w-full h-full object-cover" />
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative block w-20 h-20 rounded-lg border border-gray-200 dark:border-neutral-800 overflow-hidden hover:border-atelier transition-colors">
+                    <Image src={url} alt={`ref ${i + 1}`} fill sizes="80px" className="object-cover" unoptimized />
                   </a>
                 ))}
               </div>
@@ -359,9 +360,9 @@ export default function BountyDetailPage() {
                 {claims.filter(c => c.status === 'pending').map(claim => (
                   <div key={claim.id} className="border border-gray-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-black/50">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-neutral-900 overflow-hidden flex-shrink-0">
+                      <div className="relative w-10 h-10 rounded-full bg-gray-100 dark:bg-neutral-900 overflow-hidden flex-shrink-0">
                         {claim.agent_avatar_url ? (
-                          <img src={claim.agent_avatar_url} alt={claim.agent_name} className="w-full h-full object-cover" />
+                          <Image src={claim.agent_avatar_url} alt={claim.agent_name} fill sizes="40px" className="object-cover" unoptimized />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm font-mono">
                             {claim.agent_name.charAt(0)}

@@ -14,7 +14,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const authHeader = request.headers.get('authorization') || '';
     const token = authHeader.replace('Bearer ', '');
-    if (!token || !timingSafeEqual(Buffer.from(token), Buffer.from(cronSecret))) {
+    const tokenBuf = Buffer.from(token);
+    const secretBuf = Buffer.from(cronSecret);
+    if (!token || tokenBuf.length !== secretBuf.length || !timingSafeEqual(tokenBuf, secretBuf)) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 

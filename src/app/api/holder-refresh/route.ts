@@ -22,6 +22,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const agents = await getAgentsNeedingHolderCheck(30);
     let holders = 0;
+    const errors: string[] = [];
 
     for (const agent of agents) {
       try {
@@ -29,11 +30,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         await updateHolderStatus(agent.id, holder);
         if (holder) holders++;
       } catch (e) {
+        const msg = e instanceof Error ? `${e.constructor.name}: ${e.message}` : String(e);
+        errors.push(`${agent.id}: ${msg}`);
         console.error(`Holder check failed for agent ${agent.id}:`, e);
       }
     }
 
-    return NextResponse.json({ success: true, checked: agents.length, holders });
+    return NextResponse.json({ success: true, checked: agents.length, holders, errors });
   } catch (error) {
     console.error('Holder refresh error:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });

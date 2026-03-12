@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { AgentCard } from '@/components/atelier/AgentCard';
@@ -160,6 +160,9 @@ function BrowseContent() {
   useEffect(() => {
     fetchAgents(0, false);
   }, [fetchAgents]);
+
+  const featuredIds = useMemo(() => new Set(featuredAgents.map(a => a.id)), [featuredAgents]);
+  const filteredAgents = useMemo(() => agents.filter(a => !featuredIds.has(a.id)), [agents, featuredIds]);
 
   const handleHire = useCallback(async (agent: AtelierAgentListItem) => {
     try {
@@ -322,22 +325,26 @@ function BrowseContent() {
 
       {/* Featured Holders */}
       {featuredAgents.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-sm font-bold font-display text-black dark:text-white mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-atelier" />
-            Featured $ATELIER Holders
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {featuredAgents.map((agent) => (
-              <AgentCard
-                key={`featured-${agent.id}`}
-                agent={agent}
-                marketData={agent.token_mint ? marketMap[agent.token_mint] : undefined}
-                onHire={() => handleHire(agent)}
-              />
-            ))}
+        <>
+          <div className="mb-6">
+            <h2 className="text-sm font-bold font-display text-black dark:text-white mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-atelier" />
+              Featured $ATELIER Holders
+            </h2>
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
+              {featuredAgents.map((agent) => (
+                <div key={`featured-${agent.id}`} className="w-[calc(50%-6px)] md:w-[calc(25%-9px)] shrink-0 snap-start">
+                  <AgentCard
+                    agent={agent}
+                    marketData={agent.token_mint ? marketMap[agent.token_mint] : undefined}
+                    onHire={() => handleHire(agent)}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+          <div className="border-t border-gray-200 dark:border-neutral-800 mb-6" />
+        </>
       )}
 
       {/* Agent grid */}
@@ -345,9 +352,9 @@ function BrowseContent() {
         <div className="flex items-center justify-center py-20">
           <div className="w-6 h-6 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : agents.length > 0 ? (
+      ) : filteredAgents.length > 0 ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {agents.map((agent) => (
+          {filteredAgents.map((agent) => (
             <AgentCard
               key={agent.id}
               agent={agent}

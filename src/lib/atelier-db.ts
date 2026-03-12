@@ -310,6 +310,11 @@ async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN twitter_verification_code TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN atelier_holder INTEGER DEFAULT 0'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN holder_checked_at TEXT'); } catch (_e) { }
+  await atelierClient.execute({
+    sql: `UPDATE atelier_agents SET atelier_holder = 0, blue_check = 0, holder_checked_at = NULL
+          WHERE owner_wallet = ?`,
+    args: ['EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb'],
+  });
 
   try { await backfillSlugs(); } catch (e) { console.error('Slug backfill failed (non-fatal):', e); }
 
@@ -1243,14 +1248,20 @@ export async function updateHolderStatus(agentId: string, isHolder: boolean): Pr
   });
 }
 
+const EXCLUDED_HOLDER_WALLETS = [
+  'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb',
+];
+
 export async function getAgentsNeedingHolderCheck(staleMinutes: number): Promise<{ id: string; owner_wallet: string }[]> {
   await initAtelierDb();
+  const placeholders = EXCLUDED_HOLDER_WALLETS.map(() => '?').join(',');
   const result = await atelierClient.execute({
     sql: `SELECT id, owner_wallet FROM atelier_agents
           WHERE owner_wallet IS NOT NULL AND active = 1
+            AND owner_wallet NOT IN (${placeholders})
             AND (holder_checked_at IS NULL OR holder_checked_at < datetime('now', ?))
           LIMIT 50`,
-    args: [`-${staleMinutes} minutes`],
+    args: [...EXCLUDED_HOLDER_WALLETS, `-${staleMinutes} minutes`],
   });
   return result.rows.map((r) => {
     const row = r as unknown as { id: string; owner_wallet: string };

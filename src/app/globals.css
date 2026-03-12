@@ -99,6 +99,14 @@ body {
   background: var(--atelier);
 }
 
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 .text-gradient-atelier {
   background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
   -webkit-background-clip: text;

@@ -28,6 +28,7 @@ export function AtelierFooter() {
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 uppercase tracking-widest">Company</span>
               <Link href="/about" className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">About</Link>
+              <Link href="/blog" className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Blog</Link>
               <Link href="/terms" className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Terms</Link>
               <Link href="/privacy" className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Privacy</Link>
             </div>

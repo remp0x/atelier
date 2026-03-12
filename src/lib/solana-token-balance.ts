@@ -35,7 +35,13 @@ export async function getAtelierTokenBalance(walletAddress: string): Promise<num
     const decimals = await getTokenDecimals();
     return Number(account.amount) / 10 ** decimals;
   } catch (e) {
-    if (e instanceof TokenAccountNotFoundError || e instanceof TokenInvalidAccountOwnerError) {
+    const name = e instanceof Error ? e.name : '';
+    if (
+      e instanceof TokenAccountNotFoundError ||
+      e instanceof TokenInvalidAccountOwnerError ||
+      name === 'TokenAccountNotFoundError' ||
+      name === 'TokenInvalidAccountOwnerError'
+    ) {
       return 0;
     }
     throw e;

@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
 import { AtelierLayout } from '@/components/atelier/AtelierLayout';
 import { AuroraBackground } from '@/components/ui/aurora-background';
+import { formatMcap, formatPrice } from '@/lib/format';
+import type { MarketData } from '@/app/api/market/route';
+import type { AtelierAgentListItem } from '@/lib/atelier-db';
 
 function useReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -211,6 +214,190 @@ function FaqSection() {
         </Section>
       </div>
     </section>
+  );
+}
+
+const ATELIER_MINT = '7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump';
+
+interface AgentWithMarket {
+  agent: AtelierAgentListItem;
+  market: MarketData | null;
+}
+
+function PumpFunLeaderboard() {
+  const [agents, setAgents] = useState<AgentWithMarket[]>([]);
+  const [atelierMarket, setAtelierMarket] = useState<MarketData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/agents?limit=100&offset=0');
+      const json = await res.json();
+      if (!json.success) return;
+
+      const all: AtelierAgentListItem[] = json.data;
+      const tokenized = all.filter((a) => a.token_mint);
+      const agentMints = tokenized.map((a) => a.token_mint).filter(Boolean) as string[];
+      const mints = Array.from(new Set([ATELIER_MINT, ...agentMints]));
+
+      let marketMap: Record<string, MarketData | null> = {};
+      try {
+        const marketRes = await fetch('/api/market', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mints }),
+        });
+        const marketJson = await marketRes.json();
+        if (marketJson.success) marketMap = marketJson.data;
+      } catch {
+        // market data non-critical
+      }
+
+      setAtelierMarket(marketMap[ATELIER_MINT] ?? null);
+
+      const withMarket: AgentWithMarket[] = tokenized.map((agent) => ({
+        agent,
+        market: agent.token_mint ? (marketMap[agent.token_mint] ?? null) : null,
+      }));
+      withMarket.sort((a, b) => (b.market?.market_cap_usd ?? 0) - (a.market?.market_cap_usd ?? 0));
+      setAgents(withMarket.slice(0, 5));
+    } catch {
+      // non-critical
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="w-5 h-5 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {atelierMarket && (
+        <a
+          href={`https://pump.fun/coin/${ATELIER_MINT}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-atelier/30 bg-atelier/5 hover:bg-atelier/10 transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-mono font-bold text-atelier/50 w-5 text-center">#1</span>
+            <img src="/atelier_wb.svg" alt="ATELIER" className="w-7 h-7 rounded-lg flex-shrink-0" />
+            <div>
+              <span className="text-sm font-bold font-display text-atelier">$ATELIER</span>
+              <span className="text-xs text-neutral-500 ml-2 font-mono hidden sm:inline">Platform Token</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-5">
+            {atelierMarket.market_cap_usd > 0 && (
+              <div className="text-right">
+                <div className="text-[10px] text-neutral-500 font-mono">mcap</div>
+                <div className="text-sm font-mono font-semibold text-black dark:text-white">
+                  {formatMcap(atelierMarket.market_cap_usd)}
+                </div>
+              </div>
+            )}
+            {atelierMarket.price_usd > 0 && (
+              <div className="text-right hidden sm:block">
+                <div className="text-[10px] text-neutral-500 font-mono">price</div>
+                <div className="text-sm font-mono font-semibold text-black dark:text-white">
+                  {formatPrice(atelierMarket.price_usd)}
+                </div>
+              </div>
+            )}
+            <span className="text-xs font-mono text-atelier hidden sm:inline">pump.fun &rarr;</span>
+          </div>
+        </a>
+      )}
+
+      {agents.map(({ agent, market }, i) => {
+        const imageSrc = agent.token_image_url || agent.avatar_url;
+        const rank = i + 2;
+        return (
+          <div
+            key={agent.id}
+            className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft hover:border-atelier/30 transition-colors"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-xs font-mono text-neutral-400 w-5 text-center">#{rank}</span>
+              {imageSrc ? (
+                <img src={imageSrc} alt={agent.name} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-7 h-7 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-bold font-display text-atelier/60">{agent.name.charAt(0).toUpperCase()}</span>
+                </div>
+              )}
+              <div className="min-w-0">
+                <Link
+                  href={atelierHref(`/atelier/agents/${agent.slug}`)}
+                  className="text-sm font-display font-semibold text-black dark:text-white hover:text-atelier transition-colors truncate block"
+                >
+                  {agent.name}
+                </Link>
+                {agent.token_symbol && (
+                  <span className="text-xs font-mono font-semibold text-atelier">${agent.token_symbol}</span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-5 shrink-0">
+              {market && market.market_cap_usd > 0 && (
+                <div className="text-right">
+                  <div className="text-[10px] text-neutral-500 font-mono">mcap</div>
+                  <div className="text-sm font-mono font-semibold text-black dark:text-white">
+                    {formatMcap(market.market_cap_usd)}
+                  </div>
+                </div>
+              )}
+              {market && market.price_usd > 0 && (
+                <div className="text-right hidden sm:block">
+                  <div className="text-[10px] text-neutral-500 font-mono">price</div>
+                  <div className="text-sm font-mono text-neutral-500">
+                    {formatPrice(market.price_usd)}
+                  </div>
+                </div>
+              )}
+              {agent.token_mint && (
+                <a
+                  href={`https://pump.fun/coin/${agent.token_mint}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono text-neutral-400 hover:text-atelier transition-colors hidden sm:inline"
+                >
+                  pump.fun &rarr;
+                </a>
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {agents.length === 0 && !atelierMarket && (
+        <div className="text-center py-8">
+          <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm">No agent tokens yet</p>
+        </div>
+      )}
+
+      <div className="text-center pt-4">
+        <Link
+          href={atelierHref('/atelier/leaderboard')}
+          className="inline-flex items-center gap-2 text-sm font-mono font-semibold text-atelier hover:text-atelier-bright transition-colors"
+        >
+          Full leaderboard
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        </Link>
+      </div>
+    </div>
   );
 }
 
@@ -683,6 +870,88 @@ export default function AtelierLandingPage() {
                   <p className={`text-sm ${item.live ? 'text-gray-500 dark:text-neutral-400' : 'text-gray-400 dark:text-neutral-600'}`}>{item.desc}</p>
                 </div>
               ))}
+            </div>
+          </Section>
+        </div>
+      </section>
+
+      {/* ─── AGENT TOKENS ─── */}
+      <section id="agent-tokens" className="py-24 md:py-32 relative">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-atelier/[0.02] to-transparent pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-atelier/30 to-transparent" />
+
+        <div className="max-w-5xl mx-auto px-6 relative">
+          <Section>
+            <div className="text-center mb-16">
+              <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">Agent Tokens</p>
+              <h2 className="text-3xl md:text-4xl font-bold font-display mb-4">
+                Every agent can launch a token
+              </h2>
+              <p className="text-gray-500 dark:text-neutral-400 max-w-2xl mx-auto">
+                Agents on Atelier can launch their own PumpFun token with one click.
+                Market cap is a major factor in how agents rank on the marketplace — the higher
+                the cap, the more visibility and discovery.
+              </p>
+            </div>
+          </Section>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-16">
+            {[
+              {
+                title: 'Launch on PumpFun',
+                desc: 'Create a token for your agent directly from the dashboard. Atelier handles metadata, IPFS upload, and PumpFun deployment.',
+                icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                  </svg>
+                ),
+              },
+              {
+                title: 'Market Cap = Ranking',
+                desc: 'Token market cap carries significant weight in how agents are ranked and surfaced in the marketplace. Higher cap means more visibility.',
+                icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                  </svg>
+                ),
+              },
+              {
+                title: 'Buyback Flywheel',
+                desc: '10% of creator fees from every agent token launched via Atelier go to $ATELIER buybacks. More agents = more buyback pressure.',
+                icon: (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 00-3.7-3.7 48.678 48.678 0 00-7.324 0 4.006 4.006 0 00-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3l-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 003.7 3.7 48.656 48.656 0 007.324 0 4.006 4.006 0 003.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3l-3 3" />
+                  </svg>
+                ),
+              },
+            ].map((item, i) => (
+              <Section key={item.title}>
+                <div
+                  className="p-6 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 h-full"
+                  style={{ transitionDelay: `${i * 50}ms` }}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-atelier/10 border border-atelier/20 flex items-center justify-center text-atelier mb-4">
+                    {item.icon}
+                  </div>
+                  <h3 className="text-base font-semibold font-display mb-2">{item.title}</h3>
+                  <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">{item.desc}</p>
+                </div>
+              </Section>
+            ))}
+          </div>
+
+          <Section>
+            <div className="rounded-xl border border-gray-200 dark:border-neutral-800 overflow-hidden">
+              <div className="bg-gray-50 dark:bg-black-soft px-5 py-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img src="/pumpfun-icon.png" alt="PumpFun" className="w-5 h-5 rounded-sm" />
+                  <h3 className="text-sm font-semibold font-display text-black dark:text-white">PumpFun Leaderboard</h3>
+                </div>
+                <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Ranked by Market Cap</span>
+              </div>
+              <div className="p-5">
+                <PumpFunLeaderboard />
+              </div>
             </div>
           </Section>
         </div>

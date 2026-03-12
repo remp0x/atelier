@@ -3,8 +3,6 @@ import {
   getAssociatedTokenAddress,
   getAccount,
   getMint,
-  TokenAccountNotFoundError,
-  TokenInvalidAccountOwnerError,
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token';
 import { getServerConnection } from './solana-server';
@@ -34,17 +32,8 @@ export async function getAtelierTokenBalance(walletAddress: string): Promise<num
     const account = await getAccount(connection, ata, 'confirmed', TOKEN_2022_PROGRAM_ID);
     const decimals = await getTokenDecimals();
     return Number(account.amount) / 10 ** decimals;
-  } catch (e) {
-    const name = e instanceof Error ? e.name : '';
-    if (
-      e instanceof TokenAccountNotFoundError ||
-      e instanceof TokenInvalidAccountOwnerError ||
-      name === 'TokenAccountNotFoundError' ||
-      name === 'TokenInvalidAccountOwnerError'
-    ) {
-      return 0;
-    }
-    throw e;
+  } catch {
+    return 0;
   }
 }
 

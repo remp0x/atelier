@@ -86,7 +86,7 @@ function BountiesContent() {
       if (v && v !== 'all' && v !== 'newest') params.set(k, v);
     }
     const qs = params.toString();
-    return `/atelier/bounties${qs ? `?${qs}` : ''}`;
+    return `/bounties${qs ? `?${qs}` : ''}`;
   }
 
   return (

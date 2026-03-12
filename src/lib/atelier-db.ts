@@ -416,7 +416,11 @@ async function initAtelierDb(): Promise<void> {
           FOREIGN KEY (provider_agent_id) REFERENCES atelier_agents(id)
         )
       `);
-      await atelierClient.execute('INSERT INTO service_orders SELECT * FROM service_orders_old');
+      await atelierClient.execute(`
+        INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, payment_method, status, escrow_tx_hash, payout_tx_hash, deliverable_post_id, deliverable_url, deliverable_media_type, quota_total, quota_used, workspace_expires_at, delivered_at, review_deadline, completed_at, created_at, bounty_id)
+        SELECT id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, payment_method, status, escrow_tx_hash, payout_tx_hash, deliverable_post_id, deliverable_url, deliverable_media_type, quota_total, quota_used, workspace_expires_at, delivered_at, review_deadline, completed_at, created_at, bounty_id
+        FROM service_orders_old
+      `);
       await atelierClient.execute('DROP TABLE service_orders_old');
       await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_service_id ON service_orders(service_id)');
       await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_client ON service_orders(client_agent_id)');
@@ -426,6 +430,23 @@ async function initAtelierDb(): Promise<void> {
       await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_service_orders_escrow_tx ON service_orders(escrow_tx_hash) WHERE escrow_tx_hash IS NOT NULL');
     }
   } catch (e) { console.error('service_orders migration failed (non-fatal):', e); }
+
+  // Recovery: if the migration failed midway, service_orders_old still has the data
+  try {
+    const oldExists = await atelierClient.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='service_orders_old'");
+    if (oldExists.rows.length > 0) {
+      const count = await atelierClient.execute('SELECT COUNT(*) as cnt FROM service_orders');
+      if (Number(count.rows[0].cnt) === 0) {
+        await atelierClient.execute(`
+          INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, payment_method, status, escrow_tx_hash, payout_tx_hash, deliverable_post_id, deliverable_url, deliverable_media_type, quota_total, quota_used, workspace_expires_at, delivered_at, review_deadline, completed_at, created_at, bounty_id)
+          SELECT id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, payment_method, status, escrow_tx_hash, payout_tx_hash, deliverable_post_id, deliverable_url, deliverable_media_type, quota_total, quota_used, workspace_expires_at, delivered_at, review_deadline, completed_at, created_at, bounty_id
+          FROM service_orders_old
+        `);
+        console.log('Recovered service_orders data from service_orders_old');
+      }
+      await atelierClient.execute('DROP TABLE service_orders_old');
+    }
+  } catch (e) { console.error('service_orders recovery failed:', e); }
 
   try { await backfillSlugs(); } catch (e) { console.error('Slug backfill failed (non-fatal):', e); }
 

@@ -91,21 +91,13 @@ function BountiesContent() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-black dark:text-white font-display">
-            Bounties
-          </h1>
-          <p className="text-sm text-gray-500 dark:text-neutral-500 mt-1">
-            Post a task, set your budget — agents compete to deliver
-          </p>
-        </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="px-5 py-2.5 rounded-xl text-sm font-semibold font-mono bg-atelier text-white hover:bg-atelier/90 transition-colors"
-        >
-          Post a Bounty
-        </button>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-black dark:text-white font-display">
+          Bounties
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-neutral-500 mt-1">
+          Post a task, set your budget — agents compete to deliver
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">

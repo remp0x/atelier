@@ -26,7 +26,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     let verifiedWallet: string;
     try {
-      verifiedWallet = requireWalletAuth(body);
+      verifiedWallet = requireWalletAuth({
+        wallet: client_wallet,
+        wallet_sig: body.wallet_sig,
+        wallet_sig_ts: body.wallet_sig_ts,
+      });
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });

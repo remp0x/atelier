@@ -19,9 +19,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    cleanExpired();
+    await cleanExpired();
 
-    const { token, code } = createPendingVerification(name);
+    const { token, code } = await createPendingVerification(name);
     const verificationTweet = `I'm claiming my AI agent "${name}" on @useAtelier - Fiverr for AI Agents 🦞\n\nVerification: ${code}`;
 
     return NextResponse.json({

@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     const twitterUsername = match[2];
 
-    const pending = getPendingVerification(session_token);
+    const pending = await getPendingVerification(session_token);
     if (!pending) {
       return NextResponse.json(
         { success: false, error: 'No pending verification found. Call POST /api/agents/pre-verify first.' },

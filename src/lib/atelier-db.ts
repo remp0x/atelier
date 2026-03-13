@@ -1,7 +1,7 @@
 import { createClient, Client } from '@libsql/client';
 import { randomBytes } from 'crypto';
 
-const atelierClient: Client = createClient({
+export const atelierClient: Client = createClient({
   url: process.env.ATELIER_TURSO_DATABASE_URL || 'file:local-atelier.db',
   authToken: process.env.ATELIER_TURSO_AUTH_TOKEN,
 });
@@ -56,7 +56,7 @@ export function slugify(name: string): string {
     .slice(0, 60);
 }
 
-async function initAtelierDb(): Promise<void> {
+export async function initAtelierDb(): Promise<void> {
   if (initialized) return;
 
   await atelierClient.execute(`
@@ -478,6 +478,18 @@ async function initAtelierDb(): Promise<void> {
       await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_reviews_order ON service_reviews(order_id)');
     }
   } catch (e) { console.error('service_reviews migration failed (non-fatal):', e); }
+
+  try { await atelierClient.execute('ALTER TABLE services ADD COLUMN max_revisions INTEGER DEFAULT 3'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN revision_count INTEGER DEFAULT 0'); } catch (_e) { }
+
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS pending_verifications (
+      token TEXT PRIMARY KEY,
+      code TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `);
 
   try { await backfillSlugs(); } catch (e) { console.error('Slug backfill failed (non-fatal):', e); }
 
@@ -912,7 +924,7 @@ async function backfillProviderModels(): Promise<void> {
 
 export type ServiceCategory = 'image_gen' | 'video_gen' | 'ugc' | 'influencer' | 'brand_content' | 'custom';
 export type ServicePriceType = 'fixed' | 'quote' | 'weekly' | 'monthly';
-export type OrderStatus = 'pending_quote' | 'quoted' | 'accepted' | 'paid' | 'in_progress' | 'delivered' | 'completed' | 'disputed' | 'cancelled';
+export type OrderStatus = 'pending_quote' | 'quoted' | 'accepted' | 'paid' | 'in_progress' | 'delivered' | 'revision_requested' | 'completed' | 'disputed' | 'cancelled';
 export type BountyStatus = 'open' | 'claimed' | 'completed' | 'expired' | 'cancelled' | 'disputed';
 export type BountyClaimStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn';
 
@@ -1008,6 +1020,7 @@ export interface Service {
   provider_model: string | null;
   system_prompt: string | null;
   quota_limit: number;
+  max_revisions: number;
   is_atelier_official: number;
   partner_badge: string | null;
   created_at: string;
@@ -1037,6 +1050,8 @@ export interface ServiceOrder {
   quota_total: number;
   quota_used: number;
   workspace_expires_at: string | null;
+  revision_count: number;
+  max_revisions: number;
   delivered_at: string | null;
   review_deadline: string | null;
   bounty_id: string | null;
@@ -1552,14 +1567,15 @@ export async function createService(data: {
   portfolio_post_ids?: number[];
   demo_url?: string;
   quota_limit?: number;
+  max_revisions?: number;
 }): Promise<Service> {
   await initAtelierDb();
   const id = `svc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const detectedModel = inferModelFromText(`${data.title} ${data.description}`);
   await atelierClient.execute({
-    sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url, quota_limit, provider_model)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null, data.quota_limit ?? 0, detectedModel],
+    sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url, quota_limit, provider_model, max_revisions)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null, data.quota_limit ?? 0, detectedModel, data.max_revisions ?? 3],
   });
   return getServiceById(id) as Promise<Service>;
 }
@@ -1684,13 +1700,13 @@ export async function getServicesByAgent(agentId: string): Promise<Service[]> {
 export async function updateService(
   id: string,
   agentId: string,
-  updates: Partial<Pick<Service, 'title' | 'description' | 'price_usd' | 'price_type' | 'category' | 'turnaround_hours' | 'deliverables' | 'portfolio_post_ids' | 'demo_url' | 'active' | 'quota_limit'>>
+  updates: Partial<Pick<Service, 'title' | 'description' | 'price_usd' | 'price_type' | 'category' | 'turnaround_hours' | 'deliverables' | 'portfolio_post_ids' | 'demo_url' | 'active' | 'quota_limit' | 'max_revisions'>>
 ): Promise<Service | null> {
   await initAtelierDb();
   const setClauses: string[] = [];
   const args: (string | number | null)[] = [];
 
-  const fields: (keyof typeof updates)[] = ['title', 'description', 'price_usd', 'price_type', 'category', 'turnaround_hours', 'deliverables', 'portfolio_post_ids', 'demo_url', 'active', 'quota_limit'];
+  const fields: (keyof typeof updates)[] = ['title', 'description', 'price_usd', 'price_type', 'category', 'turnaround_hours', 'deliverables', 'portfolio_post_ids', 'demo_url', 'active', 'quota_limit', 'max_revisions'];
   for (const field of fields) {
     if (updates[field] !== undefined) {
       setClauses.push(`${field} = ?`);
@@ -1759,6 +1775,7 @@ export async function getServiceOrderById(id: string): Promise<ServiceOrder | nu
   await initAtelierDb();
   const result = await atelierClient.execute({
     sql: `SELECT o.*, s.title as service_title,
+            COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
             pa.name as provider_name
           FROM service_orders o
@@ -1782,6 +1799,7 @@ export async function getOrdersByAgent(agentId: string, role: 'client' | 'provid
 
   const result = await atelierClient.execute({
     sql: `SELECT o.*, s.title as service_title,
+            COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
             pa.name as provider_name
           FROM service_orders o
@@ -1899,6 +1917,7 @@ export async function getOrdersByWallet(wallet: string): Promise<ServiceOrder[]>
   await initAtelierDb();
   const result = await atelierClient.execute({
     sql: `SELECT o.*, s.title as service_title,
+            COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
             pa.name as provider_name
           FROM service_orders o
@@ -1957,6 +1976,19 @@ export async function incrementOrderQuotaUsed(orderId: string): Promise<number> 
     args: [orderId],
   });
   return result.rowsAffected;
+}
+
+export async function incrementRevisionCount(orderId: string): Promise<number> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE service_orders SET revision_count = COALESCE(revision_count, 0) + 1 WHERE id = ?',
+    args: [orderId],
+  });
+  const result = await atelierClient.execute({
+    sql: 'SELECT revision_count FROM service_orders WHERE id = ?',
+    args: [orderId],
+  });
+  return Number(result.rows[0]?.revision_count ?? 0);
 }
 
 // ─── Reviews ───
@@ -2634,7 +2666,7 @@ export async function getMetricsData(): Promise<MetricsData> {
 
 // ─── Notifications ───
 
-export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_message';
+export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message';
 
 export interface Notification {
   id: string;

@@ -1,39 +1,38 @@
 import { randomBytes } from 'crypto';
-
-interface PendingEntry {
-  code: string;
-  name: string;
-  createdAt: number;
-}
-
-const pendingVerifications = new Map<string, PendingEntry>();
+import { atelierClient, initAtelierDb } from '@/lib/atelier-db';
 
 const MAX_AGE_MS = 30 * 60 * 1000;
 
-export function cleanExpired(): void {
-  const now = Date.now();
-  pendingVerifications.forEach((entry, key) => {
-    if (now - entry.createdAt > MAX_AGE_MS) pendingVerifications.delete(key);
-  });
+export async function cleanExpired(): Promise<void> {
+  await initAtelierDb();
+  const cutoff = Date.now() - MAX_AGE_MS;
+  await atelierClient.execute({ sql: 'DELETE FROM pending_verifications WHERE created_at < ?', args: [cutoff] });
 }
 
-export function createPendingVerification(name: string): { token: string; code: string } {
+export async function createPendingVerification(name: string): Promise<{ token: string; code: string }> {
+  await initAtelierDb();
   const token = randomBytes(16).toString('hex');
   const code = randomBytes(3).toString('hex').toUpperCase();
-  pendingVerifications.set(token, { code, name, createdAt: Date.now() });
+  await atelierClient.execute({
+    sql: 'INSERT INTO pending_verifications (token, code, name, created_at) VALUES (?, ?, ?, ?)',
+    args: [token, code, name, Date.now()],
+  });
   return { token, code };
 }
 
-export function getPendingVerification(token: string): { code: string; name: string } | null {
-  const entry = pendingVerifications.get(token);
-  if (!entry) return null;
-  if (Date.now() - entry.createdAt > MAX_AGE_MS) {
-    pendingVerifications.delete(token);
+export async function getPendingVerification(token: string): Promise<{ code: string; name: string } | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({ sql: 'SELECT code, name, created_at FROM pending_verifications WHERE token = ?', args: [token] });
+  const row = result.rows[0];
+  if (!row) return null;
+  if (Date.now() - (row.created_at as number) > MAX_AGE_MS) {
+    await atelierClient.execute({ sql: 'DELETE FROM pending_verifications WHERE token = ?', args: [token] });
     return null;
   }
-  return { code: entry.code, name: entry.name };
+  return { code: row.code as string, name: row.name as string };
 }
 
-export function clearPendingVerification(token: string): void {
-  pendingVerifications.delete(token);
+export async function clearPendingVerification(token: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({ sql: 'DELETE FROM pending_verifications WHERE token = ?', args: [token] });
 }

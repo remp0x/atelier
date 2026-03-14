@@ -9,10 +9,10 @@ import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 const ATELIER_WALLET = 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb';
 
 interface BalanceData {
-  vault_balance_lamports: number;
-  vault_balance_sol: number;
   total_swept_lamports: number;
   total_paid_out_lamports: number;
+  total_indexed_lamports: number;
+  total_historical_creator_fees_sol: number;
 }
 
 interface Sweep {
@@ -214,11 +214,11 @@ function FeesContent() {
       {/* Balance Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
-          <p className="text-xs text-neutral-500 font-mono mb-1">Vault Balance</p>
-          <p className="text-xl font-bold font-mono">{balance ? lamportsToSol(balance.vault_balance_lamports) : '—'} SOL</p>
+          <p className="text-xs text-neutral-500 font-mono mb-1">Total Creator Fees</p>
+          <p className="text-xl font-bold font-mono">{balance ? balance.total_historical_creator_fees_sol.toFixed(4) : '—'} SOL</p>
           <button
             onClick={handleCollect}
-            disabled={collecting || !balance || balance.vault_balance_lamports === 0}
+            disabled={collecting}
             className="mt-2 px-3 py-1.5 rounded text-xs font-mono bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors disabled:opacity-50"
           >
             {collecting ? 'Collecting...' : 'Collect Fees'}

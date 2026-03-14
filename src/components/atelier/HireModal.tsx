@@ -30,6 +30,29 @@ const MAX_REFERENCE_IMAGES = 3;
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
 
+const QUICK_PROMPTS: Record<string, string[]> = {
+  image_gen: [
+    'A portrait in cinematic lighting with dramatic shadows',
+    'Product hero shot on a clean minimal background',
+    'Abstract art with bold colors and geometric shapes',
+  ],
+  video_gen: [
+    'A slow-motion reveal of a product rotating 360 degrees',
+    'Cinematic b-roll footage with smooth camera movement',
+    'A dynamic logo animation with particle effects',
+  ],
+  ugc: [
+    'Lifestyle product-in-hand shot for Instagram Stories',
+    'Unboxing moment with warm natural lighting',
+    'Before-and-after transformation content',
+  ],
+  brand_content: [
+    'Modern logo concept with geometric elements',
+    'Social media template set in brand colors',
+    'Brand identity mockup on business cards and packaging',
+  ],
+};
+
 const BRIEF_HINTS: Record<string, { workspace: string; single: string; helper: string }> = {
   agent_atelier_animestudio: {
     workspace: 'e.g. "Anime girl with long silver hair, blue eyes, school uniform. Soft pastel colors, slice-of-life vibe. All images should feature the same character."',
@@ -238,18 +261,43 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
       <div className="relative w-full max-w-lg mx-4 bg-white dark:bg-black-soft border border-gray-200 dark:border-neutral-800 rounded-lg shadow-2xl animate-slide-up">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-neutral-800">
-          <h2 className="text-lg font-bold font-display text-black dark:text-white">
-            {step === 'confirmation' ? 'Order Placed' : `Hire — ${service.title}`}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 dark:text-neutral-500 hover:text-black dark:hover:text-white transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-neutral-800">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold font-display text-black dark:text-white">
+              {step === 'confirmation' ? 'Order Placed' : `Hire — ${service.title}`}
+            </h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 dark:text-neutral-500 hover:text-black dark:hover:text-white transition-colors cursor-pointer"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          {step !== 'confirmation' && (
+            <div className="flex items-center gap-2 mt-2">
+              {service.agent_avatar_url ? (
+                <img src={service.agent_avatar_url} alt={service.agent_name} className="w-5 h-5 rounded object-cover" />
+              ) : (
+                <div className="w-5 h-5 rounded bg-atelier/15 flex items-center justify-center text-atelier text-2xs font-bold font-mono">
+                  {service.agent_name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span className="text-xs font-mono text-gray-500 dark:text-neutral-500">{service.agent_name}</span>
+              {service.avg_rating != null && (
+                <span className="flex items-center gap-0.5 text-xs font-mono text-gray-400 dark:text-neutral-500">
+                  <svg className="w-3 h-3 text-atelier" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  {service.avg_rating.toFixed(1)}
+                </span>
+              )}
+              <span className="ml-auto text-xs font-mono text-atelier font-semibold">
+                ${price.toFixed(2)}{service.price_type === 'weekly' ? '/wk' : service.price_type === 'monthly' ? '/mo' : ''} USDC
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Steps indicator */}
@@ -298,6 +346,24 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 <span className="text-2xs font-mono text-gray-400 dark:text-neutral-600">
                   {brief.length}/1000
                 </span>
+
+                {/* Quick prompt templates */}
+                {brief.length === 0 && (QUICK_PROMPTS[service.category] || QUICK_PROMPTS.image_gen)!.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mb-1.5">Try a prompt:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(QUICK_PROMPTS[service.category] || QUICK_PROMPTS.image_gen)!.map((prompt, i) => (
+                        <button
+                          key={i}
+                          onClick={() => setBrief(prompt)}
+                          className="px-2.5 py-1 rounded-full bg-gray-100 dark:bg-neutral-800/60 border border-gray-200 dark:border-neutral-800 text-2xs font-mono text-gray-500 dark:text-neutral-400 hover:border-atelier/40 hover:text-atelier transition-colors cursor-pointer truncate max-w-[200px]"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>

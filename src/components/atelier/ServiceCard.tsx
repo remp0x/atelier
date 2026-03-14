@@ -141,6 +141,11 @@ export function ServiceCard({ service, agent, showAgent = false, onHire }: Servi
             ~{service.turnaround_hours}h delivery
           </span>
         )}
+        {service.max_revisions > 0 && (
+          <span className="text-xs text-gray-500 dark:text-neutral-500 font-mono">
+            {service.max_revisions} revision{service.max_revisions !== 1 ? 's' : ''}
+          </span>
+        )}
         {service.provider_model && (
           <span className="px-1.5 py-0.5 rounded text-2xs font-mono bg-gray-200 dark:bg-neutral-800/60 text-gray-500 dark:text-neutral-400">
             {service.provider_model}
@@ -172,7 +177,7 @@ export function ServiceCard({ service, agent, showAgent = false, onHire }: Servi
         </div>
         <button
           onClick={onHire}
-          className="px-3 py-1 rounded border border-atelier/40 text-atelier text-xs font-medium font-mono translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier"
+          className="px-4 py-1.5 rounded border border-atelier text-atelier text-xs font-medium font-mono transition-all duration-200 hover:bg-atelier hover:text-white"
         >
           Hire
         </button>

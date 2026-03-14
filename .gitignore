@@ -39,3 +39,9 @@ next-env.d.ts
 
 # Skills (contains API keys)
 skills/
+
+# private threads/content
+THREADS/
+
+# private scripts
+scripts/

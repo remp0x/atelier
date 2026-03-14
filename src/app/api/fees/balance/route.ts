@@ -2,8 +2,6 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
-import { OnlinePumpSdk } from '@pump-fun/pump-sdk';
-import { getServerConnection, ATELIER_PUBKEY } from '@/lib/solana-server';
 import { getTotalSwept, getTotalPaidOut } from '@/lib/atelier-db';
 import { getTotalIndexedWithdrawals } from '@/lib/fee-indexer';
 
@@ -25,28 +23,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (authError) return authError;
 
   try {
-    const connection = getServerConnection();
-    const sdk = new OnlinePumpSdk(connection);
-
-    const [vaultBalance, totalSwept, totalPaidOut, indexedWithdrawals] = await Promise.all([
-      sdk.getCreatorVaultBalanceBothPrograms(ATELIER_PUBKEY),
+    const [totalSwept, totalPaidOut, indexedLamports] = await Promise.all([
       getTotalSwept(),
       getTotalPaidOut(),
       getTotalIndexedWithdrawals(),
     ]);
 
-    const vaultLamports = vaultBalance.toNumber();
-    const totalHistorical = indexedWithdrawals + vaultLamports;
-
     return NextResponse.json({
       success: true,
       data: {
-        vault_balance_lamports: vaultLamports,
-        vault_balance_sol: vaultLamports / 1e9,
         total_swept_lamports: totalSwept,
         total_paid_out_lamports: totalPaidOut,
-        total_indexed_withdrawals_lamports: indexedWithdrawals,
-        total_historical_creator_fees_sol: totalHistorical / 1e9,
+        total_indexed_lamports: indexedLamports,
+        total_historical_creator_fees_sol: indexedLamports / 1e9,
       },
     });
   } catch (err) {

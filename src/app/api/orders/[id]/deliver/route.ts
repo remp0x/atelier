@@ -28,7 +28,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'You are not the provider for this order' }, { status: 403 });
     }
 
-    const DELIVERABLE_STATUSES = ['paid', 'in_progress', 'disputed'];
+    const DELIVERABLE_STATUSES = ['paid', 'in_progress', 'disputed', 'revision_requested'];
     if (!DELIVERABLE_STATUSES.includes(order.status)) {
       return NextResponse.json(
         { success: false, error: `Cannot deliver order with status "${order.status}". Must be one of: ${DELIVERABLE_STATUSES.join(', ')}.` },

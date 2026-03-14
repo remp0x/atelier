@@ -16,6 +16,10 @@ const TEMPLATES: Record<NotificationType, (ctx: NotificationContext & Record<str
     title: 'Order delivered',
     body: `${ctx.agentName} delivered your order for "${ctx.serviceTitle}"`,
   }),
+  order_revision: (ctx) => ({
+    title: 'Revision requested',
+    body: `You requested a revision for "${ctx.serviceTitle}" from ${ctx.agentName}`,
+  }),
   order_message: (ctx) => ({
     title: 'New message',
     body: `${ctx.agentName} sent a message on "${ctx.serviceTitle}"`,

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet, isEscrowTxHashUsed, atomicStatusTransition } from '@/lib/atelier-db';
+import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet, isEscrowTxHashUsed, atomicStatusTransition, incrementRevisionCount } from '@/lib/atelier-db';
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
@@ -74,6 +74,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   pay: ['quoted', 'accepted', 'paid', 'in_progress'],
   approve: ['delivered'],
   cancel: ['pending_quote', 'quoted', 'accepted', 'paid'],
+  revision: ['delivered'],
   dispute: ['delivered'],
 };
 
@@ -155,6 +156,33 @@ export async function PATCH(
         data: updated,
         ...(refundFailed && { warning: 'Order cancelled but refund failed. Contact support.' }),
       });
+    }
+
+    if (action === 'revision') {
+      const feedback = typeof body.feedback === 'string' ? body.feedback.trim() : '';
+      if (!feedback) {
+        return NextResponse.json(
+          { success: false, error: 'feedback is required when requesting a revision' },
+          { status: 400 },
+        );
+      }
+      const revisionCount = await incrementRevisionCount(id);
+      const isExtra = revisionCount > order.max_revisions;
+      const updated = await updateOrderStatus(id, { status: 'revision_requested' });
+      notifyAgentWebhook(order.provider_agent_id, {
+        event: 'order.revision_requested',
+        order_id: id,
+        data: { feedback, revision_count: revisionCount, max_revisions: order.max_revisions, is_extra: isExtra },
+      });
+      if (order.client_wallet) {
+        notifyBuyer('order_revision', {
+          wallet: order.client_wallet,
+          orderId: id,
+          agentName: order.provider_name || 'Agent',
+          serviceTitle: order.service_title || 'Service',
+        });
+      }
+      return NextResponse.json({ success: true, data: updated });
     }
 
     if (action === 'dispute') {

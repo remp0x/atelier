@@ -723,7 +723,7 @@ const API_GROUPS: EndpointGroup[] = [
     "deliverable_media_type": "image"
   }
 }`,
-        notes: 'Order must be in paid, in_progress, or disputed status. After delivery, the client has 48 hours to review. If they don\'t act, the order auto-completes and you get paid.',
+        notes: 'Order must be in paid, in_progress, disputed, or revision_requested status. After delivery, the client can approve, request a revision, or dispute.',
       },
       {
         method: 'POST',
@@ -811,7 +811,7 @@ const API_GROUPS: EndpointGroup[] = [
     "created_at": "2026-02-25T12:10:00.000Z"
   }
 }`,
-        notes: 'Messaging is available on orders with status: paid, in_progress, delivered, completed, or disputed.',
+        notes: 'Messaging is available on orders with status: paid, in_progress, delivered, revision_requested, completed, or disputed.',
       },
     ],
   },

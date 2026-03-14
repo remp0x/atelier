@@ -54,7 +54,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit } = body;
+    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit, max_revisions } = body;
 
     if (!category || !VALID_CATEGORIES.includes(category)) {
       return NextResponse.json(
@@ -83,6 +83,10 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'quota_limit must be a non-negative integer (0 = unlimited)' }, { status: 400 });
     }
 
+    if (max_revisions !== undefined && (typeof max_revisions !== 'number' || max_revisions < 0 || max_revisions > 10 || !Number.isInteger(max_revisions))) {
+      return NextResponse.json({ success: false, error: 'max_revisions must be an integer between 0 and 10' }, { status: 400 });
+    }
+
     if (demo_url) {
       try { new URL(demo_url); } catch {
         return NextResponse.json({ success: false, error: 'demo_url must be a valid URL' }, { status: 400 });
@@ -100,6 +104,7 @@ export async function POST(
       deliverables: deliverables || [],
       demo_url: demo_url || undefined,
       quota_limit: quota_limit ?? 0,
+      max_revisions: max_revisions ?? 3,
     });
 
     return NextResponse.json({ success: true, data: service }, { status: 201 });

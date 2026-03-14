@@ -4,7 +4,6 @@ import {
   ConfirmedSignatureInfo,
   ParsedTransactionWithMeta,
 } from '@solana/web3.js';
-import { getAssociatedTokenAddressSync, NATIVE_MINT, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { getServerConnection, ATELIER_PUBKEY } from './solana-server';
 import {
   upsertFeeIndexEntry,
@@ -18,90 +17,43 @@ export { getTotalIndexedWithdrawals };
 
 const PUMP_PROGRAM_ID = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
 const PUMP_AMM_PROGRAM_ID = new PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
+const PUMP_PROGRAM_STRS = [PUMP_PROGRAM_ID.toBase58(), PUMP_AMM_PROGRAM_ID.toBase58()];
 
+const VAULT_TYPE = 'creator_income';
 const TX_BATCH_SIZE = 10;
 const SIGS_PER_PAGE = 100;
-const MAX_SIGS_PER_CALL = 100;
+const MAX_SIGS_PER_CALL = 300;
 
-type VaultType = 'pump' | 'pump_amm';
-
-interface VaultConfig {
-  type: VaultType;
-  address: PublicKey;
-  isTokenAccount: boolean;
-}
-
-function derivePumpVault(): PublicKey {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from('creator-vault'), ATELIER_PUBKEY.toBuffer()],
-    PUMP_PROGRAM_ID,
-  )[0];
-}
-
-function deriveAmmVaultAta(): PublicKey {
-  const authority = PublicKey.findProgramAddressSync(
-    [Buffer.from('creator_vault'), ATELIER_PUBKEY.toBuffer()],
-    PUMP_AMM_PROGRAM_ID,
-  )[0];
-  return getAssociatedTokenAddressSync(NATIVE_MINT, authority, true, TOKEN_PROGRAM_ID);
-}
-
-function getVaults(): VaultConfig[] {
-  return [
-    { type: 'pump', address: derivePumpVault(), isTokenAccount: false },
-    { type: 'pump_amm', address: deriveAmmVaultAta(), isTokenAccount: true },
-  ];
-}
-
-async function fetchSignaturesPage(
-  connection: Connection,
-  address: PublicKey,
-  before?: string,
-  until?: string,
-): Promise<ConfirmedSignatureInfo[]> {
-  return connection.getSignaturesForAddress(address, {
-    limit: SIGS_PER_PAGE,
-    before,
-    until,
-  });
-}
-
-function detectWithdrawal(
-  tx: ParsedTransactionWithMeta,
-  vaultAddress: PublicKey,
-  isTokenAccount: boolean,
-): number {
+function detectCreatorFeeIncome(tx: ParsedTransactionWithMeta): number {
   if (!tx.meta || tx.meta.err) return 0;
-
-  if (isTokenAccount) {
-    const vaultStr = vaultAddress.toBase58();
-    const pre = tx.meta.preTokenBalances ?? [];
-    const post = tx.meta.postTokenBalances ?? [];
-
-    const keys = tx.transaction.message.accountKeys.map((k) =>
-      typeof k === 'string' ? k : 'pubkey' in k ? k.pubkey.toBase58() : String(k),
-    );
-
-    const preEntry = pre.find((b) => keys[b.accountIndex] === vaultStr);
-    const postEntry = post.find((b) => keys[b.accountIndex] === vaultStr);
-
-    const preBal = preEntry ? Number(preEntry.uiTokenAmount.amount) : 0;
-    const postBal = postEntry ? Number(postEntry.uiTokenAmount.amount) : 0;
-
-    if (preBal > postBal) return preBal - postBal;
-    return 0;
-  }
 
   const keys = tx.transaction.message.accountKeys.map((k) =>
     typeof k === 'string' ? k : 'pubkey' in k ? k.pubkey.toBase58() : String(k),
   );
-  const vaultIdx = keys.indexOf(vaultAddress.toBase58());
-  if (vaultIdx === -1) return 0;
 
-  const preBal = tx.meta.preBalances[vaultIdx];
-  const postBal = tx.meta.postBalances[vaultIdx];
-  if (preBal > postBal) return preBal - postBal;
+  const hasPumpProgram = keys.some((k) => PUMP_PROGRAM_STRS.includes(k));
+  if (!hasPumpProgram) return 0;
+
+  const walletIdx = keys.indexOf(ATELIER_PUBKEY.toBase58());
+  if (walletIdx === -1) return 0;
+
+  const preBal = tx.meta.preBalances[walletIdx];
+  const postBal = tx.meta.postBalances[walletIdx];
+  if (postBal > preBal) return postBal - preBal;
+
   return 0;
+}
+
+async function fetchSignaturesPage(
+  connection: Connection,
+  before?: string,
+  until?: string,
+): Promise<ConfirmedSignatureInfo[]> {
+  return connection.getSignaturesForAddress(ATELIER_PUBKEY, {
+    limit: SIGS_PER_PAGE,
+    before,
+    until,
+  });
 }
 
 async function batchGetTransactions(
@@ -121,22 +73,21 @@ async function batchGetTransactions(
   return results;
 }
 
-interface IndexResult {
-  vault_type: VaultType;
+export interface IndexResult {
+  vault_type: string;
   signatures_processed: number;
   withdrawals_found: number;
   total_withdrawal_lamports: number;
   done: boolean;
 }
 
-async function indexVault(
+async function indexCreatorFees(
   connection: Connection,
-  vault: VaultConfig,
   mode: 'backfill' | 'incremental',
 ): Promise<IndexResult> {
-  const cursor = await getIndexCursor(vault.type);
+  const cursor = await getIndexCursor(VAULT_TYPE);
   const result: IndexResult = {
-    vault_type: vault.type,
+    vault_type: VAULT_TYPE,
     signatures_processed: 0,
     withdrawals_found: 0,
     total_withdrawal_lamports: 0,
@@ -150,10 +101,10 @@ async function indexVault(
     let newestSig = cursor?.newest_signature ?? undefined;
 
     while (result.signatures_processed < MAX_SIGS_PER_CALL) {
-      const sigs = await fetchSignaturesPage(connection, vault.address, before);
+      const sigs = await fetchSignaturesPage(connection, before);
       if (sigs.length === 0) {
         await upsertIndexCursor({
-          vault_type: vault.type,
+          vault_type: VAULT_TYPE,
           fully_backfilled: true,
           ...(newestSig ? { newest_signature: newestSig } : {}),
         });
@@ -170,10 +121,10 @@ async function indexVault(
         const tx = txs[i];
         if (!tx) continue;
 
-        const amount = detectWithdrawal(tx, vault.address, vault.isTokenAccount);
+        const amount = detectCreatorFeeIncome(tx);
         if (amount > 0) {
           await upsertFeeIndexEntry({
-            vault_type: vault.type,
+            vault_type: VAULT_TYPE,
             tx_signature: sigs[i].signature,
             amount_lamports: amount,
             block_time: sigs[i].blockTime ?? null,
@@ -188,13 +139,13 @@ async function indexVault(
       before = sigs[sigs.length - 1].signature;
 
       await upsertIndexCursor({
-        vault_type: vault.type,
+        vault_type: VAULT_TYPE,
         last_signature: before,
         newest_signature: newestSig,
       });
 
       if (sigs.length < SIGS_PER_PAGE) {
-        await upsertIndexCursor({ vault_type: vault.type, fully_backfilled: true });
+        await upsertIndexCursor({ vault_type: VAULT_TYPE, fully_backfilled: true });
         result.done = true;
         break;
       }
@@ -205,7 +156,7 @@ async function indexVault(
     let newestSig: string | undefined;
 
     while (result.signatures_processed < MAX_SIGS_PER_CALL) {
-      const sigs = await fetchSignaturesPage(connection, vault.address, before, until);
+      const sigs = await fetchSignaturesPage(connection, before, until);
       if (sigs.length === 0) { result.done = true; break; }
 
       if (!newestSig) newestSig = sigs[0].signature;
@@ -217,10 +168,10 @@ async function indexVault(
         const tx = txs[i];
         if (!tx) continue;
 
-        const amount = detectWithdrawal(tx, vault.address, vault.isTokenAccount);
+        const amount = detectCreatorFeeIncome(tx);
         if (amount > 0) {
           await upsertFeeIndexEntry({
-            vault_type: vault.type,
+            vault_type: VAULT_TYPE,
             tx_signature: sigs[i].signature,
             amount_lamports: amount,
             block_time: sigs[i].blockTime ?? null,
@@ -238,7 +189,7 @@ async function indexVault(
     }
 
     if (newestSig) {
-      await upsertIndexCursor({ vault_type: vault.type, newest_signature: newestSig });
+      await upsertIndexCursor({ vault_type: VAULT_TYPE, newest_signature: newestSig });
     }
   }
 
@@ -252,26 +203,21 @@ export async function runFeeIndex(
   if (force) await resetFeeIndexCursors();
 
   const connection = getServerConnection();
-  const vaults = getVaults();
 
-  const results: IndexResult[] = [];
-  for (const vault of vaults) {
-    try {
-      const r = await indexVault(connection, vault, mode);
-      results.push(r);
-    } catch (err) {
-      console.error(`Fee indexer: ${vault.type} vault failed:`, err);
-      results.push({
-        vault_type: vault.type,
-        signatures_processed: 0,
-        withdrawals_found: 0,
-        total_withdrawal_lamports: 0,
-        done: false,
-      });
-    }
+  let indexResult: IndexResult;
+  try {
+    indexResult = await indexCreatorFees(connection, mode);
+  } catch (err) {
+    console.error('Fee indexer failed:', err);
+    indexResult = {
+      vault_type: VAULT_TYPE,
+      signatures_processed: 0,
+      withdrawals_found: 0,
+      total_withdrawal_lamports: 0,
+      done: false,
+    };
   }
 
-  const done = results.every((r) => r.done);
   const total_indexed_lamports = await getTotalIndexedWithdrawals();
-  return { results, total_indexed_lamports, done };
+  return { results: [indexResult], total_indexed_lamports, done: indexResult.done };
 }

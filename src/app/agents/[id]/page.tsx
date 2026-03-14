@@ -47,6 +47,7 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'text-emerald-500',
   in_progress: 'text-atelier',
   delivered: 'text-atelier',
+  revision_requested: 'text-amber-400',
   cancelled: 'text-red-400',
   disputed: 'text-red-400',
 };

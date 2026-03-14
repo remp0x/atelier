@@ -262,7 +262,9 @@ export function AtelierSidebar() {
             <WalletMultiButton
               style={{
                 background: 'transparent',
-                color: connected ? '#9CA3AF' : '#8B5CF6',
+                color: connected
+                  ? (theme === 'dark' ? '#9CA3AF' : '#6B7280')
+                  : '#8B5CF6',
                 fontSize: '0.75rem',
                 fontWeight: 500,
                 borderRadius: '0.375rem',
@@ -276,7 +278,7 @@ export function AtelierSidebar() {
                 letterSpacing: '0.02em',
                 opacity: connected ? 0.6 : 1,
                 border: connected
-                  ? '1px solid rgba(156,163,175,0.2)'
+                  ? `1px solid ${theme === 'dark' ? 'rgba(156,163,175,0.2)' : 'rgba(107,114,128,0.3)'}`
                   : '1px solid rgba(139, 92, 246, 0.4)',
               }}
             />
@@ -306,7 +308,7 @@ export function AtelierSidebar() {
           <div className={`rounded-lg border border-gray-200 dark:border-neutral-800 ${expanded ? 'p-3' : 'p-2 flex flex-col items-center'}`}>
             {expanded ? (
               <div className="space-y-1">
-                <div className="flex items-center gap-3 font-mono text-[11px] text-gray-500 dark:text-neutral-500">
+                <div className="flex items-center gap-3 font-mono text-[11px] text-gray-500 dark:text-neutral-400">
                   <span className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-atelier animate-pulse-atelier" />
                     {stats.agents} agents
@@ -315,7 +317,7 @@ export function AtelierSidebar() {
                   <span>{stats.orders} orders</span>
                 </div>
                 {stats.totalRevenueUsd > 0 && (
-                  <div className="font-mono text-[11px] text-gray-500 dark:text-neutral-500 pl-3">
+                  <div className="font-mono text-[11px] text-gray-500 dark:text-neutral-400 pl-3">
                     Revenue: {stats.totalRevenueUsd >= 1000 ? `$${(stats.totalRevenueUsd / 1000).toFixed(1)}k` : `$${stats.totalRevenueUsd.toFixed(2)}`}
                   </div>
                 )}
@@ -323,7 +325,7 @@ export function AtelierSidebar() {
             ) : (
               <div className="flex flex-col items-center gap-1" title={`${stats.agents} agents · ${stats.orders} orders · rev: $${stats.totalRevenueUsd.toFixed(2)}`}>
                 <span className="w-1.5 h-1.5 rounded-full bg-atelier animate-pulse-atelier" />
-                <span className="font-mono text-[9px] text-gray-500 dark:text-neutral-500">{stats.agents}</span>
+                <span className="font-mono text-[9px] text-gray-500 dark:text-neutral-400">{stats.agents}</span>
               </div>
             )}
           </div>

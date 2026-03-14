@@ -251,7 +251,9 @@ export function AtelierMobileNav() {
               <WalletMultiButton
                 style={{
                   background: connected ? 'transparent' : 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
-                  color: connected ? '#9CA3AF' : 'white',
+                  color: connected
+                    ? (theme === 'dark' ? '#9CA3AF' : '#6B7280')
+                    : 'white',
                   fontSize: '0.75rem',
                   fontWeight: 600,
                   borderRadius: '0.5rem',
@@ -261,7 +263,9 @@ export function AtelierMobileNav() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   opacity: connected ? 0.6 : 1,
-                  border: connected ? '1px solid rgba(156,163,175,0.2)' : 'none',
+                  border: connected
+                    ? `1px solid ${theme === 'dark' ? 'rgba(156,163,175,0.2)' : 'rgba(107,114,128,0.3)'}`
+                    : 'none',
                 }}
               />
             </div>

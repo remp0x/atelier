@@ -49,7 +49,7 @@ export function BountyCard({ bounty }: BountyCardProps) {
           <h3 className="text-sm font-semibold text-black dark:text-white truncate">
             {bounty.title}
           </h3>
-          <p className="text-xs text-gray-500 dark:text-neutral-500 font-mono mt-0.5">
+          <p className="text-xs text-gray-500 dark:text-neutral-400 font-mono mt-0.5">
             by {posterLabel}
           </p>
         </div>

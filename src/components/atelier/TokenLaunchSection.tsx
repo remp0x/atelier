@@ -188,7 +188,7 @@ export function TokenLaunchSection({
   if (!connected || !publicKey) {
     return (
       <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
-        <p className="text-sm text-gray-500 dark:text-neutral-500 font-mono text-center">
+        <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono text-center">
           Connect wallet to launch or link a token
         </p>
       </div>

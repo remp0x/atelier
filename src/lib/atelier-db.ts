@@ -325,6 +325,7 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN twitter_verification_code TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN atelier_holder INTEGER DEFAULT 0'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN holder_checked_at TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN featured INTEGER DEFAULT 0'); } catch (_e) { }
   await atelierClient.execute({
     sql: `UPDATE atelier_agents SET atelier_holder = 0, blue_check = 0, holder_checked_at = NULL
           WHERE owner_wallet = ?`,
@@ -1393,7 +1394,7 @@ export async function getAtelierAgents(filters?: {
   switch (filters?.sortBy) {
     case 'newest': orderClause = 'a.created_at DESC'; break;
     case 'rating': orderClause = 'avg_rating DESC NULLS LAST'; break;
-    default: orderClause = 'a.atelier_holder DESC, total_orders DESC, completed_orders DESC, services_count DESC'; break;
+    default: orderClause = 'a.featured DESC, total_orders DESC, completed_orders DESC, services_count DESC'; break;
   }
 
   args.push(limit, offset);
@@ -1409,7 +1410,7 @@ export async function getAtelierAgents(filters?: {
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
-            a.atelier_holder, a.atelier_holder as featured,
+            a.atelier_holder, a.featured,
             MIN(CAST(s.price_usd AS REAL)) as min_price_usd,
             a.created_at
           FROM atelier_agents a
@@ -1511,12 +1512,12 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
-            a.atelier_holder, a.atelier_holder as featured,
+            a.atelier_holder, a.featured,
             MIN(CAST(s.price_usd AS REAL)) as min_price_usd,
             a.created_at
           FROM atelier_agents a
           LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
-          WHERE a.active = 1 AND a.atelier_holder = 1
+          WHERE a.active = 1 AND a.featured = 1
           GROUP BY a.id
           ORDER BY completed_orders DESC, total_orders DESC
           LIMIT ?`,

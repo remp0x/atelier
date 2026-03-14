@@ -3,17 +3,9 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { useWallet } from '@solana/wallet-adapter-react';
-import dynamic from 'next/dynamic';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { ServiceCategory } from '@/lib/atelier-db';
-
-const WalletMultiButton = dynamic(
-  () => import('@solana/wallet-adapter-react-ui').then(mod => mod.WalletMultiButton),
-  { ssr: false }
-);
 
 const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   image_gen: 'Image Gen',
@@ -30,8 +22,6 @@ const INPUT_CLASS = 'w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-black bord
 const LABEL_CLASS = 'block text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1.5 uppercase tracking-wider';
 
 export default function RegisterAgentPage() {
-  const wallet = useWallet();
-  const { getAuth } = useWalletAuth();
   const router = useRouter();
   const [step, setStep] = useState<'verify' | 'details' | 'done'>('verify');
 
@@ -101,11 +91,9 @@ export default function RegisterAgentPage() {
     setUploading(true);
     setError(null);
     try {
-      const auth = await getAuth();
       const form = new FormData();
       form.append('file', file);
-      const params = new URLSearchParams({ wallet: auth.wallet, wallet_sig: auth.wallet_sig, wallet_sig_ts: String(auth.wallet_sig_ts) });
-      const res = await fetch(`/api/profile/avatar?${params}`, { method: 'POST', body: form });
+      const res = await fetch('/api/profile/avatar', { method: 'POST', body: form });
       const json = await res.json();
       if (json.success) { setAvatarUrl(json.data.url); setAvatarPreview(json.data.url); } else { setError(json.error || 'Upload failed'); }
     } catch { setError('Upload failed'); } finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
@@ -115,14 +103,12 @@ export default function RegisterAgentPage() {
     setSaving(true);
     setError(null);
     try {
-      const auth = await getAuth();
       const res = await fetch('/api/agents/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name, description, endpoint_url: endpointUrl || undefined, avatar_url: avatarUrl || undefined,
-          capabilities, owner_wallet: auth.wallet, wallet_sig: auth.wallet_sig, wallet_sig_ts: auth.wallet_sig_ts,
-          twitter_verification_code: verificationCode, twitter_username: twitterUsername,
+          capabilities, twitter_verification_code: verificationCode, twitter_username: twitterUsername,
         }),
       });
       const json = await res.json();
@@ -131,8 +117,6 @@ export default function RegisterAgentPage() {
       setStep('done');
     } catch (e) { setError(e instanceof Error ? e.message : 'Registration failed'); } finally { setSaving(false); }
   };
-
-  const needsWallet = !wallet.publicKey;
 
   return (
     <AtelierAppLayout>
@@ -191,13 +175,7 @@ export default function RegisterAgentPage() {
               <span className="text-2xs font-mono text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">@{twitterUsername}</span>
             </div>
 
-            {needsWallet ? (
-              <div className="space-y-4">
-                <p className="text-sm text-gray-500 dark:text-neutral-400">Connect your wallet to finish registration and claim ownership of this agent.</p>
-                <WalletMultiButton style={{ background: '#8B5CF6', color: 'white', fontSize: '0.75rem', fontWeight: 600, borderRadius: '6px', height: '2.5rem', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} />
-              </div>
-            ) : (
-              <div className="space-y-4">
+            <div className="space-y-4">
                 <div>
                   <label className={LABEL_CLASS}>Name</label>
                   <input value={name} disabled className={`${INPUT_CLASS} opacity-60`} />
@@ -226,7 +204,6 @@ export default function RegisterAgentPage() {
                   <button onClick={handleSubmit} disabled={saving || !description} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Registering...' : 'Register Agent'}</button>
                 </div>
               </div>
-            )}
           </div>
         )}
 

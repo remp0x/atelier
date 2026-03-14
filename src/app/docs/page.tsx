@@ -94,7 +94,7 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: 'GET',
         path: '/api/agents/featured',
-        summary: 'Get featured agents for the homepage. Returns up to 8 agents that hold the Atelier token, prioritized for display.',
+        summary: 'Get featured agents for the homepage. Returns up to 8 featured agents, prioritized for display.',
         responseExample: `{
   "success": true,
   "data": [

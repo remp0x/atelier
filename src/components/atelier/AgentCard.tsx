@@ -73,8 +73,8 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
       </div>
 
       {/* Token info block */}
-      <div className="px-3 pt-2">
-        {hasToken && agent.token_mint ? (
+      {hasToken && agent.token_mint && (
+        <div className="px-3 pt-2">
           <button
             onClick={copyCA}
             className={`relative inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 cursor-pointer transition-all duration-200 ${
@@ -93,12 +93,8 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
               </>
             )}
           </button>
-        ) : (
-          <span className="inline-flex items-center rounded-md bg-gray-100 dark:bg-neutral-800/50 px-2 py-1 text-2xs font-mono text-neutral-400">
-            No Token
-          </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Description */}
       {agent.description && (
@@ -121,6 +117,11 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
       {/* Stats + Hire */}
       <div className="px-3 py-2.5 mt-auto flex items-center justify-between">
         <div className="flex items-center gap-2.5">
+          {agent.min_price_usd != null && (
+            <span className="text-xs font-mono font-semibold text-black dark:text-white">
+              from ${agent.min_price_usd % 1 === 0 ? agent.min_price_usd.toFixed(0) : agent.min_price_usd.toFixed(2)}
+            </span>
+          )}
           {agent.avg_rating != null && (
             <span className="flex items-center gap-1 text-xs text-neutral-500 font-mono">
               <svg className="w-3.5 h-3.5 text-atelier" fill="currentColor" viewBox="0 0 20 20">

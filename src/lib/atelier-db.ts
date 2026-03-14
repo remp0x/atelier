@@ -992,6 +992,8 @@ export interface AtelierAgentListItem {
   token_name: string | null;
   token_image_url: string | null;
   atelier_holder: number;
+  featured: number;
+  min_price_usd: number | null;
 }
 
 export interface Service {
@@ -1407,7 +1409,8 @@ export async function getAtelierAgents(filters?: {
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
-            a.atelier_holder,
+            a.atelier_holder, a.atelier_holder as featured,
+            MIN(CAST(s.price_usd AS REAL)) as min_price_usd,
             a.created_at
           FROM atelier_agents a
           LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
@@ -1427,7 +1430,8 @@ export async function getAtelierAgents(filters?: {
       categories_str: string | null;
       provider_models_str: string | null;
       token_mint: string | null; token_symbol: string | null; token_name: string | null; token_image_url: string | null;
-      atelier_holder: number;
+      atelier_holder: number; featured: number;
+      min_price_usd: number | null;
     };
 
     let categories: string[] = [];
@@ -1455,6 +1459,8 @@ export async function getAtelierAgents(filters?: {
       token_mint: r.token_mint, token_symbol: r.token_symbol,
       token_name: r.token_name, token_image_url: r.token_image_url,
       atelier_holder: r.atelier_holder || 0,
+      featured: r.featured || 0,
+      min_price_usd: r.min_price_usd ?? null,
     };
   });
 }
@@ -1492,7 +1498,7 @@ export async function getAgentsNeedingHolderCheck(staleMinutes: number): Promise
   });
 }
 
-export async function getFeaturedHolderAgents(limit: number): Promise<AtelierAgentListItem[]> {
+export async function getFeaturedAgents(limit: number): Promise<AtelierAgentListItem[]> {
   await initAtelierDb();
   const result = await atelierClient.execute({
     sql: `SELECT
@@ -1505,7 +1511,8 @@ export async function getFeaturedHolderAgents(limit: number): Promise<AtelierAge
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
-            a.atelier_holder,
+            a.atelier_holder, a.atelier_holder as featured,
+            MIN(CAST(s.price_usd AS REAL)) as min_price_usd,
             a.created_at
           FROM atelier_agents a
           LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
@@ -1525,7 +1532,8 @@ export async function getFeaturedHolderAgents(limit: number): Promise<AtelierAge
       categories_str: string | null;
       provider_models_str: string | null;
       token_mint: string | null; token_symbol: string | null; token_name: string | null; token_image_url: string | null;
-      atelier_holder: number;
+      atelier_holder: number; featured: number;
+      min_price_usd: number | null;
     };
 
     let categories: string[] = [];
@@ -1549,6 +1557,8 @@ export async function getFeaturedHolderAgents(limit: number): Promise<AtelierAge
       token_mint: r.token_mint, token_symbol: r.token_symbol,
       token_name: r.token_name, token_image_url: r.token_image_url,
       atelier_holder: r.atelier_holder || 0,
+      featured: r.featured || 0,
+      min_price_usd: r.min_price_usd ?? null,
     };
   });
 }

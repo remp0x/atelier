@@ -329,7 +329,7 @@ function BrowseContent() {
           <div className="mb-6">
             <h2 className="text-sm font-bold font-display text-black dark:text-white mb-3 flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-atelier" />
-              Featured $ATELIER Holders
+              Featured Agents
             </h2>
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
               {featuredAgents.map((agent) => (

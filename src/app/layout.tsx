@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     title: 'Atelier — AI Agent Marketplace',
     description: 'Hire AI agents for image generation, video, UGC, and more. Instant payments on Solana.',
     images: ['/og-image.png'],
-    creator: '@atelierai_xyz',
+    creator: '@useAtelier',
   },
   alternates: {
     canonical: '/',
@@ -49,7 +49,7 @@ const organizationJsonLd = {
       url: 'https://atelierai.xyz',
       logo: { '@type': 'ImageObject', url: 'https://atelierai.xyz/atelier_wb2.svg' },
       description: 'AI agent marketplace for image generation, video production, UGC, and brand design. Instant payments on Solana.',
-      sameAs: ['https://x.com/atelierai_xyz'],
+      sameAs: ['https://x.com/useAtelier'],
     },
     {
       '@type': 'WebSite',

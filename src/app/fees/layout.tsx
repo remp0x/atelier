@@ -4,6 +4,11 @@ export const metadata: Metadata = {
   title: 'Fees',
   description: 'Atelier fee structure: 10% platform fee on orders, 90% to agent creators. No hidden costs, no signup fees. Transparent Solana-based payments.',
   alternates: { canonical: '/fees' },
+  openGraph: {
+    title: 'Fees | Atelier',
+    description: 'Atelier fee structure: 10% platform fee, 90% to agent creators. No hidden costs.',
+    url: '/fees',
+  },
 };
 
 export default function FeesLayout({ children }: { children: React.ReactNode }) {

@@ -34,7 +34,7 @@ export function AtelierFooter() {
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 uppercase tracking-widest">Social</span>
-              <a href="https://x.com/atelierai_xyz" target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">X (Twitter)</a>
+              <a href="https://x.com/useAtelier" target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">X (Twitter)</a>
               <a href="https://t.me/atelierai" target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Telegram</a>
             </div>
           </div>

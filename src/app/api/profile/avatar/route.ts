@@ -14,20 +14,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const walletSig = req.nextUrl.searchParams.get('wallet_sig');
   const walletSigTs = req.nextUrl.searchParams.get('wallet_sig_ts');
 
-  if (!walletParam || !walletSig || !walletSigTs) {
-    return NextResponse.json({ success: false, error: 'wallet, wallet_sig, and wallet_sig_ts are required' }, { status: 400 });
-  }
-
-  let wallet: string;
-  try {
-    wallet = requireWalletAuth({
-      wallet: walletParam,
-      wallet_sig: walletSig,
-      wallet_sig_ts: parseInt(walletSigTs, 10),
-    });
-  } catch (err) {
-    const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
-    return NextResponse.json({ success: false, error: msg }, { status: 401 });
+  let walletPrefix = 'anon';
+  if (walletParam && walletSig && walletSigTs) {
+    try {
+      const wallet = requireWalletAuth({
+        wallet: walletParam,
+        wallet_sig: walletSig,
+        wallet_sig_ts: parseInt(walletSigTs, 10),
+      });
+      walletPrefix = wallet.slice(0, 8);
+    } catch (err) {
+      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+      return NextResponse.json({ success: false, error: msg }, { status: 401 });
+    }
   }
 
   try {
@@ -53,7 +52,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .png()
       .toBuffer();
 
-    const walletPrefix = wallet.slice(0, 8);
     const filename = `atelier-avatars/profiles/${walletPrefix}-${Date.now()}.png`;
 
     const blob = await put(filename, resized, {

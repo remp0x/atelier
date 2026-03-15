@@ -9,9 +9,9 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy, useWallets as useAllWallets } from '@privy-io/react-auth';
 import type { User } from '@privy-io/react-auth';
-import { useWallets } from '@privy-io/react-auth/solana';
+import { useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
 import { PublicKey, Transaction } from '@solana/web3.js';
 import { signWalletAuth, type WalletAuthPayload, type SignableWallet } from '@/lib/solana-auth-client';
 import type { TransactionSignableWallet } from '@/lib/solana-pay';
@@ -36,12 +36,26 @@ const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
 
 export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready, login, logout, user } = usePrivy();
-  const { wallets, ready: walletsReady } = useWallets();
+  const { wallets: solanaWallets, ready: solanaWalletsReady } = useSolanaWallets();
+  const { wallets: allWallets, ready: allWalletsReady } = useAllWallets();
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
 
-  const solanaWallet = wallets[0] ?? null;
+  const walletsReady = solanaWalletsReady && allWalletsReady;
+
+  // DEBUG — remove after confirming social login works
+  useEffect(() => {
+    if (authenticated) {
+      console.log('[atelier-auth] authenticated:', authenticated);
+      console.log('[atelier-auth] user:', user);
+      console.log('[atelier-auth] solanaWallets:', solanaWallets);
+      console.log('[atelier-auth] allWallets:', allWallets);
+      console.log('[atelier-auth] user.linkedAccounts:', user?.linkedAccounts);
+    }
+  }, [authenticated, user, solanaWallets, allWallets]);
+
+  const solanaWallet = solanaWallets[0] ?? null;
 
   const walletAddress = solanaWallet?.address ?? null;
 

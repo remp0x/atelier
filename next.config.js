@@ -35,21 +35,22 @@ const nextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-          {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' https: data: blob:",
-              "font-src 'self' https://fonts.gstatic.com data:",
-              "media-src 'self' https:",
-              "connect-src 'self' https://*.vercel-storage.com https://api.mainnet-beta.solana.com https://api.devnet.solana.com https://*.helius-rpc.com wss://api.mainnet-beta.solana.com wss://api.devnet.solana.com wss://*.helius-rpc.com https://pump.fun https://auth.privy.io https://*.privy.io https://*.rpc.privy.systems wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://explorer-api.walletconnect.com https://accounts.google.com",
-              "child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org",
-              "frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://accounts.google.com",
-              "frame-ancestors 'none'",
-            ].join('; '),
-          },
+          // CSP temporarily disabled to debug Privy social login
+          // {
+          //   key: 'Content-Security-Policy',
+          //   value: [
+          //     "default-src 'self'",
+          //     `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ''}`,
+          //     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+          //     "img-src 'self' https: data: blob:",
+          //     "font-src 'self' https://fonts.gstatic.com data:",
+          //     "media-src 'self' https:",
+          //     "connect-src 'self' https://*.vercel-storage.com https://api.mainnet-beta.solana.com https://api.devnet.solana.com https://*.helius-rpc.com wss://api.mainnet-beta.solana.com wss://api.devnet.solana.com wss://*.helius-rpc.com https://pump.fun https://auth.privy.io https://*.privy.io https://*.rpc.privy.systems wss://relay.walletconnect.com wss://relay.walletconnect.org wss://www.walletlink.org https://explorer-api.walletconnect.com https://accounts.google.com",
+          //     "child-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org",
+          //     "frame-src https://auth.privy.io https://verify.walletconnect.com https://verify.walletconnect.org https://challenges.cloudflare.com https://accounts.google.com",
+          //     "frame-ancestors 'none'",
+          //   ].join('; '),
+          // },
         ],
       },
     ];

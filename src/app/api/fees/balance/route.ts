@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { getTotalSwept, getTotalPaidOut, atelierClient } from '@/lib/atelier-db';
+import { getTotalIndexedWithdrawals } from '@/lib/fee-indexer';
 import { getVaultBalanceLamports, getPerTokenDistributableFees } from '@/lib/creator-fees';
 
 function verifyAdminKey(request: NextRequest): NextResponse | null {
@@ -28,14 +29,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
     const mints = mintsResult.rows.map((r) => r.token_mint as string);
 
-    const [totalSwept, totalPaidOut, vaultBalance, perTokenFees] = await Promise.all([
+    const [totalSwept, totalPaidOut, indexedLamports, vaultBalance, perTokenFees] = await Promise.all([
       getTotalSwept(),
       getTotalPaidOut(),
+      getTotalIndexedWithdrawals(),
       getVaultBalanceLamports(),
       getPerTokenDistributableFees(mints),
     ]);
 
-    const totalEarnedLamports = totalSwept + vaultBalance;
+    const totalEarnedLamports = indexedLamports + vaultBalance;
 
     return NextResponse.json({
       success: true,

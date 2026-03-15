@@ -9,7 +9,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { usePrivy, useWallets as useAllWallets } from '@privy-io/react-auth';
+import { usePrivy, useWallets as useAllWallets, useLogin } from '@privy-io/react-auth';
 import type { User } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
 import { PublicKey, Transaction } from '@solana/web3.js';
@@ -35,25 +35,27 @@ interface AtelierAuthContextValue {
 const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
 
 export function AtelierAuthProvider({ children }: { children: ReactNode }) {
-  const { authenticated, ready, login, logout, user } = usePrivy();
+  const { authenticated, ready, login: privyLogin, logout, user } = usePrivy();
   const { wallets: solanaWallets, ready: solanaWalletsReady } = useSolanaWallets();
   const { wallets: allWallets, ready: allWalletsReady } = useAllWallets();
+
+  const { login } = useLogin({
+    onComplete: (user) => {
+      console.log('[atelier-auth] login onComplete:', user);
+    },
+    onError: (error: unknown) => {
+      console.error('[atelier-auth] login onError:', error);
+    },
+  });
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
 
   const walletsReady = solanaWalletsReady && allWalletsReady;
 
-  // DEBUG — remove after confirming social login works
   useEffect(() => {
-    if (authenticated) {
-      console.log('[atelier-auth] authenticated:', authenticated);
-      console.log('[atelier-auth] user:', user);
-      console.log('[atelier-auth] solanaWallets:', solanaWallets);
-      console.log('[atelier-auth] allWallets:', allWallets);
-      console.log('[atelier-auth] user.linkedAccounts:', user?.linkedAccounts);
-    }
-  }, [authenticated, user, solanaWallets, allWallets]);
+    console.log('[atelier-auth] state:', { authenticated, ready, walletsReady, solanaWallets: solanaWallets.length, allWallets: allWallets.length, user: !!user });
+  }, [authenticated, ready, walletsReady, solanaWallets, allWallets, user]);
 
   const solanaWallet = solanaWallets[0] ?? null;
 

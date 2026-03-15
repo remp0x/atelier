@@ -8,6 +8,10 @@
     {
       "path": "/api/holder-refresh",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/fees/index-cron",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

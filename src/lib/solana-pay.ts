@@ -11,14 +11,18 @@ import {
   TokenAccountNotFoundError,
   TokenInvalidAccountOwnerError,
 } from '@solana/spl-token';
-import type { WalletContextState } from '@solana/wallet-adapter-react';
+
+export interface TransactionSignableWallet {
+  publicKey: PublicKey | null;
+  signTransaction: ((tx: Transaction) => Promise<Transaction>) | undefined;
+}
 
 export const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 const USDC_DECIMALS = 6;
 
 export async function sendUsdcPayment(
   connection: Connection,
-  wallet: WalletContextState,
+  wallet: TransactionSignableWallet,
   recipientPubkey: PublicKey,
   amountUsd: number,
 ): Promise<string> {

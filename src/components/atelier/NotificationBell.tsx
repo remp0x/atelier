@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { Notification } from '@/lib/atelier-db';
 
@@ -58,8 +57,7 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ compact }: NotificationBellProps) {
-  const { publicKey } = useWallet();
-  const { getAuth } = useWalletAuth();
+  const { walletAddress, authenticated, getAuth } = useAtelierAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
@@ -67,7 +65,7 @@ export function NotificationBell({ compact }: NotificationBellProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = useCallback(async () => {
-    if (!publicKey) return;
+    if (!authenticated || !walletAddress) return;
     try {
       const auth = await getAuth();
       const params = new URLSearchParams({
@@ -84,7 +82,7 @@ export function NotificationBell({ compact }: NotificationBellProps) {
     } catch {
       // silent
     }
-  }, [publicKey, getAuth]);
+  }, [walletAddress, getAuth]);
 
   useEffect(() => {
     fetchNotifications();
@@ -112,7 +110,7 @@ export function NotificationBell({ compact }: NotificationBellProps) {
   }, [open]);
 
   const markAllRead = async () => {
-    if (!publicKey) return;
+    if (!authenticated || !walletAddress) return;
     setLoading(true);
     try {
       const auth = await getAuth();
@@ -134,7 +132,7 @@ export function NotificationBell({ compact }: NotificationBellProps) {
     }
   };
 
-  if (!publicKey) return null;
+  if (!authenticated || !walletAddress) return null;
 
   return (
     <div className="relative" ref={dropdownRef}>

@@ -2,9 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { BountyListItem, BountyStatus, ServiceCategory } from '@/lib/atelier-db';
@@ -35,15 +33,11 @@ function statusBadge(status: string): string {
 }
 
 export default function MyBountiesPage() {
-  const wallet = useWallet();
-  const { getAuth } = useWalletAuth();
-  const { setVisible: openWalletModal } = useWalletModal();
+  const { walletAddress, getAuth, login } = useAtelierAuth();
 
   const [bounties, setBounties] = useState<BountyListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<BountyStatus | 'all'>('all');
-
-  const walletAddress = wallet.publicKey?.toBase58();
 
   const fetchBounties = useCallback(async () => {
     if (!walletAddress) { setLoading(false); return; }
@@ -73,12 +67,13 @@ export default function MyBountiesPage() {
     return (
       <AtelierAppLayout>
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
-          <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm mb-4">Connect your wallet to view your bounties</p>
+          <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm mb-4">Sign in to view your bounties</p>
           <button
-            onClick={() => openWalletModal(true)}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold font-mono bg-atelier text-white hover:bg-atelier/90 transition-colors"
+            onClick={() => login()}
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold font-mono text-white hover:opacity-90 transition-colors cursor-pointer"
+            style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)' }}
           >
-            Connect Wallet
+            Sign In
           </button>
         </div>
       </AtelierAppLayout>

@@ -3,16 +3,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
-import dynamic from 'next/dynamic';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import type { ServiceOrder, OrderStatus } from '@/lib/atelier-db';
-
-const WalletMultiButton = dynamic(
-  () => import('@solana/wallet-adapter-react-ui').then(mod => mod.WalletMultiButton),
-  { ssr: false }
-);
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending_quote: 'Pending Quote',
@@ -78,16 +71,14 @@ export default function MyOrdersPage() {
 }
 
 function OrdersContent() {
-  const wallet = useWallet();
-  const { publicKey } = wallet;
-  const { getAuth } = useWalletAuth();
+  const { walletAddress, authenticated, getAuth, login } = useAtelierAuth();
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   const fetchOrders = useCallback(async () => {
-    if (!publicKey) {
+    if (!authenticated || !walletAddress) {
       setOrders([]);
       return;
     }
@@ -110,7 +101,7 @@ function OrdersContent() {
     } finally {
       setLoading(false);
     }
-  }, [publicKey, getAuth]);
+  }, [authenticated, walletAddress, getAuth]);
 
   useEffect(() => {
     fetchOrders();
@@ -133,7 +124,7 @@ function OrdersContent() {
         </p>
       </div>
 
-      {!publicKey ? (
+      {!authenticated || !walletAddress ? (
         <div className="text-center py-20">
           <div className="w-16 h-16 rounded-full bg-atelier/10 flex items-center justify-center mx-auto mb-4">
             <svg className="w-7 h-7 text-atelier" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -141,19 +132,15 @@ function OrdersContent() {
             </svg>
           </div>
           <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm mb-4">
-            Connect your wallet to view orders
+            Sign in to view orders
           </p>
-          <WalletMultiButton
-            style={{
-              background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
-              color: 'white',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              borderRadius: '0.5rem',
-              height: '2.5rem',
-              padding: '0 1.5rem',
-            }}
-          />
+          <button
+            onClick={() => login()}
+            className="px-5 py-2.5 rounded-lg text-sm font-semibold font-mono text-white transition-colors cursor-pointer"
+            style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)' }}
+          >
+            Sign In
+          </button>
         </div>
       ) : loading ? (
         <div className="flex items-center justify-center py-20">

@@ -3,15 +3,10 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useTheme } from '../ThemeProvider';
 import { atelierHref } from '@/lib/atelier-paths';
-import dynamic from 'next/dynamic';
-
-const WalletMultiButton = dynamic(
-  () => import('@solana/wallet-adapter-react-ui').then(mod => mod.WalletMultiButton),
-  { ssr: false }
-);
+import { SignInButton } from './SignInButton';
 
 interface NavItem {
   href: string;
@@ -72,15 +67,6 @@ const mainNavItems: NavItem[] = [
 
 const userNavItems: NavItem[] = [
   {
-    href: '/atelier/dashboard',
-    label: 'Dashboard',
-    icon: (
-      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-      </svg>
-    ),
-  },
-  {
     href: '/atelier/orders',
     label: 'My Orders',
     icon: (
@@ -107,6 +93,15 @@ const userNavItems: NavItem[] = [
       </svg>
     ),
   },
+  {
+    href: '/atelier/dashboard',
+    label: 'Agent Dashboard',
+    icon: (
+      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+      </svg>
+    ),
+  },
 ];
 
 
@@ -114,7 +109,7 @@ export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
   const [stats, setStats] = useState<{ agents: number; orders: number; totalRevenueUsd: number } | null>(null);
   const pathname = usePathname();
-  const { connected } = useWallet();
+  const { authenticated, login } = useAtelierAuth();
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
@@ -256,46 +251,35 @@ export function AtelierSidebar() {
             <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
           )}
         </div>
-        {connected && userNavItems.map(renderNavLink)}
-        <div className={`px-1 pt-1 atelier-wallet-btn ${expanded ? '' : 'flex justify-center'}`}>
+        {userNavItems.map((item) => {
+          if (!authenticated) {
+            return (
+              <button
+                key={item.href}
+                onClick={() => login()}
+                className={`w-full flex items-center gap-3 h-10 rounded-lg transition-all cursor-pointer ${
+                  expanded ? 'px-3' : 'justify-center px-0'
+                } text-gray-400 dark:text-neutral-600 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-gray-500 dark:hover:text-neutral-400`}
+                title={!expanded ? item.label : undefined}
+              >
+                {item.icon}
+                <span
+                  className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${
+                    expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
+                  }`}
+                >
+                  {item.label}
+                </span>
+              </button>
+            );
+          }
+          return renderNavLink(item);
+        })}
+        <div className={`px-1 pt-1 ${expanded ? '' : 'flex justify-center'}`}>
           {expanded ? (
-            <WalletMultiButton
-              style={{
-                background: 'transparent',
-                color: connected
-                  ? (theme === 'dark' ? '#9CA3AF' : '#6B7280')
-                  : '#8B5CF6',
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                borderRadius: '0.375rem',
-                height: '2.25rem',
-                width: '100%',
-                padding: '0 0.75rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-start',
-                transition: 'all 0.2s ease',
-                letterSpacing: '0.02em',
-                opacity: connected ? 0.6 : 1,
-                border: connected
-                  ? `1px solid ${theme === 'dark' ? 'rgba(156,163,175,0.2)' : 'rgba(107,114,128,0.3)'}`
-                  : '1px solid rgba(139, 92, 246, 0.4)',
-              }}
-            />
+            <SignInButton expanded />
           ) : (
-            <button
-              onClick={() => { setExpanded(true); localStorage.setItem('atelier_sidebar_expanded', 'true'); }}
-              className={`flex items-center justify-center w-9 h-9 rounded-lg transition-colors ${
-                connected
-                  ? 'text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300'
-                  : 'text-atelier hover:text-atelier-bright'
-              }`}
-              title={connected ? 'Wallet' : 'Connect Wallet'}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
-              </svg>
-            </button>
+            <SignInButton expanded={false} />
           )}
         </div>
 

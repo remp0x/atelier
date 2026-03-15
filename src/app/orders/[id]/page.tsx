@@ -4,11 +4,10 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { sendUsdcPayment } from '@/lib/solana-pay';
 import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable, OrderMessage } from '@/lib/atelier-db';
 
@@ -316,8 +315,7 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
 }
 
 function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: () => void }) {
-  const wallet = useWallet();
-  const { getAuth } = useWalletAuth();
+  const { walletAddress, getAuth } = useAtelierAuth();
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -325,7 +323,7 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = useCallback(async () => {
-    if (!wallet.publicKey || rating === 0) return;
+    if (!walletAddress || rating === 0) return;
     setSubmitting(true);
     setError(null);
 
@@ -351,7 +349,7 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
     } finally {
       setSubmitting(false);
     }
-  }, [getAuth, wallet.publicKey, orderId, rating, comment, onSubmitted]);
+  }, [getAuth, walletAddress, orderId, rating, comment, onSubmitted]);
 
   return (
     <div className="mt-4 p-4 rounded-lg bg-neutral-50 dark:bg-black-soft border border-neutral-200 dark:border-neutral-800">
@@ -456,8 +454,7 @@ function TimelineDot({ state, isTerminal }: { state: StepState; isTerminal: bool
 
 function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => void }) {
   const { order, deliverables: initialDeliverables } = data;
-  const wallet = useWallet();
-  const { getAuth } = useWalletAuth();
+  const { walletAddress, getAuth } = useAtelierAuth();
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
@@ -493,7 +490,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
   }, [order.workspace_expires_at, order.status, onRefresh]);
 
   const handleGenerate = useCallback(async () => {
-    if (!canGenerate || !wallet.publicKey || !prompt.trim()) return;
+    if (!canGenerate || !walletAddress || !prompt.trim()) return;
 
     setGenerating(true);
     setGenError(null);
@@ -530,10 +527,10 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
     } finally {
       setGenerating(false);
     }
-  }, [canGenerate, wallet.publicKey, prompt, order.id, order.quota_total, onRefresh, getAuth]);
+  }, [canGenerate, walletAddress, prompt, order.id, order.quota_total, onRefresh, getAuth]);
 
   const handleApprove = useCallback(async () => {
-    if (!wallet.publicKey) return;
+    if (!walletAddress) return;
     setApproving(true);
     try {
       const auth = await getAuth();
@@ -547,7 +544,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
     } finally {
       setApproving(false);
     }
-  }, [getAuth, wallet.publicKey, order.id, onRefresh]);
+  }, [getAuth, walletAddress, order.id, onRefresh]);
 
   return (
     <div className="space-y-6">
@@ -630,7 +627,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
       )}
 
       {/* Approve button for delivered workspace orders */}
-      {order.status === 'delivered' && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
+      {order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
         <button
           onClick={handleApprove}
           disabled={approving}
@@ -714,7 +711,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
 }
 
 function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet: string }) {
-  const { getAuth, clearAuth } = useWalletAuth();
+  const { getAuth, clearAuth } = useAtelierAuth();
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -825,9 +822,8 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
 
 export default function AtelierOrderPage() {
   const params = useParams();
-  const wallet = useWallet();
+  const { walletAddress, getAuth, getTransactionWallet } = useAtelierAuth();
   const { connection } = useConnection();
-  const { getAuth } = useWalletAuth();
   const [data, setData] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -892,7 +888,7 @@ export default function AtelierOrderPage() {
   const isTerminal = order.status === 'cancelled' || order.status === 'disputed';
   const showWorkspace = isWorkspace && ['in_progress', 'delivered', 'completed'].includes(order.status);
   const canCancel = ['pending_quote', 'quoted', 'accepted', 'paid'].includes(order.status)
-    && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58();
+    && walletAddress && order.client_wallet === walletAddress;
 
   return (
     <AtelierAppLayout>
@@ -979,7 +975,7 @@ export default function AtelierOrderPage() {
         <StatusBanner order={order} />
 
         {/* Accept & Pay for quoted orders */}
-        {order.status === 'quoted' && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
+        {order.status === 'quoted' && walletAddress && order.client_wallet === walletAddress && (
           <div className="mb-8 p-5 rounded-lg border border-atelier/30 bg-atelier/5">
             <h3 className="text-sm font-bold font-display text-black dark:text-white mb-3">Quote Received</h3>
             <div className="flex items-center gap-4 text-sm font-mono mb-4">
@@ -1000,7 +996,7 @@ export default function AtelierOrderPage() {
                   if (total <= 0) { setPayError('Invalid order total'); return; }
 
                   setPayMsg('Sending USDC payment...');
-                  const txSig = await sendUsdcPayment(connection, wallet, new PublicKey(treasuryWallet), total);
+                  const txSig = await sendUsdcPayment(connection, getTransactionWallet()!, new PublicKey(treasuryWallet), total);
 
                   setPayMsg('Verifying payment...');
                   const auth = await getAuth();
@@ -1086,7 +1082,7 @@ export default function AtelierOrderPage() {
               })}
             </div>
 
-            {order.status === 'delivered' && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
+            {order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
               <>
                 {order.revision_count > 0 && (
                   <p className="mt-6 text-xs font-mono text-neutral-400">
@@ -1162,7 +1158,7 @@ export default function AtelierOrderPage() {
               </>
             )}
 
-            {showRevisionForm && order.status === 'delivered' && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
+            {showRevisionForm && order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
               <div className="mt-4 p-4 rounded-lg border border-amber-400/20 bg-amber-400/5">
                 {order.revision_count >= order.max_revisions && (
                   <p className="text-xs font-mono text-amber-400/70 mb-3">
@@ -1228,7 +1224,7 @@ export default function AtelierOrderPage() {
               </div>
             )}
 
-            {showDisputeForm && order.status === 'delivered' && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
+            {showDisputeForm && order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
               <div className="mt-4 p-4 rounded-lg border border-red-400/20 bg-red-400/5">
                 <p className="text-sm font-mono text-red-400 mb-3">Why are you disputing this order?</p>
                 <textarea
@@ -1292,7 +1288,7 @@ export default function AtelierOrderPage() {
         )}
 
         {/* Review prompt — prominent placement for completed orders */}
-        {order.status === 'completed' && !review && wallet.publicKey && order.client_wallet === wallet.publicKey.toBase58() && (
+        {order.status === 'completed' && !review && walletAddress && order.client_wallet === walletAddress && (
           <div className="mt-6">
             <div className="p-4 rounded-lg border border-atelier/20 bg-atelier/5 mb-2">
               <p className="text-sm font-mono text-atelier mb-1">How was your experience?</p>
@@ -1318,7 +1314,7 @@ export default function AtelierOrderPage() {
         )}
 
         {/* Collapsible messages */}
-        {wallet.publicKey && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
+        {walletAddress && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
           <div className="mt-8">
             <button
               onClick={() => setShowMessages(!showMessages)}
@@ -1330,7 +1326,7 @@ export default function AtelierOrderPage() {
               Messages
             </button>
             {showMessages && (
-              <OrderChat orderId={order.id} wallet={wallet.publicKey.toBase58()} />
+              <OrderChat orderId={order.id} wallet={walletAddress} />
             )}
           </div>
         )}

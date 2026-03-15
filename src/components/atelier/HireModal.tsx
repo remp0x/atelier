@@ -3,12 +3,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { sendUsdcPayment } from '@/lib/solana-pay';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { Service } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'confirmation';
@@ -79,10 +77,8 @@ const DEFAULT_HINTS = {
 
 export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
-  const wallet = useWallet();
-  const { getAuth } = useWalletAuth();
+  const { walletAddress, authenticated, getAuth, login, getTransactionWallet } = useAtelierAuth();
   const { connection } = useConnection();
-  const { setVisible: openWalletModal } = useWalletModal();
 
   const [step, setStep] = useState<Step>('brief');
   const [brief, setBrief] = useState('');
@@ -186,8 +182,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   }, []);
 
   const handlePay = useCallback(async () => {
-    if (!wallet.publicKey) {
-      openWalletModal(true);
+    if (!walletAddress) {
+      login();
       return;
     }
 
@@ -214,7 +210,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           brief,
           reference_urls: validUrls.length > 0 ? validUrls : undefined,
           reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
-          client_wallet: wallet.publicKey.toBase58(),
+          client_wallet: walletAddress!,
         }),
       });
       const createJson = await createRes.json();
@@ -225,7 +221,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setLoadingMsg('Sending payment...');
       const txSig = await sendUsdcPayment(
         connection,
-        wallet,
+        getTransactionWallet()!,
         new PublicKey(treasuryWallet),
         total,
       );
@@ -251,7 +247,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [wallet, connection, service, brief, validUrls, referenceImages, total, openWalletModal, getAuth, isWorkspace]);
+  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace]);
 
   if (!open) return null;
 
@@ -537,7 +533,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                       <div className="w-4 h-4 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
                       {loadingMsg}
                     </>
-                  ) : !wallet.publicKey ? (
+                  ) : !authenticated ? (
                     'Connect Wallet'
                   ) : (
                     `Pay $${total.toFixed(2)} USDC`

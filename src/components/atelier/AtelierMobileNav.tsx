@@ -3,22 +3,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useTheme } from '../ThemeProvider';
 import { atelierHref } from '@/lib/atelier-paths';
-import dynamic from 'next/dynamic';
 import { NotificationBell } from './NotificationBell';
-
-const WalletMultiButton = dynamic(
-  () => import('@solana/wallet-adapter-react-ui').then(mod => mod.WalletMultiButton),
-  { ssr: false }
-);
+import { SignInButton } from './SignInButton';
 
 const ICON_CLASS = 'w-5 h-5';
 
 export function AtelierMobileNav() {
   const pathname = usePathname();
-  const { connected } = useWallet();
+  const { authenticated, login } = useAtelierAuth();
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -154,54 +149,39 @@ export function AtelierMobileNav() {
               <span className="text-sm font-mono">Bounties</span>
             </Link>
 
-            {connected && (
-              <>
+            {[
+              { href: '/atelier/orders', label: 'My Orders', icon: <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg> },
+              { href: '/atelier/bounties/my', label: 'My Bounties', icon: <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" /></svg> },
+              { href: '/atelier/dashboard', label: 'Dashboard', icon: <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" /></svg> },
+            ].map((item) => {
+              if (!authenticated) {
+                return (
+                  <button
+                    key={item.href}
+                    onClick={() => { setMenuOpen(false); login(); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer text-gray-400 dark:text-neutral-600 hover:bg-gray-100 dark:hover:bg-neutral-900"
+                  >
+                    {item.icon}
+                    <span className="text-sm font-mono">{item.label}</span>
+                  </button>
+                );
+              }
+              return (
                 <Link
-                  href={atelierHref('/atelier/orders')}
+                  key={item.href}
+                  href={atelierHref(item.href)}
                   onClick={() => setMenuOpen(false)}
                   className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive('/atelier/orders')
+                    isActive(item.href)
                       ? 'text-atelier bg-atelier/10'
                       : 'text-gray-700 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900'
                   }`}
                 >
-                  <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                  </svg>
-                  <span className="text-sm font-mono">My Orders</span>
+                  {item.icon}
+                  <span className="text-sm font-mono">{item.label}</span>
                 </Link>
-
-                <Link
-                  href={atelierHref('/atelier/bounties/my')}
-                  onClick={() => setMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive('/atelier/bounties/my')
-                      ? 'text-atelier bg-atelier/10'
-                      : 'text-gray-700 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900'
-                  }`}
-                >
-                  <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-                  </svg>
-                  <span className="text-sm font-mono">My Bounties</span>
-                </Link>
-
-                <Link
-                  href={atelierHref('/atelier/dashboard')}
-                  onClick={() => setMenuOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    isActive('/atelier/dashboard')
-                      ? 'text-atelier bg-atelier/10'
-                      : 'text-gray-700 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900'
-                  }`}
-                >
-                  <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-                  </svg>
-                  <span className="text-sm font-mono">Dashboard</span>
-                </Link>
-              </>
-            )}
+              );
+            })}
 
             <Link
               href={atelierHref('/atelier/register')}
@@ -248,26 +228,7 @@ export function AtelierMobileNav() {
             <div className="mx-2 my-1 border-t border-gray-200 dark:border-neutral-800" />
 
             <div className="px-4 py-3">
-              <WalletMultiButton
-                style={{
-                  background: connected ? 'transparent' : 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
-                  color: connected
-                    ? (theme === 'dark' ? '#9CA3AF' : '#6B7280')
-                    : 'white',
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  borderRadius: '0.5rem',
-                  height: '2.5rem',
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: connected ? 0.6 : 1,
-                  border: connected
-                    ? `1px solid ${theme === 'dark' ? 'rgba(156,163,175,0.2)' : 'rgba(107,114,128,0.3)'}`
-                    : 'none',
-                }}
-              />
+              <SignInButton expanded />
             </div>
           </div>
         </div>

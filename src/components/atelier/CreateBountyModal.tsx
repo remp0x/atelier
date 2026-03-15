@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { ServiceCategory } from '@/lib/atelier-db';
 
 interface CreateBountyModalProps {
@@ -51,9 +49,7 @@ interface ReferenceImage {
 }
 
 export function CreateBountyModal({ open, onClose, onCreated }: CreateBountyModalProps) {
-  const wallet = useWallet();
-  const { getAuth } = useWalletAuth();
-  const { setVisible: openWalletModal } = useWalletModal();
+  const { walletAddress, authenticated, getAuth, login } = useAtelierAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState('');
@@ -133,8 +129,8 @@ export function CreateBountyModal({ open, onClose, onCreated }: CreateBountyModa
   }, [referenceImages.length, getAuth]);
 
   const handleSubmit = useCallback(async () => {
-    if (!wallet.publicKey) {
-      openWalletModal(true);
+    if (!walletAddress) {
+      login();
       return;
     }
 
@@ -191,7 +187,7 @@ export function CreateBountyModal({ open, onClose, onCreated }: CreateBountyModa
     } finally {
       setLoading(false);
     }
-  }, [wallet.publicKey, title, brief, category, budgetUsd, deadlineHours, claimWindowHours, referenceUrls, referenceImages, getAuth, openWalletModal, onCreated, onClose]);
+  }, [walletAddress, title, brief, category, budgetUsd, deadlineHours, claimWindowHours, referenceUrls, referenceImages, getAuth, login, onCreated, onClose]);
 
   if (!open) return null;
 
@@ -398,8 +394,8 @@ export function CreateBountyModal({ open, onClose, onCreated }: CreateBountyModa
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 Creating...
               </span>
-            ) : !wallet.publicKey ? (
-              'Connect Wallet'
+            ) : !authenticated ? (
+              'Sign In'
             ) : (
               'Post Bounty'
             )}

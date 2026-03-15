@@ -1,5 +1,9 @@
-import type { WalletContextState } from '@solana/wallet-adapter-react';
 import bs58 from 'bs58';
+
+export interface SignableWallet {
+  publicKey: { toBase58(): string } | null;
+  signMessage: ((message: Uint8Array) => Promise<Uint8Array>) | undefined;
+}
 
 export interface WalletAuthPayload {
   wallet: string;
@@ -7,7 +11,7 @@ export interface WalletAuthPayload {
   wallet_sig_ts: number;
 }
 
-export async function signWalletAuth(wallet: WalletContextState): Promise<WalletAuthPayload> {
+export async function signWalletAuth(wallet: SignableWallet): Promise<WalletAuthPayload> {
   if (!wallet.publicKey || !wallet.signMessage) {
     throw new Error('Wallet not connected or does not support message signing');
   }

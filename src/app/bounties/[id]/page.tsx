@@ -4,12 +4,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
-import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { PublicKey } from '@solana/web3.js';
 import { sendUsdcPayment } from '@/lib/solana-pay';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { Bounty, BountyClaimWithAgent, AtelierAgent, ServiceCategory } from '@/lib/atelier-db';
@@ -44,10 +42,8 @@ function timeRemaining(expiresAt: string): string {
 export default function BountyDetailPage() {
   const { id } = useParams();
   const router = useRouter();
-  const wallet = useWallet();
   const { connection } = useConnection();
-  const { getAuth } = useWalletAuth();
-  const { setVisible: openWalletModal } = useWalletModal();
+  const { walletAddress, authenticated, getAuth, login, getTransactionWallet } = useAtelierAuth();
 
   const [bounty, setBounty] = useState<Bounty & { claims_count: number } | null>(null);
   const [claims, setClaims] = useState<BountyClaimWithAgent[]>([]);
@@ -58,8 +54,6 @@ export default function BountyDetailPage() {
   const [claimMessage, setClaimMessage] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [showClaimForm, setShowClaimForm] = useState(false);
-
-  const walletAddress = wallet.publicKey?.toBase58();
   const isPoster = bounty && walletAddress && bounty.poster_wallet === walletAddress;
   const isOpen = bounty?.status === 'open' && new Date(bounty.expires_at) > new Date();
 
@@ -129,7 +123,7 @@ export default function BountyDetailPage() {
   }, [myAgents, selectedAgentId]);
 
   const handleClaim = useCallback(async () => {
-    if (!wallet.publicKey) { openWalletModal(true); return; }
+    if (!walletAddress) { login(); return; }
     if (!selectedAgentId) { setActionError('Select an agent'); return; }
 
     setActionLoading(true);
@@ -158,10 +152,10 @@ export default function BountyDetailPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [wallet.publicKey, selectedAgentId, claimMessage, id, getAuth, openWalletModal, fetchBounty]);
+  }, [walletAddress, selectedAgentId, claimMessage, id, getAuth, login, fetchBounty]);
 
   const handleAccept = useCallback(async (claimId: string) => {
-    if (!wallet.publicKey || !bounty) return;
+    if (!walletAddress || !bounty) return;
 
     const treasuryWallet = process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET;
     if (!treasuryWallet) { setActionError('Treasury wallet not configured'); return; }
@@ -174,7 +168,7 @@ export default function BountyDetailPage() {
 
       const txSig = await sendUsdcPayment(
         connection,
-        wallet,
+        getTransactionWallet()!,
         new PublicKey(treasuryWallet),
         totalAmount,
       );
@@ -199,10 +193,10 @@ export default function BountyDetailPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [wallet, bounty, connection, id, getAuth, router]);
+  }, [walletAddress, bounty, connection, id, getAuth, getTransactionWallet, router]);
 
   const handleCancel = useCallback(async () => {
-    if (!wallet.publicKey) return;
+    if (!walletAddress) return;
     setActionLoading(true);
     setActionError(null);
     try {
@@ -225,7 +219,7 @@ export default function BountyDetailPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [wallet.publicKey, id, getAuth, fetchBounty]);
+  }, [walletAddress, id, getAuth, fetchBounty]);
 
   if (loading) {
     return (
@@ -501,7 +495,7 @@ export default function BountyDetailPage() {
         {!walletAddress && isOpen && (
           <div className="mb-6">
             <button
-              onClick={() => openWalletModal(true)}
+              onClick={() => login()}
               className="w-full py-3 rounded-xl text-sm font-semibold font-mono border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier hover:text-atelier transition-colors"
             >
               Connect Wallet to Claim

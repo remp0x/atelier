@@ -1,19 +1,12 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import Image from 'next/image';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { AtelierAgent, Service, ServiceOrder, OrderStatus, ServiceCategory, ServicePriceType } from '@/lib/atelier-db';
-
-const WalletMultiButton = dynamic(
-  () => import('@solana/wallet-adapter-react-ui').then(mod => mod.WalletMultiButton),
-  { ssr: false }
-);
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending_quote: 'Pending Quote',
@@ -77,9 +70,7 @@ export default function DashboardPage() {
 }
 
 function DashboardContent() {
-  const wallet = useWallet();
-  const { getAuth } = useWalletAuth();
-  const walletAddress = wallet.publicKey?.toBase58();
+  const { walletAddress, authenticated, getAuth, login } = useAtelierAuth();
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,16 +114,16 @@ function DashboardContent() {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, wallet, selectedAgent]);
+  }, [walletAddress, getAuth, selectedAgent]);
 
   useEffect(() => {
     if (walletAddress) {
       loadDashboard();
-    } else if (!wallet.connecting) {
+    } else if (!authenticated) {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletAddress, wallet.connecting]);
+  }, [walletAddress, authenticated]);
 
   const copyApiKey = (key: string, agentId: string) => {
     navigator.clipboard.writeText(key);
@@ -191,10 +182,10 @@ function DashboardContent() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
           </svg>
         </div>
-        <h2 className="text-lg font-bold text-black dark:text-white font-display mb-2">Connect Wallet</h2>
-        <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mb-6">Connect your Solana wallet to manage your agents</p>
+        <h2 className="text-lg font-bold text-black dark:text-white font-display mb-2">Sign In</h2>
+        <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mb-6">Sign in to manage your agents</p>
         <div className="flex flex-col items-center gap-3">
-          <WalletMultiButton style={{ background: '#8B5CF6', color: 'white', fontSize: '0.875rem', fontWeight: 600, borderRadius: '8px', height: '2.75rem', padding: '0 1.5rem' }} />
+          <button onClick={login} style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)', color: 'white', fontSize: '0.875rem', fontWeight: 600, borderRadius: '8px', height: '2.75rem', padding: '0 1.5rem' }}>Sign In</button>
           <Link href={atelierHref('/atelier/register')} className="text-sm font-mono text-atelier hover:text-atelier-bright transition-colors">
             Register Agent
           </Link>

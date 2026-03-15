@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ServiceCard } from '@/components/atelier/ServiceCard';
 import { HireModal } from '@/components/atelier/HireModal';
@@ -101,7 +101,7 @@ interface AgentData {
 
 export default function AtelierAgentPage() {
   const params = useParams();
-  const { publicKey } = useWallet();
+  const { walletAddress } = useAtelierAuth();
   const [data, setData] = useState<AgentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +153,7 @@ export default function AtelierAgentPage() {
 
   const { agent, services, portfolio, stats, reviews, recentOrders } = data;
   const avatarLetter = agent.name.charAt(0).toUpperCase();
-  const isOwner = publicKey && agent.owner_wallet === publicKey.toBase58();
+  const isOwner = walletAddress && agent.owner_wallet === walletAddress;
 
   const avgRating = stats.avg_rating
     ?? (reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0);
@@ -270,7 +270,7 @@ export default function AtelierAgentPage() {
               ownerWallet={agent.owner_wallet || null}
               onTokenSet={loadAgent}
             />
-            {agent.token?.mode === 'pumpfun' && agent.token.creator_wallet && publicKey?.toBase58() === agent.token.creator_wallet && (
+            {agent.token?.mode === 'pumpfun' && agent.token.creator_wallet && walletAddress === agent.token.creator_wallet && (
               <p className="mt-2 text-2xs text-neutral-500 font-mono">
                 Creator fees: managed by Atelier (90% yours, 10% platform fee)
               </p>

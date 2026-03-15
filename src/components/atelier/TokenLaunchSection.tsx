@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { linkExistingToken } from '@/lib/pumpfun-client';
 import Image from 'next/image';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
 import type { MarketData } from '@/app/api/market/route';
 
 interface TokenInfo {
@@ -45,9 +44,7 @@ export function TokenLaunchSection({
   ownerWallet: string | null;
   onTokenSet: () => void;
 }) {
-  const wallet = useWallet();
-  const { getAuth } = useWalletAuth();
-  const { publicKey, connected } = wallet;
+  const { walletAddress, authenticated, getAuth } = useAtelierAuth();
 
   const [mode, setMode] = useState<'none' | 'pumpfun' | 'byot'>('none');
   const [step, setStep] = useState<LaunchStep>('idle');
@@ -185,24 +182,24 @@ export function TokenLaunchSection({
 
   if (!ownerWallet) return null;
 
-  if (!connected || !publicKey) {
+  if (!authenticated || !walletAddress) {
     return (
       <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
         <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono text-center">
-          Connect wallet to launch or link a token
+          Sign in to launch or link a token
         </p>
       </div>
     );
   }
 
-  if (publicKey.toBase58() !== ownerWallet) {
+  if (walletAddress !== ownerWallet) {
     return null;
   }
 
   const busy = step !== 'idle' && step !== 'done' && step !== 'error';
 
   async function handlePumpFunLaunch() {
-    if (!publicKey) return;
+    if (!walletAddress) return;
     setError(null);
 
     try {
@@ -234,7 +231,7 @@ export function TokenLaunchSection({
   }
 
   async function handleByotLink() {
-    if (!publicKey) return;
+    if (!walletAddress) return;
     setError(null);
 
     try {
@@ -246,7 +243,7 @@ export function TokenLaunchSection({
         mintAddress: byotMint,
         name: fullName,
         symbol: byotSymbol,
-        walletPublicKey: publicKey.toBase58(),
+        walletPublicKey: walletAddress,
         walletAuth,
       });
       setStep('done');

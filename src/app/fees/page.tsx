@@ -1,18 +1,27 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
 import { useConnection } from '@solana/wallet-adapter-react';
-import { LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 
 const ATELIER_WALLET = 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb';
 
+interface TokenFee {
+  mint: string;
+  distributableFeesLamports: number;
+  canDistribute: boolean;
+  isGraduated: boolean;
+}
+
 interface BalanceData {
   total_swept_lamports: number;
   total_paid_out_lamports: number;
-  total_indexed_lamports: number;
+  vault_balance_lamports: number;
+  total_earned_lamports: number;
   total_historical_creator_fees_sol: number;
+  per_token_fees: TokenFee[];
 }
 
 interface Sweep {
@@ -62,7 +71,7 @@ export default function FeesAdminPage() {
 }
 
 function FeesContent() {
-  const { publicKey } = useWallet();
+  const { walletAddress } = useAtelierAuth();
   const { connection } = useConnection();
 
   const [balance, setBalance] = useState<BalanceData | null>(null);
@@ -80,7 +89,7 @@ function FeesContent() {
   const [payoutMint, setPayoutMint] = useState('');
   const [payoutAmount, setPayoutAmount] = useState('');
 
-  const isAdmin = publicKey?.toBase58() === ATELIER_WALLET;
+  const isAdmin = walletAddress === ATELIER_WALLET;
 
   const loadData = useCallback(async () => {
     if (!isAdmin) return;
@@ -91,7 +100,7 @@ function FeesContent() {
         fetch('/api/fees/sweeps').then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/fees/payouts').then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/agents?source=all&limit=200').then(r => r.json()),
-        connection.getBalance(publicKey!),
+        connection.getBalance(new PublicKey(walletAddress!)),
       ]);
 
       if (balRes.success) setBalance(balRes.data);
@@ -116,7 +125,7 @@ function FeesContent() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, publicKey, connection]);
+  }, [isAdmin, walletAddress, connection]);
 
   useEffect(() => {
     loadData();
@@ -177,10 +186,10 @@ function FeesContent() {
     }
   }
 
-  if (!publicKey) {
+  if (!walletAddress) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-neutral-500 font-mono text-sm">Connect wallet to access fee dashboard</p>
+        <p className="text-neutral-500 font-mono text-sm">Sign in to access fee dashboard</p>
       </div>
     );
   }
@@ -212,10 +221,16 @@ function FeesContent() {
       )}
 
       {/* Balance Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
           <p className="text-xs text-neutral-500 font-mono mb-1">Total Creator Fees</p>
           <p className="text-xl font-bold font-mono">{balance ? balance.total_historical_creator_fees_sol.toFixed(4) : '—'} SOL</p>
+          <p className="text-2xs text-neutral-500 font-mono mt-1">Swept + Vault</p>
+        </div>
+
+        <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
+          <p className="text-xs text-neutral-500 font-mono mb-1">Vault Balance</p>
+          <p className="text-xl font-bold font-mono">{balance ? lamportsToSol(balance.vault_balance_lamports) : '—'} SOL</p>
           <button
             onClick={handleCollect}
             disabled={collecting}
@@ -253,16 +268,33 @@ function FeesContent() {
                   <th className="px-3 py-2 text-left">Agent</th>
                   <th className="px-3 py-2 text-left">Mint</th>
                   <th className="px-3 py-2 text-left">Creator Wallet</th>
+                  <th className="px-3 py-2 text-right">Distributable Fees</th>
+                  <th className="px-3 py-2 text-center">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {tokens.map((t) => (
-                  <tr key={t.id} className="border-t border-gray-200 dark:border-neutral-800">
-                    <td className="px-3 py-2">{t.name}</td>
-                    <td className="px-3 py-2 text-atelier">{truncAddr(t.token_mint)}</td>
-                    <td className="px-3 py-2 text-neutral-400">{t.token_creator_wallet ? truncAddr(t.token_creator_wallet) : '—'}</td>
-                  </tr>
-                ))}
+                {tokens.map((t) => {
+                  const fee = balance?.per_token_fees?.find((f) => f.mint === t.token_mint);
+                  return (
+                    <tr key={t.id} className="border-t border-gray-200 dark:border-neutral-800">
+                      <td className="px-3 py-2">{t.name}</td>
+                      <td className="px-3 py-2 text-atelier">{truncAddr(t.token_mint)}</td>
+                      <td className="px-3 py-2 text-neutral-400">{t.token_creator_wallet ? truncAddr(t.token_creator_wallet) : '—'}</td>
+                      <td className="px-3 py-2 text-right text-green-400">
+                        {fee ? lamportsToSol(fee.distributableFeesLamports) : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {fee ? (
+                          <span className={`px-1.5 py-0.5 rounded text-2xs ${
+                            fee.isGraduated ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-400/10 text-amber-400'
+                          }`}>
+                            {fee.isGraduated ? 'graduated' : 'bonding'}
+                          </span>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

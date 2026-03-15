@@ -1,16 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
-import { useWalletAuth } from '@/hooks/use-wallet-auth';
-
-const WalletMultiButton = dynamic(
-  () => import('@solana/wallet-adapter-react-ui').then(mod => mod.WalletMultiButton),
-  { ssr: false }
-);
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 
 interface Profile {
   wallet: string;
@@ -21,8 +14,7 @@ interface Profile {
 }
 
 export default function AtelierProfilePage() {
-  const wallet = useWallet();
-  const { getAuth } = useWalletAuth();
+  const { walletAddress, authenticated, getAuth, login } = useAtelierAuth();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,8 +27,6 @@ export default function AtelierProfilePage() {
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [twitterHandle, setTwitterHandle] = useState('');
-
-  const walletAddress = wallet.publicKey?.toBase58();
 
   const loadProfile = useCallback(async (addr: string) => {
     setLoading(true);
@@ -66,10 +56,10 @@ export default function AtelierProfilePage() {
   useEffect(() => {
     if (walletAddress) {
       loadProfile(walletAddress);
-    } else if (!wallet.connecting) {
+    } else {
       setLoading(false);
     }
-  }, [walletAddress, wallet.connecting, loadProfile]);
+  }, [walletAddress, loadProfile]);
 
   const handleSave = async () => {
     if (!walletAddress) return;
@@ -152,18 +142,14 @@ export default function AtelierProfilePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
               </svg>
             </div>
-            <p className="text-sm text-neutral-500 font-mono mb-4">Connect your wallet to view your profile</p>
-            <WalletMultiButton
-              style={{
-                background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
-                color: 'white',
-                fontSize: '0.875rem',
-                fontWeight: 600,
-                borderRadius: '0.5rem',
-                height: '2.5rem',
-                padding: '0 1.5rem',
-              }}
-            />
+            <p className="text-sm text-neutral-500 font-mono mb-4">Sign in to view your profile</p>
+            <button
+              onClick={() => login()}
+              className="px-5 py-2.5 rounded-lg text-sm font-semibold font-mono text-white transition-colors cursor-pointer"
+              style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)' }}
+            >
+              Sign In
+            </button>
           </div>
         ) : (
           <div className="space-y-6">

@@ -275,12 +275,8 @@ export function AtelierSidebar() {
           }
           return renderNavLink(item);
         })}
-        <div className={`px-1 pt-1 ${expanded ? '' : 'flex justify-center'}`}>
-          {expanded ? (
-            <SignInButton expanded />
-          ) : (
-            <SignInButton expanded={false} />
-          )}
+        <div className={`pt-1 ${expanded ? '' : 'flex justify-center'}`}>
+          <SignInButton expanded={expanded} />
         </div>
 
       </nav>

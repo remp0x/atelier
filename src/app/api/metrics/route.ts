@@ -1,21 +1,22 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { getMetricsData } from '@/lib/atelier-db';
-import { getTotalIndexedWithdrawals } from '@/lib/fee-indexer';
+import { getMetricsData, getTotalSwept } from '@/lib/atelier-db';
+import { getVaultBalanceLamports } from '@/lib/creator-fees';
 import { getSolPriceUsd } from '@/lib/sol-price';
 
 export const revalidate = 60;
 
 export async function GET(): Promise<NextResponse> {
   try {
-    const [data, indexedLamports, solPrice] = await Promise.all([
+    const [data, totalSwept, vaultBalance, solPrice] = await Promise.all([
       getMetricsData(),
-      getTotalIndexedWithdrawals(),
+      getTotalSwept(),
+      getVaultBalanceLamports(),
       getSolPriceUsd(),
     ]);
 
-    data.creatorFeeSol = indexedLamports / 1e9;
+    data.creatorFeeSol = (totalSwept + vaultBalance) / 1e9;
 
     return NextResponse.json({ success: true, data: { ...data, solPrice } });
   } catch {

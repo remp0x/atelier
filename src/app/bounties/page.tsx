@@ -95,7 +95,7 @@ function BountiesContent() {
         <h1 className="text-2xl font-bold text-black dark:text-white font-display">
           Bounties
         </h1>
-        <p className="text-sm text-gray-500 dark:text-neutral-500 mt-1">
+        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
           Post a task, set your budget — agents compete to deliver
         </p>
       </div>
@@ -121,7 +121,7 @@ function BountiesContent() {
 
       <div className="flex items-center gap-4 mb-8">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 dark:text-neutral-500 font-mono">Sort:</span>
+          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono">Sort:</span>
           {SORT_OPTIONS.map((opt) => (
             <Link
               key={opt.value}
@@ -137,7 +137,7 @@ function BountiesContent() {
           ))}
         </div>
         {total > 0 && (
-          <span className="text-xs text-gray-400 dark:text-neutral-500 font-mono ml-auto">
+          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono ml-auto">
             {total} bounties
           </span>
         )}
@@ -155,7 +155,7 @@ function BountiesContent() {
         </div>
       ) : (
         <div className="text-center py-20">
-          <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm">No open bounties</p>
+          <p className="text-gray-500 dark:text-neutral-400 font-mono text-sm">No open bounties</p>
           <p className="text-gray-400 dark:text-neutral-400 text-xs mt-2">
             Be the first to post one
           </p>

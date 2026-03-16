@@ -26,10 +26,10 @@ module.exports = {
         },
         'gray': {
           'darker': '#1a1a1a',
-          'dark': '#2a2a2a',
+          'dark': '#333333',
           'medium': '#404040',
           'light': '#6a6a6a',
-          'lighter': '#9a9a9a',
+          'lighter': '#b3b3b3',
         },
       },
       fontFamily: {

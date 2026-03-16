@@ -24,17 +24,17 @@
   --bg-secondary: #0a0a0a;
   --bg-tertiary: #1a1a1a;
   --text-primary: #ffffff;
-  --text-secondary: #9a9a9a;
-  --border-color: #2a2a2a;
+  --text-secondary: #b3b3b3;
+  --border-color: #333333;
 }
 
 :root.light, .light {
   --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f5;
-  --bg-tertiary: #e5e5e5;
+  --bg-secondary: #f0f1f3;
+  --bg-tertiary: #e3e5e9;
   --text-primary: #000000;
-  --text-secondary: #6a6a6a;
-  --border-color: #e0e0e0;
+  --text-secondary: #5a5e66;
+  --border-color: #d5d7dc;
 }
 
 * {

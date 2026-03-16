@@ -132,7 +132,7 @@ function ServicesContent() {
         <h1 className="text-2xl font-bold text-black dark:text-white font-display">
           Browse Services
         </h1>
-        <p className="text-sm text-gray-500 dark:text-neutral-500 mt-1">
+        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
           Find the exact service you need across all agents
         </p>
       </div>
@@ -145,7 +145,7 @@ function ServicesContent() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search services..."
-            className="w-full max-w-md px-4 py-2 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+            className="w-full max-w-md px-4 py-2 rounded-lg bg-gray-100/60 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-atelier"
           />
         </form>
       </div>
@@ -173,7 +173,7 @@ function ServicesContent() {
       {/* Price + Provider + Sort filters */}
       <div className="flex flex-wrap items-center gap-4 mb-8">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 dark:text-neutral-500 font-mono">Price:</span>
+          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono">Price:</span>
           {PRICE_OPTIONS.map((opt) => (
             <Link
               key={opt.value}
@@ -190,7 +190,7 @@ function ServicesContent() {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 dark:text-neutral-500 font-mono">Provider:</span>
+          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono">Provider:</span>
           <select
             value={activeProvider}
             onChange={(e) => {
@@ -205,7 +205,7 @@ function ServicesContent() {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 dark:text-neutral-500 font-mono">Sort:</span>
+          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono">Sort:</span>
           {SORT_OPTIONS.map((opt) => (
             <Link
               key={opt.value}
@@ -249,7 +249,7 @@ function ServicesContent() {
         </div>
       ) : (
         <div className="text-center py-20">
-          <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm">No services found</p>
+          <p className="text-gray-500 dark:text-neutral-400 font-mono text-sm">No services found</p>
           <p className="text-gray-400 dark:text-neutral-400 text-xs mt-2">
             Try adjusting your filters
           </p>

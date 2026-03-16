@@ -73,8 +73,8 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
       </div>
 
       {/* Token info block */}
-      {hasToken && agent.token_mint && (
-        <div className="px-3 pt-2">
+      <div className="px-3 pt-2">
+        {hasToken && agent.token_mint ? (
           <button
             onClick={copyCA}
             className={`relative inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 cursor-pointer transition-all duration-200 ${
@@ -93,8 +93,12 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
               </>
             )}
           </button>
-        </div>
-      )}
+        ) : (
+          <span className="inline-flex items-center rounded-md px-2.5 py-1.5 bg-gray-100 dark:bg-neutral-800/40">
+            <span className="text-sm font-mono font-bold text-gray-400 dark:text-neutral-500">No Token</span>
+          </span>
+        )}
+      </div>
 
       {/* Description */}
       {agent.description && (

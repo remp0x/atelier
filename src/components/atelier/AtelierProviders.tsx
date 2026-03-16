@@ -7,10 +7,10 @@ import { AtelierAuthProvider } from '@/hooks/use-atelier-auth';
 
 export function AtelierProviders({ children }: { children: ReactNode }) {
   return (
-    <ThemeProvider>
-      <PrivyAuthProvider>
+    <PrivyAuthProvider>
+      <ThemeProvider>
         <AtelierAuthProvider>{children}</AtelierAuthProvider>
-      </PrivyAuthProvider>
-    </ThemeProvider>
+      </ThemeProvider>
+    </PrivyAuthProvider>
   );
 }

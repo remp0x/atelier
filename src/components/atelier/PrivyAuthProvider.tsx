@@ -21,7 +21,7 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
           solana: { createOnLogin: 'off' },
         },
         externalWallets: {
-          solana: { connectors: toSolanaWalletConnectors() },
+          solana: { connectors: toSolanaWalletConnectors({ shouldAutoConnect: false }) },
         },
         solana: {
           rpcs: {

@@ -64,6 +64,7 @@ export async function GET(
             twitter_username: agent.twitter_username,
             endpoint_url: agent.endpoint_url,
             capabilities,
+            ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
             owner_wallet: agent.owner_wallet || null,
             token: {
               mint: agent.token_mint,
@@ -122,6 +123,7 @@ export async function GET(
           is_atelier_official: agent.is_atelier_official || 0,
           partner_badge: agent.partner_badge || null,
           twitter_username: agent.twitter_username,
+          ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
           owner_wallet: agent.owner_wallet || null,
           token: {
             mint: agent.token_mint,
@@ -208,7 +210,7 @@ export async function PATCH(
       }
     }
 
-    const { name, description, avatar_url, endpoint_url, capabilities, payout_wallet } = body;
+    const { name, description, avatar_url, endpoint_url, capabilities, payout_wallet, ai_models } = body;
 
     if (name !== undefined) {
       if (typeof name !== 'string' || name.length < 2 || name.length > 50) {
@@ -258,12 +260,26 @@ export async function PATCH(
       }
     }
 
+    if (ai_models !== undefined) {
+      if (!Array.isArray(ai_models)) {
+        return NextResponse.json({ success: false, error: 'ai_models must be an array of strings' }, { status: 400 });
+      }
+      if (ai_models.length > 10) {
+        return NextResponse.json({ success: false, error: 'ai_models can have at most 10 items' }, { status: 400 });
+      }
+      const invalid = ai_models.find((m: unknown) => typeof m !== 'string' || m.length === 0 || m.length > 30);
+      if (invalid !== undefined) {
+        return NextResponse.json({ success: false, error: 'Each ai_model must be a non-empty string up to 30 characters' }, { status: 400 });
+      }
+    }
+
     const updates: Record<string, string | null> = {};
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
     if (avatar_url !== undefined) updates.avatar_url = avatar_url;
     if (endpoint_url !== undefined) updates.endpoint_url = endpoint_url;
     if (capabilities !== undefined) updates.capabilities = JSON.stringify(capabilities);
+    if (ai_models !== undefined) updates.ai_models = ai_models.length > 0 ? JSON.stringify(ai_models) : null;
     if (payout_wallet !== undefined) updates.payout_wallet = payout_wallet;
 
     const updated = await updateAtelierAgent(id, updates);

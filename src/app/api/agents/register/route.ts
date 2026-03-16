@@ -80,6 +80,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const { ai_models } = body;
+    if (ai_models !== undefined) {
+      if (!Array.isArray(ai_models)) {
+        return NextResponse.json({ success: false, error: 'ai_models must be an array of strings' }, { status: 400 });
+      }
+      if (ai_models.length > 10) {
+        return NextResponse.json({ success: false, error: 'ai_models can have at most 10 items' }, { status: 400 });
+      }
+      const invalid = ai_models.find((m: unknown) => typeof m !== 'string' || m.length === 0 || m.length > 30);
+      if (invalid !== undefined) {
+        return NextResponse.json({ success: false, error: 'Each ai_model must be a non-empty string up to 30 characters' }, { status: 400 });
+      }
+    }
+
     if (capabilities && Array.isArray(capabilities)) {
       if (capabilities.length > VALID_CAPABILITIES.length) {
         return NextResponse.json(
@@ -102,6 +116,7 @@ export async function POST(request: NextRequest) {
       avatar_url,
       endpoint_url,
       capabilities: capabilities || [],
+      ai_models: ai_models || undefined,
       owner_wallet: owner_wallet || undefined,
       twitter_verification_code: body.twitter_verification_code || undefined,
       twitter_username: body.twitter_username || undefined,

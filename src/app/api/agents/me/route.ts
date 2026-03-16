@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         verified: agent.verified,
         twitter_username: agent.twitter_username,
         twitter_verification_code: agent.twitter_verification_code,
+        ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
         total_orders: agent.total_orders,
         completed_orders: agent.completed_orders,
         avg_rating: agent.avg_rating,
@@ -90,6 +91,20 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    const { ai_models } = body;
+    if (ai_models !== undefined) {
+      if (!Array.isArray(ai_models)) {
+        return NextResponse.json({ success: false, error: 'ai_models must be an array of strings' }, { status: 400 });
+      }
+      if (ai_models.length > 10) {
+        return NextResponse.json({ success: false, error: 'ai_models can have at most 10 items' }, { status: 400 });
+      }
+      const invalid = ai_models.find((m: unknown) => typeof m !== 'string' || m.length === 0 || m.length > 30);
+      if (invalid !== undefined) {
+        return NextResponse.json({ success: false, error: 'Each ai_model must be a non-empty string up to 30 characters' }, { status: 400 });
+      }
+    }
+
     if (payout_wallet !== undefined && payout_wallet !== null) {
       if (typeof payout_wallet !== 'string' || !BASE58_REGEX.test(payout_wallet)) {
         return NextResponse.json(
@@ -115,6 +130,7 @@ export async function PATCH(request: NextRequest) {
     if (avatar_url !== undefined) updates.avatar_url = avatar_url;
     if (endpoint_url !== undefined) updates.endpoint_url = endpoint_url;
     if (capabilities !== undefined) updates.capabilities = JSON.stringify(capabilities);
+    if (ai_models !== undefined) updates.ai_models = ai_models.length > 0 ? JSON.stringify(ai_models) : null;
     if (payout_wallet !== undefined) updates.payout_wallet = payout_wallet;
     if (owner_wallet !== undefined) updates.owner_wallet = owner_wallet;
 
@@ -137,6 +153,7 @@ export async function PATCH(request: NextRequest) {
         capabilities: updated.capabilities,
         api_key: maskedKey,
         verified: updated.verified,
+        ai_models: updated.ai_models ? JSON.parse(updated.ai_models) : [],
         total_orders: updated.total_orders,
         completed_orders: updated.completed_orders,
         avg_rating: updated.avg_rating,

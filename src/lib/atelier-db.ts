@@ -104,6 +104,7 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_slug ON atelier_agents(slug) WHERE slug IS NOT NULL');
 
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN token_launch_attempted INTEGER DEFAULT 0`).catch(() => {});
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN ai_models TEXT`).catch(() => {});
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS services (
@@ -962,6 +963,7 @@ export interface AtelierAgent {
   token_tx_hash: string | null;
   token_created_at: string | null;
   token_launch_attempted: number;
+  ai_models: string | null;
   atelier_holder: number;
   holder_checked_at: string | null;
   created_at: string;
@@ -1279,6 +1281,7 @@ export async function registerAtelierAgent(data: {
   avatar_url?: string;
   endpoint_url?: string;
   capabilities?: string[];
+  ai_models?: string[];
   owner_wallet?: string;
   twitter_verification_code?: string;
   twitter_username?: string;
@@ -1299,10 +1302,12 @@ export async function registerAtelierAgent(data: {
     slug = `${base}-${suffix++}`;
   }
 
+  const aiModels = data.ai_models?.length ? JSON.stringify(data.ai_models) : null;
+
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username)
-          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?)`,
-    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null],
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username, ai_models)
+          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null, aiModels],
   });
 
   return { agent_id: id, api_key: apiKey, slug, twitter_verification_code: verificationCode };
@@ -1310,13 +1315,13 @@ export async function registerAtelierAgent(data: {
 
 export async function updateAtelierAgent(
   id: string,
-  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'payout_wallet' | 'owner_wallet' | 'twitter_username'>>
+  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'ai_models' | 'payout_wallet' | 'owner_wallet' | 'twitter_username'>>
 ): Promise<AtelierAgent | null> {
   await initAtelierDb();
   const setClauses: string[] = [];
   const args: (string | null)[] = [];
 
-  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'payout_wallet', 'owner_wallet', 'twitter_username'];
+  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'ai_models', 'payout_wallet', 'owner_wallet', 'twitter_username'];
   for (const field of fields) {
     if (updates[field] !== undefined) {
       setClauses.push(`${field} = ?`);
@@ -1337,15 +1342,32 @@ export async function updateAtelierAgent(
 
 export async function getDistinctProviderModels(): Promise<string[]> {
   await initAtelierDb();
-  const result = await atelierClient.execute({
-    sql: `SELECT DISTINCT s.provider_model
-          FROM services s
-          INNER JOIN atelier_agents a ON a.id = s.agent_id AND a.active = 1
-          WHERE s.active = 1 AND s.provider_model IS NOT NULL AND s.provider_model != ''
-          ORDER BY s.provider_model`,
-    args: [],
-  });
-  return result.rows.map((r) => (r as unknown as { provider_model: string }).provider_model);
+  const [serviceResult, agentResult] = await Promise.all([
+    atelierClient.execute({
+      sql: `SELECT DISTINCT s.provider_model AS model
+            FROM services s
+            INNER JOIN atelier_agents a ON a.id = s.agent_id AND a.active = 1
+            WHERE s.active = 1 AND s.provider_model IS NOT NULL AND s.provider_model != ''`,
+      args: [],
+    }),
+    atelierClient.execute({
+      sql: `SELECT ai_models FROM atelier_agents WHERE active = 1 AND ai_models IS NOT NULL AND ai_models != ''`,
+      args: [],
+    }),
+  ]);
+
+  const models = new Set<string>();
+  for (const r of serviceResult.rows) {
+    models.add((r as unknown as { model: string }).model);
+  }
+  for (const r of agentResult.rows) {
+    try {
+      const parsed: string[] = JSON.parse((r as unknown as { ai_models: string }).ai_models);
+      for (const m of parsed) if (m) models.add(m);
+    } catch { /* skip malformed */ }
+  }
+
+  return Array.from(models).sort();
 }
 
 export async function getAtelierAgents(filters?: {
@@ -1386,8 +1408,8 @@ export async function getAtelierAgents(filters?: {
     args.push(pat, pat, pat);
   }
   if (filters?.model) {
-    conditions.push('s.provider_model = ?');
-    args.push(filters.model);
+    conditions.push("(s.provider_model = ? OR a.ai_models LIKE ? ESCAPE '\\')");
+    args.push(filters.model, `%"${escapeLikePattern(filters.model)}"%`);
   }
 
   let orderClause: string;
@@ -1409,6 +1431,7 @@ export async function getAtelierAgents(filters?: {
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
+            a.ai_models,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
             a.atelier_holder, a.featured,
             MIN(CAST(s.price_usd AS REAL)) as min_price_usd,
@@ -1430,6 +1453,7 @@ export async function getAtelierAgents(filters?: {
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       categories_str: string | null;
       provider_models_str: string | null;
+      ai_models: string | null;
       token_mint: string | null; token_symbol: string | null; token_name: string | null; token_image_url: string | null;
       atelier_holder: number; featured: number;
       min_price_usd: number | null;
@@ -1444,7 +1468,13 @@ export async function getAtelierAgents(filters?: {
       }
     }
 
-    let provider_models = r.provider_models_str ? r.provider_models_str.split(',').filter(Boolean) : [];
+    let provider_models: string[] = [];
+    if (r.ai_models) {
+      try { provider_models = JSON.parse(r.ai_models); } catch { /* skip */ }
+    }
+    if (provider_models.length === 0 && r.provider_models_str) {
+      provider_models = r.provider_models_str.split(',').filter(Boolean);
+    }
     if (provider_models.length === 0 && r.description) {
       const detected = inferModelFromText(r.description);
       if (detected) provider_models = [detected];
@@ -1511,6 +1541,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
+            a.ai_models,
             a.token_mint, a.token_symbol, a.token_name, a.token_image_url,
             a.atelier_holder, a.featured,
             MIN(CAST(s.price_usd AS REAL)) as min_price_usd,
@@ -1532,6 +1563,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       categories_str: string | null;
       provider_models_str: string | null;
+      ai_models: string | null;
       token_mint: string | null; token_symbol: string | null; token_name: string | null; token_image_url: string | null;
       atelier_holder: number; featured: number;
       min_price_usd: number | null;
@@ -1546,7 +1578,13 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
       }
     }
 
-    const provider_models = r.provider_models_str ? r.provider_models_str.split(',').filter(Boolean) : [];
+    let provider_models: string[] = [];
+    if (r.ai_models) {
+      try { provider_models = JSON.parse(r.ai_models); } catch { /* skip */ }
+    }
+    if (provider_models.length === 0) {
+      provider_models = r.provider_models_str ? r.provider_models_str.split(',').filter(Boolean) : [];
+    }
 
     return {
       id: r.id, slug: r.slug, name: r.name, description: r.description, avatar_url: r.avatar_url,

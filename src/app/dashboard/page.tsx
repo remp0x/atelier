@@ -241,7 +241,7 @@ function DashboardContent() {
             <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
               {agents.map(a => (
                 <button key={a.id} onClick={() => setSelectedAgent(a.id)} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-mono whitespace-nowrap transition-all cursor-pointer ${selectedAgent === a.id ? 'bg-atelier/10 text-atelier border border-atelier/30 shadow-[0_0_12px_rgba(139,92,246,0.1)]' : 'bg-gray-50 dark:bg-neutral-950 text-gray-500 dark:text-neutral-400 border border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-700 dark:hover:text-neutral-300'}`}>
-                  {a.avatar_url ? <Image src={a.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full object-cover" unoptimized /> : <div className="w-5 h-5 rounded-full bg-atelier/20 flex items-center justify-center text-[10px] font-bold text-atelier">{a.name.charAt(0).toUpperCase()}</div>}
+                  {a.avatar_url ? <Image src={a.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full object-cover" /> : <div className="w-5 h-5 rounded-full bg-atelier/20 flex items-center justify-center text-[10px] font-bold text-atelier">{a.name.charAt(0).toUpperCase()}</div>}
                   {a.name}
                 </button>
               ))}
@@ -514,6 +514,8 @@ function EditAgentModal({ agent, getAuth, onClose, onSuccess }: { agent: Atelier
   const [avatarUrl, setAvatarUrl] = useState(agent.avatar_url || '');
   const [endpointUrl, setEndpointUrl] = useState(agent.endpoint_url || '');
   const [capabilities, setCapabilities] = useState<ServiceCategory[]>(agent.capabilities ? JSON.parse(agent.capabilities) : []);
+  const [aiModels, setAiModels] = useState<string[]>(agent.ai_models ? JSON.parse(agent.ai_models) : []);
+  const [modelInput, setModelInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -538,7 +540,7 @@ function EditAgentModal({ agent, getAuth, onClose, onSuccess }: { agent: Atelier
     setSaving(true); setError(null);
     try {
       const auth = await getAuth();
-      const res = await fetch(`/api/agents/${agent.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, name, description, avatar_url: avatarUrl || null, endpoint_url: endpointUrl, capabilities }) });
+      const res = await fetch(`/api/agents/${agent.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, name, description, avatar_url: avatarUrl || null, endpoint_url: endpointUrl, capabilities, ai_models: aiModels }) });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       onSuccess();
@@ -568,6 +570,36 @@ function EditAgentModal({ agent, getAuth, onClose, onSuccess }: { agent: Atelier
           <div className="flex flex-wrap gap-2 mt-1">
             {VALID_CATEGORIES.map(cap => <button key={cap} onClick={() => setCapabilities(prev => prev.includes(cap) ? prev.filter(c => c !== cap) : [...prev, cap])} className={`text-xs font-mono px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${capabilities.includes(cap) ? 'bg-atelier/10 text-atelier border-atelier/30' : 'text-gray-500 dark:text-neutral-500 border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700'}`}>{CATEGORY_LABELS[cap]}</button>)}
           </div>
+        </div>
+        <div>
+          <label className={LABEL_CLASS}>AI Models <span className="text-gray-400 dark:text-neutral-600 font-normal">(optional)</span></label>
+          <div className="flex flex-wrap gap-1.5 mt-1 min-h-[32px]">
+            {aiModels.map(m => (
+              <span key={m} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono bg-atelier/10 text-atelier border border-atelier/20">
+                {m}
+                <button onClick={() => setAiModels(prev => prev.filter(x => x !== m))} className="hover:text-red-400 transition-colors cursor-pointer">&times;</button>
+              </span>
+            ))}
+          </div>
+          {aiModels.length < 10 && (
+            <input
+              value={modelInput}
+              onChange={e => setModelInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  const val = modelInput.trim();
+                  if (val && val.length <= 30 && !aiModels.includes(val)) {
+                    setAiModels(prev => [...prev, val]);
+                    setModelInput('');
+                  }
+                }
+              }}
+              placeholder="Type model name and press Enter..."
+              maxLength={30}
+              className={`${INPUT_CLASS} mt-1.5`}
+            />
+          )}
         </div>
         {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
         <div className="flex gap-3 pt-2">

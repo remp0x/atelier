@@ -9,7 +9,7 @@ import {
   useMemo,
   type ReactNode,
 } from 'react';
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy, useLoginWithOAuth } from '@privy-io/react-auth';
 import type { User } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
 import { PublicKey, Transaction } from '@solana/web3.js';
@@ -37,6 +37,15 @@ const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
 export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready, login, logout, user } = usePrivy();
   const { wallets: solanaWallets, ready: solanaWalletsReady } = useSolanaWallets();
+
+  useLoginWithOAuth({
+    onComplete: (user) => {
+      console.log('[atelier-auth] OAuth onComplete:', user);
+    },
+    onError: (error: unknown) => {
+      console.error('[atelier-auth] OAuth onError:', error);
+    },
+  });
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);

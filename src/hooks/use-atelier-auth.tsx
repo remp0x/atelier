@@ -7,9 +7,10 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useState,
   type ReactNode,
 } from 'react';
-import { usePrivy, useLoginWithOAuth } from '@privy-io/react-auth';
+import { usePrivy } from '@privy-io/react-auth';
 import type { User } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets } from '@privy-io/react-auth/solana';
 import { PublicKey, Transaction } from '@solana/web3.js';
@@ -34,29 +35,34 @@ interface AtelierAuthContextValue {
 
 const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
 
+function SolanaWalletBridge({ onWalletChange }: { onWalletChange: (wallet: { address: string; signMessage: (input: { message: Uint8Array }) => Promise<{ signature: Uint8Array }>; signTransaction: (input: { transaction: Uint8Array }) => Promise<{ signedTransaction: Uint8Array }> } | null) => void }) {
+  const { wallets } = useSolanaWallets();
+  const wallet = wallets[0] ?? null;
+
+  useEffect(() => {
+    onWalletChange(wallet);
+  }, [wallet, onWalletChange]);
+
+  return null;
+}
+
 export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready, login, logout, user } = usePrivy();
-  const { wallets: solanaWallets, ready: solanaWalletsReady } = useSolanaWallets();
-
-  useLoginWithOAuth({
-    onComplete: (user) => {
-      console.log('[atelier-auth] OAuth onComplete:', user);
-    },
-    onError: (error: unknown) => {
-      console.error('[atelier-auth] OAuth onError:', error);
-    },
-  });
+  const [solanaWallet, setSolanaWallet] = useState<{
+    address: string;
+    signMessage: (input: { message: Uint8Array }) => Promise<{ signature: Uint8Array }>;
+    signTransaction: (input: { transaction: Uint8Array }) => Promise<{ signedTransaction: Uint8Array }>;
+  } | null>(null);
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
 
-  const walletsReady = solanaWalletsReady;
-
-  const solanaWallet = solanaWallets[0] ?? null;
-
   const walletAddress = solanaWallet?.address ?? null;
+  const walletReady = authenticated && walletAddress !== null;
 
-  const walletReady = authenticated && walletsReady && walletAddress !== null;
+  const handleWalletChange = useCallback((wallet: typeof solanaWallet) => {
+    setSolanaWallet(wallet);
+  }, []);
 
   const getSignableWallet = useCallback((): SignableWallet | null => {
     if (!solanaWallet || !walletAddress) return null;
@@ -166,6 +172,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AtelierAuthContext.Provider value={value}>
+      {authenticated && <SolanaWalletBridge onWalletChange={handleWalletChange} />}
       {children}
     </AtelierAuthContext.Provider>
   );

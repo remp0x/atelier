@@ -69,9 +69,9 @@ function BrowseContent() {
   const [servicePicker, setServicePicker] = useState<{ agentName: string; services: Service[] } | null>(null);
 
   useEffect(() => {
+    if (window.location.search.includes('privy')) return;
     const params = new URLSearchParams();
     if (category !== 'all') params.set('category', category);
-
     if (sort !== 'marketcap') params.set('sort', sort);
     if (search) params.set('search', search);
     if (pricing !== 'all') params.set('pricing', pricing);

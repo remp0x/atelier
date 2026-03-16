@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (!pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
   const origin = request.headers.get('origin');
   const response = NextResponse.next();
 
@@ -13,37 +18,35 @@ export function middleware(request: NextRequest) {
       : []),
   ];
 
-  if (pathname.startsWith('/api/')) {
-    if (origin && allowedOrigins.includes(origin)) {
-      response.headers.set('Access-Control-Allow-Origin', origin);
-      response.headers.set('Access-Control-Allow-Credentials', 'true');
-      response.headers.set(
-        'Access-Control-Allow-Methods',
-        'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-      );
-      response.headers.set(
-        'Access-Control-Allow-Headers',
-        'Content-Type, Authorization'
-      );
-      response.headers.set('Access-Control-Max-Age', '86400');
-    }
+  if (origin && allowedOrigins.includes(origin)) {
+    response.headers.set('Access-Control-Allow-Origin', origin);
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    response.headers.set(
+      'Access-Control-Allow-Methods',
+      'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+    );
+    response.headers.set(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization'
+    );
+    response.headers.set('Access-Control-Max-Age', '86400');
+  }
 
-    if (request.method === 'OPTIONS') {
-      return new NextResponse(null, {
-        status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': origin && allowedOrigins.includes(origin) ? origin : '',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-          'Access-Control-Max-Age': '86400',
-        },
-      });
-    }
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': origin && allowedOrigins.includes(origin) ? origin : '',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400',
+      },
+    });
   }
 
   return response;
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image).*)'],
+  matcher: ['/api/:path*'],
 };

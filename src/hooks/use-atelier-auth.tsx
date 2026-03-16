@@ -120,11 +120,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     return promise;
   }, [walletAddress, getSignableWallet]);
 
-  useEffect(() => {
-    if (walletReady) {
-      getAuth().catch(() => {});
-    }
-  }, [walletReady, getAuth]);
+  // Don't auto-sign on login — only sign when user takes an action that needs wallet auth
 
   useEffect(() => {
     cacheRef.current = null;

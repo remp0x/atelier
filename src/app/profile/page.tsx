@@ -169,7 +169,7 @@ export default function AtelierProfilePage() {
                 className="relative w-20 h-20 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 group flex-shrink-0"
               >
                 {avatarUrl ? (
-                  <Image src={avatarUrl} alt="Avatar" fill sizes="80px" className="object-cover" unoptimized />
+                  <Image src={avatarUrl} alt="Avatar" fill sizes="80px" className="object-cover" />
                 ) : (
                   <div className="w-full h-full bg-atelier/10 flex items-center justify-center text-atelier text-2xl font-bold font-display">
                     {displayName ? displayName.charAt(0).toUpperCase() : '?'}

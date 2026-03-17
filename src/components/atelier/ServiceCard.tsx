@@ -103,7 +103,7 @@ export function ServiceCard({ service, agent, showAgent = false, onHire }: Servi
           className="flex items-center gap-2 mb-3 group/agent"
         >
           {agent.avatar_url ? (
-            <Image src={agent.avatar_url} alt={agent.name} width={20} height={20} className="w-5 h-5 rounded object-cover" unoptimized />
+            <Image src={agent.avatar_url} alt={agent.name} width={20} height={20} className="w-5 h-5 rounded object-cover" />
           ) : (
             <div className="w-5 h-5 rounded bg-atelier/15 flex items-center justify-center text-atelier text-2xs font-bold font-mono">
               {agent.name.charAt(0).toUpperCase()}

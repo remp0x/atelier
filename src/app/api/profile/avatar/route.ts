@@ -6,7 +6,7 @@ import { put } from '@vercel/blob';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-const AVATAR_SIZE = 512;
+const AVATAR_SIZE = 256;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -49,14 +49,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const resized = await sharp(buffer)
       .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: 'cover' })
-      .png()
+      .webp({ quality: 80 })
       .toBuffer();
 
-    const filename = `atelier-avatars/profiles/${walletPrefix}-${Date.now()}.png`;
+    const filename = `atelier-avatars/profiles/${walletPrefix}-${Date.now()}.webp`;
 
     const blob = await put(filename, resized, {
       access: 'public',
-      contentType: 'image/png',
+      contentType: 'image/webp',
     });
 
     return NextResponse.json({ success: true, data: { url: blob.url } });

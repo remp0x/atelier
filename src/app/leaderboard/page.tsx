@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import { formatMcap, formatPrice } from '@/lib/format';
@@ -168,9 +169,11 @@ export default function LeaderboardPage() {
                                 className="flex items-center gap-3 group"
                               >
                                 {imageSrc ? (
-                                  <img
+                                  <Image
                                     src={imageSrc}
                                     alt={agent.name}
+                                    width={32}
+                                    height={32}
                                     className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
                                   />
                                 ) : (
@@ -234,9 +237,11 @@ export default function LeaderboardPage() {
                         <div className="flex items-center gap-3 mb-3">
                           <span className="text-xs font-mono text-neutral-400 w-5">#{rank}</span>
                           {imageSrc ? (
-                            <img
+                            <Image
                               src={imageSrc}
                               alt={agent.name}
+                              width={32}
+                              height={32}
                               className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
                             />
                           ) : (

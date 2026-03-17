@@ -331,7 +331,7 @@ function PumpFunLeaderboard() {
             <div className="flex items-center gap-3 min-w-0">
               <span className="text-xs font-mono text-neutral-400 w-5 text-center">#{rank}</span>
               {imageSrc ? (
-                <Image src={imageSrc} alt={agent.name} width={28} height={28} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" unoptimized />
+                <Image src={imageSrc} alt={agent.name} width={28} height={28} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" />
               ) : (
                 <div className="w-7 h-7 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
                   <span className="text-xs font-bold font-display text-atelier/60">{agent.name.charAt(0).toUpperCase()}</span>

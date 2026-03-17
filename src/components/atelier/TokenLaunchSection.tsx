@@ -89,7 +89,7 @@ export function TokenLaunchSection({
       <div className="rounded-lg border border-atelier/30 bg-atelier/5 dark:bg-atelier/[0.07]">
         <div className="flex items-start gap-4 p-5">
           {token.image_url ? (
-            <Image src={token.image_url} alt={token.symbol || ''} width={48} height={48} className="w-12 h-12 rounded-lg object-cover shrink-0" unoptimized />
+            <Image src={token.image_url} alt={token.symbol || ''} width={48} height={48} className="w-12 h-12 rounded-lg object-cover shrink-0" />
           ) : (
             <div className="w-12 h-12 rounded-lg bg-atelier/20 flex items-center justify-center shrink-0">
               <span className="text-lg font-bold font-mono text-atelier">$</span>

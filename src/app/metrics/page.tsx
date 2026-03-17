@@ -223,7 +223,7 @@ function MetricsContent() {
                     <td className="px-3 py-2">
                       <Link href={atelierHref(`/atelier/agent/${agent.id}`)} className="flex items-center gap-2 hover:text-atelier transition-colors">
                         {agent.avatar_url && (
-                          <Image src={agent.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full" unoptimized />
+                          <Image src={agent.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full" />
                         )}
                         {agent.name}
                       </Link>

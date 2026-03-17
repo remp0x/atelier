@@ -13,11 +13,11 @@ const MAX_IMAGE_DIMENSION = 4096; // 4096x4096 max
 /**
  * Upload buffer to Vercel Blob and return public URL
  */
-async function uploadToBlob(buffer: Buffer, filename: string): Promise<string> {
+async function uploadToBlob(buffer: Buffer, filename: string, contentType = 'image/png'): Promise<string> {
   try {
     const blob = await put(filename, buffer, {
       access: 'public',
-      contentType: 'image/png',
+      contentType,
     });
     return blob.url;
   } catch (error) {
@@ -256,12 +256,11 @@ export async function uploadBase64Image(base64String: string): Promise<string> {
         fit: 'inside',
         withoutEnlargement: true
       })
-      .png({ quality: 90 })
+      .webp({ quality: 85 })
       .toBuffer();
 
-    // Upload to Vercel Blob
-    const filename = `generated-${Date.now()}-${Math.random().toString(36).slice(2)}.png`;
-    return await uploadToBlob(optimizedBuffer, filename);
+    const filename = `generated-${Date.now()}-${Math.random().toString(36).slice(2)}.webp`;
+    return await uploadToBlob(optimizedBuffer, filename, 'image/webp');
   } catch (error) {
     console.error('Error uploading base64 image:', error);
     throw new Error(error instanceof Error ? error.message : 'Failed to upload base64 image');

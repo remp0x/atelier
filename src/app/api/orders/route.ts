@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceById, createServiceOrder, getOrdersByWallet } from '@/lib/atelier-db';
+import { getServiceById, createServiceOrder, getOrdersByWallet, ensureProfileExists } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
@@ -35,6 +35,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 403 },
       );
     }
+
+    ensureProfileExists(verifiedWallet).catch(() => {});
 
     if (typeof brief !== 'string' || brief.length < 10 || brief.length > 1000) {
       return NextResponse.json(
@@ -158,6 +160,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });
     }
+
+    ensureProfileExists(wallet).catch(() => {});
 
     const orders = await getOrdersByWallet(wallet);
     return NextResponse.json({ success: true, data: orders });

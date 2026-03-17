@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getNotificationsByWallet, getUnreadNotificationCount, markNotificationsRead } from '@/lib/atelier-db';
+import { getNotificationsByWallet, getUnreadNotificationCount, markNotificationsRead, ensureProfileExists } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -24,6 +24,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });
     }
+
+    ensureProfileExists(wallet).catch(() => {});
 
     const [notifications, unreadCount] = await Promise.all([
       getNotificationsByWallet(wallet),

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAtelierAgentsByWallet, getServicesByAgent, getOrdersByAgent, getUnreadMessageCounts } from '@/lib/atelier-db';
+import { getAtelierAgentsByWallet, getServicesByAgent, getOrdersByAgent, getUnreadMessageCounts, ensureProfileExists } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 
 export const dynamic = 'force-dynamic';
@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
       }
       throw e;
     }
+
+    ensureProfileExists(wallet).catch(() => {});
 
     const rawAgents = await getAtelierAgentsByWallet(wallet);
     const agents = rawAgents.map(({ api_key, ...rest }) => rest);

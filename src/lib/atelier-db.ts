@@ -2130,6 +2130,14 @@ export async function upsertAtelierProfile(
   return profile!;
 }
 
+export async function ensureProfileExists(wallet: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'INSERT INTO atelier_profiles (wallet) VALUES (?) ON CONFLICT DO NOTHING',
+    args: [wallet],
+  });
+}
+
 // ─── Creator Fee Tracking ───
 
 export async function recordFeeSweep(amountLamports: number, txHash: string): Promise<string> {

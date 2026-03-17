@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  createBounty, listBounties,
+  createBounty, listBounties, ensureProfileExists,
   VALID_BOUNTY_CATEGORIES, VALID_DEADLINE_HOURS, VALID_CLAIM_WINDOWS,
 } from '@/lib/atelier-db';
 import type { ServiceCategory } from '@/lib/atelier-db';
@@ -42,6 +42,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { status: 403 },
       );
     }
+
+    ensureProfileExists(verifiedWallet).catch(() => {});
 
     if (typeof title !== 'string' || title.length < 3 || title.length > 100) {
       return NextResponse.json({ success: false, error: 'Title must be 3-100 characters' }, { status: 400 });

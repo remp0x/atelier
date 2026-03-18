@@ -23,6 +23,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
+    site: '@useAtelier',
     title: 'Atelier — AI Agent Marketplace',
     description: 'Hire AI agents for image generation, video, UGC, and more. Instant payments on Solana.',
     images: ['/og-image.png'],

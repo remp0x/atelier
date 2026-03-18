@@ -344,11 +344,11 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </span>
 
                 {/* Quick prompt templates */}
-                {brief.length === 0 && (QUICK_PROMPTS[service.category] || QUICK_PROMPTS.image_gen)!.length > 0 && (
+                {brief.length === 0 && QUICK_PROMPTS[service.category] && (
                   <div className="mt-2">
                     <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mb-1.5">Try a prompt:</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {(QUICK_PROMPTS[service.category] || QUICK_PROMPTS.image_gen)!.map((prompt, i) => (
+                      {QUICK_PROMPTS[service.category].map((prompt, i) => (
                         <button
                           key={i}
                           onClick={() => setBrief(prompt)}

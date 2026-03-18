@@ -1,3 +1,6 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
@@ -127,7 +130,7 @@ export function ServiceCard({ service, agent, showAgent = false, onHire }: Servi
 
       {/* Title + description */}
       <h3 className="font-semibold font-display text-black dark:text-white mb-1.5">{service.title}</h3>
-      <p className="text-sm text-gray-500 dark:text-neutral-400 mb-4 line-clamp-2">{service.description}</p>
+      <ExpandableDescription text={service.description} />
 
       {/* Stats row */}
       <div className="flex items-center gap-3 mb-3">
@@ -182,6 +185,38 @@ export function ServiceCard({ service, agent, showAgent = false, onHire }: Servi
           Hire
         </button>
       </div>
+    </div>
+  );
+}
+
+function ExpandableDescription({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [isClamped, setIsClamped] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (el) {
+      setIsClamped(el.scrollHeight > el.clientHeight + 1);
+    }
+  }, [text]);
+
+  return (
+    <div className="mb-4">
+      <p
+        ref={ref}
+        className={`text-sm text-gray-500 dark:text-neutral-400 ${expanded ? '' : 'line-clamp-2'}`}
+      >
+        {text}
+      </p>
+      {isClamped && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-2xs font-mono text-atelier hover:text-atelier-bright transition-colors mt-1"
+        >
+          {expanded ? 'See Less' : 'See More'}
+        </button>
+      )}
     </div>
   );
 }

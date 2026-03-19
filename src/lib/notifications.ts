@@ -1,4 +1,4 @@
-import { createNotification, type NotificationType } from '@/lib/atelier-db';
+import { createNotification, getAtelierAgent, type NotificationType } from '@/lib/atelier-db';
 
 interface NotificationContext {
   wallet: string;
@@ -7,7 +7,9 @@ interface NotificationContext {
   serviceTitle: string;
 }
 
-const TEMPLATES: Record<NotificationType, (ctx: NotificationContext & Record<string, string>) => { title: string; body: string }> = {
+type TemplateRenderer = (ctx: NotificationContext & Record<string, string>) => { title: string; body: string };
+
+const BUYER_TEMPLATES: Record<string, TemplateRenderer> = {
   order_quoted: (ctx) => ({
     title: 'Order quoted',
     body: `${ctx.agentName} quoted $${ctx.price} for "${ctx.serviceTitle}"`,
@@ -26,13 +28,29 @@ const TEMPLATES: Record<NotificationType, (ctx: NotificationContext & Record<str
   }),
 };
 
+const PROVIDER_TEMPLATES: Record<string, TemplateRenderer> = {
+  provider_order_received: (ctx) => ({
+    title: 'New order received',
+    body: `Your agent "${ctx.agentName}" received a new order for "${ctx.serviceTitle}"`,
+  }),
+  provider_order_paid: (ctx) => ({
+    title: 'Order paid — ready to deliver',
+    body: `A client paid for "${ctx.serviceTitle}" on your agent "${ctx.agentName}". Delivery is pending.`,
+  }),
+  provider_webhook_failed: (ctx) => ({
+    title: 'Webhook delivery failed',
+    body: `Failed to notify your agent "${ctx.agentName}" about order for "${ctx.serviceTitle}". Check your endpoint URL.`,
+  }),
+};
+
 export async function notifyBuyer(
   type: NotificationType,
   ctx: NotificationContext,
   extra?: Record<string, string>,
 ): Promise<void> {
   try {
-    const template = TEMPLATES[type];
+    const template = BUYER_TEMPLATES[type];
+    if (!template) return;
     const { title, body } = template({ ...ctx, ...extra } as NotificationContext & Record<string, string>);
     await createNotification({
       wallet: ctx.wallet,
@@ -42,6 +60,38 @@ export async function notifyBuyer(
       order_id: ctx.orderId,
     });
   } catch {
-    // fire-and-forget — never block order flow
+    // fire-and-forget
+  }
+}
+
+export async function notifyProvider(
+  type: NotificationType,
+  agentId: string,
+  ctx: Omit<NotificationContext, 'wallet'> & { wallet?: string },
+): Promise<void> {
+  try {
+    const agent = await getAtelierAgent(agentId);
+    const ownerWallet = agent?.owner_wallet;
+    if (!ownerWallet) return;
+
+    const template = PROVIDER_TEMPLATES[type];
+    if (!template) return;
+
+    const fullCtx: NotificationContext & Record<string, string> = {
+      wallet: ownerWallet,
+      orderId: ctx.orderId,
+      agentName: ctx.agentName,
+      serviceTitle: ctx.serviceTitle,
+    };
+    const { title, body } = template(fullCtx);
+    await createNotification({
+      wallet: ownerWallet,
+      type,
+      title,
+      body,
+      order_id: ctx.orderId,
+    });
+  } catch {
+    // fire-and-forget
   }
 }

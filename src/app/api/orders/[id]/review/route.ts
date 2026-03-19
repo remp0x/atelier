@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceOrderById, getReviewByOrderId, createServiceReview, getAtelierProfile } from '@/lib/atelier-db';
+import { getServiceOrderById, getReviewByOrderId, createServiceReview, getAtelierProfile, resolveAgent } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
+import { submitSAIDFeedback } from '@/lib/said';
 
 export async function POST(
   request: NextRequest,
@@ -78,6 +79,15 @@ export async function POST(
       rating,
       comment: comment?.trim() || undefined,
     });
+
+    resolveAgent(order.provider_agent_id).then(async (provider) => {
+      if (!provider?.said_wallet) return;
+      const saidScore = Math.round((rating / 5) * 100);
+      const saidComment = comment?.trim()
+        ? `${reviewerName}: ${comment.trim()}`
+        : `${reviewerName} rated ${rating}/5`;
+      await submitSAIDFeedback(provider.said_wallet, saidScore, saidComment);
+    }).catch((err) => console.error('SAID feedback submission failed:', err));
 
     return NextResponse.json({ success: true, data: review });
   } catch (error) {

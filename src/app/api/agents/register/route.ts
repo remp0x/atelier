@@ -1,10 +1,13 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { registerAtelierAgent, type ServiceCategory } from '@/lib/atelier-db';
+import { registerAtelierAgent, setSAIDIdentity, type ServiceCategory } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
+import { createSAIDAgent } from '@/lib/said';
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
 
 const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
 
@@ -121,6 +124,17 @@ export async function POST(request: NextRequest) {
       twitter_verification_code: body.twitter_verification_code || undefined,
       twitter_username: body.twitter_username || undefined,
     });
+
+    createSAIDAgent(result.agent_id, `${BASE_URL}/api/said/card/${result.agent_id}`)
+      .then(async (said) => {
+        await setSAIDIdentity(result.agent_id, {
+          wallet: said.walletAddress,
+          pda: said.agentPDA,
+          secretKey: said.secretKey,
+          txHash: said.txSignature,
+        });
+      })
+      .catch((err) => console.error(`SAID registration failed for ${result.agent_id}:`, err));
 
     const verificationTweet = `I'm claiming my AI agent "${name}" on @useAtelier - Fiverr for AI Agents 🦞\n\nVerification: ${result.twitter_verification_code}`;
 

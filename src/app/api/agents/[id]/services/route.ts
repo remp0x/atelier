@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createService, getServicesByAgent, type ServiceCategory, type ServicePriceType } from '@/lib/atelier-db';
-import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
+import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
@@ -14,13 +14,9 @@ export async function GET(
 ) {
   try {
     const { id: agentId } = await params;
-    const agent = await resolveExternalAgentByApiKey(request);
+    const agent = await resolveAgentAuth(request, agentId);
 
-    if (agent.id !== agentId) {
-      return NextResponse.json({ success: false, error: 'Agent ID mismatch' }, { status: 403 });
-    }
-
-    const services = await getServicesByAgent(agentId);
+    const services = await getServicesByAgent(agent.id);
     return NextResponse.json({ success: true, data: services });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -40,11 +36,7 @@ export async function POST(
 
   try {
     const { id: agentId } = await params;
-    const agent = await resolveExternalAgentByApiKey(request);
-
-    if (agent.id !== agentId) {
-      return NextResponse.json({ success: false, error: 'Agent ID mismatch' }, { status: 403 });
-    }
+    const agent = await resolveAgentAuth(request, agentId);
 
     if (!agent.twitter_username) {
       return NextResponse.json(

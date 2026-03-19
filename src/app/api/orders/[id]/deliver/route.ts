@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, updateOrderStatus } from '@/lib/atelier-db';
-import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
+import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyBuyer } from '@/lib/notifications';
 
@@ -17,12 +17,13 @@ export async function POST(
 
   try {
     const { id: orderId } = await params;
-    const agent = await resolveExternalAgentByApiKey(request);
 
     const order = await getServiceOrderById(orderId);
     if (!order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
+
+    const agent = await resolveAgentAuth(request, order.provider_agent_id);
 
     if (order.provider_agent_id !== agent.id) {
       return NextResponse.json({ success: false, error: 'You are not the provider for this order' }, { status: 403 });

@@ -45,6 +45,23 @@ const CATEGORY_LABELS: Record<ServiceCategory, string> = {
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
 
+type WalletAuth = { wallet: string; wallet_sig: string; wallet_sig_ts: number };
+
+async function authFetch(
+  url: string,
+  options: RequestInit & { headers?: Record<string, string> },
+  apiKey: string | null,
+  getAuth: () => Promise<WalletAuth>,
+): Promise<Response> {
+  if (apiKey) {
+    return fetch(url, { ...options, headers: { ...options.headers, Authorization: `Bearer ${apiKey}` } });
+  }
+  const auth = await getAuth();
+  const sep = url.includes('?') ? '&' : '?';
+  const authUrl = `${url}${sep}wallet=${auth.wallet}&wallet_sig=${encodeURIComponent(auth.wallet_sig)}&wallet_sig_ts=${auth.wallet_sig_ts}`;
+  return fetch(authUrl, options);
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -131,14 +148,11 @@ function DashboardContent() {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const deleteService = async (serviceId: string, apiKey: string) => {
+  const deleteService = async (serviceId: string, apiKey: string | null) => {
     if (!confirm('Delete this service? This cannot be undone.')) return;
     setDeletingService(serviceId);
     try {
-      const res = await fetch(`/api/services/${serviceId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${apiKey}` },
-      });
+      const res = await authFetch(`/api/services/${serviceId}`, { method: 'DELETE' }, apiKey, getAuth);
       const json = await res.json();
       if (json.success) loadDashboard();
     } finally {
@@ -146,15 +160,25 @@ function DashboardContent() {
     }
   };
 
-  const savePayoutWallet = async (agentApiKey: string, value: string | null) => {
+  const savePayoutWallet = async (agentId: string, agentApiKey: string | null, value: string | null) => {
     setPayoutSaving(true);
     setPayoutError(null);
     try {
-      const res = await fetch('/api/agents/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentApiKey}` },
-        body: JSON.stringify({ payout_wallet: value }),
-      });
+      let res: Response;
+      if (agentApiKey) {
+        res = await fetch('/api/agents/me', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentApiKey}` },
+          body: JSON.stringify({ payout_wallet: value }),
+        });
+      } else {
+        const auth = await getAuth();
+        res = await fetch(`/api/agents/${agentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...auth, payout_wallet: value }),
+        });
+      }
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       setEditingPayout(false);
@@ -308,7 +332,7 @@ function DashboardContent() {
                       {!editingPayout && (
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => { setPayoutDraft(agent.payout_wallet || ''); setEditingPayout(true); setPayoutError(null); }} className="text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors text-[10px] font-mono cursor-pointer">Edit</button>
-                          {agent.payout_wallet && <button onClick={() => savePayoutWallet(agent.api_key ?? '', null)} className="text-gray-400 dark:text-neutral-500 hover:text-red-500 dark:hover:text-red-400 transition-colors text-[10px] font-mono cursor-pointer">Clear</button>}
+                          {agent.payout_wallet && <button onClick={() => savePayoutWallet(agent.id, agent.api_key ?? null, null)} className="text-gray-400 dark:text-neutral-500 hover:text-red-500 dark:hover:text-red-400 transition-colors text-[10px] font-mono cursor-pointer">Clear</button>}
                         </div>
                       )}
                     </div>
@@ -321,7 +345,7 @@ function DashboardContent() {
                       <div className="space-y-2">
                         <input value={payoutDraft} onChange={e => setPayoutDraft(e.target.value)} placeholder="Solana wallet address" className="w-full px-2.5 py-1.5 rounded bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 text-xs font-mono text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier" />
                         <div className="flex gap-2">
-                          <button onClick={() => savePayoutWallet(agent.api_key ?? '', payoutDraft || null)} disabled={payoutSaving} className="text-[10px] font-mono font-semibold text-atelier disabled:opacity-40 cursor-pointer">{payoutSaving ? '...' : 'Save'}</button>
+                          <button onClick={() => savePayoutWallet(agent.id, agent.api_key ?? null, payoutDraft || null)} disabled={payoutSaving} className="text-[10px] font-mono font-semibold text-atelier disabled:opacity-40 cursor-pointer">{payoutSaving ? '...' : 'Save'}</button>
                           <button onClick={() => { setEditingPayout(false); setPayoutError(null); }} className="text-[10px] font-mono text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 cursor-pointer">Cancel</button>
                         </div>
                         {payoutError && <p className="text-[10px] font-mono text-red-500 dark:text-red-400">{payoutError}</p>}
@@ -365,7 +389,7 @@ function DashboardContent() {
                           <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600">{svc.total_orders} order{svc.total_orders !== 1 ? 's' : ''}{svc.completed_orders > 0 && ` \u00b7 ${svc.completed_orders} done`}</span>
                           <div className="flex items-center gap-3 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                             <button onClick={() => setShowEditService(svc)} className="text-[11px] font-mono text-gray-400 dark:text-neutral-400 hover:text-atelier transition-colors cursor-pointer">Edit</button>
-                            <button onClick={() => deleteService(svc.id, agent!.api_key ?? '')} disabled={deletingService === svc.id} className="text-[11px] font-mono text-gray-400 dark:text-neutral-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-50 transition-colors cursor-pointer">{deletingService === svc.id ? '...' : 'Delete'}</button>
+                            <button onClick={() => deleteService(svc.id, agent!.api_key ?? null)} disabled={deletingService === svc.id} className="text-[11px] font-mono text-gray-400 dark:text-neutral-400 hover:text-red-500 dark:hover:text-red-400 disabled:opacity-50 transition-colors cursor-pointer">{deletingService === svc.id ? '...' : 'Delete'}</button>
                           </div>
                         </div>
                       </div>
@@ -426,10 +450,10 @@ function DashboardContent() {
       )}
 
       {showEditAgent && agent && <EditAgentModal agent={agent} getAuth={getAuth} onClose={() => setShowEditAgent(false)} onSuccess={() => { setShowEditAgent(false); loadDashboard(); }} />}
-      {showEditService && agent && <EditServiceModal service={showEditService} apiKey={agent.api_key ?? ''} onClose={() => setShowEditService(null)} onSuccess={() => { setShowEditService(null); loadDashboard(); }} />}
-      {showCreateService && agent && <CreateServiceModal agentId={agent.id} apiKey={agent.api_key ?? ''} onClose={() => setShowCreateService(false)} onSuccess={() => { setShowCreateService(false); loadDashboard(); }} />}
-      {showQuote && agent && <QuoteModal orderId={showQuote} apiKey={agent.api_key ?? ''} onClose={() => setShowQuote(null)} onSuccess={() => { setShowQuote(null); loadDashboard(); }} />}
-      {showDeliver && agent && <DeliverModal orderId={showDeliver} apiKey={agent.api_key ?? ''} onClose={() => setShowDeliver(null)} onSuccess={() => { setShowDeliver(null); loadDashboard(); }} />}
+      {showEditService && agent && <EditServiceModal service={showEditService} apiKey={agent.api_key ?? null} getAuth={getAuth} onClose={() => setShowEditService(null)} onSuccess={() => { setShowEditService(null); loadDashboard(); }} />}
+      {showCreateService && agent && <CreateServiceModal agentId={agent.id} apiKey={agent.api_key ?? null} getAuth={getAuth} onClose={() => setShowCreateService(false)} onSuccess={() => { setShowCreateService(false); loadDashboard(); }} />}
+      {showQuote && agent && <QuoteModal orderId={showQuote} apiKey={agent.api_key ?? null} getAuth={getAuth} onClose={() => setShowQuote(null)} onSuccess={() => { setShowQuote(null); loadDashboard(); }} />}
+      {showDeliver && agent && <DeliverModal orderId={showDeliver} apiKey={agent.api_key ?? null} getAuth={getAuth} onClose={() => setShowDeliver(null)} onSuccess={() => { setShowDeliver(null); loadDashboard(); }} />}
     </div>
   );
 }
@@ -460,7 +484,7 @@ function ModalOverlay({ children, onClose }: { children: React.ReactNode; onClos
 const INPUT_CLASS = 'w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier transition-colors';
 const LABEL_CLASS = 'block text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1.5 uppercase tracking-wider';
 
-function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: { agentId: string; apiKey: string; onClose: () => void; onSuccess: () => void }) {
+function CreateServiceModal({ agentId, apiKey, getAuth, onClose, onSuccess }: { agentId: string; apiKey: string | null; getAuth: () => Promise<WalletAuth>; onClose: () => void; onSuccess: () => void }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<ServiceCategory>('image_gen');
@@ -476,7 +500,7 @@ function CreateServiceModal({ agentId, apiKey, onClose, onSuccess }: { agentId: 
   const handleSubmit = async () => {
     setSaving(true); setError(null);
     try {
-      const res = await fetch(`/api/agents/${agentId}/services`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ category, title, description, price_usd: priceUsd, price_type: priceType, quota_limit: (priceType === 'weekly' || priceType === 'monthly') ? Number(quotaLimit) || 0 : undefined, turnaround_hours: turnaroundHours ? Number(turnaroundHours) : undefined, deliverables: deliverables ? deliverables.split(',').map(s => s.trim()).filter(Boolean) : [], demo_url: demoUrl || undefined }) });
+      const res = await authFetch(`/api/agents/${agentId}/services`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category, title, description, price_usd: priceUsd, price_type: priceType, quota_limit: (priceType === 'weekly' || priceType === 'monthly') ? Number(quotaLimit) || 0 : undefined, turnaround_hours: turnaroundHours ? Number(turnaroundHours) : undefined, deliverables: deliverables ? deliverables.split(',').map(s => s.trim()).filter(Boolean) : [], demo_url: demoUrl || undefined }) }, apiKey, getAuth);
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       onSuccess();
@@ -611,7 +635,7 @@ function EditAgentModal({ agent, getAuth, onClose, onSuccess }: { agent: Atelier
   );
 }
 
-function EditServiceModal({ service, apiKey, onClose, onSuccess }: { service: Service; apiKey: string; onClose: () => void; onSuccess: () => void }) {
+function EditServiceModal({ service, apiKey, getAuth, onClose, onSuccess }: { service: Service; apiKey: string | null; getAuth: () => Promise<WalletAuth>; onClose: () => void; onSuccess: () => void }) {
   const [title, setTitle] = useState(service.title);
   const [description, setDescription] = useState(service.description);
   const [category, setCategory] = useState<ServiceCategory>(service.category);
@@ -625,7 +649,7 @@ function EditServiceModal({ service, apiKey, onClose, onSuccess }: { service: Se
   const handleSubmit = async () => {
     setSaving(true); setError(null);
     try {
-      const res = await fetch(`/api/services/${service.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ category, title, description, price_usd: priceUsd, price_type: priceType, turnaround_hours: turnaroundHours ? Number(turnaroundHours) : undefined, demo_url: demoUrl || null }) });
+      const res = await authFetch(`/api/services/${service.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category, title, description, price_usd: priceUsd, price_type: priceType, turnaround_hours: turnaroundHours ? Number(turnaroundHours) : undefined, demo_url: demoUrl || null }) }, apiKey, getAuth);
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       onSuccess();
@@ -655,7 +679,7 @@ function EditServiceModal({ service, apiKey, onClose, onSuccess }: { service: Se
   );
 }
 
-function QuoteModal({ orderId, apiKey, onClose, onSuccess }: { orderId: string; apiKey: string; onClose: () => void; onSuccess: () => void }) {
+function QuoteModal({ orderId, apiKey, getAuth, onClose, onSuccess }: { orderId: string; apiKey: string | null; getAuth: () => Promise<WalletAuth>; onClose: () => void; onSuccess: () => void }) {
   const [priceUsd, setPriceUsd] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -663,7 +687,7 @@ function QuoteModal({ orderId, apiKey, onClose, onSuccess }: { orderId: string; 
   const handleSubmit = async () => {
     setSaving(true); setError(null);
     try {
-      const res = await fetch(`/api/orders/${orderId}/quote`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ price_usd: priceUsd }) });
+      const res = await authFetch(`/api/orders/${orderId}/quote`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ price_usd: priceUsd }) }, apiKey, getAuth);
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       onSuccess();
@@ -693,7 +717,7 @@ function QuoteModal({ orderId, apiKey, onClose, onSuccess }: { orderId: string; 
   );
 }
 
-function DeliverModal({ orderId, apiKey, onClose, onSuccess }: { orderId: string; apiKey: string; onClose: () => void; onSuccess: () => void }) {
+function DeliverModal({ orderId, apiKey, getAuth, onClose, onSuccess }: { orderId: string; apiKey: string | null; getAuth: () => Promise<WalletAuth>; onClose: () => void; onSuccess: () => void }) {
   const [deliverableUrl, setDeliverableUrl] = useState('');
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [saving, setSaving] = useState(false);
@@ -702,7 +726,7 @@ function DeliverModal({ orderId, apiKey, onClose, onSuccess }: { orderId: string
   const handleSubmit = async () => {
     setSaving(true); setError(null);
     try {
-      const res = await fetch(`/api/orders/${orderId}/deliver`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ deliverable_url: deliverableUrl, deliverable_media_type: mediaType }) });
+      const res = await authFetch(`/api/orders/${orderId}/deliver`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deliverable_url: deliverableUrl, deliverable_media_type: mediaType }) }, apiKey, getAuth);
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
       onSuccess();

@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceById, updateService, deactivateService, type ServiceCategory, type ServicePriceType } from '@/lib/atelier-db';
-import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
+import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
 const VALID_PRICE_TYPES: ServicePriceType[] = ['fixed', 'quote', 'weekly', 'monthly'];
@@ -13,12 +13,13 @@ export async function GET(
 ) {
   try {
     const { id: serviceId } = await params;
-    const agent = await resolveExternalAgentByApiKey(request);
 
     const service = await getServiceById(serviceId);
     if (!service) {
       return NextResponse.json({ success: false, error: 'Service not found' }, { status: 404 });
     }
+
+    const agent = await resolveAgentAuth(request, service.agent_id);
 
     if (service.agent_id !== agent.id) {
       return NextResponse.json({ success: false, error: 'Service does not belong to this agent' }, { status: 403 });
@@ -40,12 +41,14 @@ export async function PATCH(
 ) {
   try {
     const { id: serviceId } = await params;
-    const agent = await resolveExternalAgentByApiKey(request);
 
     const existing = await getServiceById(serviceId);
     if (!existing) {
       return NextResponse.json({ success: false, error: 'Service not found' }, { status: 404 });
     }
+
+    const agent = await resolveAgentAuth(request, existing.agent_id);
+
     if (existing.agent_id !== agent.id) {
       return NextResponse.json({ success: false, error: 'Service does not belong to this agent' }, { status: 403 });
     }
@@ -119,12 +122,14 @@ export async function DELETE(
 ) {
   try {
     const { id: serviceId } = await params;
-    const agent = await resolveExternalAgentByApiKey(request);
 
     const existing = await getServiceById(serviceId);
     if (!existing) {
       return NextResponse.json({ success: false, error: 'Service not found' }, { status: 404 });
     }
+
+    const agent = await resolveAgentAuth(request, existing.agent_id);
+
     if (existing.agent_id !== agent.id) {
       return NextResponse.json({ success: false, error: 'Service does not belong to this agent' }, { status: 403 });
     }

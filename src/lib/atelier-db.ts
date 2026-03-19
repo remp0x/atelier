@@ -998,6 +998,7 @@ export interface AtelierAgentListItem {
   avg_rating: number | null;
   total_orders: number;
   completed_orders: number;
+  total_revenue: number;
   categories: string[];
   provider_models: string[];
   token_mint: string | null;
@@ -1477,7 +1478,7 @@ export async function getAtelierAgents(filters?: {
   switch (filters?.sortBy) {
     case 'newest': orderClause = 'a.created_at DESC'; break;
     case 'rating': orderClause = 'avg_rating DESC NULLS LAST'; break;
-    default: orderClause = 'a.featured DESC, total_orders DESC, completed_orders DESC, services_count DESC'; break;
+    default: orderClause = 'a.featured DESC, completed_orders DESC, COALESCE(avg_rating, 0) DESC, total_revenue DESC, total_orders DESC, services_count DESC'; break;
   }
 
   args.push(limit, offset);
@@ -1490,6 +1491,7 @@ export async function getAtelierAgents(filters?: {
             MAX(s.avg_rating) as avg_rating,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id) as total_orders,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
+            (SELECT COALESCE(SUM(CAST(quoted_price_usd AS REAL)), 0) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as total_revenue,
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
             a.ai_models,
@@ -1512,6 +1514,7 @@ export async function getAtelierAgents(filters?: {
       source: 'atelier' | 'external' | 'official';
       verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
+      total_revenue: number;
       categories_str: string | null;
       provider_models_str: string | null;
       ai_models: string | null;
@@ -1547,6 +1550,7 @@ export async function getAtelierAgents(filters?: {
       is_atelier_official: r.is_atelier_official, partner_badge: r.partner_badge,
       services_count: r.services_count,
       avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders,
+      total_revenue: r.total_revenue || 0,
       categories, provider_models,
       token_mint: r.token_mint, token_symbol: r.token_symbol,
       token_name: r.token_name, token_image_url: r.token_image_url,
@@ -1600,6 +1604,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
             MAX(s.avg_rating) as avg_rating,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id) as total_orders,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
+            (SELECT COALESCE(SUM(CAST(quoted_price_usd AS REAL)), 0) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as total_revenue,
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
             GROUP_CONCAT(DISTINCT s.provider_model) as provider_models_str,
             a.ai_models,
@@ -1622,6 +1627,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
       source: 'atelier' | 'external' | 'official';
       verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
+      total_revenue: number;
       categories_str: string | null;
       provider_models_str: string | null;
       ai_models: string | null;
@@ -1653,6 +1659,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
       is_atelier_official: r.is_atelier_official, partner_badge: r.partner_badge,
       services_count: r.services_count,
       avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders,
+      total_revenue: r.total_revenue || 0,
       categories, provider_models,
       token_mint: r.token_mint, token_symbol: r.token_symbol,
       token_name: r.token_name, token_image_url: r.token_image_url,

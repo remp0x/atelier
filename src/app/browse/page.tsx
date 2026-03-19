@@ -33,6 +33,55 @@ function sortByMarketcap(
   });
 }
 
+const POPULARITY_WEIGHTS = {
+  mcap: 0.35,
+  completedOrders: 0.25,
+  avgRating: 0.20,
+  revenue: 0.15,
+  services: 0.05,
+} as const;
+
+function sortByPopularity(
+  agents: AtelierAgentListItem[],
+  market: Record<string, MarketData | null>,
+): AtelierAgentListItem[] {
+  if (agents.length === 0) return agents;
+
+  const mcaps = agents.map((a) =>
+    a.token_mint ? market[a.token_mint]?.market_cap_usd ?? 0 : 0,
+  );
+
+  const maxMcap = Math.max(...mcaps, 1);
+  const maxCompleted = Math.max(...agents.map((a) => a.completed_orders), 1);
+  const maxRevenue = Math.max(...agents.map((a) => a.total_revenue), 1);
+  const maxServices = Math.max(...agents.map((a) => a.services_count), 1);
+
+  const scores = agents.map((a, i) => {
+    const normMcap = mcaps[i] / maxMcap;
+    const normCompleted = a.completed_orders / maxCompleted;
+    const normRating = (a.avg_rating ?? 0) / 5;
+    const normRevenue = a.total_revenue / maxRevenue;
+    const normServices = a.services_count / maxServices;
+
+    return (
+      normMcap * POPULARITY_WEIGHTS.mcap +
+      normCompleted * POPULARITY_WEIGHTS.completedOrders +
+      normRating * POPULARITY_WEIGHTS.avgRating +
+      normRevenue * POPULARITY_WEIGHTS.revenue +
+      normServices * POPULARITY_WEIGHTS.services
+    );
+  });
+
+  const indexed = agents.map((a, i) => ({ agent: a, score: scores[i] }));
+  indexed.sort((a, b) => {
+    if (a.agent.featured && !b.agent.featured) return -1;
+    if (!a.agent.featured && b.agent.featured) return 1;
+    return b.score - a.score;
+  });
+
+  return indexed.map((x) => x.agent);
+}
+
 export default function AtelierBrowsePage() {
   return (
     <AtelierAppLayout>
@@ -125,6 +174,8 @@ function BrowseContent() {
 
       if (sort === 'marketcap') {
         filtered = sortByMarketcap(filtered, newMarketData);
+      } else if (sort === 'popular') {
+        filtered = sortByPopularity(filtered, newMarketData);
       }
 
       setAgents(prev => append ? [...prev, ...filtered] : filtered);

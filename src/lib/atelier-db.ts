@@ -105,6 +105,11 @@ export async function initAtelierDb(): Promise<void> {
 
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN token_launch_attempted INTEGER DEFAULT 0`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN ai_models TEXT`).catch(() => {});
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN last_poll_at DATETIME`).catch(() => {});
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_wallet TEXT`).catch(() => {});
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_pda TEXT`).catch(() => {});
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_secret_key TEXT`).catch(() => {});
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_tx_hash TEXT`).catch(() => {});
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS services (
@@ -964,8 +969,13 @@ export interface AtelierAgent {
   token_created_at: string | null;
   token_launch_attempted: number;
   ai_models: string | null;
+  last_poll_at: string | null;
   atelier_holder: number;
   holder_checked_at: string | null;
+  said_wallet: string | null;
+  said_pda: string | null;
+  said_secret_key: string | null;
+  said_tx_hash: string | null;
   created_at: string;
 }
 
@@ -1272,7 +1282,38 @@ export async function getAtelierAgentsByWallet(ownerWallet: string): Promise<Ate
     sql: 'SELECT * FROM atelier_agents WHERE owner_wallet = ? AND active = 1',
     args: [ownerWallet],
   });
-  return result.rows as unknown as AtelierAgent[];
+  const agents = result.rows as unknown as AtelierAgent[];
+
+  for (const agent of agents) {
+    if (!agent.api_key) {
+      const apiKey = `atelier_${randomBytes(24).toString('hex')}`;
+      await atelierClient.execute({
+        sql: 'UPDATE atelier_agents SET api_key = ? WHERE id = ? AND api_key IS NULL',
+        args: [apiKey, agent.id],
+      });
+      agent.api_key = apiKey;
+    }
+  }
+
+  return agents;
+}
+
+export async function getPendingOrderCountForAgent(agentId: string): Promise<number> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT COUNT(*) as cnt FROM service_orders WHERE provider_agent_id = ? AND status IN ('paid', 'in_progress')`,
+    args: [agentId],
+  });
+  const row = result.rows[0] as unknown as { cnt: number };
+  return row?.cnt ?? 0;
+}
+
+export async function updateAgentLastPoll(agentId: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE atelier_agents SET last_poll_at = CURRENT_TIMESTAMP WHERE id = ?',
+    args: [agentId],
+  });
 }
 
 export async function registerAtelierAgent(data: {
@@ -1338,6 +1379,26 @@ export async function updateAtelierAgent(
   });
 
   return getAtelierAgent(id);
+}
+
+export async function setSAIDIdentity(
+  agentId: string,
+  data: { wallet: string; pda: string; secretKey: string; txHash: string }
+): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `UPDATE atelier_agents SET said_wallet = ?, said_pda = ?, said_secret_key = ?, said_tx_hash = ? WHERE id = ?`,
+    args: [data.wallet, data.pda, data.secretKey, data.txHash, agentId],
+  });
+}
+
+export async function getAgentsWithoutSAID(): Promise<AtelierAgent[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT * FROM atelier_agents WHERE active = 1 AND (said_wallet IS NULL OR said_wallet = '')`,
+    args: [],
+  });
+  return result.rows as unknown as AtelierAgent[];
 }
 
 export async function getDistinctProviderModels(): Promise<string[]> {
@@ -2723,7 +2784,7 @@ export async function getMetricsData(): Promise<MetricsData> {
 
 // ─── Notifications ───
 
-export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message';
+export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message' | 'provider_order_received' | 'provider_order_paid' | 'provider_webhook_failed';
 
 export interface Notification {
   id: string;

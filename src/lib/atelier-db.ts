@@ -1477,8 +1477,8 @@ export async function getAtelierAgents(filters?: {
   let orderClause: string;
   switch (filters?.sortBy) {
     case 'newest': orderClause = 'a.created_at DESC'; break;
-    case 'rating': orderClause = 'avg_rating DESC NULLS LAST'; break;
-    default: orderClause = 'a.featured DESC, completed_orders DESC, COALESCE(avg_rating, 0) DESC, total_revenue DESC, total_orders DESC, services_count DESC'; break;
+    case 'rating': orderClause = 'MAX(s.avg_rating) DESC NULLS LAST'; break;
+    default: orderClause = 'a.featured DESC, completed_orders DESC, COALESCE(MAX(s.avg_rating), 0) DESC, total_revenue DESC, total_orders DESC, services_count DESC'; break;
   }
 
   args.push(limit, offset);

@@ -18,6 +18,41 @@ import { signWalletAuth, type WalletAuthPayload, type SignableWallet } from '@/l
 import type { TransactionSignableWallet } from '@/lib/solana-pay';
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
+const STORAGE_KEY_PREFIX = 'atelier_auth_';
+
+function loadCachedAuth(wallet: string): { payload: WalletAuthPayload; ts: number } | null {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${wallet}`);
+    if (!raw) return null;
+    const { payload, ts } = JSON.parse(raw) as { payload: WalletAuthPayload; ts: number };
+    if (payload.wallet !== wallet || Date.now() - ts >= SESSION_TTL) {
+      localStorage.removeItem(`${STORAGE_KEY_PREFIX}${wallet}`);
+      return null;
+    }
+    return { payload, ts };
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedAuth(payload: WalletAuthPayload, ts: number): void {
+  try {
+    localStorage.setItem(
+      `${STORAGE_KEY_PREFIX}${payload.wallet}`,
+      JSON.stringify({ payload, ts }),
+    );
+  } catch {
+    // storage full or unavailable
+  }
+}
+
+function clearCachedAuth(wallet: string): void {
+  try {
+    localStorage.removeItem(`${STORAGE_KEY_PREFIX}${wallet}`);
+  } catch {
+    // unavailable
+  }
+}
 
 const SolanaWalletBridge = dynamic(
   () => import('@/components/atelier/SolanaWalletBridge').then(m => ({ default: m.SolanaWalletBridge })),
@@ -96,6 +131,14 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       return inflightRef.current;
     }
 
+    if (walletAddress) {
+      const stored = loadCachedAuth(walletAddress);
+      if (stored) {
+        cacheRef.current = stored;
+        return stored.payload;
+      }
+    }
+
     const wallet = getSignableWallet();
     if (!wallet) {
       throw new Error('No Solana wallet available for signing');
@@ -103,7 +146,9 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
 
     const promise = signWalletAuth(wallet)
       .then((payload) => {
-        cacheRef.current = { payload, ts: Date.now() };
+        const ts = Date.now();
+        cacheRef.current = { payload, ts };
+        saveCachedAuth(payload, ts);
         inflightRef.current = null;
         return payload;
       })
@@ -117,14 +162,20 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   }, [walletAddress, getSignableWallet]);
 
   useEffect(() => {
-    cacheRef.current = null;
     inflightRef.current = null;
+    if (walletAddress) {
+      const stored = loadCachedAuth(walletAddress);
+      cacheRef.current = stored;
+    } else {
+      cacheRef.current = null;
+    }
   }, [walletAddress]);
 
   const clearAuth = useCallback(() => {
     cacheRef.current = null;
     inflightRef.current = null;
-  }, []);
+    if (walletAddress) clearCachedAuth(walletAddress);
+  }, [walletAddress]);
 
   const handleLogout = useCallback(async () => {
     clearAuth();

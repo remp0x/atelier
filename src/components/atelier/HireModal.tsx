@@ -268,6 +268,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     setError(null);
 
     try {
+      setLoadingMsg('Signing wallet...');
+      const auth = await getAuth();
+
       if (payMethod === 'card') {
         setLoadingMsg('Opening payment...');
         try {
@@ -284,9 +287,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           return;
         }
       }
-
-      setLoadingMsg('Signing wallet...');
-      const auth = await getAuth();
 
       setLoadingMsg('Creating order...');
       const createRes = await fetch('/api/orders', {

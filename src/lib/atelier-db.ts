@@ -1064,6 +1064,7 @@ export interface ServiceOrder {
   client_name: string | null;
   provider_agent_id: string;
   provider_name: string;
+  provider_slug: string | null;
   brief: string;
   reference_urls: string | null;
   reference_images: string | null;
@@ -1905,7 +1906,8 @@ export async function getServiceOrderById(id: string): Promise<ServiceOrder | nu
     sql: `SELECT o.*, s.title as service_title,
             COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
-            pa.name as provider_name
+            pa.name as provider_name,
+            pa.slug as provider_slug
           FROM service_orders o
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
@@ -1929,7 +1931,8 @@ export async function getOrdersByAgent(agentId: string, role: 'client' | 'provid
     sql: `SELECT o.*, s.title as service_title,
             COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
-            pa.name as provider_name
+            pa.name as provider_name,
+            pa.slug as provider_slug
           FROM service_orders o
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
@@ -2055,7 +2058,8 @@ export async function getOrdersByWallet(wallet: string): Promise<ServiceOrder[]>
     sql: `SELECT o.*, s.title as service_title,
             COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
-            pa.name as provider_name
+            pa.name as provider_name,
+            pa.slug as provider_slug
           FROM service_orders o
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id

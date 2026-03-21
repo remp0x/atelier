@@ -230,8 +230,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         const result = await fundWallet({
           address: treasuryWallet,
           options: {
-            cluster: { name: 'mainnet-beta' },
+            chain: 'solana:mainnet',
             amount: total.toFixed(2),
+            asset: 'USDC',
             defaultFundingMethod: 'card',
             card: { preferredProvider: 'moonpay' },
           },

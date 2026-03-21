@@ -82,11 +82,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
   const { walletAddress, authenticated, getAuth, login, getTransactionWallet } = useAtelierAuth();
   const { connection } = useConnection();
-  const { fundWallet } = useFundWallet({
-    onUserExited: ({ fundingMethod }) => {
-      if (fundingMethod) setCardFunded(true);
-    },
-  });
+  const { fundWallet } = useFundWallet();
 
   const [step, setStep] = useState<Step>('brief');
   const [brief, setBrief] = useState('');
@@ -97,7 +93,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [payMethod, setPayMethod] = useState<PayMethod>('wallet');
-  const [cardFunded, setCardFunded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -228,22 +223,17 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
       const newOrderId = createJson.data.id;
 
-      if (payMethod === 'card' && !cardFunded) {
+      if (payMethod === 'card') {
         setLoadingMsg('Opening card payment...');
-        setCardFunded(false);
         await fundWallet({
           address: walletAddress!,
           options: {
             chain: 'solana:mainnet',
-            amount: total.toFixed(2),
             asset: 'USDC',
             defaultFundingMethod: 'card',
             card: { preferredProvider: 'moonpay' },
           },
         });
-        setLoadingMsg('Waiting for funds...');
-        setLoading(false);
-        return;
       }
 
       setLoadingMsg('Sending payment...');
@@ -275,7 +265,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, cardFunded, fundWallet]);
+  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, fundWallet]);
 
   if (!open) return null;
 
@@ -564,6 +554,11 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                     Card (Moonpay)
                   </button>
                 </div>
+                {payMethod === 'card' && (
+                  <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mt-1.5">
+                    Moonpay has a ~$15 minimum. Excess USDC stays in your wallet for future orders.
+                  </p>
+                )}
               </div>
 
               {error && (
@@ -589,10 +584,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                     </>
                   ) : !authenticated ? (
                     'Connect Wallet'
-                  ) : payMethod === 'card' && !cardFunded ? (
-                    `Buy $${total.toFixed(2)} USDC with Card`
-                  ) : payMethod === 'card' && cardFunded ? (
-                    `Pay $${total.toFixed(2)} USDC`
+                  ) : payMethod === 'card' ? (
+                    `Pay $${total.toFixed(2)} with Card`
                   ) : (
                     `Pay $${total.toFixed(2)} USDC`
                   )}

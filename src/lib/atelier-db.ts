@@ -487,7 +487,9 @@ export async function initAtelierDb(): Promise<void> {
   } catch (e) { console.error('service_reviews migration failed (non-fatal):', e); }
 
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN max_revisions INTEGER DEFAULT 3'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE services ADD COLUMN requirement_fields TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN revision_count INTEGER DEFAULT 0'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN requirement_answers TEXT'); } catch (_e) { }
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS pending_verifications (
@@ -933,6 +935,16 @@ export type ServiceCategory = 'image_gen' | 'video_gen' | 'ugc' | 'influencer' |
 export type ServicePriceType = 'fixed' | 'quote' | 'weekly' | 'monthly';
 export type OrderStatus = 'pending_quote' | 'quoted' | 'accepted' | 'paid' | 'in_progress' | 'delivered' | 'revision_requested' | 'completed' | 'disputed' | 'cancelled';
 export type BountyStatus = 'open' | 'claimed' | 'completed' | 'expired' | 'cancelled' | 'disputed';
+
+export type RequirementFieldType = 'text' | 'url' | 'select' | 'number' | 'textarea';
+
+export interface RequirementField {
+  label: string;
+  type: RequirementFieldType;
+  required: boolean;
+  placeholder?: string;
+  options?: string[];
+}
 export type BountyClaimStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn';
 
 export interface AtelierAgent {
@@ -1037,6 +1049,7 @@ export interface Service {
   system_prompt: string | null;
   quota_limit: number;
   max_revisions: number;
+  requirement_fields: string | null;
   is_atelier_official: number;
   partner_badge: string | null;
   created_at: string;
@@ -1070,6 +1083,7 @@ export interface ServiceOrder {
   max_revisions: number;
   delivered_at: string | null;
   review_deadline: string | null;
+  requirement_answers: string | null;
   bounty_id: string | null;
   completed_at: string | null;
   created_at: string;
@@ -1685,14 +1699,15 @@ export async function createService(data: {
   demo_url?: string;
   quota_limit?: number;
   max_revisions?: number;
+  requirement_fields?: RequirementField[];
 }): Promise<Service> {
   await initAtelierDb();
   const id = `svc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const detectedModel = inferModelFromText(`${data.title} ${data.description}`);
   await atelierClient.execute({
-    sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url, quota_limit, provider_model, max_revisions)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null, data.quota_limit ?? 0, detectedModel, data.max_revisions ?? 3],
+    sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url, quota_limit, provider_model, max_revisions, requirement_fields)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null, data.quota_limit ?? 0, detectedModel, data.max_revisions ?? 3, data.requirement_fields ? JSON.stringify(data.requirement_fields) : null],
   });
   return getServiceById(id) as Promise<Service>;
 }
@@ -1868,6 +1883,7 @@ export async function createServiceOrder(data: {
   reference_images?: string[];
   quoted_price_usd?: string;
   quota_total?: number;
+  requirement_answers?: Record<string, string>;
 }): Promise<ServiceOrder> {
   await initAtelierDb();
   const id = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -1875,9 +1891,9 @@ export async function createServiceOrder(data: {
   const platformFee = data.quoted_price_usd ? (parseFloat(data.quoted_price_usd) * 0.10).toFixed(2) : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.reference_images ? JSON.stringify(data.reference_images) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0],
+    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.reference_images ? JSON.stringify(data.reference_images) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0, data.requirement_answers ? JSON.stringify(data.requirement_answers) : null],
   });
 
   return getServiceOrderById(id) as Promise<ServiceOrder>;

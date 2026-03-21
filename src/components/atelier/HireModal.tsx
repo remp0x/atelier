@@ -141,7 +141,7 @@ const DEFAULT_HINTS = {
   helper: 'Describe the style and direction for your project. Each generation will follow this direction.',
 };
 
-type PayMethod = 'wallet' | 'moonpay' | 'coinbase';
+type PayMethod = 'wallet' | 'card';
 
 export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
@@ -158,7 +158,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [payMethod, setPayMethod] = useState<PayMethod>('wallet');
-  const [walletFunded, setWalletFunded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -171,7 +170,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setLoading(false);
       setOrderId(null);
       setPayMethod('wallet');
-      setWalletFunded(false);
     }
   }, [open]);
 
@@ -254,38 +252,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
-  const handleFundWallet = useCallback(async (provider: 'moonpay' | 'coinbase') => {
-    if (!walletAddress) { login(); return; }
-    setLoading(true);
-    setError(null);
-    try {
-      await fundWallet({
-        address: walletAddress,
-        options: {
-          chain: 'solana:mainnet',
-          amount: total.toFixed(2),
-          asset: 'USDC',
-          defaultFundingMethod: 'card',
-          card: { preferredProvider: provider },
-        },
-      });
-      setWalletFunded(true);
-      setPayMethod('wallet');
-    } catch {
-      setError('Wallet funding was cancelled');
-    } finally {
-      setLoading(false);
-    }
-  }, [walletAddress, total, login, fundWallet]);
-
   const handlePay = useCallback(async () => {
     if (!walletAddress) {
       login();
-      return;
-    }
-
-    if (payMethod === 'moonpay' || payMethod === 'coinbase') {
-      await handleFundWallet(payMethod);
       return;
     }
 
@@ -299,6 +268,23 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     setError(null);
 
     try {
+      if (payMethod === 'card') {
+        setLoadingMsg('Opening payment...');
+        try {
+          await fundWallet({
+            address: walletAddress,
+            options: {
+              chain: 'solana:mainnet',
+              amount: total.toFixed(2),
+              asset: 'USDC',
+            },
+          });
+        } catch {
+          setLoading(false);
+          return;
+        }
+      }
+
       setLoadingMsg('Signing wallet...');
       const auth = await getAuth();
 
@@ -349,7 +335,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, handleFundWallet]);
+  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, fundWallet]);
 
   if (!open) return null;
 
@@ -619,29 +605,27 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
               <div>
                 <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Payment method</p>
                 <div className="flex gap-2">
-                  {([
-                    { key: 'wallet', label: 'Wallet' },
-                    { key: 'moonpay', label: 'Moonpay' },
-                    { key: 'coinbase', label: 'Coinbase' },
-                  ] as const).map(({ key, label }) => (
-                    <button
-                      key={key}
-                      onClick={() => setPayMethod(key)}
-                      className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
-                        payMethod === key
-                          ? 'border-atelier text-atelier bg-atelier/5'
-                          : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => setPayMethod('wallet')}
+                    className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                      payMethod === 'wallet'
+                        ? 'border-atelier text-atelier bg-atelier/5'
+                        : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
+                    }`}
+                  >
+                    Crypto Wallet
+                  </button>
+                  <button
+                    onClick={() => setPayMethod('card')}
+                    className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                      payMethod === 'card'
+                        ? 'border-atelier text-atelier bg-atelier/5'
+                        : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
+                    }`}
+                  >
+                    Card / Transfer
+                  </button>
                 </div>
-                {payMethod !== 'wallet' && (
-                  <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mt-1.5">
-                    Buy USDC with card first, then pay from your wallet. Excess stays for future orders.
-                  </p>
-                )}
               </div>
 
               {error && (
@@ -667,10 +651,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                     </>
                   ) : !authenticated ? (
                     'Connect Wallet'
-                  ) : payMethod !== 'wallet' ? (
-                    `Buy $${total.toFixed(2)} USDC`
                   ) : (
-                    `Pay $${total.toFixed(2)} USDC`
+                    `Pay $${total.toFixed(2)}`
                   )}
                 </button>
               </div>

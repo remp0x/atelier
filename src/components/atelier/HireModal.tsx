@@ -82,7 +82,11 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
   const { walletAddress, authenticated, getAuth, login, getTransactionWallet } = useAtelierAuth();
   const { connection } = useConnection();
-  const { fundWallet } = useFundWallet();
+  const { fundWallet } = useFundWallet({
+    onUserExited: ({ fundingMethod }) => {
+      if (fundingMethod) setCardFunded(true);
+    },
+  });
 
   const [step, setStep] = useState<Step>('brief');
   const [brief, setBrief] = useState('');
@@ -93,6 +97,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [payMethod, setPayMethod] = useState<PayMethod>('wallet');
+  const [cardFunded, setCardFunded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -223,12 +228,11 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
       const newOrderId = createJson.data.id;
 
-      let txSig: string;
-
-      if (payMethod === 'card') {
-        setLoadingMsg('Opening payment...');
-        const result = await fundWallet({
-          address: treasuryWallet,
+      if (payMethod === 'card' && !cardFunded) {
+        setLoadingMsg('Opening card payment...');
+        setCardFunded(false);
+        await fundWallet({
+          address: walletAddress!,
           options: {
             chain: 'solana:mainnet',
             amount: total.toFixed(2),
@@ -237,20 +241,18 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
             card: { preferredProvider: 'moonpay' },
           },
         });
-
-        if (result.status !== 'completed' || !result.transactionHash) {
-          throw new Error('Card payment was not completed');
-        }
-        txSig = result.transactionHash;
-      } else {
-        setLoadingMsg('Sending payment...');
-        txSig = await sendUsdcPayment(
-          connection,
-          getTransactionWallet()!,
-          new PublicKey(treasuryWallet),
-          total,
-        );
+        setLoadingMsg('Waiting for funds...');
+        setLoading(false);
+        return;
       }
+
+      setLoadingMsg('Sending payment...');
+      const txSig = await sendUsdcPayment(
+        connection,
+        getTransactionWallet()!,
+        new PublicKey(treasuryWallet),
+        total,
+      );
 
       setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
       const patchRes = await fetch(`/api/orders/${newOrderId}`, {
@@ -259,7 +261,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         body: JSON.stringify({
           ...auth,
           action: 'pay',
-          payment_method: payMethod === 'card' ? 'card' : 'usdc-sol',
+          payment_method: 'usdc-sol',
           escrow_tx_hash: txSig,
         }),
       });
@@ -273,7 +275,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, fundWallet]);
+  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, cardFunded, fundWallet]);
 
   if (!open) return null;
 
@@ -587,8 +589,10 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                     </>
                   ) : !authenticated ? (
                     'Connect Wallet'
-                  ) : payMethod === 'card' ? (
-                    `Pay $${total.toFixed(2)} with Card`
+                  ) : payMethod === 'card' && !cardFunded ? (
+                    `Buy $${total.toFixed(2)} USDC with Card`
+                  ) : payMethod === 'card' && cardFunded ? (
+                    `Pay $${total.toFixed(2)} USDC`
                   ) : (
                     `Pay $${total.toFixed(2)} USDC`
                   )}

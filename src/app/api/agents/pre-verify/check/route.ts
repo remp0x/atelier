@@ -3,9 +3,10 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPendingVerification } from '@/lib/pending-verifications';
 
-const TWEET_URL_REGEX = /^https?:\/\/(x\.com|twitter\.com)\/([a-zA-Z0-9_]{1,15})\/status\/(\d+)/;
+const TWEET_URL_REGEX = /^https?:\/\/(x\.com|twitter\.com)\/[a-zA-Z0-9_]{1,15}\/status\/\d+/;
+const AUTHOR_URL_REGEX = /^https?:\/\/(x\.com|twitter\.com)\/([a-zA-Z0-9_]{1,15})$/;
 
-async function fetchTweetText(tweetUrl: string): Promise<string> {
+async function fetchTweetOembed(tweetUrl: string): Promise<{ text: string; username: string }> {
   const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true`;
   const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(10_000) });
   if (!res.ok) {
@@ -13,7 +14,15 @@ async function fetchTweetText(tweetUrl: string): Promise<string> {
   }
   const data = await res.json();
   const html: string = data.html || '';
-  return html.replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+
+  const authorUrl: string = data.author_url || '';
+  const authorMatch = authorUrl.match(AUTHOR_URL_REGEX);
+  if (!authorMatch) {
+    throw new Error('Could not determine tweet author from response.');
+  }
+
+  return { text, username: authorMatch[2] };
 }
 
 export async function POST(request: NextRequest) {
@@ -35,15 +44,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const match = tweet_url.trim().match(TWEET_URL_REGEX);
-    if (!match) {
+    if (!TWEET_URL_REGEX.test(tweet_url.trim())) {
       return NextResponse.json(
         { success: false, error: 'Invalid tweet URL. Expected: https://x.com/{username}/status/{id}' },
         { status: 400 },
       );
     }
-
-    const twitterUsername = match[2];
 
     const pending = await getPendingVerification(session_token);
     if (!pending) {
@@ -54,8 +60,11 @@ export async function POST(request: NextRequest) {
     }
 
     let tweetText: string;
+    let twitterUsername: string;
     try {
-      tweetText = await fetchTweetText(tweet_url.trim());
+      const oembed = await fetchTweetOembed(tweet_url.trim());
+      tweetText = oembed.text;
+      twitterUsername = oembed.username;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to fetch tweet';
       return NextResponse.json({ success: false, error: msg }, { status: 422 });

@@ -309,7 +309,7 @@ export default function BountyDetailPage() {
               <div className="flex flex-wrap gap-2">
                 {referenceImages.map((url, i) => (
                   <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative block w-20 h-20 rounded-lg border border-gray-200 dark:border-neutral-800 overflow-hidden hover:border-atelier transition-colors">
-                    <Image src={url} alt={`ref ${i + 1}`} fill sizes="80px" className="object-cover" unoptimized />
+                    <Image src={url} alt={`ref ${i + 1}`} fill sizes="80px" className="object-cover" unoptimized onError={(e) => { const el = e.currentTarget.closest('a'); if (el) el.style.display = 'none'; }} />
                   </a>
                 ))}
               </div>
@@ -362,7 +362,7 @@ export default function BountyDetailPage() {
                     <div className="flex items-center gap-3 mb-3">
                       <div className="relative w-10 h-10 rounded-full bg-gray-100 dark:bg-neutral-900 overflow-hidden flex-shrink-0">
                         {claim.agent_avatar_url ? (
-                          <Image src={claim.agent_avatar_url} alt={claim.agent_name} fill sizes="40px" className="object-cover" unoptimized />
+                          <Image src={claim.agent_avatar_url} alt={claim.agent_name} fill sizes="40px" className="object-cover" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm font-mono">
                             {claim.agent_name.charAt(0)}

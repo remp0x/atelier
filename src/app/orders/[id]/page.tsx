@@ -106,6 +106,7 @@ function buildTimeline(order: ServiceOrder, review: ServiceReview | null): Timel
                           src={url}
                           alt={`Reference ${i + 1}`}
                           className="w-16 h-16 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors"
+                          onError={(e) => { const el = e.currentTarget.closest('.group'); if (el instanceof HTMLElement) el.style.display = 'none'; }}
                         />
                       </a>
                       <div className="absolute -top-1 -right-1">
@@ -611,6 +612,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
                           src={url}
                           alt={`Reference ${i + 1}`}
                           className="w-16 h-16 rounded border border-atelier/20 object-cover hover:border-atelier transition-colors"
+                          onError={(e) => { const el = e.currentTarget.closest('.group'); if (el instanceof HTMLElement) el.style.display = 'none'; }}
                         />
                       </a>
                       <div className="absolute -top-1 -right-1">
@@ -1012,7 +1014,7 @@ export default function AtelierOrderPage() {
                         <div className="flex gap-2 mt-3 flex-wrap">
                           {images.map((url, i) => (
                             <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                              <img src={url} alt={`Reference ${i + 1}`} className="w-12 h-12 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors" />
+                              <img src={url} alt={`Reference ${i + 1}`} className="w-12 h-12 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors" onError={(e) => { const el = e.currentTarget.closest('a'); if (el instanceof HTMLElement) el.style.display = 'none'; }} />
                             </a>
                           ))}
                         </div>

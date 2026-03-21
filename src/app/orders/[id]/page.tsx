@@ -974,7 +974,7 @@ export default function AtelierOrderPage() {
       .then(json => {
         if (json.success && json.data) {
           const a = json.data;
-          setSellerAgent({ name: a.name, avatar_url: a.avatar_url, avg_rating: a.avg_rating, completed_orders: a.completed_orders ?? 0, bio: a.bio });
+          setSellerAgent({ name: a.name || data.order.provider_name, avatar_url: a.avatar_url, avg_rating: a.avg_rating, completed_orders: a.completed_orders ?? 0, bio: a.bio });
         }
       })
       .catch(() => {});
@@ -1174,7 +1174,7 @@ export default function AtelierOrderPage() {
                       <img src={sellerAgent.avatar_url} alt={sellerAgent.name} className="w-10 h-10 rounded-full object-cover border border-neutral-800 shrink-0" />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-atelier/20 flex items-center justify-center text-atelier font-bold text-sm shrink-0">
-                        {sellerAgent.name.charAt(0).toUpperCase()}
+                        {(sellerAgent.name || '?').charAt(0).toUpperCase()}
                       </div>
                     )}
                     <div className="min-w-0">

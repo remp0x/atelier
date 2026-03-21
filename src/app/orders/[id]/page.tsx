@@ -92,7 +92,7 @@ function buildTimeline(order: ServiceOrder, review: ServiceReview | null): Timel
       timestamp: order.created_at,
       content: (
         <div>
-          <p className="text-sm text-neutral-400">{order.brief}</p>
+          <p className="text-sm text-neutral-400 break-all">{order.brief}</p>
           {order.reference_images && (() => {
             try {
               const images: string[] = JSON.parse(order.reference_images);
@@ -598,7 +598,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
       {order.brief && (
         <div className="p-3 rounded bg-atelier/5 border border-atelier/10">
           <p className="text-2xs font-mono text-neutral-500 mb-1">Project brief</p>
-          <p className="text-sm text-neutral-300">{order.brief}</p>
+          <p className="text-sm text-neutral-300 break-all">{order.brief}</p>
           {order.reference_images && (() => {
             try {
               const images: string[] = JSON.parse(order.reference_images);
@@ -766,7 +766,37 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
   );
 }
 
-function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet: string }) {
+interface DeliveryInfo {
+  url: string;
+  mediaType: string | null;
+  deliveredAt: string | null;
+  revisionCount: number;
+}
+
+function DeliveryCard({ delivery, index }: { delivery: DeliveryInfo; index: number }) {
+  return (
+    <div className="my-3">
+      <div className="rounded-lg border-2 border-atelier/30 bg-atelier/5 overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2 bg-atelier/10 border-b border-atelier/20">
+          <svg className="w-4 h-4 text-atelier shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+          <span className="text-xs font-mono font-bold text-atelier uppercase tracking-wider">Delivery #{index}</span>
+          {delivery.deliveredAt && (
+            <span className="text-2xs font-mono text-neutral-500 ml-auto">
+              {formatDate(delivery.deliveredAt)}
+            </span>
+          )}
+        </div>
+        <div className="p-3">
+          <DeliverableMedia url={delivery.url} mediaType={delivery.mediaType} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: string; wallet: string; deliveries: DeliveryInfo[] }) {
   const { getAuth, clearAuth } = useAtelierAuth();
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [input, setInput] = useState('');
@@ -836,23 +866,44 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
         {messages.length === 0 && (
           <p className="text-xs text-neutral-400 dark:text-neutral-600 font-mono text-center py-4">No messages yet</p>
         )}
-        {messages.map((msg) => {
+        {messages.map((msg, idx) => {
           const isMe = msg.sender_id === walletAddress;
+          const msgDate = new Date(msg.created_at);
+          const prevDate = idx > 0 ? new Date(messages[idx - 1].created_at) : null;
+          const showDateSep = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
+          const timeStr = msgDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
           return (
-            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[75%] rounded-lg px-3 py-2 ${
-                isMe
-                  ? 'bg-atelier/20 text-black dark:text-white'
-                  : 'bg-white dark:bg-black-soft border border-neutral-200 dark:border-neutral-800 text-black dark:text-white'
-              }`}>
-                <p className="text-2xs font-mono text-neutral-500 mb-0.5">
-                  {msg.sender_name || (isMe ? 'You' : msg.sender_type)}
-                </p>
-                <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+            <div key={msg.id}>
+              {showDateSep && (
+                <div className="flex items-center gap-3 my-4">
+                  <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
+                  <span className="text-2xs font-mono text-neutral-400 shrink-0">
+                    {msgDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                  <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
+                </div>
+              )}
+              <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[75%] rounded-lg px-3 py-2 ${
+                  isMe
+                    ? 'bg-atelier/20 text-black dark:text-white'
+                    : 'bg-white dark:bg-black-soft border border-neutral-200 dark:border-neutral-800 text-black dark:text-white'
+                }`}>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className="text-2xs font-mono text-neutral-500">
+                      {msg.sender_name || (isMe ? 'You' : msg.sender_type)}
+                    </p>
+                    <p className="text-2xs font-mono text-neutral-600">{timeStr}</p>
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                </div>
               </div>
             </div>
           );
         })}
+        {deliveries.map((d, i) => (
+          <DeliveryCard key={`delivery-${i}`} delivery={d} index={i + 1} />
+        ))}
         <div ref={messagesEndRef} />
       </div>
       <div className="flex gap-2 mt-3">
@@ -896,6 +947,7 @@ export default function AtelierOrderPage() {
   const [cancelling, setCancelling] = useState(false);
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [sellerAgent, setSellerAgent] = useState<{ name: string; avatar_url: string | null; avg_rating: number | null; completed_orders: number; bio: string | null } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -914,6 +966,19 @@ export default function AtelierOrderPage() {
   }, [params.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!data?.order.provider_agent_id) return;
+    fetch(`/api/agents/${data.order.provider_agent_id}`)
+      .then(r => r.json())
+      .then(json => {
+        if (json.success && json.data) {
+          const a = json.data;
+          setSellerAgent({ name: a.name, avatar_url: a.avatar_url, avg_rating: a.avg_rating, completed_orders: a.completed_orders ?? 0, bio: a.bio });
+        }
+      })
+      .catch(() => {});
+  }, [data?.order.provider_agent_id]);
 
   if (loading) {
     return (
@@ -975,6 +1040,10 @@ export default function AtelierOrderPage() {
                 </div>
                 <div className="space-y-1.5 text-sm">
                   <div className="flex items-center justify-between">
+                    <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
+                    <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
                     <span className="text-neutral-500 font-mono text-2xs">Provider</span>
                     <Link href={atelierHref(`/atelier/agents/${order.provider_agent_id}`)} className="text-atelier hover:underline text-xs font-mono">
                       {order.provider_name}
@@ -1005,7 +1074,7 @@ export default function AtelierOrderPage() {
               {order.brief && (
                 <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
                   <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Brief</p>
-                  <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed">{order.brief}</p>
+                  <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed break-all">{order.brief}</p>
                   {order.reference_images && (() => {
                     try {
                       const images: string[] = JSON.parse(order.reference_images);
@@ -1024,40 +1093,110 @@ export default function AtelierOrderPage() {
                 </div>
               )}
 
-              {/* Compact Progress */}
-              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
-                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-3">Progress</p>
-                <div className="space-y-1.5">
-                  {STATUS_SEQUENCE.map((s, i) => {
-                    const currentIdx = statusIndex(order.status);
-                    const isDone = i < currentIdx || (i === currentIdx && order.status === 'completed');
-                    const isCurrent = i === currentIdx && order.status !== 'completed';
-                    const isRevision = order.status === 'revision_requested' && s === 'delivered';
-                    return (
-                      <div key={s} className="flex items-center gap-2.5">
-                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                          isDone || isRevision ? 'bg-emerald-400' : isCurrent ? 'bg-atelier animate-pulse' : 'bg-neutral-700'
-                        }`} />
-                        <span className={`text-2xs font-mono ${
-                          isDone || isRevision ? 'text-neutral-400' : isCurrent ? 'text-white font-medium' : 'text-neutral-600'
-                        }`}>{STATUS_LABELS[s]}</span>
+              {order.requirement_answers && (() => {
+                try {
+                  const answers: Record<string, string> = JSON.parse(order.requirement_answers);
+                  const entries = Object.entries(answers).filter(([, v]) => v?.trim());
+                  if (entries.length === 0) return null;
+                  return (
+                    <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                      <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Requirements</p>
+                      <div className="space-y-2">
+                        {entries.map(([label, value]) => (
+                          <div key={label}>
+                            <p className="text-2xs font-mono text-neutral-500">{label}</p>
+                            <p className="text-sm text-gray-700 dark:text-neutral-300">{value}</p>
+                          </div>
+                        ))}
                       </div>
-                    );
-                  })}
-                  {isTerminal && (
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-400" />
-                      <span className="text-2xs font-mono text-red-400">{order.status === 'cancelled' ? 'Cancelled' : 'Disputed'}</span>
                     </div>
-                  )}
-                  {order.status === 'revision_requested' && (
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-400 animate-pulse" />
-                      <span className="text-2xs font-mono text-amber-400">Revision Requested</span>
-                    </div>
-                  )}
+                  );
+                } catch { return null; }
+              })()}
+
+              {/* Timeline Progress */}
+              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-4">Progress</p>
+                <div className="relative">
+                  {(() => {
+                    const currentIdx = statusIndex(order.status);
+                    const steps = STATUS_SEQUENCE.map((s, i) => {
+                      const isDone = i < currentIdx || (i === currentIdx && order.status === 'completed');
+                      const isCurrent = i === currentIdx && order.status !== 'completed';
+                      const isRevisionStep = order.status === 'revision_requested' && s === 'delivered';
+                      return { key: s, label: STATUS_LABELS[s], isDone: isDone || isRevisionStep, isCurrent, isTerminalStep: false, isRevisionStep: false };
+                    });
+                    if (order.status === 'revision_requested') {
+                      steps.push({ key: 'revision_requested', label: 'Revision Requested', isDone: false, isCurrent: true, isTerminalStep: false, isRevisionStep: true });
+                    }
+                    if (isTerminal) {
+                      steps.push({ key: order.status, label: order.status === 'cancelled' ? 'Cancelled' : 'Disputed', isDone: true, isCurrent: false, isTerminalStep: true, isRevisionStep: false });
+                    }
+                    return steps.map((step, i) => {
+                      const isLast = i === steps.length - 1;
+                      return (
+                        <div key={step.key} className="relative flex gap-3">
+                          <div className="flex flex-col items-center">
+                            {step.isTerminalStep ? (
+                              <div className="w-3 h-3 rounded-full bg-red-400 ring-2 ring-red-400/20 shrink-0 mt-0.5" />
+                            ) : step.isCurrent ? (
+                              <div className="w-3 h-3 rounded-full bg-atelier animate-pulse-atelier ring-2 ring-atelier/20 shrink-0 mt-0.5" />
+                            ) : step.isDone ? (
+                              <div className="w-3 h-3 rounded-full bg-emerald-400 shrink-0 mt-0.5" />
+                            ) : (
+                              <div className="w-3 h-3 rounded-full bg-neutral-800 border border-neutral-600 shrink-0 mt-0.5" />
+                            )}
+                            {!isLast && (
+                              <div className={`w-px flex-1 min-h-[20px] ${step.isDone ? 'bg-emerald-400/30' : 'bg-neutral-800'}`} />
+                            )}
+                          </div>
+                          <div className={`pb-4 ${isLast ? 'pb-0' : ''}`}>
+                            <span className={`text-xs font-mono leading-none ${
+                              step.isTerminalStep ? 'text-red-400 font-medium' :
+                              step.isRevisionStep ? 'text-amber-400 font-medium' :
+                              step.isCurrent ? 'text-white font-medium' :
+                              step.isDone ? 'text-neutral-400' : 'text-neutral-600'
+                            }`}>{step.label}</span>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
+
+              {/* Seller Profile */}
+              {sellerAgent && (
+                <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                  <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-3">Seller</p>
+                  <Link href={atelierHref(`/atelier/agents/${order.provider_agent_id}`)} className="flex items-center gap-3 group">
+                    {sellerAgent.avatar_url ? (
+                      <img src={sellerAgent.avatar_url} alt={sellerAgent.name} className="w-10 h-10 rounded-full object-cover border border-neutral-800 shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-atelier/20 flex items-center justify-center text-atelier font-bold text-sm shrink-0">
+                        {sellerAgent.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-black dark:text-white group-hover:text-atelier transition-colors truncate">{sellerAgent.name}</p>
+                      <div className="flex items-center gap-2 text-2xs font-mono text-neutral-500">
+                        {sellerAgent.avg_rating && (
+                          <span className="flex items-center gap-0.5">
+                            <svg className="w-3 h-3 text-atelier" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                            {sellerAgent.avg_rating.toFixed(1)}
+                          </span>
+                        )}
+                        <span>{sellerAgent.completed_orders} completed</span>
+                      </div>
+                    </div>
+                  </Link>
+                  {sellerAgent.bio && (
+                    <p className="text-2xs text-neutral-500 mt-2 line-clamp-2">{sellerAgent.bio}</p>
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="space-y-2">
@@ -1178,6 +1317,24 @@ export default function AtelierOrderPage() {
                     Hire {order.provider_name} Again
                   </Link>
                 )}
+              </div>
+
+              {/* Support & FAQs */}
+              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                <div className="flex items-center gap-4 text-2xs font-mono">
+                  <a href="https://t.me/atelierai" target="_blank" rel="noopener noreferrer" className="text-neutral-500 hover:text-atelier transition-colors flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+                    </svg>
+                    Telegram
+                  </a>
+                  <a href="https://x.com/useAtelier" target="_blank" rel="noopener noreferrer" className="text-neutral-500 hover:text-atelier transition-colors flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                    </svg>
+                    @useAtelier
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -1340,7 +1497,16 @@ export default function AtelierOrderPage() {
 
             {/* Chat — always visible */}
             {walletAddress && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
-              <OrderChat orderId={order.id} wallet={walletAddress} />
+              <OrderChat
+                orderId={order.id}
+                wallet={walletAddress}
+                deliveries={order.deliverable_url ? [{
+                  url: order.deliverable_url,
+                  mediaType: order.deliverable_media_type,
+                  deliveredAt: order.delivered_at,
+                  revisionCount: order.revision_count,
+                }] : []}
+              />
             )}
           </div>
         </div>

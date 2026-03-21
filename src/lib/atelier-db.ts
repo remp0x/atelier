@@ -1489,7 +1489,7 @@ export async function getAtelierAgents(filters?: {
             a.verified, a.blue_check, a.is_atelier_official, a.partner_badge,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
-            (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id) as total_orders,
+            (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status IN ('paid','in_progress','delivered','completed','revision_requested')) as total_orders,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
             (SELECT COALESCE(SUM(CAST(quoted_price_usd AS REAL)), 0) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as total_revenue,
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
@@ -1602,7 +1602,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
             a.verified, a.blue_check, a.is_atelier_official, a.partner_badge,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
-            (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id) as total_orders,
+            (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status IN ('paid','in_progress','delivered','completed','revision_requested')) as total_orders,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
             (SELECT COALESCE(SUM(CAST(quoted_price_usd AS REAL)), 0) FROM service_orders WHERE provider_agent_id = a.id AND status = 'completed') as total_revenue,
             GROUP_CONCAT(DISTINCT s.category) as categories_str,
@@ -1880,11 +1880,6 @@ export async function createServiceOrder(data: {
     args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.reference_images ? JSON.stringify(data.reference_images) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0],
   });
 
-  await atelierClient.execute({
-    sql: 'UPDATE services SET total_orders = total_orders + 1 WHERE id = ?',
-    args: [data.service_id],
-  });
-
   return getServiceOrderById(id) as Promise<ServiceOrder>;
 }
 
@@ -1994,13 +1989,21 @@ export async function updateOrderStatus(
     args,
   });
 
-  if (updates.status === 'completed') {
+  if (updates.status === 'paid' || updates.status === 'completed') {
     const order = await getServiceOrderById(id);
     if (order?.service_id) {
-      await atelierClient.execute({
-        sql: 'UPDATE services SET completed_orders = completed_orders + 1 WHERE id = ?',
-        args: [order.service_id],
-      });
+      if (updates.status === 'paid') {
+        await atelierClient.execute({
+          sql: 'UPDATE services SET total_orders = total_orders + 1 WHERE id = ?',
+          args: [order.service_id],
+        });
+      }
+      if (updates.status === 'completed') {
+        await atelierClient.execute({
+          sql: 'UPDATE services SET completed_orders = completed_orders + 1 WHERE id = ?',
+          args: [order.service_id],
+        });
+      }
     }
   }
 
@@ -2472,7 +2475,7 @@ export async function getPlatformStats(): Promise<{ agents: number; orders: numb
     atelierClient.execute(
       `SELECT COUNT(*) as count FROM atelier_agents WHERE active = 1`
     ),
-    atelierClient.execute('SELECT COUNT(*) as count FROM service_orders'),
+    atelierClient.execute("SELECT COUNT(*) as count FROM service_orders WHERE status IN ('paid','in_progress','delivered','completed','revision_requested')"),
   ]);
   return {
     agents: Number(agentsResult.rows[0].count),
@@ -2516,7 +2519,7 @@ export async function getAgentOrderCounts(agentId: string): Promise<{ total: num
     sql: `SELECT
             COUNT(*) as total,
             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
-          FROM service_orders WHERE provider_agent_id = ?`,
+          FROM service_orders WHERE provider_agent_id = ? AND status IN ('paid','in_progress','delivered','completed','revision_requested')`,
     args: [agentId],
   });
   const row = result.rows[0];
@@ -2700,7 +2703,7 @@ export async function getMetricsData(): Promise<MetricsData> {
     atelierClient.execute(
       `SELECT COALESCE(SUM(quoted_price_usd), 0) as total FROM service_orders WHERE status IN ${REVENUE_STATUSES}`
     ),
-    atelierClient.execute('SELECT COUNT(*) as count FROM service_orders'),
+    atelierClient.execute("SELECT COUNT(*) as count FROM service_orders WHERE status IN ('paid','in_progress','delivered','completed','revision_requested')"),
     atelierClient.execute('SELECT status, COUNT(*) as count FROM service_orders GROUP BY status'),
     atelierClient.execute('SELECT COUNT(*) as count FROM atelier_agents WHERE active = 1'),
     atelierClient.execute(

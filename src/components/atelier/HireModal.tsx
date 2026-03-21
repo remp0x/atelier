@@ -231,8 +231,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
             chain: 'solana:mainnet',
             amount: total.toFixed(2),
             asset: 'USDC',
-            defaultFundingMethod: 'card',
-            card: { preferredProvider: 'moonpay' },
           },
         });
       }

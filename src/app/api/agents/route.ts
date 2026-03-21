@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAtelierAgents, type ServiceCategory } from '@/lib/atelier-db';
+import { getAtelierAgents, getAtelierAgentsByWallet, type ServiceCategory } from '@/lib/atelier-db';
+import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const VALID_SORT = ['popular', 'newest', 'rating'] as const;
@@ -10,6 +11,29 @@ const VALID_SOURCE = ['atelier', 'external', 'official', 'all'] as const;
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+
+    const ownerWallet = searchParams.get('owner_wallet');
+    if (ownerWallet) {
+      const walletSig = searchParams.get('wallet_sig');
+      const walletSigTs = searchParams.get('wallet_sig_ts');
+      if (!walletSig || !walletSigTs) {
+        return NextResponse.json(
+          { success: false, error: 'wallet_sig and wallet_sig_ts required' },
+          { status: 401 }
+        );
+      }
+      try {
+        requireWalletAuth({ wallet: ownerWallet, wallet_sig: walletSig, wallet_sig_ts: Number(walletSigTs) });
+      } catch (err) {
+        const status = err instanceof WalletAuthError ? 401 : 500;
+        return NextResponse.json(
+          { success: false, error: err instanceof WalletAuthError ? err.message : 'Auth failed' },
+          { status }
+        );
+      }
+      const agents = await getAtelierAgentsByWallet(ownerWallet);
+      return NextResponse.json({ success: true, data: agents });
+    }
 
     const category = searchParams.get('category') as ServiceCategory | null;
     if (category && !VALID_CATEGORIES.includes(category)) {

@@ -6,6 +6,7 @@ import { atelierHref } from '@/lib/atelier-paths';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { sendUsdcPayment } from '@/lib/solana-pay';
+import { useFundWallet } from '@privy-io/react-auth/solana';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { Service } from '@/lib/atelier-db';
 
@@ -75,10 +76,13 @@ const DEFAULT_HINTS = {
   helper: 'Describe the style and direction for your project. Each generation will follow this direction.',
 };
 
+type PayMethod = 'wallet' | 'card';
+
 export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
   const { walletAddress, authenticated, getAuth, login, getTransactionWallet } = useAtelierAuth();
   const { connection } = useConnection();
+  const { fundWallet } = useFundWallet();
 
   const [step, setStep] = useState<Step>('brief');
   const [brief, setBrief] = useState('');
@@ -88,6 +92,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [loadingMsg, setLoadingMsg] = useState('');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+  const [payMethod, setPayMethod] = useState<PayMethod>('wallet');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -218,13 +223,33 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
       const newOrderId = createJson.data.id;
 
-      setLoadingMsg('Sending payment...');
-      const txSig = await sendUsdcPayment(
-        connection,
-        getTransactionWallet()!,
-        new PublicKey(treasuryWallet),
-        total,
-      );
+      let txSig: string;
+
+      if (payMethod === 'card') {
+        setLoadingMsg('Opening payment...');
+        const result = await fundWallet({
+          address: treasuryWallet,
+          options: {
+            cluster: { name: 'mainnet-beta' },
+            amount: total.toFixed(2),
+            defaultFundingMethod: 'card',
+            card: { preferredProvider: 'moonpay' },
+          },
+        });
+
+        if (result.status !== 'completed' || !result.transactionHash) {
+          throw new Error('Card payment was not completed');
+        }
+        txSig = result.transactionHash;
+      } else {
+        setLoadingMsg('Sending payment...');
+        txSig = await sendUsdcPayment(
+          connection,
+          getTransactionWallet()!,
+          new PublicKey(treasuryWallet),
+          total,
+        );
+      }
 
       setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
       const patchRes = await fetch(`/api/orders/${newOrderId}`, {
@@ -233,7 +258,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         body: JSON.stringify({
           ...auth,
           action: 'pay',
-          payment_method: 'usdc-sol',
+          payment_method: payMethod === 'card' ? 'card' : 'usdc-sol',
           escrow_tx_hash: txSig,
         }),
       });
@@ -247,7 +272,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace]);
+  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, fundWallet]);
 
   if (!open) return null;
 
@@ -512,6 +537,32 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 )}
               </div>
 
+              <div>
+                <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Payment method</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPayMethod('wallet')}
+                    className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                      payMethod === 'wallet'
+                        ? 'border-atelier text-atelier bg-atelier/5'
+                        : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
+                    }`}
+                  >
+                    Wallet (USDC)
+                  </button>
+                  <button
+                    onClick={() => setPayMethod('card')}
+                    className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                      payMethod === 'card'
+                        ? 'border-atelier text-atelier bg-atelier/5'
+                        : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
+                    }`}
+                  >
+                    Card (Moonpay)
+                  </button>
+                </div>
+              </div>
+
               {error && (
                 <p className="text-sm text-red-400 font-mono">{error}</p>
               )}
@@ -535,6 +586,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                     </>
                   ) : !authenticated ? (
                     'Connect Wallet'
+                  ) : payMethod === 'card' ? (
+                    `Pay $${total.toFixed(2)} with Card`
                   ) : (
                     `Pay $${total.toFixed(2)} USDC`
                   )}

@@ -10,6 +10,50 @@ interface VerifyResult {
   error?: string;
 }
 
+export async function verifySolanaUsdcReceived(
+  txSignature: string,
+  expectedAmountUsd: number,
+): Promise<VerifyResult> {
+  const connection = getServerConnection();
+
+  const tx = await connection.getTransaction(txSignature, {
+    maxSupportedTransactionVersion: 0,
+  });
+
+  if (!tx) {
+    return { verified: false, error: 'Transaction not found' };
+  }
+
+  if (tx.meta?.err) {
+    return { verified: false, error: 'Transaction failed on-chain' };
+  }
+
+  const treasuryWallet = process.env.ATELIER_TREASURY_WALLET || ATELIER_PUBKEY.toBase58();
+  const treasuryPubkey = new PublicKey(treasuryWallet);
+  const treasuryAta = await getAssociatedTokenAddress(USDC_MINT, treasuryPubkey);
+  const treasuryAtaStr = treasuryAta.toBase58();
+
+  const preBalances = tx.meta?.preTokenBalances ?? [];
+  const postBalances = tx.meta?.postTokenBalances ?? [];
+
+  const usdcMintStr = USDC_MINT.toBase58();
+
+  const preAmount = findTokenBalance(preBalances, treasuryAtaStr, usdcMintStr, tx.transaction.message);
+  const postAmount = findTokenBalance(postBalances, treasuryAtaStr, usdcMintStr, tx.transaction.message);
+
+  const delta = postAmount - preAmount;
+  const expectedRaw = Math.round(expectedAmountUsd * 10 ** USDC_DECIMALS);
+
+  if (delta < expectedRaw) {
+    return {
+      verified: false,
+      error: `Insufficient payment: expected $${expectedAmountUsd}, received $${(delta / 10 ** USDC_DECIMALS).toFixed(2)}`,
+    };
+  }
+
+  return { verified: true };
+}
+
 export async function verifySolanaUsdcPayment(
   txSignature: string,
   expectedSender: string,

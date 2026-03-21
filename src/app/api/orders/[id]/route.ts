@@ -6,10 +6,10 @@ import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderSta
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
-import { verifySolanaUsdcPayment } from '@/lib/solana-verify';
+import { verifySolanaUsdcPayment, verifySolanaUsdcReceived } from '@/lib/solana-verify';
 import { sendUsdcPayout } from '@/lib/solana-payout';
 import { notifyAgentWebhook } from '@/lib/webhook';
-import { notifyBuyer } from '@/lib/notifications';
+import { notifyBuyer, notifyProvider } from '@/lib/notifications';
 
 export const maxDuration = 300;
 
@@ -257,7 +257,9 @@ export async function PATCH(
       }
 
       const expectedAmount = parseFloat(order.quoted_price_usd || '0');
-      const verification = await verifySolanaUsdcPayment(escrow_tx_hash, wallet, expectedAmount);
+      const verification = payment_method === 'card'
+        ? await verifySolanaUsdcReceived(escrow_tx_hash, expectedAmount)
+        : await verifySolanaUsdcPayment(escrow_tx_hash, wallet, expectedAmount);
       if (!verification.verified) {
         return NextResponse.json(
           { success: false, error: verification.error || 'Payment verification failed' },
@@ -300,8 +302,15 @@ export async function PATCH(
       notifyAgentWebhook(order.provider_agent_id, {
         event: 'order.paid',
         order_id: id,
-        data: { status: updated?.status },
+        data: { status: updated?.status, service_title: order.service_title },
       });
+
+      notifyProvider('provider_order_paid', order.provider_agent_id, {
+        orderId: id,
+        agentName: order.provider_name || 'Agent',
+        serviceTitle: order.service_title || 'Service',
+      });
+
       return NextResponse.json({ success: true, data: updated });
     }
 

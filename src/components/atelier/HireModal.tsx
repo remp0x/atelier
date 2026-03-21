@@ -50,6 +50,36 @@ const QUICK_PROMPTS: Record<string, string[]> = {
     'Social media template set in brand colors',
     'Brand identity mockup on business cards and packaging',
   ],
+  coding: [
+    'Build a responsive landing page with email capture form',
+    'Create a REST API with authentication and rate limiting',
+    'Refactor this codebase to TypeScript with strict types',
+  ],
+  analytics: [
+    'Weekly traffic report with top pages, sources, and trends',
+    'Competitor analysis comparing 3 sites on key metrics',
+    'Custom dashboard tracking conversions and revenue',
+  ],
+  seo: [
+    'Full technical SEO audit with prioritized recommendations',
+    'Keyword research for 20 high-intent terms in my niche',
+    'On-page optimization for my top 5 landing pages',
+  ],
+  trading: [
+    'DCA bot that buys SOL weekly with stop-loss protection',
+    'Arbitrage scanner across 3 DEXes with Telegram alerts',
+    'Portfolio rebalancer targeting 60/30/10 allocation',
+  ],
+  automation: [
+    'Scrape product prices daily and alert on drops > 10%',
+    'Auto-reply to support emails using FAQ knowledge base',
+    'Sync new CRM leads to Slack channel with enrichment',
+  ],
+  consulting: [
+    'Review my smart contract for security vulnerabilities',
+    'Evaluate my go-to-market strategy for a SaaS launch',
+    'Assess my infrastructure costs and suggest optimizations',
+  ],
 };
 
 const BRIEF_HINTS: Record<string, { workspace: string; single: string; helper: string }> = {
@@ -67,6 +97,41 @@ const BRIEF_HINTS: Record<string, { workspace: string; single: string; helper: s
     workspace: 'e.g. "Organic protein bar brand — earthy tones, kitchen and gym settings, product-in-hand shots. Target audience: health-conscious millennials on Instagram."',
     single: 'e.g. "Coffee mug on a messy desk next to a laptop, morning light through window, cozy work-from-home vibe"',
     helper: 'Describe your brand, product, and target audience. Each piece of content will follow this creative direction.',
+  },
+};
+
+const NON_VISUAL_CATEGORIES = ['coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
+
+const CATEGORY_HINTS: Record<string, { workspace: string; single: string; helper: string }> = {
+  coding: {
+    workspace: 'Describe the project — tech stack, requirements, and expected deliverables...',
+    single: 'Describe what you need built — include tech stack, requirements, and scope...',
+    helper: 'Be specific about the tech stack, features, and acceptance criteria.',
+  },
+  analytics: {
+    workspace: 'Describe the data/metrics you need analyzed and the format you want...',
+    single: 'Describe the report or analysis you need — include data sources and KPIs...',
+    helper: 'Specify the metrics, data sources, and preferred output format.',
+  },
+  seo: {
+    workspace: 'Describe your site, target keywords, and what SEO work you need...',
+    single: 'Describe the SEO task — include your site URL and target goals...',
+    helper: 'Include your site URL, target market, and current pain points.',
+  },
+  trading: {
+    workspace: 'Describe the trading strategy, assets, risk parameters, and alerts you need...',
+    single: 'Describe the trading bot or strategy you need — include assets and risk tolerance...',
+    helper: 'Be specific about assets, entry/exit conditions, and risk management.',
+  },
+  automation: {
+    workspace: 'Describe the workflow to automate — triggers, actions, and integrations...',
+    single: 'Describe the automation you need — include the trigger, action, and tools involved...',
+    helper: 'Specify the systems involved, triggers, and expected outputs.',
+  },
+  consulting: {
+    workspace: 'Describe what you need reviewed or evaluated and the context...',
+    single: 'Describe the consultation you need — include context and specific questions...',
+    helper: 'Provide context, constraints, and the specific decisions you need help with.',
   },
 };
 
@@ -125,7 +190,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const fee = price * PLATFORM_FEE_RATE;
   const total = price;
 
-  const hints = BRIEF_HINTS[service.agent_id] ?? DEFAULT_HINTS;
+  const hints = BRIEF_HINTS[service.agent_id] ?? CATEGORY_HINTS[service.category] ?? DEFAULT_HINTS;
   const validUrls = referenceUrls.filter((u) => u.trim().length > 0);
 
   const isUploading = referenceImages.some((img) => img.uploading);
@@ -437,6 +502,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 )}
               </div>
 
+              {['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content'].includes(service.category) && (
               <div>
                 <label className="block text-sm font-mono text-gray-600 dark:text-neutral-400 mb-1.5">
                   Reference Images <span className="text-gray-400 dark:text-neutral-600">(optional, max 3, JPG/PNG, 5MB each)</span>
@@ -480,6 +546,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   )}
                 </div>
               </div>
+              )}
 
               {error && (
                 <p className="text-sm text-red-400 font-mono">{error}</p>

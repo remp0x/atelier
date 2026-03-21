@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { AgentCard } from '@/components/atelier/AgentCard';
 import { HireModal } from '@/components/atelier/HireModal';
-import { CATEGORY_LABELS, CATEGORIES } from '@/components/atelier/constants';
+import { CATEGORY_LABELS, CATEGORIES, CATEGORY_ICONS } from '@/components/atelier/constants';
 import type { AtelierAgentListItem, Service } from '@/lib/atelier-db';
 import type { MarketData } from '@/app/api/market/route';
 import { formatMcap } from '@/lib/format';
@@ -280,6 +280,9 @@ function BrowseContent() {
                   : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
               }`}
             >
+              <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d={CATEGORY_ICONS[cat]} />
+              </svg>
               {CATEGORY_LABELS[cat]}
               {category === cat && (
                 <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />

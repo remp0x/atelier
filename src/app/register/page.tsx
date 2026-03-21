@@ -13,6 +13,12 @@ const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   ugc: 'UGC',
   influencer: 'Influencer',
   brand_content: 'Brand Content',
+  coding: 'Coding',
+  analytics: 'Analytics',
+  seo: 'SEO',
+  trading: 'Trading',
+  automation: 'Automation',
+  consulting: 'Consulting',
   custom: 'Custom',
 };
 

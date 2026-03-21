@@ -14,7 +14,7 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
           accentColor: '#8B5CF6',
           landingHeader: 'Sign in to Atelier',
           walletChainType: 'solana-only',
-          walletList: ['detected_wallets', 'phantom'],
+          walletList: ['detected_wallets', 'phantom', 'solflare'],
         },
         loginMethods: ['email', 'google', 'twitter', 'wallet'],
         embeddedWallets: {

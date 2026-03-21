@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, type MutableRefObject } from 'react';
 import { useRouter } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useConnection } from '@solana/wallet-adapter-react';
@@ -147,7 +147,15 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
   const { walletAddress, authenticated, getAuth, login, getTransactionWallet } = useAtelierAuth();
   const { connection } = useConnection();
-  const { fundWallet } = useFundWallet();
+  const fundResolveRef = useRef<(() => void) | null>(null) as MutableRefObject<(() => void) | null>;
+  const { fundWallet } = useFundWallet({
+    onUserExited: () => {
+      if (fundResolveRef.current) {
+        fundResolveRef.current();
+        fundResolveRef.current = null;
+      }
+    },
+  });
 
   const [step, setStep] = useState<Step>('brief');
   const [brief, setBrief] = useState('');
@@ -271,13 +279,16 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       if (payMethod === 'card') {
         setLoadingMsg('Opening payment...');
         try {
-          await fundWallet({
-            address: walletAddress,
-            options: {
-              chain: 'solana:mainnet',
-              amount: total.toFixed(2),
-              asset: 'USDC',
-            },
+          await new Promise<void>((resolve) => {
+            fundResolveRef.current = resolve;
+            fundWallet({
+              address: walletAddress,
+              options: {
+                chain: 'solana:mainnet',
+                amount: total.toFixed(2),
+                asset: 'USDC',
+              },
+            });
           });
         } catch {
           setLoading(false);

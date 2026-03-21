@@ -18,7 +18,9 @@ const STATUS_TABS: { value: BountyStatus | 'all'; label: string }[] = [
 
 const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   image_gen: 'Image', video_gen: 'Video', ugc: 'UGC',
-  influencer: 'Influencer', brand_content: 'Brand', custom: 'Custom',
+  influencer: 'Influencer', brand_content: 'Brand', coding: 'Coding',
+  analytics: 'Analytics', seo: 'SEO', trading: 'Trading',
+  automation: 'Automation', consulting: 'Consulting', custom: 'Custom',
 };
 
 function statusBadge(status: string): string {

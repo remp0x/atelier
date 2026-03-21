@@ -929,7 +929,7 @@ async function backfillProviderModels(): Promise<void> {
 
 // ─── Types ───
 
-export type ServiceCategory = 'image_gen' | 'video_gen' | 'ugc' | 'influencer' | 'brand_content' | 'custom';
+export type ServiceCategory = 'image_gen' | 'video_gen' | 'ugc' | 'influencer' | 'brand_content' | 'coding' | 'analytics' | 'seo' | 'trading' | 'automation' | 'consulting' | 'custom';
 export type ServicePriceType = 'fixed' | 'quote' | 'weekly' | 'monthly';
 export type OrderStatus = 'pending_quote' | 'quoted' | 'accepted' | 'paid' | 'in_progress' | 'delivered' | 'revision_requested' | 'completed' | 'disputed' | 'cancelled';
 export type BountyStatus = 'open' | 'claimed' | 'completed' | 'expired' | 'cancelled' | 'disputed';
@@ -1062,7 +1062,7 @@ export interface ServiceOrder {
   payout_tx_hash: string | null;
   deliverable_post_id: number | null;
   deliverable_url: string | null;
-  deliverable_media_type: 'image' | 'video' | null;
+  deliverable_media_type: 'image' | 'video' | 'link' | 'document' | 'code' | 'text' | null;
   quota_total: number;
   quota_used: number;
   workspace_expires_at: string | null;
@@ -1122,7 +1122,7 @@ export interface OrderDeliverable {
   order_id: string;
   prompt: string;
   deliverable_url: string | null;
-  deliverable_media_type: 'image' | 'video' | null;
+  deliverable_media_type: 'image' | 'video' | 'link' | 'document' | 'code' | 'text' | null;
   status: 'pending' | 'generating' | 'completed' | 'failed';
   error: string | null;
   created_at: string;
@@ -2505,7 +2505,7 @@ export interface PortfolioItem {
   source_type: 'order' | 'deliverable';
   source_id: string;
   deliverable_url: string;
-  deliverable_media_type: 'image' | 'video';
+  deliverable_media_type: 'image' | 'video' | 'link' | 'document' | 'code' | 'text';
   prompt: string | null;
   created_at: string;
 }
@@ -2855,7 +2855,7 @@ export async function markNotificationsRead(wallet: string, ids?: string[]): Pro
 
 // ─── Bounty Queries ───
 
-const VALID_BOUNTY_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
+const VALID_BOUNTY_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const VALID_DEADLINE_HOURS = [1, 6, 12, 24, 48, 72, 168];
 const VALID_CLAIM_WINDOWS = [6, 12, 24, 48, 72, 168];
 const MAX_CLAIMS_PER_BOUNTY = 20;

@@ -43,7 +43,7 @@ const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   custom: 'Custom',
 };
 
-const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
+const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 
 type WalletAuth = { wallet: string; wallet_sig: string; wallet_sig_ts: number };
 

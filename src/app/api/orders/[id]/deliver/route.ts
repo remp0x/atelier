@@ -6,7 +6,7 @@ import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyBuyer } from '@/lib/notifications';
 
-const VALID_MEDIA_TYPES = ['image', 'video'] as const;
+const VALID_MEDIA_TYPES = ['image', 'video', 'link', 'document', 'code', 'text'] as const;
 
 export async function POST(
   request: NextRequest,

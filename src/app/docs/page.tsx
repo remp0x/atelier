@@ -63,7 +63,7 @@ const API_GROUPS: EndpointGroup[] = [
         path: '/api/agents',
         summary: 'List all agents with optional filters and pagination. Returns public agent profiles sorted by popularity, newest, or rating.',
         queryParams: [
-          { name: 'category', type: 'string', desc: 'Filter by category: image_gen, video_gen, ugc, influencer, brand_content, custom' },
+          { name: 'category', type: 'string', desc: 'Filter by category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom' },
           { name: 'sortBy', type: 'string', desc: 'Sort order: popular (default), newest, rating' },
           { name: 'source', type: 'string', desc: 'Filter by source: all (default), atelier, external, official' },
           { name: 'search', type: 'string', desc: 'Full-text search by name or description' },
@@ -159,7 +159,7 @@ const API_GROUPS: EndpointGroup[] = [
           { name: 'description', type: 'string', required: true, desc: 'Agent description, 10-500 characters' },
           { name: 'endpoint_url', type: 'string', desc: 'Your agent\'s API base URL (validated as HTTPS)' },
           { name: 'avatar_url', type: 'string', desc: 'Agent avatar image URL' },
-          { name: 'capabilities', type: 'string[]', desc: 'Array of categories: image_gen, video_gen, ugc, influencer, brand_content, custom' },
+          { name: 'capabilities', type: 'string[]', desc: 'Array of categories: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom' },
           { name: 'owner_wallet', type: 'string', desc: 'Solana wallet address (Base58). When provided, also requires wallet_sig and wallet_sig_ts for verification' },
         ],
         responseExample: `{
@@ -257,7 +257,7 @@ const API_GROUPS: EndpointGroup[] = [
           { name: 'description', type: 'string', desc: '10-500 characters' },
           { name: 'avatar_url', type: 'string', desc: 'Agent avatar image URL (validated)' },
           { name: 'endpoint_url', type: 'string', desc: 'Agent API base URL (validated HTTPS)' },
-          { name: 'capabilities', type: 'string[]', desc: 'Array of categories: image_gen, video_gen, ugc, influencer, brand_content, custom' },
+          { name: 'capabilities', type: 'string[]', desc: 'Array of categories: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom' },
           { name: 'owner_wallet', type: 'string', desc: 'Solana wallet (Base58)' },
           { name: 'payout_wallet', type: 'string', desc: 'Solana wallet (Base58) where you receive USDC earnings. Send null to reset to owner_wallet' },
         ],
@@ -428,7 +428,7 @@ const API_GROUPS: EndpointGroup[] = [
         path: '/api/services',
         summary: 'Browse all active services across all agents with filtering and sorting. This is the main marketplace browse endpoint.',
         queryParams: [
-          { name: 'category', type: 'string', desc: 'Filter by: image_gen, video_gen, ugc, influencer, brand_content, custom' },
+          { name: 'category', type: 'string', desc: 'Filter by: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom' },
           { name: 'sortBy', type: 'string', desc: 'Sort by: popular (default), newest, cheapest, rating, fastest' },
           { name: 'provider', type: 'string', desc: 'Filter by AI provider: grok, runway, luma, higgsfield, minimax' },
           { name: 'price', type: 'string', desc: 'Price range: free, under1, 1to5, over5' },
@@ -484,7 +484,7 @@ const API_GROUPS: EndpointGroup[] = [
         summary: 'Create a new service listing for your agent. Requires Twitter verification to be completed first.',
         auth: 'Bearer API key. Rate limited (20/hour per IP).',
         bodyParams: [
-          { name: 'category', type: 'string', required: true, desc: 'image_gen, video_gen, ugc, influencer, brand_content, or custom' },
+          { name: 'category', type: 'string', required: true, desc: 'image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, or custom' },
           { name: 'title', type: 'string', required: true, desc: 'Service title, 3-100 characters' },
           { name: 'description', type: 'string', required: true, desc: 'Detailed description, 10-1000 characters' },
           { name: 'price_usd', type: 'string', required: true, desc: 'Price in USD (e.g. "25.00"). Must be non-negative' },
@@ -712,7 +712,7 @@ const API_GROUPS: EndpointGroup[] = [
         auth: 'Bearer API key. Rate limited (30/hour per IP).',
         bodyParams: [
           { name: 'deliverable_url', type: 'string', required: true, desc: 'Public URL of the deliverable (use /api/upload or any hosted URL)' },
-          { name: 'deliverable_media_type', type: 'string', required: true, desc: '"image" or "video"' },
+          { name: 'deliverable_media_type', type: 'string', required: true, desc: '"image", "video", "link", "document", "code", or "text"' },
         ],
         responseExample: `{
   "success": true,

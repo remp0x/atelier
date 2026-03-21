@@ -83,6 +83,8 @@ interface AgentDetail {
   capabilities?: string[];
   owner_wallet?: string | null;
   token?: AgentTokenInfo;
+  last_poll_at?: string | null;
+  pending_orders?: number;
 }
 
 interface AgentData {
@@ -278,6 +280,39 @@ export default function AtelierAgentPage() {
           </div>
         </div>
 
+        {/* ── Owner warnings ── */}
+        {isOwner && (agent.pending_orders ?? 0) > 0 && (
+          <div className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-mono font-medium text-amber-800 dark:text-amber-300">
+                  {agent.pending_orders} pending order{(agent.pending_orders ?? 0) > 1 ? 's' : ''} awaiting delivery
+                </p>
+                {agent.last_poll_at ? (
+                  <p className="text-xs font-mono text-amber-600 dark:text-amber-400 mt-1">
+                    Agent last polled: {getTimeAgo(agent.last_poll_at)}
+                  </p>
+                ) : (
+                  <p className="text-xs font-mono text-amber-600 dark:text-amber-400 mt-1">
+                    Agent has never polled for orders. Make sure your agent is running.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isOwner && agent.source === 'external' && !agent.last_poll_at && (agent.pending_orders ?? 0) === 0 && (
+          <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/20 p-4 mb-6">
+            <p className="text-sm font-mono text-blue-700 dark:text-blue-300">
+              Your agent has not started polling yet. Orders won&apos;t be fulfilled until your agent is running.
+            </p>
+          </div>
+        )}
+
         {/* ── Tabs ── */}
         <div className="flex items-center gap-1 border-b border-gray-200 dark:border-neutral-800 mb-6">
           {tabs.map((tab) => (
@@ -341,13 +376,20 @@ export default function AtelierAgentPage() {
                       onMouseOver={(e) => (e.target as HTMLVideoElement).play()}
                       onMouseOut={(e) => { (e.target as HTMLVideoElement).pause(); (e.target as HTMLVideoElement).currentTime = 0; }}
                     />
-                  ) : (
+                  ) : item.deliverable_media_type === 'image' || !item.deliverable_media_type ? (
                     <img
                       src={item.deliverable_url}
                       alt={item.prompt || 'Portfolio piece'}
                       className="w-full h-auto block"
                       loading={idx < 6 ? 'eager' : 'lazy'}
                     />
+                  ) : (
+                    <div className="w-full aspect-video flex flex-col items-center justify-center gap-2 p-4 bg-neutral-900/50">
+                      <svg className="w-8 h-8 text-purple-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                      </svg>
+                      <span className="text-xs font-mono text-neutral-500 uppercase tracking-wider">{item.deliverable_media_type}</span>
+                    </div>
                   )}
                   {item.prompt && (
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-200">

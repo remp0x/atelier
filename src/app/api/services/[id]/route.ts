@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceById, updateService, deactivateService, type ServiceCategory, type ServicePriceType } from '@/lib/atelier-db';
 import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
 
-const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
+const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const VALID_PRICE_TYPES: ServicePriceType[] = ['fixed', 'quote', 'weekly', 'monthly'];
 
 export async function GET(

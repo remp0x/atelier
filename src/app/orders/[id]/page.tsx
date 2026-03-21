@@ -291,25 +291,70 @@ function DownloadButton({ url, name }: { url: string; name?: string }) {
 function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: string | null }) {
   if (!url) return null;
 
+  if (mediaType === 'video') {
+    return (
+      <div className="group relative max-w-md mt-2">
+        <video src={url} controls playsInline className="w-full rounded-lg border border-neutral-800" />
+        <div className="absolute top-2 right-2"><DownloadButton url={url} name="deliverable" /></div>
+      </div>
+    );
+  }
+
+  if (mediaType === 'link') {
+    return (
+      <div className="mt-2 p-4 rounded-lg border border-neutral-800 bg-neutral-900/50 max-w-md">
+        <div className="flex items-center gap-2 mb-2">
+          <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
+          </svg>
+          <span className="text-xs font-mono text-neutral-400 uppercase tracking-wider">Delivered Link</span>
+        </div>
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 font-mono text-sm break-all underline underline-offset-2">
+          {url}
+        </a>
+      </div>
+    );
+  }
+
+  if (mediaType === 'document' || mediaType === 'code') {
+    const label = mediaType === 'code' ? 'Code Deliverable' : 'Document';
+    return (
+      <div className="mt-2 p-4 rounded-lg border border-neutral-800 bg-neutral-900/50 max-w-md">
+        <div className="flex items-center gap-2 mb-2">
+          <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+          <span className="text-xs font-mono text-neutral-400 uppercase tracking-wider">{label}</span>
+        </div>
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 font-mono text-sm break-all underline underline-offset-2">
+          {url}
+        </a>
+        <div className="mt-2"><DownloadButton url={url} name="deliverable" /></div>
+      </div>
+    );
+  }
+
+  if (mediaType === 'text') {
+    return (
+      <div className="mt-2 p-4 rounded-lg border border-neutral-800 bg-neutral-900/50 max-w-md">
+        <div className="flex items-center gap-2 mb-2">
+          <svg className="w-4 h-4 text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+          </svg>
+          <span className="text-xs font-mono text-neutral-400 uppercase tracking-wider">Text Deliverable</span>
+        </div>
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 font-mono text-sm break-all underline underline-offset-2">
+          {url}
+        </a>
+        <div className="mt-2"><DownloadButton url={url} name="deliverable" /></div>
+      </div>
+    );
+  }
+
   return (
     <div className="group relative max-w-md mt-2">
-      {mediaType === 'video' ? (
-        <video
-          src={url}
-          controls
-          playsInline
-          className="w-full rounded-lg border border-neutral-800"
-        />
-      ) : (
-        <img
-          src={url}
-          alt="Deliverable"
-          className="w-full rounded-lg border border-neutral-800"
-        />
-      )}
-      <div className="absolute top-2 right-2">
-        <DownloadButton url={url} name="deliverable" />
-      </div>
+      <img src={url} alt="Deliverable" className="w-full rounded-lg border border-neutral-800" />
+      <div className="absolute top-2 right-2"><DownloadButton url={url} name="deliverable" /></div>
     </div>
   );
 }
@@ -665,12 +710,21 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
                         playsInline
                         className="w-full aspect-square object-cover"
                       />
-                    ) : (
+                    ) : d.deliverable_media_type === 'image' || !d.deliverable_media_type ? (
                       <img
                         src={d.deliverable_url}
                         alt={d.prompt}
                         className="w-full aspect-square object-cover"
                       />
+                    ) : (
+                      <div className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-3">
+                        <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
+                        </svg>
+                        <a href={d.deliverable_url} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 text-xs font-mono text-center break-all underline underline-offset-2">
+                          {d.deliverable_media_type}
+                        </a>
+                      </div>
                     )}
                     <div className="absolute top-2 right-2">
                       <DownloadButton url={d.deliverable_url} name={d.prompt?.slice(0, 40) || 'deliverable'} />
@@ -771,11 +825,11 @@ function OrderChat({ orderId, wallet: walletAddress }: { orderId: string; wallet
   }, [orderId, getAuth, input, sending]);
 
   return (
-    <div className="mt-8">
+    <div>
       <h3 className="text-sm font-mono text-neutral-400 mb-3">Messages</h3>
       <div
         ref={containerRef}
-        className="border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50 dark:bg-black p-4 max-h-80 overflow-y-auto space-y-3"
+        className="border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50 dark:bg-black p-4 min-h-[300px] max-h-[50vh] overflow-y-auto space-y-3"
       >
         {messages.length === 0 && (
           <p className="text-xs text-neutral-400 dark:text-neutral-600 font-mono text-center py-4">No messages yet</p>
@@ -840,7 +894,6 @@ export default function AtelierOrderPage() {
   const [cancelling, setCancelling] = useState(false);
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [showMessages, setShowMessages] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -892,10 +945,10 @@ export default function AtelierOrderPage() {
 
   return (
     <AtelierAppLayout>
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-20">
         <Link
           href={atelierHref('/atelier/orders')}
-          className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-atelier font-mono mb-8 transition-colors"
+          className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-atelier font-mono mb-6 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -903,263 +956,249 @@ export default function AtelierOrderPage() {
           My Orders
         </Link>
 
-        {/* Header */}
-        <div className="mb-10">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
-            <div>
-              <h1 className="text-xl font-bold font-display mb-1">{order.service_title}</h1>
-              <p className="text-xs font-mono text-neutral-400">{order.id}</p>
-            </div>
-            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-mono font-medium ${STATUS_COLORS[order.status] || 'bg-neutral-800 text-neutral-300'}`}>
-              {STATUS_LABELS[order.status] || order.status}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-4 text-sm text-neutral-400">
-            <span>
-              <span className="text-neutral-500">Provider:</span>{' '}
-              <Link href={atelierHref(`/atelier/agents/${order.provider_agent_id}`)} className="text-atelier hover:underline">
-                {order.provider_name}
-              </Link>
-            </span>
-            {order.client_name && (
-              <span>
-                <span className="text-neutral-500">Client:</span>{' '}
-                <span className="text-white">{order.client_name}</span>
-              </span>
-            )}
-          </div>
-
-          {canCancel && (
-            <>
-              <button
-                onClick={() => setShowCancelConfirm(true)}
-                disabled={cancelling}
-                className="text-xs font-mono text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors cursor-pointer"
-              >
-                {cancelling ? 'Cancelling...' : 'Cancel Order'}
-              </button>
-              <ConfirmDialog
-                open={showCancelConfirm}
-                title="Cancel Order"
-                message={order.status === 'paid'
-                  ? 'Cancel this order? A refund will be issued to your wallet.'
-                  : 'Are you sure you want to cancel this order?'}
-                confirmLabel="Cancel Order"
-                confirmClass="bg-red-500 hover:bg-red-600"
-                loading={cancelling}
-                onCancel={() => setShowCancelConfirm(false)}
-                onConfirm={async () => {
-                  setCancelling(true);
-                  try {
-                    const auth = await getAuth();
-                    const res = await fetch(`/api/orders/${order.id}`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ...auth, action: 'cancel' }),
-                    });
-                    const json = await res.json();
-                    if (json.success) {
-                      setShowCancelConfirm(false);
-                      load();
-                    }
-                  } finally {
-                    setCancelling(false);
-                  }
-                }}
-              />
-            </>
-          )}
-        </div>
-
-        <StatusBanner order={order} />
-
-        {/* Accept & Pay for quoted orders */}
-        {order.status === 'quoted' && walletAddress && order.client_wallet === walletAddress && (
-          <div className="mb-8 p-5 rounded-lg border border-atelier/30 bg-atelier/5">
-            <h3 className="text-sm font-bold font-display text-black dark:text-white mb-3">Quote Received</h3>
-            <div className="flex items-center gap-4 text-sm font-mono mb-4">
-              <span className="text-black dark:text-white font-bold">${order.quoted_price_usd} USDC</span>
-            </div>
-            {payError && <p className="text-xs font-mono text-red-400 mb-3">{payError}</p>}
-            {payMsg && <p className="text-xs font-mono text-neutral-400 mb-3">{payMsg}</p>}
-            <button
-              onClick={async () => {
-                setPaying(true);
-                setPayError(null);
-                setPayMsg(null);
-                try {
-                  const treasuryWallet = process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET;
-                  if (!treasuryWallet) { setPayError('Treasury wallet not configured'); return; }
-
-                  const total = parseFloat(order.quoted_price_usd || '0');
-                  if (total <= 0) { setPayError('Invalid order total'); return; }
-
-                  setPayMsg('Sending USDC payment...');
-                  const txSig = await sendUsdcPayment(connection, getTransactionWallet()!, new PublicKey(treasuryWallet), total);
-
-                  setPayMsg('Verifying payment...');
-                  const auth = await getAuth();
-                  const res = await fetch(`/api/orders/${order.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      ...auth,
-                      action: 'pay',
-                      payment_method: 'usdc-sol',
-                      escrow_tx_hash: txSig,
-                    }),
-                  });
-                  const json = await res.json();
-                  if (!json.success) { setPayError(json.error || 'Payment verification failed'); return; }
-                  setPayMsg(null);
-                  load();
-                } catch (e) {
-                  setPayError(e instanceof Error ? e.message : 'Payment failed');
-                } finally {
-                  setPaying(false);
-                  setPayMsg(null);
-                }
-              }}
-              disabled={paying}
-              className="w-full py-3 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {paying ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
-                  {payMsg || 'Processing...'}
-                </>
-              ) : (
-                `Accept & Pay $${parseFloat(order.quoted_price_usd || '0').toFixed(2)}`
-              )}
-            </button>
-          </div>
-        )}
-
-        {showWorkspace ? (
-          <WorkspaceView data={data} onRefresh={load} />
-        ) : (
-          <>
-            <div className="relative">
-              {buildTimeline(order, review).map((step, i, arr) => {
-                const isLast = i === arr.length - 1;
-                const isTerminalStep = isTerminal && isLast;
-
-                return (
-                  <div key={step.label} className="relative flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <TimelineDot
-                        state={step.state}
-                        isTerminal={isTerminalStep}
-                      />
-                      {!isLast && (
-                        <div className={`w-px flex-1 min-h-[2rem] ${
-                          step.state === 'done' ? 'bg-emerald-400/30' :
-                          step.state === 'active' ? 'bg-atelier/30' :
-                          'bg-neutral-800'
-                        }`} />
-                      )}
-                    </div>
-
-                    <div className={`pb-8 ${isLast ? 'pb-0' : ''}`}>
-                      <div className="flex items-center gap-3 -mt-0.5">
-                        <h3 className={`text-sm font-medium ${
-                          isTerminalStep ? 'text-red-400' :
-                          step.state === 'done' ? 'text-white' :
-                          step.state === 'active' ? 'text-atelier-bright' :
-                          'text-neutral-500'
-                        }`}>
-                          {step.label}
-                        </h3>
-                        {step.timestamp && (
-                          <span className="text-2xs text-neutral-400 font-mono">{formatDate(step.timestamp)}</span>
-                        )}
-                      </div>
-                      {step.content && <div className="mt-2">{step.content}</div>}
-                    </div>
+        <div className="flex flex-col lg:grid lg:grid-cols-[1fr_360px] lg:gap-8">
+          {/* === SIDEBAR (shows first on mobile, right column on desktop) === */}
+          <div className="lg:order-last mb-6 lg:mb-0">
+            <div className="lg:sticky lg:top-20 space-y-3">
+              {/* Order Header */}
+              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="min-w-0">
+                    <h1 className="text-base font-bold font-display truncate">{order.service_title}</h1>
+                    <p className="text-2xs font-mono text-neutral-500 mt-0.5">{order.id}</p>
                   </div>
-                );
-              })}
-            </div>
-
-            {order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
-              <>
-                {order.revision_count > 0 && (
-                  <p className="mt-6 text-xs font-mono text-neutral-400">
-                    {order.revision_count} of {order.max_revisions} included revision{order.max_revisions !== 1 ? 's' : ''} used
-                  </p>
-                )}
-                {/* Primary action */}
-                <button
-                  onClick={() => setShowApproveConfirm(true)}
-                  disabled={approving || disputing || requestingRevision}
-                  className="w-full mt-4 py-3 rounded bg-emerald-500 text-white text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all duration-200 hover:bg-emerald-600 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {approving ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      Approving...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                      </svg>
-                      Approve & Complete
-                    </>
-                  )}
-                </button>
-                {/* Secondary actions */}
-                <div className="mt-2 flex gap-2">
-                  <button
-                    onClick={() => { setShowRevisionForm(true); setShowDisputeForm(false); }}
-                    disabled={approving || requestingRevision || showRevisionForm}
-                    className="flex-1 py-2.5 rounded border border-amber-400/30 text-amber-400 text-sm font-mono hover:bg-amber-400/10 disabled:opacity-60 transition-colors cursor-pointer"
-                  >
-                    {order.revision_count >= order.max_revisions ? 'Extra Revision' : 'Request Revision'}
-                  </button>
+                  <span className={`shrink-0 inline-flex px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium ${STATUS_COLORS[order.status] || 'bg-neutral-800 text-neutral-300'}`}>
+                    {STATUS_LABELS[order.status] || order.status}
+                  </span>
                 </div>
-                {/* Tertiary action */}
-                <button
-                  onClick={() => { setShowDisputeForm(true); setShowRevisionForm(false); }}
-                  disabled={approving || disputing || showDisputeForm}
-                  className="mt-2 text-xs font-mono text-red-400/70 hover:text-red-400 disabled:opacity-60 transition-colors cursor-pointer"
-                >
-                  Report a problem
-                </button>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500 font-mono text-2xs">Provider</span>
+                    <Link href={atelierHref(`/atelier/agents/${order.provider_agent_id}`)} className="text-atelier hover:underline text-xs font-mono">
+                      {order.provider_name}
+                    </Link>
+                  </div>
+                  {order.client_name && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-500 font-mono text-2xs">Client</span>
+                      <span className="text-black dark:text-white text-xs font-mono">{order.client_name}</span>
+                    </div>
+                  )}
+                  {order.quoted_price_usd && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-500 font-mono text-2xs">Price</span>
+                      <span className="text-black dark:text-white text-xs font-mono font-bold">${order.quoted_price_usd} USDC</span>
+                    </div>
+                  )}
+                  {order.escrow_tx_hash && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-500 font-mono text-2xs">Tx</span>
+                      <span className="text-atelier-bright text-2xs font-mono">{truncateId(order.escrow_tx_hash)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
 
-                <ConfirmDialog
-                  open={showApproveConfirm}
-                  title="Approve & Complete"
-                  message="This will release the payment to the agent. This action cannot be undone."
-                  confirmLabel="Approve"
-                  confirmClass="bg-emerald-500 hover:bg-emerald-600"
-                  loading={approving}
-                  onCancel={() => setShowApproveConfirm(false)}
-                  onConfirm={async () => {
-                    setApproving(true);
+              {/* Brief */}
+              {order.brief && (
+                <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                  <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Brief</p>
+                  <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed">{order.brief}</p>
+                  {order.reference_images && (() => {
                     try {
-                      const auth = await getAuth();
-                      const res = await fetch(`/api/orders/${order.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ...auth, action: 'approve' }),
-                      });
-                      const json = await res.json();
-                      if (json.success) {
-                        setShowApproveConfirm(false);
-                        load();
-                      }
-                    } finally {
-                      setApproving(false);
-                    }
-                  }}
-                />
+                      const images: string[] = JSON.parse(order.reference_images);
+                      if (images.length === 0) return null;
+                      return (
+                        <div className="flex gap-2 mt-3 flex-wrap">
+                          {images.map((url, i) => (
+                            <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                              <img src={url} alt={`Reference ${i + 1}`} className="w-12 h-12 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors" />
+                            </a>
+                          ))}
+                        </div>
+                      );
+                    } catch { return null; }
+                  })()}
+                </div>
+              )}
+
+              {/* Compact Progress */}
+              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-3">Progress</p>
+                <div className="space-y-1.5">
+                  {STATUS_SEQUENCE.map((s, i) => {
+                    const currentIdx = statusIndex(order.status);
+                    const isDone = i < currentIdx || (i === currentIdx && order.status === 'completed');
+                    const isCurrent = i === currentIdx && order.status !== 'completed';
+                    const isRevision = order.status === 'revision_requested' && s === 'delivered';
+                    return (
+                      <div key={s} className="flex items-center gap-2.5">
+                        <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          isDone || isRevision ? 'bg-emerald-400' : isCurrent ? 'bg-atelier animate-pulse' : 'bg-neutral-700'
+                        }`} />
+                        <span className={`text-2xs font-mono ${
+                          isDone || isRevision ? 'text-neutral-400' : isCurrent ? 'text-white font-medium' : 'text-neutral-600'
+                        }`}>{STATUS_LABELS[s]}</span>
+                      </div>
+                    );
+                  })}
+                  {isTerminal && (
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-red-400" />
+                      <span className="text-2xs font-mono text-red-400">{order.status === 'cancelled' ? 'Cancelled' : 'Disputed'}</span>
+                    </div>
+                  )}
+                  {order.status === 'revision_requested' && (
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-400 animate-pulse" />
+                      <span className="text-2xs font-mono text-amber-400">Revision Requested</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2">
+                {/* Accept & Pay */}
+                {order.status === 'quoted' && walletAddress && order.client_wallet === walletAddress && (
+                  <div className="p-4 rounded-lg border border-atelier/30 bg-atelier/5">
+                    {payError && <p className="text-2xs font-mono text-red-400 mb-2">{payError}</p>}
+                    {payMsg && <p className="text-2xs font-mono text-neutral-400 mb-2">{payMsg}</p>}
+                    <button
+                      onClick={async () => {
+                        setPaying(true);
+                        setPayError(null);
+                        setPayMsg(null);
+                        try {
+                          const treasuryWallet = process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET;
+                          if (!treasuryWallet) { setPayError('Treasury wallet not configured'); return; }
+                          const total = parseFloat(order.quoted_price_usd || '0');
+                          if (total <= 0) { setPayError('Invalid order total'); return; }
+                          setPayMsg('Sending USDC payment...');
+                          const txSig = await sendUsdcPayment(connection, getTransactionWallet()!, new PublicKey(treasuryWallet), total);
+                          setPayMsg('Verifying payment...');
+                          const auth = await getAuth();
+                          const res = await fetch(`/api/orders/${order.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ...auth, action: 'pay', payment_method: 'usdc-sol', escrow_tx_hash: txSig }),
+                          });
+                          const json = await res.json();
+                          if (!json.success) { setPayError(json.error || 'Payment verification failed'); return; }
+                          setPayMsg(null);
+                          load();
+                        } catch (e) {
+                          setPayError(e instanceof Error ? e.message : 'Payment failed');
+                        } finally {
+                          setPaying(false);
+                          setPayMsg(null);
+                        }
+                      }}
+                      disabled={paying}
+                      className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {paying ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
+                          {payMsg || 'Processing...'}
+                        </>
+                      ) : (
+                        `Accept & Pay $${parseFloat(order.quoted_price_usd || '0').toFixed(2)}`
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Approve / Revise / Dispute */}
+                {order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
+                  <>
+                    {order.revision_count > 0 && (
+                      <p className="text-2xs font-mono text-neutral-500 px-1">
+                        {order.revision_count}/{order.max_revisions} revisions used
+                      </p>
+                    )}
+                    <button
+                      onClick={() => setShowApproveConfirm(true)}
+                      disabled={approving || disputing || requestingRevision}
+                      className="w-full py-2.5 rounded bg-emerald-500 text-white text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all hover:bg-emerald-600 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {approving ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                          Approving...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                          </svg>
+                          Approve & Complete
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => { setShowRevisionForm(true); setShowDisputeForm(false); }}
+                      disabled={approving || requestingRevision || showRevisionForm}
+                      className="w-full py-2 rounded border border-amber-400/30 text-amber-400 text-xs font-mono hover:bg-amber-400/10 disabled:opacity-60 transition-colors cursor-pointer"
+                    >
+                      {order.revision_count >= order.max_revisions ? 'Extra Revision' : 'Request Revision'}
+                    </button>
+                    <button
+                      onClick={() => { setShowDisputeForm(true); setShowRevisionForm(false); }}
+                      disabled={approving || disputing || showDisputeForm}
+                      className="w-full text-2xs font-mono text-red-400/70 hover:text-red-400 disabled:opacity-60 transition-colors cursor-pointer py-1"
+                    >
+                      Report a problem
+                    </button>
+                  </>
+                )}
+
+                {/* Cancel */}
+                {canCancel && (
+                  <button
+                    onClick={() => setShowCancelConfirm(true)}
+                    disabled={cancelling}
+                    className="w-full text-xs font-mono text-red-400/70 hover:text-red-400 disabled:opacity-50 transition-colors cursor-pointer py-2 rounded border border-red-400/20 hover:bg-red-400/5"
+                  >
+                    {cancelling ? 'Cancelling...' : 'Cancel Order'}
+                  </button>
+                )}
+
+                {/* Hire Again */}
+                {order.status === 'completed' && order.service_id && (
+                  <Link
+                    href={atelierHref(`/atelier/agents/${order.provider_agent_id}`)}
+                    className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
+                    </svg>
+                    Hire {order.provider_name} Again
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* === MAIN CONTENT (second on mobile, left column on desktop) === */}
+          <div className="lg:order-first min-w-0 space-y-6">
+            <StatusBanner order={order} />
+
+            {showWorkspace ? (
+              <WorkspaceView data={data} onRefresh={load} />
+            ) : (
+              <>
+                {order.deliverable_url && (
+                  <DeliverableMedia url={order.deliverable_url} mediaType={order.deliverable_media_type} />
+                )}
               </>
             )}
 
+            {review && <ReviewInline review={review} />}
+
+            {/* Revision form */}
             {showRevisionForm && order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
-              <div className="mt-4 p-4 rounded-lg border border-amber-400/20 bg-amber-400/5">
+              <div className="p-4 rounded-lg border border-amber-400/20 bg-amber-400/5">
                 {order.revision_count >= order.max_revisions && (
                   <p className="text-xs font-mono text-amber-400/70 mb-3">
                     You have used all {order.max_revisions} included revision{order.max_revisions !== 1 ? 's' : ''}. The agent may decline this extra request.
@@ -1224,8 +1263,9 @@ export default function AtelierOrderPage() {
               </div>
             )}
 
+            {/* Dispute form */}
             {showDisputeForm && order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
-              <div className="mt-4 p-4 rounded-lg border border-red-400/20 bg-red-400/5">
+              <div className="p-4 rounded-lg border border-red-400/20 bg-red-400/5">
                 <p className="text-sm font-mono text-red-400 mb-3">Why are you disputing this order?</p>
                 <textarea
                   value={disputeReason}
@@ -1284,52 +1324,82 @@ export default function AtelierOrderPage() {
                 </div>
               </div>
             )}
-          </>
-        )}
 
-        {/* Review prompt — prominent placement for completed orders */}
-        {order.status === 'completed' && !review && walletAddress && order.client_wallet === walletAddress && (
-          <div className="mt-6">
-            <div className="p-4 rounded-lg border border-atelier/20 bg-atelier/5 mb-2">
-              <p className="text-sm font-mono text-atelier mb-1">How was your experience?</p>
-              <p className="text-xs text-neutral-500">Your review helps other buyers find great agents.</p>
-            </div>
-            <ReviewForm orderId={order.id} onSubmitted={load} />
-          </div>
-        )}
+            {/* Review */}
+            {order.status === 'completed' && !review && walletAddress && order.client_wallet === walletAddress && (
+              <div>
+                <div className="p-4 rounded-lg border border-atelier/20 bg-atelier/5 mb-2">
+                  <p className="text-sm font-mono text-atelier mb-1">How was your experience?</p>
+                  <p className="text-xs text-neutral-500">Your review helps other buyers find great agents.</p>
+                </div>
+                <ReviewForm orderId={order.id} onSubmitted={load} />
+              </div>
+            )}
 
-        {/* Hire Again CTA for completed orders */}
-        {order.status === 'completed' && order.service_id && (
-          <div className="mt-6">
-            <Link
-              href={atelierHref(`/atelier/agents/${order.provider_agent_id}`)}
-              className="w-full py-3 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
-              </svg>
-              Hire {order.provider_name} Again
-            </Link>
-          </div>
-        )}
-
-        {/* Collapsible messages */}
-        {walletAddress && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
-          <div className="mt-8">
-            <button
-              onClick={() => setShowMessages(!showMessages)}
-              className="flex items-center gap-2 text-sm font-mono text-neutral-400 hover:text-white transition-colors cursor-pointer w-full"
-            >
-              <svg className={`w-4 h-4 transition-transform ${showMessages ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-              </svg>
-              Messages
-            </button>
-            {showMessages && (
+            {/* Chat — always visible */}
+            {walletAddress && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
               <OrderChat orderId={order.id} wallet={walletAddress} />
             )}
           </div>
-        )}
+        </div>
+
+        {/* Confirm Dialogs */}
+        <ConfirmDialog
+          open={showApproveConfirm}
+          title="Approve & Complete"
+          message="This will release the payment to the agent. This action cannot be undone."
+          confirmLabel="Approve"
+          confirmClass="bg-emerald-500 hover:bg-emerald-600"
+          loading={approving}
+          onCancel={() => setShowApproveConfirm(false)}
+          onConfirm={async () => {
+            setApproving(true);
+            try {
+              const auth = await getAuth();
+              const res = await fetch(`/api/orders/${order.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...auth, action: 'approve' }),
+              });
+              const json = await res.json();
+              if (json.success) {
+                setShowApproveConfirm(false);
+                load();
+              }
+            } finally {
+              setApproving(false);
+            }
+          }}
+        />
+        <ConfirmDialog
+          open={showCancelConfirm}
+          title="Cancel Order"
+          message={order.status === 'paid'
+            ? 'Cancel this order? A refund will be issued to your wallet.'
+            : 'Are you sure you want to cancel this order?'}
+          confirmLabel="Cancel Order"
+          confirmClass="bg-red-500 hover:bg-red-600"
+          loading={cancelling}
+          onCancel={() => setShowCancelConfirm(false)}
+          onConfirm={async () => {
+            setCancelling(true);
+            try {
+              const auth = await getAuth();
+              const res = await fetch(`/api/orders/${order.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...auth, action: 'cancel' }),
+              });
+              const json = await res.json();
+              if (json.success) {
+                setShowCancelConfirm(false);
+                load();
+              }
+            } finally {
+              setCancelling(false);
+            }
+          }}
+        />
       </div>
     </AtelierAppLayout>
   );

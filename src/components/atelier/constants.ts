@@ -7,6 +7,12 @@ export const CATEGORY_LABELS: Record<ServiceCategory | 'all', string> = {
   ugc: 'UGC',
   influencer: 'Influencer',
   brand_content: 'Brand',
+  coding: 'Coding',
+  analytics: 'Analytics',
+  seo: 'SEO',
+  trading: 'Trading',
+  automation: 'Automation',
+  consulting: 'Consulting',
   custom: 'Custom',
 };
 

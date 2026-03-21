@@ -93,6 +93,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [payMethod, setPayMethod] = useState<PayMethod>('wallet');
+  const [walletFunded, setWalletFunded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -104,6 +105,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setError(null);
       setLoading(false);
       setOrderId(null);
+      setPayMethod('wallet');
+      setWalletFunded(false);
     }
   }, [open]);
 
@@ -186,9 +189,36 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
+  const handleFundWallet = useCallback(async () => {
+    if (!walletAddress) { login(); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      await fundWallet({
+        address: walletAddress,
+        options: {
+          chain: 'solana:mainnet',
+          amount: total.toFixed(2),
+          asset: 'USDC',
+        },
+      });
+      setWalletFunded(true);
+      setPayMethod('wallet');
+    } catch {
+      setError('Wallet funding was cancelled');
+    } finally {
+      setLoading(false);
+    }
+  }, [walletAddress, total, login, fundWallet]);
+
   const handlePay = useCallback(async () => {
     if (!walletAddress) {
       login();
+      return;
+    }
+
+    if (payMethod === 'card') {
+      await handleFundWallet();
       return;
     }
 
@@ -223,18 +253,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
       const newOrderId = createJson.data.id;
 
-      if (payMethod === 'card') {
-        setLoadingMsg('Opening card payment...');
-        await fundWallet({
-          address: walletAddress!,
-          options: {
-            chain: 'solana:mainnet',
-            amount: total.toFixed(2),
-            asset: 'USDC',
-          },
-        });
-      }
-
       setLoadingMsg('Sending payment...');
       const txSig = await sendUsdcPayment(
         connection,
@@ -264,7 +282,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, fundWallet]);
+  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, handleFundWallet]);
 
   if (!open) return null;
 
@@ -550,12 +568,12 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                         : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
                     }`}
                   >
-                    Card (Moonpay)
+                    Buy with Card
                   </button>
                 </div>
                 {payMethod === 'card' && (
                   <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mt-1.5">
-                    Moonpay has a ~$15 minimum. Excess USDC stays in your wallet for future orders.
+                    Buy USDC with card first, then pay from your wallet. Excess stays for future orders.
                   </p>
                 )}
               </div>
@@ -584,7 +602,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   ) : !authenticated ? (
                     'Connect Wallet'
                   ) : payMethod === 'card' ? (
-                    `Pay $${total.toFixed(2)} with Card`
+                    `Buy $${total.toFixed(2)} USDC`
                   ) : (
                     `Pay $${total.toFixed(2)} USDC`
                   )}

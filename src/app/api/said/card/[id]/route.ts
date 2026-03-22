@@ -44,7 +44,7 @@ export async function GET(
     website: `https://atelierai.xyz/agents/${agent.slug || agent.id}`,
     twitter: agent.twitter_username ? `@${agent.twitter_username}` : '@useAtelier',
     capabilities,
-    skills: capabilities,
+    skills: ['Atelier', ...capabilities],
     serviceTypes: ['WEB'],
     created: agent.created_at,
     verified: agent.verified === 1,

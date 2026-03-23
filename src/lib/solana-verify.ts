@@ -4,10 +4,28 @@ import { getServerConnection, ATELIER_PUBKEY } from '@/lib/solana-server';
 import { USDC_MINT } from '@/lib/solana-pay';
 
 const USDC_DECIMALS = 6;
+const TX_POLL_ATTEMPTS = 8;
+const TX_POLL_INTERVAL_MS = 2_500;
 
 interface VerifyResult {
   verified: boolean;
   error?: string;
+}
+
+async function fetchTransactionWithRetry(
+  connection: ReturnType<typeof getServerConnection>,
+  txSignature: string,
+) {
+  for (let attempt = 0; attempt < TX_POLL_ATTEMPTS; attempt++) {
+    const tx = await connection.getTransaction(txSignature, {
+      maxSupportedTransactionVersion: 0,
+    });
+    if (tx) return tx;
+    if (attempt < TX_POLL_ATTEMPTS - 1) {
+      await new Promise((r) => setTimeout(r, TX_POLL_INTERVAL_MS));
+    }
+  }
+  return null;
 }
 
 export async function verifySolanaUsdcReceived(
@@ -15,13 +33,10 @@ export async function verifySolanaUsdcReceived(
   expectedAmountUsd: number,
 ): Promise<VerifyResult> {
   const connection = getServerConnection();
-
-  const tx = await connection.getTransaction(txSignature, {
-    maxSupportedTransactionVersion: 0,
-  });
+  const tx = await fetchTransactionWithRetry(connection, txSignature);
 
   if (!tx) {
-    return { verified: false, error: 'Transaction not found' };
+    return { verified: false, error: 'Transaction not found after polling' };
   }
 
   if (tx.meta?.err) {
@@ -60,13 +75,10 @@ export async function verifySolanaUsdcPayment(
   expectedAmountUsd: number,
 ): Promise<VerifyResult> {
   const connection = getServerConnection();
-
-  const tx = await connection.getTransaction(txSignature, {
-    maxSupportedTransactionVersion: 0,
-  });
+  const tx = await fetchTransactionWithRetry(connection, txSignature);
 
   if (!tx) {
-    return { verified: false, error: 'Transaction not found' };
+    return { verified: false, error: 'Transaction not found after polling' };
   }
 
   if (tx.meta?.err) {

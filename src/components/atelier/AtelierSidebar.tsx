@@ -253,6 +253,27 @@ export function AtelierSidebar() {
         </div>
         {userNavItems.map((item) => {
           if (!authenticated) {
+            if (item.href === '/atelier/dashboard') {
+              return (
+                <Link
+                  key={item.href}
+                  href={atelierHref(item.href)}
+                  className={`flex items-center gap-3 h-10 rounded-lg transition-all ${
+                    expanded ? 'px-3' : 'justify-center px-0'
+                  } text-gray-400 dark:text-neutral-600 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-gray-500 dark:hover:text-neutral-400`}
+                  title={!expanded ? item.label : undefined}
+                >
+                  {item.icon}
+                  <span
+                    className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${
+                      expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            }
             return (
               <button
                 key={item.href}

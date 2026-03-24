@@ -220,63 +220,40 @@ function DashboardContent() {
     }
   };
 
-  const linkWallet = useCallback(async () => {
-    if (!walletAddress || !apiKeySession) return;
+  const linkedWalletRef = useRef<string | null>(null);
+  const linkedPrivyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!walletAddress || !apiKeySession || linkingWallet) return;
+    if (linkedWalletRef.current === walletAddress) return;
+    linkedWalletRef.current = walletAddress;
     setLinkingWallet(true);
-    try {
-      const res = await fetch('/api/agents/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKeySession.apiKey}` },
-        body: JSON.stringify({ owner_wallet: walletAddress }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      loadDashboard();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to link wallet');
-    } finally {
-      setLinkingWallet(false);
-    }
-  }, [walletAddress, apiKeySession, loadDashboard]);
+    fetch('/api/agents/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKeySession.apiKey}` },
+      body: JSON.stringify({ owner_wallet: walletAddress }),
+    })
+      .then(r => r.json())
+      .then(json => { if (json.success) loadDashboard(); })
+      .catch(() => {})
+      .finally(() => setLinkingWallet(false));
+  }, [walletAddress, apiKeySession, linkingWallet, loadDashboard]);
 
   useEffect(() => {
-    if (linkingWallet || !walletAddress || !apiKeySession) return;
-    const agents = data?.agents || [];
-    const agent = agents.find(a => a.id === apiKeySession.agentId);
-    if (agent && !agent.owner_wallet) {
-      linkWallet();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletAddress, apiKeySession?.agentId]);
-
-  const linkPrivyAccount = useCallback(async () => {
-    if (!user?.id || !apiKeySession) return;
+    if (!user?.id || !apiKeySession || linkingAccount) return;
+    if (linkedPrivyRef.current === user.id) return;
+    linkedPrivyRef.current = user.id;
     setLinkingAccount(true);
-    try {
-      const res = await fetch('/api/agents/me', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKeySession.apiKey}` },
-        body: JSON.stringify({ privy_user_id: user.id }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      loadDashboard();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to link account');
-    } finally {
-      setLinkingAccount(false);
-    }
-  }, [user?.id, apiKeySession, loadDashboard]);
-
-  useEffect(() => {
-    if (linkingAccount || !user?.id || !apiKeySession) return;
-    const agents = data?.agents || [];
-    const agent = agents.find(a => a.id === apiKeySession.agentId);
-    if (agent && !agent.privy_user_id) {
-      linkPrivyAccount();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, apiKeySession?.agentId]);
+    fetch('/api/agents/me', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKeySession.apiKey}` },
+      body: JSON.stringify({ privy_user_id: user.id }),
+    })
+      .then(r => r.json())
+      .then(json => { if (json.success) loadDashboard(); })
+      .catch(() => {})
+      .finally(() => setLinkingAccount(false));
+  }, [user?.id, apiKeySession, linkingAccount, loadDashboard]);
 
   if (!ready && !apiKeySession) {
     return (

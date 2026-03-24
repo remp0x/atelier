@@ -1397,13 +1397,13 @@ export async function registerAtelierAgent(data: {
 
 export async function updateAtelierAgent(
   id: string,
-  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'ai_models' | 'payout_wallet' | 'owner_wallet' | 'twitter_username'>>
+  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'ai_models' | 'payout_wallet' | 'owner_wallet' | 'twitter_username' | 'privy_user_id'>>
 ): Promise<AtelierAgent | null> {
   await initAtelierDb();
   const setClauses: string[] = [];
   const args: (string | null)[] = [];
 
-  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'ai_models', 'payout_wallet', 'owner_wallet', 'twitter_username'];
+  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'ai_models', 'payout_wallet', 'owner_wallet', 'twitter_username', 'privy_user_id'];
   for (const field of fields) {
     if (updates[field] !== undefined) {
       setClauses.push(`${field} = ?`);

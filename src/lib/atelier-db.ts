@@ -110,6 +110,8 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_pda TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_secret_key TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_tx_hash TEXT`).catch(() => {});
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN privy_user_id TEXT`).catch(() => {});
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_privy_user_id ON atelier_agents(privy_user_id)').catch(() => {});
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS services (
@@ -988,6 +990,7 @@ export interface AtelierAgent {
   said_pda: string | null;
   said_secret_key: string | null;
   said_tx_hash: string | null;
+  privy_user_id: string | null;
   created_at: string;
 }
 
@@ -1297,6 +1300,28 @@ export async function getAtelierAgentsByWallet(ownerWallet: string): Promise<Ate
   const result = await atelierClient.execute({
     sql: 'SELECT * FROM atelier_agents WHERE owner_wallet = ? AND active = 1',
     args: [ownerWallet],
+  });
+  const agents = result.rows as unknown as AtelierAgent[];
+
+  for (const agent of agents) {
+    if (!agent.api_key) {
+      const apiKey = `atelier_${randomBytes(24).toString('hex')}`;
+      await atelierClient.execute({
+        sql: 'UPDATE atelier_agents SET api_key = ? WHERE id = ? AND api_key IS NULL',
+        args: [apiKey, agent.id],
+      });
+      agent.api_key = apiKey;
+    }
+  }
+
+  return agents;
+}
+
+export async function getAtelierAgentsByPrivyUser(privyUserId: string): Promise<AtelierAgent[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM atelier_agents WHERE privy_user_id = ? AND active = 1',
+    args: [privyUserId],
   });
   const agents = result.rows as unknown as AtelierAgent[];
 

@@ -19,6 +19,40 @@ import type { TransactionSignableWallet } from '@/lib/solana-pay';
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 const STORAGE_KEY_PREFIX = 'atelier_auth_';
+const APIKEY_STORAGE_KEY = 'atelier_apikey_session';
+
+interface ApiKeySession {
+  apiKey: string;
+  agentId: string;
+  ts: number;
+}
+
+function loadApiKeySession(): ApiKeySession | null {
+  try {
+    const raw = localStorage.getItem(APIKEY_STORAGE_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as ApiKeySession;
+    if (Date.now() - session.ts >= SESSION_TTL) {
+      localStorage.removeItem(APIKEY_STORAGE_KEY);
+      return null;
+    }
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function saveApiKeySession(session: ApiKeySession): void {
+  try {
+    localStorage.setItem(APIKEY_STORAGE_KEY, JSON.stringify(session));
+  } catch {}
+}
+
+function clearApiKeySession(): void {
+  try {
+    localStorage.removeItem(APIKEY_STORAGE_KEY);
+  } catch {}
+}
 
 function loadCachedAuth(wallet: string): { payload: WalletAuthPayload; ts: number } | null {
   try {
@@ -41,17 +75,13 @@ function saveCachedAuth(payload: WalletAuthPayload, ts: number): void {
       `${STORAGE_KEY_PREFIX}${payload.wallet}`,
       JSON.stringify({ payload, ts }),
     );
-  } catch {
-    // storage full or unavailable
-  }
+  } catch {}
 }
 
 function clearCachedAuth(wallet: string): void {
   try {
     localStorage.removeItem(`${STORAGE_KEY_PREFIX}${wallet}`);
-  } catch {
-    // unavailable
-  }
+  } catch {}
 }
 
 const SolanaWalletBridge = dynamic(
@@ -65,6 +95,8 @@ interface SolanaWalletState {
   signTransaction: (input: { transaction: Uint8Array }) => Promise<{ signedTransaction: Uint8Array }>;
 }
 
+type AuthMode = 'wallet' | 'apikey' | 'privy' | null;
+
 interface AtelierAuthContextValue {
   authenticated: boolean;
   ready: boolean;
@@ -77,6 +109,10 @@ interface AtelierAuthContextValue {
   clearAuth: () => void;
   getSignableWallet: () => SignableWallet | null;
   getTransactionWallet: () => TransactionSignableWallet | null;
+  authMode: AuthMode;
+  apiKeySession: ApiKeySession | null;
+  loginWithApiKey: (apiKey: string) => Promise<void>;
+  logoutApiKey: () => void;
 }
 
 const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
@@ -84,12 +120,24 @@ const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
 export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready, login, logout, user } = usePrivy();
   const [solanaWallet, setSolanaWallet] = useState<SolanaWalletState | null>(null);
+  const [apiKeySess, setApiKeySess] = useState<ApiKeySession | null>(null);
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
 
   const walletAddress = solanaWallet?.address ?? null;
   const walletReady = authenticated && walletAddress !== null;
+
+  useEffect(() => {
+    setApiKeySess(loadApiKeySession());
+  }, []);
+
+  const authMode: AuthMode = useMemo(() => {
+    if (walletReady) return 'wallet';
+    if (apiKeySess) return 'apikey';
+    if (authenticated) return 'privy';
+    return null;
+  }, [walletReady, apiKeySess, authenticated]);
 
   const handleWalletChange = useCallback((wallet: SolanaWalletState | null) => {
     setSolanaWallet(wallet);
@@ -177,15 +225,32 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     if (walletAddress) clearCachedAuth(walletAddress);
   }, [walletAddress]);
 
+  const loginWithApiKey = useCallback(async (apiKey: string) => {
+    const res = await fetch('/api/agents/me', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Invalid API key');
+    const session: ApiKeySession = { apiKey, agentId: json.data.id, ts: Date.now() };
+    saveApiKeySession(session);
+    setApiKeySess(session);
+  }, []);
+
+  const logoutApiKey = useCallback(() => {
+    clearApiKeySession();
+    setApiKeySess(null);
+  }, []);
+
   const handleLogout = useCallback(async () => {
     clearAuth();
+    logoutApiKey();
     setSolanaWallet(null);
     await logout();
-  }, [clearAuth, logout]);
+  }, [clearAuth, logoutApiKey, logout]);
 
   const value = useMemo<AtelierAuthContextValue>(
     () => ({
-      authenticated,
+      authenticated: authenticated || apiKeySess !== null,
       ready,
       login,
       logout: handleLogout,
@@ -196,6 +261,10 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       clearAuth,
       getSignableWallet,
       getTransactionWallet,
+      authMode,
+      apiKeySession: apiKeySess,
+      loginWithApiKey,
+      logoutApiKey,
     }),
     [
       authenticated,
@@ -209,6 +278,10 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       clearAuth,
       getSignableWallet,
       getTransactionWallet,
+      authMode,
+      apiKeySess,
+      loginWithApiKey,
+      logoutApiKey,
     ]
   );
 

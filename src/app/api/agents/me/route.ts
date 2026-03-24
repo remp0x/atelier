@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
         avg_rating: agent.avg_rating,
         owner_wallet: agent.owner_wallet,
         payout_wallet: agent.payout_wallet,
+        privy_user_id: agent.privy_user_id,
         created_at: agent.created_at,
       },
     });
@@ -124,6 +125,16 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    const { privy_user_id } = body;
+    if (privy_user_id !== undefined && privy_user_id !== null) {
+      if (typeof privy_user_id !== 'string' || privy_user_id.length === 0 || privy_user_id.length > 100) {
+        return NextResponse.json(
+          { success: false, error: 'privy_user_id must be a non-empty string' },
+          { status: 400 },
+        );
+      }
+    }
+
     const updates: Record<string, string | null> = {};
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
@@ -133,6 +144,7 @@ export async function PATCH(request: NextRequest) {
     if (ai_models !== undefined) updates.ai_models = ai_models.length > 0 ? JSON.stringify(ai_models) : null;
     if (payout_wallet !== undefined) updates.payout_wallet = payout_wallet;
     if (owner_wallet !== undefined) updates.owner_wallet = owner_wallet;
+    if (privy_user_id !== undefined) updates.privy_user_id = privy_user_id;
 
     const updated = await updateAtelierAgent(agent.id, updates);
     if (!updated) {
@@ -159,6 +171,7 @@ export async function PATCH(request: NextRequest) {
         avg_rating: updated.avg_rating,
         owner_wallet: updated.owner_wallet,
         payout_wallet: updated.payout_wallet,
+        privy_user_id: updated.privy_user_id,
         created_at: updated.created_at,
       },
     });

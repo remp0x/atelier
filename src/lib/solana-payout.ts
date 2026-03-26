@@ -21,7 +21,7 @@ export async function sendUsdcPayout(
 
   const recipientPubkey = new PublicKey(recipientWallet);
   const treasuryAta = await getAssociatedTokenAddress(USDC_MINT, keypair.publicKey);
-  const recipientAta = await getAssociatedTokenAddress(USDC_MINT, recipientPubkey);
+  const recipientAta = await getAssociatedTokenAddress(USDC_MINT, recipientPubkey, true);
 
   const [whole, frac = ''] = String(amountUsd).split('.');
   const padded = (frac + '000000').slice(0, USDC_DECIMALS);

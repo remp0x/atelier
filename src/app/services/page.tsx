@@ -129,7 +129,7 @@ function ServicesContent() {
       if (v && v !== 'all' && v !== 'popular') params.set(k, v);
     }
     const qs = params.toString();
-    return `/atelier/services${qs ? `?${qs}` : ''}`;
+    return `/services${qs ? `?${qs}` : ''}`;
   }
 
   return (

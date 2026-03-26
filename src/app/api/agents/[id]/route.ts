@@ -10,6 +10,7 @@ import {
   getRecentOrdersForAgent,
   getAgentPortfolio,
   getAgentOrderCounts,
+  getPendingOrderCountForAgent,
   type ServiceCategory,
 } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
@@ -32,6 +33,10 @@ export async function GET(
       );
     }
 
+    const url = new URL(_request.url);
+    const viewerWallet = url.searchParams.get('wallet');
+    const isOwner = viewerWallet && agent.owner_wallet === viewerWallet;
+
     if (agent.source === 'external') {
       let capabilities: string[] = [];
       try { capabilities = JSON.parse(agent.capabilities); } catch { /* empty */ }
@@ -47,36 +52,44 @@ export async function GET(
         services.map((s) => getServiceReviews(s.id))
       );
 
+      const agentPayload: Record<string, unknown> = {
+        id: agent.id,
+        slug: agent.slug,
+        name: agent.name,
+        description: agent.description,
+        avatar_url: agent.avatar_url,
+        source: 'external' as const,
+        verified: agent.verified,
+        blue_check: agent.blue_check || 0,
+        atelier_holder: agent.atelier_holder || 0,
+        partner_badge: agent.partner_badge || null,
+        twitter_username: agent.twitter_username,
+        endpoint_url: agent.endpoint_url,
+        capabilities,
+        ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
+        owner_wallet: agent.owner_wallet || null,
+        token: {
+          mint: agent.token_mint,
+          name: agent.token_name,
+          symbol: agent.token_symbol,
+          image_url: agent.token_image_url,
+          mode: agent.token_mode,
+          creator_wallet: agent.token_creator_wallet,
+          tx_hash: agent.token_tx_hash,
+          launch_attempted: !!agent.token_launch_attempted,
+        },
+      };
+
+      if (isOwner) {
+        const pendingOrders = await getPendingOrderCountForAgent(agent.id);
+        agentPayload.last_poll_at = agent.last_poll_at || null;
+        agentPayload.pending_orders = pendingOrders;
+      }
+
       return NextResponse.json({
         success: true,
         data: {
-          agent: {
-            id: agent.id,
-            slug: agent.slug,
-            name: agent.name,
-            description: agent.description,
-            avatar_url: agent.avatar_url,
-            source: 'external' as const,
-            verified: agent.verified,
-            blue_check: agent.blue_check || 0,
-            atelier_holder: agent.atelier_holder || 0,
-            partner_badge: agent.partner_badge || null,
-            twitter_username: agent.twitter_username,
-            endpoint_url: agent.endpoint_url,
-            capabilities,
-            ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
-            owner_wallet: agent.owner_wallet || null,
-            token: {
-              mint: agent.token_mint,
-              name: agent.token_name,
-              symbol: agent.token_symbol,
-              image_url: agent.token_image_url,
-              mode: agent.token_mode,
-              creator_wallet: agent.token_creator_wallet,
-              tx_hash: agent.token_tx_hash,
-              launch_attempted: !!agent.token_launch_attempted,
-            },
-          },
+          agent: agentPayload,
           services,
           portfolio,
           stats: {
@@ -106,36 +119,44 @@ export async function GET(
     const ratings = services.filter((s) => s.avg_rating != null).map((s) => s.avg_rating as number);
     const avgRating = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null;
 
+    const atelierAgentPayload: Record<string, unknown> = {
+      id: agent.id,
+      slug: agent.slug,
+      name: agent.name,
+      description: agent.description,
+      bio: agent.bio,
+      avatar_url: agent.avatar_url,
+      source: agent.source,
+      verified: agent.verified,
+      blue_check: agent.blue_check,
+      atelier_holder: agent.atelier_holder || 0,
+      is_atelier_official: agent.is_atelier_official || 0,
+      partner_badge: agent.partner_badge || null,
+      twitter_username: agent.twitter_username,
+      ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
+      owner_wallet: agent.owner_wallet || null,
+      token: {
+        mint: agent.token_mint,
+        name: agent.token_name,
+        symbol: agent.token_symbol,
+        image_url: agent.token_image_url,
+        mode: agent.token_mode,
+        creator_wallet: agent.token_creator_wallet,
+        tx_hash: agent.token_tx_hash,
+        launch_attempted: !!agent.token_launch_attempted,
+      },
+    };
+
+    if (isOwner) {
+      const pendingOrders = await getPendingOrderCountForAgent(agent.id);
+      atelierAgentPayload.last_poll_at = agent.last_poll_at || null;
+      atelierAgentPayload.pending_orders = pendingOrders;
+    }
+
     return NextResponse.json({
       success: true,
       data: {
-        agent: {
-          id: agent.id,
-          slug: agent.slug,
-          name: agent.name,
-          description: agent.description,
-          bio: agent.bio,
-          avatar_url: agent.avatar_url,
-          source: agent.source,
-          verified: agent.verified,
-          blue_check: agent.blue_check,
-          atelier_holder: agent.atelier_holder || 0,
-          is_atelier_official: agent.is_atelier_official || 0,
-          partner_badge: agent.partner_badge || null,
-          twitter_username: agent.twitter_username,
-          ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
-          owner_wallet: agent.owner_wallet || null,
-          token: {
-            mint: agent.token_mint,
-            name: agent.token_name,
-            symbol: agent.token_symbol,
-            image_url: agent.token_image_url,
-            mode: agent.token_mode,
-            creator_wallet: agent.token_creator_wallet,
-            tx_hash: agent.token_tx_hash,
-            launch_attempted: !!agent.token_launch_attempted,
-          },
-        },
+        agent: atelierAgentPayload,
         services,
         portfolio,
         stats: {
@@ -157,7 +178,7 @@ export async function GET(
   }
 }
 
-const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'custom'];
+const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export async function PATCH(

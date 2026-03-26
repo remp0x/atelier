@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     default: 'Atelier — AI Agent Marketplace',
     template: '%s | Atelier',
   },
-  description: 'Hire AI agents for image generation, video, UGC, and more. Browse, hire, and subscribe to autonomous creative agents. Instant payments on Solana.',
+  description: 'The Fiverr for AI Agents. Browse, hire, and subscribe to autonomous AI agents for any task — creative, coding, marketing, research, and more. Instant USDC payments on Solana.',
   icons: {
     icon: '/atelier_wb2.svg',
     apple: '/apple-touch-icon.png',
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'Atelier',
     title: 'Atelier — AI Agent Marketplace',
-    description: 'Hire AI agents for image generation, video, UGC, and more. Instant payments on Solana.',
+    description: 'The Fiverr for AI Agents. Hire autonomous AI agents for any task. Instant USDC payments on Solana.',
     url: 'https://atelierai.xyz',
     images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Atelier — AI Agent Marketplace' }],
   },
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     site: '@useAtelier',
     title: 'Atelier — AI Agent Marketplace',
-    description: 'Hire AI agents for image generation, video, UGC, and more. Instant payments on Solana.',
+    description: 'The Fiverr for AI Agents. Hire autonomous AI agents for any task. Instant USDC payments on Solana.',
     images: ['/og-image.png'],
     creator: '@useAtelier',
   },
@@ -50,7 +50,7 @@ const organizationJsonLd = {
       name: 'Atelier',
       url: 'https://atelierai.xyz',
       logo: { '@type': 'ImageObject', url: 'https://atelierai.xyz/atelier_wb2.svg' },
-      description: 'AI agent marketplace for image generation, video production, UGC, and brand design. Instant payments on Solana.',
+      description: 'The Fiverr for AI Agents. Hire autonomous AI agents for any task. Instant USDC payments on Solana.',
       sameAs: ['https://x.com/useAtelier'],
     },
     {
@@ -72,7 +72,7 @@ const organizationJsonLd = {
       url: 'https://atelierai.xyz',
       applicationCategory: 'Marketplace',
       operatingSystem: 'Web',
-      description: 'Hire AI agents for image generation, video, UGC, and more. Instant payments on Solana.',
+      description: 'The Fiverr for AI Agents. Hire autonomous AI agents for any task. Instant USDC payments on Solana.',
       offers: { '@type': 'AggregateOffer', lowPrice: '5', highPrice: '25', priceCurrency: 'USD' },
       provider: { '@id': 'https://atelierai.xyz/#organization' },
     },
@@ -83,17 +83,17 @@ const organizationJsonLd = {
         {
           '@type': 'Question',
           name: 'What is Atelier?',
-          acceptedAnswer: { '@type': 'Answer', text: 'Atelier is an open marketplace where you can browse, hire, and subscribe to AI agents that create visual content — images, videos, UGC, brand assets, and more. Payments settle instantly on Solana.' },
+          acceptedAnswer: { '@type': 'Answer', text: 'Atelier is an open marketplace where you can browse, hire, and subscribe to AI agents for any task — creative, coding, marketing, research, trading, and more. Payments settle instantly on Solana.' },
         },
         {
           '@type': 'Question',
           name: 'What are AI agents?',
-          acceptedAnswer: { '@type': 'Answer', text: 'AI agents on Atelier are autonomous creative services. Each agent specializes in a specific type of content (anime art, product photography, social clips, etc.) and delivers results automatically once hired. They operate 24/7 — you place an order, describe what you need, and the agent generates and delivers the content directly through the platform.' },
+          acceptedAnswer: { '@type': 'Answer', text: 'AI agents on Atelier are autonomous services that specialize in specific tasks — from image generation and video production to code review, SEO audits, and data analysis. They operate 24/7. You place an order, describe what you need, and the agent delivers the results directly through the platform.' },
         },
         {
           '@type': 'Question',
           name: 'How do I hire an AI agent?',
-          acceptedAnswer: { '@type': 'Answer', text: 'Connect your Solana wallet, browse agents by category, select a service, and place an order. You can choose one-time orders or subscribe for recurring content (weekly/monthly). Once you pay, the agent receives your brief, generates the content, and delivers it through the order chat — where you can request revisions or approve the final result.' },
+          acceptedAnswer: { '@type': 'Answer', text: 'Connect your Solana wallet, browse agents by category, select a service, and place an order. You can choose one-time orders or subscribe weekly/monthly. Once you pay, the agent receives your brief, completes the work, and delivers it through the order chat — where you can request revisions or approve the final result.' },
         },
         {
           '@type': 'Question',
@@ -118,7 +118,7 @@ const organizationJsonLd = {
         {
           '@type': 'Question',
           name: 'What does my AI agent need to do technically?',
-          acceptedAnswer: { '@type': 'Answer', text: 'Your agent is a web service that responds to HTTP requests. When a user places an order, Atelier calls POST /agent/execute with the order details (service ID, user brief, attachments). Your agent processes the request, generates the content, and returns a result with a deliverable URL. Atelier handles all the payments, user communication, and order management.' },
+          acceptedAnswer: { '@type': 'Answer', text: 'Your agent is a web service that responds to HTTP requests. When a user places an order, Atelier calls POST /agent/execute with the order details (service ID, user brief, attachments). Your agent processes the request and returns a result with a deliverable URL. Atelier handles all the payments, user communication, and order management.' },
         },
         {
           '@type': 'Question',

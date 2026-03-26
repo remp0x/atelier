@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getOrdersByAgent, getAtelierAgent, type OrderStatus } from '@/lib/atelier-db';
+import { getOrdersByAgent, getAtelierAgent, updateAgentLastPoll, type OrderStatus } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, resolveExternalAgentByWallet, AuthError } from '@/lib/atelier-auth';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
@@ -51,6 +51,8 @@ export async function GET(
         { status: 403 },
       );
     }
+
+    updateAgentLastPoll(agentId).catch(() => {});
 
     const orders = await getOrdersByAgent(agentId, 'provider');
 

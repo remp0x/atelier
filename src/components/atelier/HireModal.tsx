@@ -8,7 +8,7 @@ import { PublicKey } from '@solana/web3.js';
 import { sendUsdcPayment } from '@/lib/solana-pay';
 import { useFundWallet } from '@privy-io/react-auth/solana';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
-import type { Service } from '@/lib/atelier-db';
+import type { Service, RequirementField } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'confirmation';
 
@@ -166,7 +166,14 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [payMethod, setPayMethod] = useState<PayMethod>('wallet');
+  const [reqAnswers, setReqAnswers] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const reqFields: RequirementField[] = (() => {
+    try {
+      return service.requirement_fields ? JSON.parse(service.requirement_fields) : [];
+    } catch { return []; }
+  })();
 
   useEffect(() => {
     if (open) {
@@ -174,6 +181,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setBrief('');
       setReferenceUrls(['']);
       setReferenceImages([]);
+      setReqAnswers({});
       setError(null);
       setLoading(false);
       setOrderId(null);
@@ -309,6 +317,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           brief,
           reference_urls: validUrls.length > 0 ? validUrls : undefined,
           reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
+          requirement_answers: Object.keys(reqAnswers).length > 0 ? reqAnswers : undefined,
           client_wallet: walletAddress!,
         }),
       });
@@ -421,9 +430,56 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         <div className="px-6 py-5">
           {step === 'brief' && (
             <div className="space-y-4">
+              {reqFields.length > 0 && (
+                <div className="space-y-3">
+                  {reqFields.map((field) => (
+                    <div key={field.label}>
+                      <label className="block text-sm font-mono text-gray-600 dark:text-neutral-400 mb-1">
+                        {field.label} {field.required && <span className="text-red-400">*</span>}
+                      </label>
+                      {field.type === 'select' && field.options ? (
+                        <select
+                          value={reqAnswers[field.label] || ''}
+                          onChange={(e) => setReqAnswers((prev) => ({ ...prev, [field.label]: e.target.value }))}
+                          className="w-full px-3 py-2.5 rounded bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono focus:outline-none focus:border-atelier"
+                        >
+                          <option value="">Select...</option>
+                          {field.options.map((opt) => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ))}
+                        </select>
+                      ) : field.type === 'textarea' ? (
+                        <textarea
+                          value={reqAnswers[field.label] || ''}
+                          onChange={(e) => setReqAnswers((prev) => ({ ...prev, [field.label]: e.target.value }))}
+                          placeholder={field.placeholder}
+                          rows={3}
+                          className="w-full px-3 py-2.5 rounded bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier resize-none"
+                        />
+                      ) : field.type === 'number' ? (
+                        <input
+                          type="number"
+                          value={reqAnswers[field.label] || ''}
+                          onChange={(e) => setReqAnswers((prev) => ({ ...prev, [field.label]: e.target.value }))}
+                          placeholder={field.placeholder}
+                          className="w-full px-3 py-2.5 rounded bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+                        />
+                      ) : (
+                        <input
+                          type={field.type === 'url' ? 'url' : 'text'}
+                          value={reqAnswers[field.label] || ''}
+                          onChange={(e) => setReqAnswers((prev) => ({ ...prev, [field.label]: e.target.value }))}
+                          placeholder={field.placeholder}
+                          className="w-full px-3 py-2.5 rounded bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-mono text-gray-600 dark:text-neutral-400 mb-1">
-                  {isWorkspace ? 'Project Brief' : 'Brief'}
+                  {reqFields.length > 0 ? 'Additional Details' : isWorkspace ? 'Project Brief' : 'Brief'}
                 </label>
                 {isWorkspace && (
                   <p className="text-2xs text-gray-400 dark:text-neutral-500 mb-2">
@@ -551,7 +607,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
               <button
                 onClick={() => setStep('review')}
-                disabled={brief.length < 10 || isUploading}
+                disabled={brief.length < 10 || isUploading || reqFields.some((f) => f.required && !reqAnswers[f.label]?.trim())}
                 className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white"
               >
                 Continue

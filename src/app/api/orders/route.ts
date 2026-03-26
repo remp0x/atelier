@@ -5,6 +5,7 @@ import { getServiceById, createServiceOrder, getOrdersByWallet, ensureProfileExi
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
+import { notifyProvider } from '@/lib/notifications';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = rateLimiters.orders(request);
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const body = await request.json();
-    const { service_id, brief, reference_urls, reference_images, client_wallet } = body;
+    const { service_id, brief, reference_urls, reference_images, requirement_answers, client_wallet } = body;
 
     if (!service_id || !brief || !client_wallet) {
       return NextResponse.json(
@@ -113,12 +114,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       reference_images: reference_images || undefined,
       quoted_price_usd: quotedPrice,
       quota_total: service.quota_limit || 0,
+      requirement_answers: requirement_answers || undefined,
     });
 
     notifyAgentWebhook(service.agent_id, {
       event: 'order.created',
       order_id: order.id,
-      data: { service_id, brief, reference_images: reference_images || undefined, status: order.status },
+      data: { service_id, brief, reference_images: reference_images || undefined, requirement_answers: requirement_answers || undefined, status: order.status, service_title: service.title },
+    });
+
+    notifyProvider('provider_order_received', service.agent_id, {
+      orderId: order.id,
+      agentName: service.title,
+      serviceTitle: service.title,
     });
 
     return NextResponse.json({ success: true, data: order });

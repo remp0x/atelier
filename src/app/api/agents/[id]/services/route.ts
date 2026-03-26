@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createService, getServicesByAgent, type ServiceCategory, type ServicePriceType } from '@/lib/atelier-db';
 import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
+import { CATEGORY_REQUIREMENT_TEMPLATES } from '@/components/atelier/constants';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const VALID_PRICE_TYPES: ServicePriceType[] = ['fixed', 'quote', 'weekly', 'monthly'];
@@ -46,7 +47,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit, max_revisions } = body;
+    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit, max_revisions, requirement_fields } = body;
 
     if (!category || !VALID_CATEGORIES.includes(category)) {
       return NextResponse.json(
@@ -85,6 +86,10 @@ export async function POST(
       }
     }
 
+    const resolvedFields = Array.isArray(requirement_fields)
+      ? requirement_fields
+      : CATEGORY_REQUIREMENT_TEMPLATES[category as ServiceCategory] ?? undefined;
+
     const service = await createService({
       agent_id: agent.id,
       category,
@@ -97,6 +102,7 @@ export async function POST(
       demo_url: demo_url || undefined,
       quota_limit: quota_limit ?? 0,
       max_revisions: max_revisions ?? 3,
+      requirement_fields: resolvedFields,
     });
 
     return NextResponse.json({ success: true, data: service }, { status: 201 });

@@ -1,4 +1,4 @@
-import type { ServiceCategory } from '@/lib/atelier-db';
+import type { ServiceCategory, RequirementField } from '@/lib/atelier-db';
 
 export const CATEGORY_LABELS: Record<ServiceCategory | 'all', string> = {
   all: 'All',
@@ -32,4 +32,42 @@ export const CATEGORY_ICONS: Record<ServiceCategory | 'all', string> = {
   automation: 'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182',
   consulting: 'M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155',
   custom: 'M11.42 15.17l-5.1-5.1a2.25 2.25 0 010-3.182l.72-.72a2.25 2.25 0 013.182 0l5.1 5.1m-6.9 6.9l5.1 5.1a2.25 2.25 0 003.182 0l.72-.72a2.25 2.25 0 000-3.182l-5.1-5.1m-6.9-6.9L9 3.75m3.75 3.75L9 3.75m0 0L5.25 7.5m3.75-3.75L12.75 7.5',
+};
+
+export const CATEGORY_REQUIREMENT_TEMPLATES: Partial<Record<ServiceCategory, RequirementField[]>> = {
+  coding: [
+    { label: 'Project URL', type: 'url', required: false, placeholder: 'https://github.com/... or live site URL' },
+    { label: 'Tech Stack', type: 'select', required: true, options: ['React', 'Next.js', 'Python', 'Node.js', 'Solana/Rust', 'TypeScript', 'Other'] },
+    { label: 'Scope', type: 'textarea', required: true, placeholder: 'Describe features, requirements, and acceptance criteria...' },
+    { label: 'Deadline', type: 'select', required: false, options: ['ASAP', '1 week', '2 weeks', '1 month', 'Flexible'] },
+  ],
+  seo: [
+    { label: 'Website URL', type: 'url', required: true, placeholder: 'https://yoursite.com' },
+    { label: 'Target Keywords', type: 'textarea', required: false, placeholder: 'Main keywords you want to rank for...' },
+    { label: 'Competitor URLs', type: 'text', required: false, placeholder: 'competitor1.com, competitor2.com' },
+    { label: 'Focus Area', type: 'select', required: true, options: ['Full Audit', 'Technical SEO', 'On-Page Optimization', 'Backlink Analysis', 'Keyword Research'] },
+  ],
+  analytics: [
+    { label: 'Data Source', type: 'url', required: true, placeholder: 'https://yoursite.com or dashboard URL' },
+    { label: 'Metrics to Track', type: 'textarea', required: true, placeholder: 'Traffic, conversions, revenue, bounce rate...' },
+    { label: 'Report Format', type: 'select', required: false, options: ['PDF Report', 'Dashboard Link', 'Spreadsheet', 'Any'] },
+    { label: 'Frequency', type: 'select', required: false, options: ['One-time', 'Weekly', 'Monthly'] },
+  ],
+  trading: [
+    { label: 'Asset / Pair', type: 'text', required: true, placeholder: 'SOL/USDC, BTC/USDT, etc.' },
+    { label: 'Budget (USDC)', type: 'number', required: true, placeholder: '1000' },
+    { label: 'Risk Tolerance', type: 'select', required: true, options: ['Conservative', 'Moderate', 'Aggressive'] },
+    { label: 'Target Exchange/DEX', type: 'select', required: false, options: ['Jupiter', 'Raydium', 'Orca', 'Binance', 'Bybit', 'Other'] },
+  ],
+  automation: [
+    { label: 'Trigger', type: 'text', required: true, placeholder: 'When X happens...' },
+    { label: 'Action', type: 'text', required: true, placeholder: 'Then do Y...' },
+    { label: 'Tools/Services', type: 'textarea', required: false, placeholder: 'Slack, Gmail, Notion, Airtable, etc.' },
+    { label: 'Frequency', type: 'select', required: false, options: ['Real-time', 'Hourly', 'Daily', 'Weekly', 'On-demand'] },
+  ],
+  consulting: [
+    { label: 'Topic', type: 'text', required: true, placeholder: 'Smart contract security, GTM strategy, etc.' },
+    { label: 'Context', type: 'textarea', required: true, placeholder: 'Background info, constraints, and specific questions...' },
+    { label: 'Deliverable Format', type: 'select', required: false, options: ['Written Report', 'Checklist', 'Recommendations Doc', 'Any'] },
+  ],
 };

@@ -45,3 +45,6 @@ THREADS/
 
 # private scripts
 scripts/
+
+# clude
+.mcp.json

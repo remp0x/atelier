@@ -53,8 +53,10 @@ export async function verifySolanaUsdcReceived(
 
   const usdcMintStr = USDC_MINT.toBase58();
 
-  const preAmount = findTokenBalance(preBalances, treasuryAtaStr, usdcMintStr, tx.transaction.message);
-  const postAmount = findTokenBalance(postBalances, treasuryAtaStr, usdcMintStr, tx.transaction.message);
+  const accountKeys = buildAccountKeys(tx);
+
+  const preAmount = findTokenBalance(preBalances, treasuryAtaStr, usdcMintStr, accountKeys);
+  const postAmount = findTokenBalance(postBalances, treasuryAtaStr, usdcMintStr, accountKeys);
 
   const delta = postAmount - preAmount;
   const expectedRaw = Math.round(expectedAmountUsd * 10 ** USDC_DECIMALS);
@@ -94,9 +96,10 @@ export async function verifySolanaUsdcPayment(
   const postBalances = tx.meta?.postTokenBalances ?? [];
 
   const usdcMintStr = USDC_MINT.toBase58();
+  const accountKeys = buildAccountKeys(tx);
 
-  const preAmount = findTokenBalance(preBalances, treasuryAtaStr, usdcMintStr, tx.transaction.message);
-  const postAmount = findTokenBalance(postBalances, treasuryAtaStr, usdcMintStr, tx.transaction.message);
+  const preAmount = findTokenBalance(preBalances, treasuryAtaStr, usdcMintStr, accountKeys);
+  const postAmount = findTokenBalance(postBalances, treasuryAtaStr, usdcMintStr, accountKeys);
 
   const delta = postAmount - preAmount;
   const expectedRaw = Math.round(expectedAmountUsd * 10 ** USDC_DECIMALS);
@@ -117,23 +120,47 @@ export async function verifySolanaUsdcPayment(
   return { verified: true };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function buildAccountKeys(tx: any): string[] {
+  const keys: string[] = [];
+  const message = tx.transaction.message;
+
+  if ('staticAccountKeys' in message) {
+    for (const k of message.staticAccountKeys) {
+      keys.push(k.toBase58());
+    }
+  } else if ('getAccountKeys' in message) {
+    const ak = message.getAccountKeys();
+    const len = ak.length ?? ak.keySegments?.()?.flat()?.length ?? 0;
+    for (let i = 0; i < len; i++) {
+      const k = ak.get(i);
+      if (k) keys.push(k.toBase58());
+      else keys.push('');
+    }
+  }
+
+  const loaded = tx.meta?.loadedAddresses;
+  if (loaded) {
+    for (const addr of loaded.writable ?? []) {
+      keys.push(typeof addr === 'string' ? addr : addr.toBase58());
+    }
+    for (const addr of loaded.readonly ?? []) {
+      keys.push(typeof addr === 'string' ? addr : addr.toBase58());
+    }
+  }
+
+  return keys;
+}
+
 function findTokenBalance(
   balances: Array<{ accountIndex: number; mint: string; uiTokenAmount: { amount: string } }>,
   ataAddress: string,
   mintAddress: string,
-  message: { getAccountKeys: () => { get: (index: number) => PublicKey | null } } | { staticAccountKeys: PublicKey[] },
+  accountKeys: string[],
 ): number {
   for (const b of balances) {
     if (b.mint !== mintAddress) continue;
-
-    let accountKey: string | null = null;
-    if ('getAccountKeys' in message) {
-      const key = message.getAccountKeys().get(b.accountIndex);
-      accountKey = key?.toBase58() ?? null;
-    } else {
-      accountKey = message.staticAccountKeys[b.accountIndex]?.toBase58() ?? null;
-    }
-
+    const accountKey = accountKeys[b.accountIndex] ?? null;
     if (accountKey === ataAddress) {
       return parseInt(b.uiTokenAmount.amount, 10);
     }
@@ -141,22 +168,14 @@ function findTokenBalance(
   return 0;
 }
 
-function getSigners(tx: { transaction: { message: { getAccountKeys: () => { get: (index: number) => PublicKey | null }; length: number } | { staticAccountKeys: PublicKey[]; header: { numRequiredSignatures: number } } } }): PublicKey[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getSigners(tx: any): PublicKey[] {
+  const keys = buildAccountKeys(tx);
   const message = tx.transaction.message;
+  const numSigners = message.header?.numRequiredSignatures ?? 1;
   const result: PublicKey[] = [];
-
-  if ('staticAccountKeys' in message) {
-    const numSigners = message.header.numRequiredSignatures;
-    for (let i = 0; i < numSigners; i++) {
-      if (message.staticAccountKeys[i]) {
-        result.push(message.staticAccountKeys[i]);
-      }
-    }
-  } else if ('getAccountKeys' in message) {
-    const keys = message.getAccountKeys();
-    const key0 = keys.get(0);
-    if (key0) result.push(key0);
+  for (let i = 0; i < numSigners && i < keys.length; i++) {
+    if (keys[i]) result.push(new PublicKey(keys[i]));
   }
-
   return result;
 }

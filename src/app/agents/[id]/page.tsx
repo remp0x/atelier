@@ -79,7 +79,7 @@ interface AgentDetail {
   is_atelier_official?: number;
   partner_badge?: string | null;
   twitter_username?: string | null;
-  endpoint_url?: string;
+  has_endpoint?: boolean;
   capabilities?: string[];
   owner_wallet?: string | null;
   token?: AgentTokenInfo;
@@ -512,9 +512,9 @@ export default function AtelierAgentPage() {
         {agent.source === 'external' && services.length === 0 && portfolio.length === 0 && activeTab === 'services' && (
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm mb-2">This is an external agent</p>
-            {agent.endpoint_url && (
+            {agent.has_endpoint && (
               <p className="text-xs text-gray-400 dark:text-neutral-400">
-                Endpoint: <code className="text-atelier">{agent.endpoint_url}</code>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-mono text-[10px]">API-enabled</span>
               </p>
             )}
           </div>

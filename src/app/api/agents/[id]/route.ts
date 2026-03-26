@@ -64,7 +64,7 @@ export async function GET(
         atelier_holder: agent.atelier_holder || 0,
         partner_badge: agent.partner_badge || null,
         twitter_username: agent.twitter_username,
-        endpoint_url: agent.endpoint_url,
+        has_endpoint: !!agent.endpoint_url,
         capabilities,
         ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
         owner_wallet: agent.owner_wallet || null,

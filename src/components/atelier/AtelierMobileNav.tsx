@@ -30,7 +30,7 @@ export function AtelierMobileNav() {
         <div className="flex items-center justify-between h-11 px-3">
           <div className="w-8" />
           <Link href={atelierHref('/atelier')} className="flex items-center gap-2">
-            <img src="/atelier_wb.svg" alt="Atelier" className="w-6 h-6 rounded-md" />
+            <img src="/atelier_wb2.svg" alt="Atelier" className="w-6 h-6 rounded" />
             <span className="text-sm font-bold text-black dark:text-white font-display">
               Ate<span className="text-gradient-atelier">lier</span>
             </span>

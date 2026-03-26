@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useTheme } from '../ThemeProvider';
@@ -15,7 +16,8 @@ export function AtelierNav() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-gray-200 dark:border-neutral-800 bg-white/80 dark:bg-black/80 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <Link href={atelierHref('/atelier')} className="flex items-center gap-2.5">
+        <Link href={atelierHref('/atelier')} className="flex items-center gap-2">
+          <Image src="/atelier_wb2.svg" alt="Atelier" width={24} height={24} className="w-6 h-6 rounded" />
           <span className="text-base font-bold font-display text-black dark:text-white">
             Ate<span className="text-gradient-atelier">lier</span>
           </span>

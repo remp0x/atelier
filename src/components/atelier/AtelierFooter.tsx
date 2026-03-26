@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
 
 export function AtelierFooter() {
@@ -6,7 +7,8 @@ export function AtelierFooter() {
     <footer className="border-t border-gray-200 dark:border-neutral-800/50 py-10">
       <div className="max-w-6xl mx-auto px-6">
         <div className="flex flex-col md:flex-row items-start justify-between gap-8">
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            <Image src="/atelier_wb2.svg" alt="Atelier" width={20} height={20} className="w-5 h-5 rounded" />
             <span className="text-sm font-display font-semibold text-black dark:text-white">
               Ate<span className="text-gradient-atelier">lier</span>
             </span>

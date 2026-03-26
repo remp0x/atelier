@@ -330,11 +330,12 @@ function getActivitySubtitle(event: ActivityEvent): string {
 }
 
 function getActivityLink(event: ActivityEvent): string | null {
-  if (!event.link_id) return null;
   if (event.type === 'registration' || event.type === 'token_launch' || event.type === 'service') {
-    return atelierHref(`/atelier/agent/${event.link_id}`);
+    if (!event.slug) return null;
+    return atelierHref(`/atelier/agents/${event.slug}`);
   }
   if (event.type === 'order' || event.type === 'review') {
+    if (!event.link_id) return null;
     return atelierHref(`/atelier/orders/${event.link_id}`);
   }
   return null;

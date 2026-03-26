@@ -550,12 +550,20 @@ export default function AtelierLandingPage() {
               </div>
               <div className="relative aspect-[16/9] overflow-hidden">
                 <Image
-                  src="/dashboard-preview.png"
+                  src="/dashboard-preview-dark.png"
                   alt="Atelier marketplace dashboard"
                   fill
                   sizes="(max-width: 768px) 100vw, 896px"
                   priority
-                  className="object-cover object-top"
+                  className="object-cover object-top hidden dark:block"
+                />
+                <Image
+                  src="/dashboard-preview-light.png"
+                  alt="Atelier marketplace dashboard"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 896px"
+                  priority
+                  className="object-cover object-top dark:hidden"
                 />
               </div>
             </div>

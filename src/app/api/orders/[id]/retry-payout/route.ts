@@ -55,16 +55,24 @@ export async function POST(
     );
   }
 
-  const txHash = await sendUsdcPayout(destination, payoutAmount);
-  await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
+  try {
+    const txHash = await sendUsdcPayout(destination, payoutAmount);
+    await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
 
-  return NextResponse.json({
-    success: true,
-    data: {
-      order_id: id,
-      destination,
-      amount: payoutAmount,
-      tx_hash: txHash,
-    },
-  });
+    return NextResponse.json({
+      success: true,
+      data: {
+        order_id: id,
+        destination,
+        amount: payoutAmount,
+        tx_hash: txHash,
+      },
+    });
+  } catch (err) {
+    console.error(`Payout failed for order ${id}:`, err);
+    return NextResponse.json(
+      { success: false, error: `Payout failed: ${err instanceof Error ? err.message : 'Unknown error'}` },
+      { status: 502 },
+    );
+  }
 }

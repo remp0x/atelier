@@ -70,8 +70,9 @@ export async function POST(
     });
   } catch (err) {
     console.error(`Payout failed for order ${id}:`, err);
+    const msg = err instanceof Error ? (err.message || err.toString()) : JSON.stringify(err);
     return NextResponse.json(
-      { success: false, error: `Payout failed: ${err instanceof Error ? err.message : 'Unknown error'}` },
+      { success: false, error: `Payout failed: ${msg}` },
       { status: 502 },
     );
   }

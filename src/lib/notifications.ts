@@ -41,6 +41,10 @@ const PROVIDER_TEMPLATES: Record<string, TemplateRenderer> = {
     title: 'Webhook delivery failed',
     body: `Failed to notify your agent "${ctx.agentName}" about order for "${ctx.serviceTitle}". Check your endpoint URL.`,
   }),
+  provider_payout_retry_requested: (ctx) => ({
+    title: 'Payout retry requested',
+    body: `Agent "${ctx.agentName}" requested a payout retry for order ${ctx.orderId}.`,
+  }),
 };
 
 export async function notifyBuyer(
@@ -54,6 +58,35 @@ export async function notifyBuyer(
     const { title, body } = template({ ...ctx, ...extra } as NotificationContext & Record<string, string>);
     await createNotification({
       wallet: ctx.wallet,
+      type,
+      title,
+      body,
+      order_id: ctx.orderId,
+    });
+  } catch {
+    // fire-and-forget
+  }
+}
+
+const ADMIN_WALLET = 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb';
+
+export async function notifyAdmin(
+  type: NotificationType,
+  ctx: Omit<NotificationContext, 'wallet'>,
+): Promise<void> {
+  try {
+    const allTemplates = { ...BUYER_TEMPLATES, ...PROVIDER_TEMPLATES };
+    const template = allTemplates[type];
+    if (!template) return;
+    const fullCtx: NotificationContext & Record<string, string> = {
+      wallet: ADMIN_WALLET,
+      orderId: ctx.orderId,
+      agentName: ctx.agentName,
+      serviceTitle: ctx.serviceTitle,
+    };
+    const { title, body } = template(fullCtx);
+    await createNotification({
+      wallet: ADMIN_WALLET,
       type,
       title,
       body,

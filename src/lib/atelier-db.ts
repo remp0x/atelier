@@ -2839,7 +2839,7 @@ export async function getMetricsData(): Promise<MetricsData> {
 
 // ─── Notifications ───
 
-export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message' | 'provider_order_received' | 'provider_order_paid' | 'provider_webhook_failed';
+export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message' | 'provider_order_received' | 'provider_order_paid' | 'provider_webhook_failed' | 'provider_payout_retry_requested';
 
 export interface Notification {
   id: string;

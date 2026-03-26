@@ -934,6 +934,8 @@ export default function AtelierOrderPage() {
   const [cancelling, setCancelling] = useState(false);
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [retryingPayout, setRetryingPayout] = useState(false);
+  const [retryPayoutMsg, setRetryPayoutMsg] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/orders/${params.id}`);
@@ -1257,6 +1259,54 @@ export default function AtelierOrderPage() {
                     </svg>
                     Hire {order.provider_name} Again
                   </Link>
+                )}
+
+                {/* Admin: Retry Payout */}
+                {order.status === 'completed' && !order.payout_tx_hash && walletAddress === 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb' && (
+                  <div className="p-3 rounded-lg border border-amber-400/30 bg-amber-400/5">
+                    <p className="text-2xs font-mono text-amber-400/70 mb-2">Payout missing for this order</p>
+                    {retryPayoutMsg && (
+                      <p className={`text-2xs font-mono mb-2 ${retryPayoutMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>
+                        {retryPayoutMsg}
+                      </p>
+                    )}
+                    <button
+                      onClick={async () => {
+                        const adminKey = prompt('Admin key:');
+                        if (!adminKey) return;
+                        setRetryingPayout(true);
+                        setRetryPayoutMsg(null);
+                        try {
+                          const res = await fetch(`/api/orders/${order.id}/retry-payout`, {
+                            method: 'POST',
+                            headers: { Authorization: `Bearer ${adminKey}` },
+                          });
+                          const json = await res.json();
+                          if (json.success) {
+                            setRetryPayoutMsg(`Payout sent: ${json.data.tx_hash}`);
+                            load();
+                          } else {
+                            setRetryPayoutMsg(`Error: ${json.error}`);
+                          }
+                        } catch (e) {
+                          setRetryPayoutMsg(`Error: ${e instanceof Error ? e.message : 'Failed'}`);
+                        } finally {
+                          setRetryingPayout(false);
+                        }
+                      }}
+                      disabled={retryingPayout}
+                      className="w-full py-2 rounded border border-amber-400 text-amber-400 text-xs font-mono font-medium hover:bg-amber-400/10 disabled:opacity-50 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      {retryingPayout ? (
+                        <>
+                          <div className="w-3 h-3 border-2 border-amber-400/40 border-t-amber-400 rounded-full animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        'Retry Payout'
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
 

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
-import type { MetricsData } from '@/lib/atelier-db';
+import type { MetricsData, ActivityType, ActivityEvent } from '@/lib/atelier-db';
 
 const STATUS_LABELS: Record<string, string> = {
   pending_quote: 'Pending Quote',
@@ -272,7 +272,206 @@ function MetricsContent() {
           </div>
         </section>
       )}
+
+      {/* Activity Feed */}
+      <ActivityFeed />
     </div>
+  );
+}
+
+const ACTIVITY_FILTERS: { key: ActivityType | 'all'; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'registration', label: 'Registrations' },
+  { key: 'order', label: 'Orders' },
+  { key: 'service', label: 'Services' },
+  { key: 'review', label: 'Reviews' },
+  { key: 'token_launch', label: 'Tokens' },
+];
+
+const ACTIVITY_TYPE_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
+  registration: { label: 'Registration', color: 'text-violet-400', dot: 'bg-violet-400' },
+  order: { label: 'Order', color: 'text-amber-400', dot: 'bg-amber-400' },
+  service: { label: 'Service', color: 'text-emerald-400', dot: 'bg-emerald-400' },
+  review: { label: 'Review', color: 'text-cyan-400', dot: 'bg-cyan-400' },
+  token_launch: { label: 'Token', color: 'text-pink-400', dot: 'bg-pink-400' },
+};
+
+function formatRelativeTime(ts: string): string {
+  const now = Date.now();
+  const then = new Date(ts).getTime();
+  const diff = now - then;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function getActivitySubtitle(event: ActivityEvent): string {
+  if (event.type === 'order' && event.subtitle) {
+    return STATUS_LABELS[event.subtitle] || event.subtitle;
+  }
+  if (event.type === 'service' && event.subtitle) {
+    return CATEGORY_LABELS[event.subtitle] || event.subtitle;
+  }
+  if (event.type === 'review' && event.subtitle) {
+    return `${'*'.repeat(Number(event.subtitle))} ${event.subtitle}/5`;
+  }
+  if (event.type === 'token_launch' && event.subtitle) {
+    return `$${event.subtitle}`;
+  }
+  if (event.type === 'registration' && event.subtitle) {
+    return `${event.subtitle.slice(0, 4)}...${event.subtitle.slice(-4)}`;
+  }
+  return '';
+}
+
+function getActivityLink(event: ActivityEvent): string | null {
+  if (!event.link_id) return null;
+  if (event.type === 'registration' || event.type === 'token_launch' || event.type === 'service') {
+    return atelierHref(`/atelier/agent/${event.link_id}`);
+  }
+  if (event.type === 'order' || event.type === 'review') {
+    return atelierHref(`/atelier/orders/${event.link_id}`);
+  }
+  return null;
+}
+
+const PAGE_SIZE = 20;
+
+function ActivityFeed() {
+  const [filter, setFilter] = useState<ActivityType | 'all'>('all');
+  const [events, setEvents] = useState<ActivityEvent[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+
+  const fetchActivity = useCallback(async (f: ActivityType | 'all', p: number) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/metrics/activity?filter=${f}&limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}`);
+      const json = await res.json();
+      if (json.success) {
+        setEvents(json.data.events);
+        setTotal(json.data.total);
+      }
+    } catch {
+      // non-critical
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchActivity(filter, page);
+  }, [filter, page, fetchActivity]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  return (
+    <section>
+      <h2 className="text-lg font-bold font-display mb-3">Activity Feed</h2>
+
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+        {ACTIVITY_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => { setFilter(f.key); setPage(0); }}
+            className={`px-3 py-1.5 rounded-full text-xs font-mono whitespace-nowrap transition-colors cursor-pointer ${
+              filter === f.key
+                ? 'bg-atelier text-white'
+                : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-lg border border-gray-200 dark:border-neutral-800 overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-5 h-5 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : events.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <p className="text-neutral-500 font-mono text-xs">No activity found</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-200 dark:divide-neutral-800">
+            {events.map((event) => {
+              const config = ACTIVITY_TYPE_CONFIG[event.type];
+              const link = getActivityLink(event);
+              const subtitle = getActivitySubtitle(event);
+
+              const content = (
+                <div className="flex items-center gap-3 px-4 py-3 group">
+                  {event.avatar_url ? (
+                    <Image src={event.avatar_url} alt="" width={28} height={28} className="w-7 h-7 rounded-full flex-shrink-0" />
+                  ) : (
+                    <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-gray-100 dark:bg-neutral-800`}>
+                      <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono truncate">{event.title}</span>
+                      {subtitle && (
+                        <span className="text-[10px] font-mono text-neutral-500 truncate hidden sm:inline">{subtitle}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 ${config.color} flex-shrink-0`}>
+                    {config.label}
+                  </span>
+
+                  <span className="text-[10px] font-mono text-neutral-500 flex-shrink-0 w-16 text-right">
+                    {formatRelativeTime(event.timestamp)}
+                  </span>
+                </div>
+              );
+
+              return link ? (
+                <Link key={`${event.type}-${event.id}`} href={link} className="block hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors">
+                  {content}
+                </Link>
+              ) : (
+                <div key={`${event.type}-${event.id}`}>
+                  {content}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-black-soft border-t border-gray-200 dark:border-neutral-800">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="text-xs font-mono text-neutral-500 hover:text-atelier disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-[10px] font-mono text-neutral-500">
+              {page + 1} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="text-xs font-mono text-neutral-500 hover:text-atelier disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

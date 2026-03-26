@@ -2837,6 +2837,102 @@ export async function getMetricsData(): Promise<MetricsData> {
   };
 }
 
+// ─── Activity Feed ───
+
+export type ActivityType = 'registration' | 'order' | 'service' | 'review' | 'token_launch';
+
+export interface ActivityEvent {
+  type: ActivityType;
+  id: string;
+  title: string;
+  subtitle: string | null;
+  timestamp: string;
+  avatar_url: string | null;
+  link_id: string | null;
+}
+
+export async function getActivityFeed(
+  filter: ActivityType | 'all' = 'all',
+  limit = 50,
+  offset = 0,
+): Promise<{ events: ActivityEvent[]; total: number }> {
+  await initAtelierDb();
+
+  const unions: string[] = [];
+
+  if (filter === 'all' || filter === 'registration') {
+    unions.push(`
+      SELECT 'registration' as type, id, name as title, owner_wallet as subtitle,
+             created_at as timestamp, avatar_url, id as link_id
+      FROM atelier_agents WHERE active = 1
+    `);
+  }
+
+  if (filter === 'all' || filter === 'order') {
+    unions.push(`
+      SELECT 'order' as type, so.id, s.title as title, so.status as subtitle,
+             so.created_at as timestamp,
+             (SELECT a.avatar_url FROM atelier_agents a WHERE a.id = so.provider_agent_id) as avatar_url,
+             so.id as link_id
+      FROM service_orders so
+      JOIN services s ON s.id = so.service_id
+    `);
+  }
+
+  if (filter === 'all' || filter === 'service') {
+    unions.push(`
+      SELECT 'service' as type, s.id, s.title as title, s.category as subtitle,
+             s.created_at as timestamp,
+             (SELECT a.avatar_url FROM atelier_agents a WHERE a.id = s.agent_id) as avatar_url,
+             s.agent_id as link_id
+      FROM services s WHERE s.active = 1
+    `);
+  }
+
+  if (filter === 'all' || filter === 'review') {
+    unions.push(`
+      SELECT 'review' as type, sr.id, sr.reviewer_name as title,
+             CAST(sr.rating AS TEXT) as subtitle,
+             sr.created_at as timestamp,
+             NULL as avatar_url,
+             sr.order_id as link_id
+      FROM service_reviews sr
+    `);
+  }
+
+  if (filter === 'all' || filter === 'token_launch') {
+    unions.push(`
+      SELECT 'token_launch' as type, id, name as title, token_symbol as subtitle,
+             token_created_at as timestamp, avatar_url, id as link_id
+      FROM atelier_agents WHERE token_mint IS NOT NULL AND token_created_at IS NOT NULL
+    `);
+  }
+
+  if (unions.length === 0) return { events: [], total: 0 };
+
+  const unionQuery = unions.join(' UNION ALL ');
+
+  const [countResult, dataResult] = await Promise.all([
+    atelierClient.execute(`SELECT COUNT(*) as total FROM (${unionQuery})`),
+    atelierClient.execute(
+      `SELECT * FROM (${unionQuery}) ORDER BY timestamp DESC LIMIT ${limit} OFFSET ${offset}`
+    ),
+  ]);
+
+  const total = Number(countResult.rows[0].total);
+  const events: ActivityEvent[] = dataResult.rows.map((row) => ({
+    type: String(row.type) as ActivityType,
+    id: String(row.id),
+    title: String(row.title ?? ''),
+    subtitle: row.subtitle ? String(row.subtitle) : null,
+    timestamp: String(row.timestamp),
+    avatar_url: row.avatar_url ? String(row.avatar_url) : null,
+    link_id: row.link_id ? String(row.link_id) : null,
+  }));
+
+  return { events, total };
+}
+
 // ─── Notifications ───
 
 export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message' | 'provider_order_received' | 'provider_order_paid' | 'provider_webhook_failed' | 'provider_payout_retry_requested';

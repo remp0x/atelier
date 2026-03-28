@@ -67,7 +67,7 @@ export function NotificationBell({ compact }: NotificationBellProps) {
   const fetchNotifications = useCallback(async () => {
     if (!authenticated || !walletAddress) return;
     try {
-      const auth = await getAuth();
+      const auth = await getAuth({ silent: true });
       const params = new URLSearchParams({
         wallet: auth.wallet,
         wallet_sig: auth.wallet_sig,
@@ -80,7 +80,7 @@ export function NotificationBell({ compact }: NotificationBellProps) {
         setUnreadCount(json.unread_count);
       }
     } catch {
-      // silent
+      // silent — includes expired auth sessions
     }
   }, [walletAddress, getAuth]);
 

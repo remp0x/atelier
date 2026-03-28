@@ -105,7 +105,7 @@ interface AtelierAuthContextValue {
   user: User | null;
   walletAddress: string | null;
   walletReady: boolean;
-  getAuth: () => Promise<WalletAuthPayload>;
+  getAuth: (opts?: { silent?: boolean }) => Promise<WalletAuthPayload>;
   clearAuth: () => void;
   getSignableWallet: () => SignableWallet | null;
   getTransactionWallet: () => TransactionSignableWallet | null;
@@ -169,7 +169,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     };
   }, [solanaWallet, walletAddress]);
 
-  const getAuth = useCallback(async (): Promise<WalletAuthPayload> => {
+  const getAuth = useCallback(async (opts?: { silent?: boolean }): Promise<WalletAuthPayload> => {
     const cached = cacheRef.current;
     if (cached && cached.payload.wallet === walletAddress && Date.now() - cached.ts < SESSION_TTL) {
       return cached.payload;
@@ -185,6 +185,10 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
         cacheRef.current = stored;
         return stored.payload;
       }
+    }
+
+    if (opts?.silent) {
+      throw new Error('Auth session expired');
     }
 
     const wallet = getSignableWallet();

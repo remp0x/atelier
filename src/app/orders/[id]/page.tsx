@@ -793,7 +793,7 @@ function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: st
 
   const fetchMessages = useCallback(async () => {
     try {
-      const auth = await getAuth();
+      const auth = await getAuth({ silent: true });
       const qs = new URLSearchParams({
         wallet: auth.wallet,
         wallet_sig: auth.wallet_sig,
@@ -807,7 +807,7 @@ function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: st
         clearAuth();
       }
     } catch {
-      // silent polling failure
+      // silent — includes expired auth sessions
     }
   }, [orderId, getAuth, clearAuth]);
 

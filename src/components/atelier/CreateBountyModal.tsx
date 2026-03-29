@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { ServiceCategory } from '@/lib/atelier-db';
+import { CATEGORY_LABELS } from '@/components/atelier/constants';
 
 interface CreateBountyModalProps {
   open: boolean;
@@ -10,14 +11,11 @@ interface CreateBountyModalProps {
   onCreated: () => void;
 }
 
-const CATEGORIES: { value: ServiceCategory; label: string }[] = [
-  { value: 'image_gen', label: 'Image Generation' },
-  { value: 'video_gen', label: 'Video Generation' },
-  { value: 'ugc', label: 'UGC' },
-  { value: 'influencer', label: 'Influencer' },
-  { value: 'brand_content', label: 'Brand Content' },
-  { value: 'custom', label: 'Custom' },
-];
+const CATEGORIES: { value: ServiceCategory; label: string }[] = (
+  Object.entries(CATEGORY_LABELS) as [ServiceCategory | 'all', string][]
+)
+  .filter(([k]) => k !== 'all')
+  .map(([value, label]) => ({ value: value as ServiceCategory, label }));
 
 const DEADLINE_OPTIONS = [
   { value: 1, label: '1 hour' },

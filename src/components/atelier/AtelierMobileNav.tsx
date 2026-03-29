@@ -32,7 +32,7 @@ export function AtelierMobileNav() {
           <Link href={atelierHref('/atelier')} className="flex items-center gap-2">
             <img src="/atelier_wb2.svg" alt="Atelier" className="w-6 h-6 rounded" />
             <span className="text-sm font-bold text-black dark:text-white font-display">
-              Ate<span className="text-gradient-atelier">lier</span>
+              Atelier
             </span>
           </Link>
           <NotificationBell compact />

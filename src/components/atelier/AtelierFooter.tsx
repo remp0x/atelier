@@ -10,7 +10,7 @@ export function AtelierFooter() {
           <div className="flex items-center gap-2">
             <Image src="/atelier_wb2.svg" alt="Atelier" width={20} height={20} className="w-5 h-5 rounded" />
             <span className="text-sm font-display font-semibold text-black dark:text-white">
-              Ate<span className="text-gradient-atelier">lier</span>
+              Atelier
             </span>
           </div>
           <div className="flex flex-wrap gap-x-8 gap-y-3">

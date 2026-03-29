@@ -19,7 +19,7 @@ export function AtelierNav() {
         <Link href={atelierHref('/atelier')} className="flex items-center gap-2">
           <Image src="/atelier_wb2.svg" alt="Atelier" width={24} height={24} className="w-6 h-6 rounded" />
           <span className="text-base font-bold font-display text-black dark:text-white">
-            Ate<span className="text-gradient-atelier">lier</span>
+            Atelier
           </span>
         </Link>
 

@@ -463,7 +463,7 @@ export default function AtelierLandingPage() {
             </a>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold font-display leading-[0.95] tracking-tight mb-6">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[0.95] tracking-tight mb-6" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
             Hire an AI Agent.
             <br />
             <span className="text-gradient-atelier">Get it Done.</span>

@@ -6,6 +6,7 @@ import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderSta
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { verifySolanaUsdcPayment, verifySolanaUsdcReceived } from '@/lib/solana-verify';
 import { sendUsdcPayout } from '@/lib/solana-payout';
 import { notifyAgentWebhook } from '@/lib/webhook';
@@ -87,9 +88,9 @@ export async function PATCH(
     const body = await request.json();
     const { action } = body;
 
-    if (!body.wallet || !action) {
+    if (!action) {
       return NextResponse.json(
-        { success: false, error: 'wallet, action, wallet_sig, and wallet_sig_ts are required' },
+        { success: false, error: 'action is required' },
         { status: 400 },
       );
     }
@@ -100,11 +101,53 @@ export async function PATCH(
     }
 
     let wallet: string;
-    try {
-      wallet = requireWalletAuth(body, order.client_wallet);
-    } catch (err) {
-      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
-      return NextResponse.json({ success: false, error: msg }, { status: 401 });
+    if (action === 'pay') {
+      if (!body.wallet) {
+        return NextResponse.json(
+          { success: false, error: 'Wallet signature required for pay action' },
+          { status: 400 },
+        );
+      }
+      try {
+        wallet = requireWalletAuth(body, order.client_wallet);
+      } catch (err) {
+        const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+        return NextResponse.json({ success: false, error: msg }, { status: 401 });
+      }
+    } else {
+      const authHeader = request.headers.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        try {
+          const agent = await resolveExternalAgentByApiKey(request);
+          if (agent.id !== order.client_agent_id) {
+            return NextResponse.json(
+              { success: false, error: 'Agent is not the client on this order' },
+              { status: 403 },
+            );
+          }
+          wallet = agent.owner_wallet ?? order.client_wallet ?? '';
+        } catch (err) {
+          if (err instanceof AuthError) {
+            return NextResponse.json(
+              { success: false, error: err.message },
+              { status: err.statusCode },
+            );
+          }
+          throw err;
+        }
+      } else if (body.wallet) {
+        try {
+          wallet = requireWalletAuth(body, order.client_wallet);
+        } catch (err) {
+          const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+          return NextResponse.json({ success: false, error: msg }, { status: 401 });
+        }
+      } else {
+        return NextResponse.json(
+          { success: false, error: 'Authentication required: Bearer api_key or wallet signature' },
+          { status: 401 },
+        );
+      }
     }
 
     const allowedStatuses = VALID_TRANSITIONS[action as string];

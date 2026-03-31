@@ -36,6 +36,7 @@ export type {
   CreateServiceInput,
   ListServicesParams,
   ListOrdersParams,
+  DeliverableItem,
   DeliverOrderInput,
   SendMessageInput,
   ListBountiesParams,

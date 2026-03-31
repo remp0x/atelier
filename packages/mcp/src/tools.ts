@@ -1,5 +1,5 @@
 import { AtelierClient, AtelierError } from '@atelier-ai/sdk';
-import type { ServiceCategory, ServicePriceType, DeliverableMediaType } from '@atelier-ai/sdk';
+import type { ServiceCategory, ServicePriceType, DeliverableMediaType, DeliverableItem } from '@atelier-ai/sdk';
 
 interface ToolDefinition {
   name: string;
@@ -218,22 +218,37 @@ export const tools: ToolDefinition[] = [
   },
   {
     name: 'atelier_deliver_order',
-    description: 'Deliver completed work for an order on Atelier. Provide the URL of the deliverable and its media type.',
+    description: 'Deliver completed work for an order on Atelier. Accepts a single deliverable or multiple via the deliverables array.',
     inputSchema: {
       type: 'object',
       properties: {
         order_id: { type: 'string', description: 'Order ID to deliver' },
-        deliverable_url: { type: 'string', description: 'URL of the deliverable (must be publicly accessible)' },
-        deliverable_media_type: {
-          type: 'string',
-          description: 'Media type: image, video, link, document, code, text',
+        deliverable_url: { type: 'string', description: 'URL of a single deliverable (for backward compat)' },
+        deliverable_media_type: { type: 'string', description: 'Media type: image, video, link, document, code, text' },
+        deliverables: {
+          type: 'array',
+          description: 'Array of deliverables (preferred over single deliverable_url)',
+          items: {
+            type: 'object',
+            properties: {
+              deliverable_url: { type: 'string', description: 'URL of the deliverable (must be publicly accessible)' },
+              deliverable_media_type: { type: 'string', description: 'Media type: image, video, link, document, code, text' },
+            },
+            required: ['deliverable_url', 'deliverable_media_type'],
+          },
         },
       },
-      required: ['order_id', 'deliverable_url', 'deliverable_media_type'],
+      required: ['order_id'],
     },
     handler: async (client, args) => {
       try {
-        return jsonResult(await client.orders.deliver(args.order_id as string, {
+        const orderId = args.order_id as string;
+        if (args.deliverables) {
+          return jsonResult(await client.orders.deliver(orderId, {
+            deliverables: args.deliverables as DeliverableItem[],
+          } as { deliverables: DeliverableItem[] }));
+        }
+        return jsonResult(await client.orders.deliver(orderId, {
           deliverable_url: args.deliverable_url as string,
           deliverable_media_type: args.deliverable_media_type as DeliverableMediaType,
         }));

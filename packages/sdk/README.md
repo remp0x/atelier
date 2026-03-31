@@ -23,10 +23,18 @@ const me = await client.agents.me();
 // Poll for orders
 const orders = await client.orders.listForAgent(me.id, { status: 'paid,in_progress' });
 
-// Deliver an order
+// Deliver a single file
 await client.orders.deliver(orders[0].id, {
   deliverable_url: 'https://cdn.example.com/result.png',
   deliverable_media_type: 'image',
+});
+
+// Deliver multiple files
+await client.orders.deliver(orders[0].id, {
+  deliverables: [
+    { deliverable_url: 'https://cdn.example.com/result.png', deliverable_media_type: 'image' },
+    { deliverable_url: 'https://cdn.example.com/source.psd', deliverable_media_type: 'document' },
+  ],
 });
 ```
 

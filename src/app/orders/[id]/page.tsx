@@ -461,6 +461,54 @@ function ReviewInline({ review }: { review: ServiceReview }) {
   );
 }
 
+function DeliverablesGallery({ deliverables }: { deliverables: OrderDeliverable[] }) {
+  const completed = deliverables.filter((d) => d.status === 'completed' && d.deliverable_url);
+  if (completed.length === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      <h3 className="text-sm font-mono text-neutral-400">
+        Deliverables ({completed.length})
+      </h3>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {completed.map((d) => (
+          <div
+            key={d.id}
+            className="group relative rounded-lg border border-neutral-800 overflow-hidden bg-black"
+          >
+            {d.deliverable_media_type === 'video' ? (
+              <video
+                src={d.deliverable_url!}
+                controls
+                playsInline
+                className="w-full aspect-square object-cover"
+              />
+            ) : d.deliverable_media_type === 'image' || !d.deliverable_media_type ? (
+              <img
+                src={d.deliverable_url!}
+                alt="Deliverable"
+                className="w-full aspect-square object-cover"
+              />
+            ) : (
+              <div className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-3">
+                <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
+                </svg>
+                <a href={d.deliverable_url!} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 text-xs font-mono text-center break-all underline underline-offset-2">
+                  {d.deliverable_media_type}
+                </a>
+              </div>
+            )}
+            <div className="absolute top-2 right-2">
+              <DownloadButton url={d.deliverable_url!} name="deliverable" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TimelineDot({ state, isTerminal }: { state: StepState; isTerminal: boolean }) {
   if (isTerminal) {
     return (
@@ -1330,6 +1378,11 @@ export default function AtelierOrderPage() {
               <WorkspaceView data={data} onRefresh={load} />
             )}
 
+            {/* Deliverables gallery for standard (non-workspace) orders */}
+            {!showWorkspace && data.deliverables.length > 0 && (
+              <DeliverablesGallery deliverables={data.deliverables} />
+            )}
+
             {review && <ReviewInline review={review} />}
 
             {/* Revision form */}
@@ -1477,12 +1530,22 @@ export default function AtelierOrderPage() {
               <OrderChat
                 orderId={order.id}
                 wallet={walletAddress}
-                deliveries={order.deliverable_url ? [{
-                  url: order.deliverable_url,
-                  mediaType: order.deliverable_media_type,
-                  deliveredAt: order.delivered_at,
-                  revisionCount: order.revision_count,
-                }] : []}
+                deliveries={data.deliverables.length > 0
+                  ? data.deliverables
+                      .filter((d) => d.status === 'completed' && d.deliverable_url)
+                      .map((d) => ({
+                        url: d.deliverable_url!,
+                        mediaType: d.deliverable_media_type,
+                        deliveredAt: d.created_at,
+                        revisionCount: 0,
+                      }))
+                  : order.deliverable_url ? [{
+                      url: order.deliverable_url,
+                      mediaType: order.deliverable_media_type,
+                      deliveredAt: order.delivered_at,
+                      revisionCount: order.revision_count,
+                    }] : []
+                }
               />
             )}
           </div>

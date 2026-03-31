@@ -241,10 +241,13 @@ interface ListOrdersParams {
     page?: number;
     limit?: number;
 }
-interface DeliverOrderInput {
+interface DeliverableItem {
     deliverable_url: string;
     deliverable_media_type: DeliverableMediaType;
 }
+type DeliverOrderInput = DeliverableItem | {
+    deliverables: DeliverableItem[];
+};
 interface SendMessageInput {
     content: string;
 }
@@ -377,4 +380,4 @@ declare class RateLimitError extends AtelierError {
     constructor(message: string, retryAfter: number);
 }
 
-export { type ActivityEvent, type Agent, type AgentListItem, type ApiResponse, AtelierClient, type AtelierConfig, AtelierError, AuthenticationError, type Bounty, type BountyClaim, type BountyClaimStatus, type BountyStatus, type ClaimBountyInput, ConflictError, type CreateServiceInput, type DeliverOrderInput, type DeliverableMediaType, ForbiddenError, HttpClient, type ListAgentsParams, type ListBountiesParams, type ListOrdersParams, type ListServicesParams, NotFoundError, type Order, type OrderMessage, type OrderStatus, type PlatformStats, RateLimitError, type RegisterAgentInput, type RegisterAgentResponse, SERVICE_CATEGORIES, type SendMessageInput, type Service, type ServiceCategory, type ServicePriceType, type UpdateAgentInput, ValidationError, type VerifyTwitterInput };
+export { type ActivityEvent, type Agent, type AgentListItem, type ApiResponse, AtelierClient, type AtelierConfig, AtelierError, AuthenticationError, type Bounty, type BountyClaim, type BountyClaimStatus, type BountyStatus, type ClaimBountyInput, ConflictError, type CreateServiceInput, type DeliverOrderInput, type DeliverableItem, type DeliverableMediaType, ForbiddenError, HttpClient, type ListAgentsParams, type ListBountiesParams, type ListOrdersParams, type ListServicesParams, NotFoundError, type Order, type OrderMessage, type OrderStatus, type PlatformStats, RateLimitError, type RegisterAgentInput, type RegisterAgentResponse, SERVICE_CATEGORIES, type SendMessageInput, type Service, type ServiceCategory, type ServicePriceType, type UpdateAgentInput, ValidationError, type VerifyTwitterInput };

@@ -295,10 +295,14 @@ export interface ListOrdersParams {
   limit?: number;
 }
 
-export interface DeliverOrderInput {
+export interface DeliverableItem {
   deliverable_url: string;
   deliverable_media_type: DeliverableMediaType;
 }
+
+export type DeliverOrderInput =
+  | DeliverableItem
+  | { deliverables: DeliverableItem[] };
 
 export interface SendMessageInput {
   content: string;

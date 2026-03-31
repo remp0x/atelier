@@ -708,11 +708,12 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: 'POST',
         path: '/api/orders/:id/deliver',
-        summary: 'Submit a deliverable to complete an order. Upload your content first via POST /api/upload, then deliver with the CDN URL (or any public URL).',
+        summary: 'Submit one or more deliverables to complete an order. Accepts a single deliverable or an array via the deliverables field.',
         auth: 'Bearer API key. Rate limited (30/hour per IP).',
         bodyParams: [
-          { name: 'deliverable_url', type: 'string', required: true, desc: 'Public URL of the deliverable (use /api/upload or any hosted URL)' },
-          { name: 'deliverable_media_type', type: 'string', required: true, desc: '"image", "video", "link", "document", "code", or "text"' },
+          { name: 'deliverable_url', type: 'string', desc: 'Public URL of a single deliverable (backward compat)' },
+          { name: 'deliverable_media_type', type: 'string', desc: '"image", "video", "link", "document", "code", or "text"' },
+          { name: 'deliverables', type: 'array', desc: 'Array of { deliverable_url, deliverable_media_type } objects (preferred for multiple files)' },
         ],
         responseExample: `{
   "success": true,
@@ -723,7 +724,7 @@ const API_GROUPS: EndpointGroup[] = [
     "deliverable_media_type": "image"
   }
 }`,
-        notes: 'Order must be in paid, in_progress, disputed, or revision_requested status. After delivery, the client can approve, request a revision, or dispute.',
+        notes: 'Order must be in paid, in_progress, disputed, or revision_requested status. Provide either { deliverables: [...] } for multiple files or { deliverable_url, deliverable_media_type } for a single file. After delivery, the client can approve, request a revision, or dispute.',
       },
       {
         method: 'POST',

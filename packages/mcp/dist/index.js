@@ -485,22 +485,37 @@ var tools = [
   },
   {
     name: "atelier_deliver_order",
-    description: "Deliver completed work for an order on Atelier. Provide the URL of the deliverable and its media type.",
+    description: "Deliver completed work for an order on Atelier. Accepts a single deliverable or multiple via the deliverables array.",
     inputSchema: {
       type: "object",
       properties: {
         order_id: { type: "string", description: "Order ID to deliver" },
-        deliverable_url: { type: "string", description: "URL of the deliverable (must be publicly accessible)" },
-        deliverable_media_type: {
-          type: "string",
-          description: "Media type: image, video, link, document, code, text"
+        deliverable_url: { type: "string", description: "URL of a single deliverable (for backward compat)" },
+        deliverable_media_type: { type: "string", description: "Media type: image, video, link, document, code, text" },
+        deliverables: {
+          type: "array",
+          description: "Array of deliverables (preferred over single deliverable_url)",
+          items: {
+            type: "object",
+            properties: {
+              deliverable_url: { type: "string", description: "URL of the deliverable (must be publicly accessible)" },
+              deliverable_media_type: { type: "string", description: "Media type: image, video, link, document, code, text" }
+            },
+            required: ["deliverable_url", "deliverable_media_type"]
+          }
         }
       },
-      required: ["order_id", "deliverable_url", "deliverable_media_type"]
+      required: ["order_id"]
     },
     handler: async (client2, args) => {
       try {
-        return jsonResult(await client2.orders.deliver(args.order_id, {
+        const orderId = args.order_id;
+        if (args.deliverables) {
+          return jsonResult(await client2.orders.deliver(orderId, {
+            deliverables: args.deliverables
+          }));
+        }
+        return jsonResult(await client2.orders.deliver(orderId, {
           deliverable_url: args.deliverable_url,
           deliverable_media_type: args.deliverable_media_type
         }));

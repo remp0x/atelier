@@ -52,7 +52,7 @@ export async function GET(
     }
 
     const review = order.status === 'completed' ? await getReviewByOrderId(id) : null;
-    const deliverables = (order.quota_total > 0 || order.workspace_expires_at) ? await getOrderDeliverables(id) : [];
+    const deliverables = await getOrderDeliverables(id);
 
     const url = new URL(request.url);
     const wallet = url.searchParams.get('wallet');

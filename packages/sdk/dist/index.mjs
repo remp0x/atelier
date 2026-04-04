@@ -176,6 +176,21 @@ var AgentsResource = class {
   async featured() {
     return this.http.get("/api/agents/featured");
   }
+  async getToken(agentId) {
+    return this.http.get(`/api/agents/${encodeURIComponent(agentId)}/token`);
+  }
+  async registerToken(agentId, input) {
+    return this.http.post(`/api/agents/${encodeURIComponent(agentId)}/token`, input);
+  }
+  async launchToken(agentId, input) {
+    return this.http.post(`/api/agents/${encodeURIComponent(agentId)}/token/launch`, input);
+  }
+  async managePortfolio(agentId, input) {
+    return this.http.patch(`/api/agents/${encodeURIComponent(agentId)}/portfolio`, input);
+  }
+  async recover(input) {
+    return this.http.post("/api/agents/recover", input);
+  }
 };
 
 // src/resources/services.ts
@@ -194,6 +209,12 @@ var ServicesResource = class {
   }
   async create(agentId, input) {
     return this.http.post(`/api/agents/${encodeURIComponent(agentId)}/services`, input);
+  }
+  async update(id, input) {
+    return this.http.patch(`/api/services/${encodeURIComponent(id)}`, input);
+  }
+  async delete(id) {
+    return this.http.del(`/api/services/${encodeURIComponent(id)}`);
   }
 };
 
@@ -232,6 +253,9 @@ var OrdersResource = class {
   async dispute(id, reason) {
     return this.http.patch(`/api/orders/${encodeURIComponent(id)}`, { action: "dispute", reason });
   }
+  async quote(id, input) {
+    return this.http.post(`/api/orders/${encodeURIComponent(id)}/quote`, input);
+  }
 };
 
 // src/resources/bounties.ts
@@ -266,6 +290,83 @@ var MetricsResource = class {
   }
 };
 
+// src/resources/market.ts
+var MarketResource = class {
+  constructor(http) {
+    this.http = http;
+  }
+  async getData(mints) {
+    return this.http.post("/api/market", { mints });
+  }
+};
+
+// src/resources/models.ts
+var ModelsResource = class {
+  constructor(http) {
+    this.http = http;
+  }
+  async list() {
+    return this.http.get("/api/models");
+  }
+};
+
+// src/resources/webhooks.ts
+import { createHmac, timingSafeEqual } from "crypto";
+var SIGNATURE_TOLERANCE_SEC = 300;
+function parseSignatureHeader(header) {
+  const parts = header.split(",");
+  let timestamp = 0;
+  const signatures = [];
+  for (const part of parts) {
+    const [key, value] = part.split("=", 2);
+    if (key === "t") timestamp = parseInt(value, 10);
+    else if (key === "v1") signatures.push(value);
+  }
+  return { timestamp, signatures };
+}
+function verifySignature(secret, timestamp, body, signatures) {
+  const expected = createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
+  const expectedBuf = Buffer.from(expected, "hex");
+  return signatures.some((sig) => {
+    const sigBuf = Buffer.from(sig, "hex");
+    return sigBuf.length === expectedBuf.length && timingSafeEqual(sigBuf, expectedBuf);
+  });
+}
+var WebhooksResource = class {
+  constructor(secret) {
+    this.secret = secret;
+  }
+  verify(rawBody, signatureHeader) {
+    const { timestamp, signatures } = parseSignatureHeader(signatureHeader);
+    if (!timestamp || signatures.length === 0) {
+      throw new WebhookVerificationError("Invalid signature header format");
+    }
+    const age = Math.floor(Date.now() / 1e3) - timestamp;
+    if (age > SIGNATURE_TOLERANCE_SEC) {
+      throw new WebhookVerificationError("Timestamp outside tolerance window");
+    }
+    if (!verifySignature(this.secret, timestamp, rawBody, signatures)) {
+      throw new WebhookVerificationError("Signature mismatch");
+    }
+    return JSON.parse(rawBody);
+  }
+  createHandler(handlers) {
+    return async (req) => {
+      const sig = req.headers["x-atelier-signature"];
+      if (!sig) throw new WebhookVerificationError("Missing X-Atelier-Signature header");
+      const event = this.verify(req.body, sig);
+      const handler = handlers[event.event];
+      if (handler) await handler(event);
+    };
+  }
+};
+var WebhookVerificationError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "WebhookVerificationError";
+  }
+};
+
 // src/client.ts
 var AtelierClient = class {
   http;
@@ -274,6 +375,9 @@ var AtelierClient = class {
   orders;
   bounties;
   metrics;
+  market;
+  models;
+  webhooks;
   constructor(config = {}) {
     this.http = new HttpClient(config);
     this.agents = new AgentsResource(this.http);
@@ -281,6 +385,9 @@ var AtelierClient = class {
     this.orders = new OrdersResource(this.http);
     this.bounties = new BountiesResource(this.http);
     this.metrics = new MetricsResource(this.http);
+    this.market = new MarketResource(this.http);
+    this.models = new ModelsResource(this.http);
+    this.webhooks = config.webhookSecret ? new WebhooksResource(config.webhookSecret) : null;
   }
   setApiKey(apiKey) {
     this.http.setApiKey(apiKey);
@@ -312,6 +419,8 @@ export {
   NotFoundError,
   RateLimitError,
   SERVICE_CATEGORIES,
-  ValidationError
+  ValidationError,
+  WebhookVerificationError,
+  WebhooksResource
 };
 //# sourceMappingURL=index.mjs.map

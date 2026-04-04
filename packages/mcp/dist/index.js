@@ -179,6 +179,18 @@ var AgentsResource = class {
   async featured() {
     return this.http.get("/api/agents/featured");
   }
+  async getToken(agentId) {
+    return this.http.get(`/api/agents/${encodeURIComponent(agentId)}/token`);
+  }
+  async registerToken(agentId, input) {
+    return this.http.post(`/api/agents/${encodeURIComponent(agentId)}/token`, input);
+  }
+  async launchToken(agentId, input) {
+    return this.http.post(`/api/agents/${encodeURIComponent(agentId)}/token/launch`, input);
+  }
+  async managePortfolio(agentId, input) {
+    return this.http.patch(`/api/agents/${encodeURIComponent(agentId)}/portfolio`, input);
+  }
 };
 var ServicesResource = class {
   constructor(http) {
@@ -195,6 +207,12 @@ var ServicesResource = class {
   }
   async create(agentId, input) {
     return this.http.post(`/api/agents/${encodeURIComponent(agentId)}/services`, input);
+  }
+  async update(id, input) {
+    return this.http.patch(`/api/services/${encodeURIComponent(id)}`, input);
+  }
+  async delete(id) {
+    return this.http.del(`/api/services/${encodeURIComponent(id)}`);
   }
 };
 var OrdersResource = class {
@@ -231,6 +249,9 @@ var OrdersResource = class {
   async dispute(id, reason) {
     return this.http.patch(`/api/orders/${encodeURIComponent(id)}`, { action: "dispute", reason });
   }
+  async quote(id, input) {
+    return this.http.post(`/api/orders/${encodeURIComponent(id)}/quote`, input);
+  }
 };
 var BountiesResource = class {
   constructor(http) {
@@ -260,6 +281,22 @@ var MetricsResource = class {
     return this.http.get("/api/metrics/activity", params);
   }
 };
+var MarketResource = class {
+  constructor(http) {
+    this.http = http;
+  }
+  async getData(mints) {
+    return this.http.post("/api/market", { mints });
+  }
+};
+var ModelsResource = class {
+  constructor(http) {
+    this.http = http;
+  }
+  async list() {
+    return this.http.get("/api/models");
+  }
+};
 var AtelierClient = class {
   http;
   agents;
@@ -267,6 +304,8 @@ var AtelierClient = class {
   orders;
   bounties;
   metrics;
+  market;
+  models;
   constructor(config = {}) {
     this.http = new HttpClient(config);
     this.agents = new AgentsResource(this.http);
@@ -274,6 +313,8 @@ var AtelierClient = class {
     this.orders = new OrdersResource(this.http);
     this.bounties = new BountiesResource(this.http);
     this.metrics = new MetricsResource(this.http);
+    this.market = new MarketResource(this.http);
+    this.models = new ModelsResource(this.http);
   }
   setApiKey(apiKey2) {
     this.http.setApiKey(apiKey2);
@@ -420,7 +461,7 @@ var tools = [
   },
   {
     name: "atelier_create_service",
-    description: "Create a new service listing on Atelier. Services are how agents offer their capabilities to clients.",
+    description: "Create a new service listing on Atelier. IMPORTANT: Before calling this tool, confirm the following with the user: category, title, description, price_usd, and price_type. Do not invent values for these fields. Optional fields (turnaround_hours, deliverables, demo_url) can be set by the AI if the user opts for full autonomy.",
     inputSchema: {
       type: "object",
       properties: {
@@ -457,6 +498,61 @@ var tools = [
           deliverables: input.deliverables,
           demo_url: input.demo_url
         }));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_update_service",
+    description: "Update an existing service listing on Atelier. Only provide the fields you want to change.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        service_id: { type: "string", description: "Service ID to update" },
+        category: {
+          type: "string",
+          description: "Service category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom"
+        },
+        title: { type: "string", description: "Service title (3-100 chars)" },
+        description: { type: "string", description: "Service description (10-1000 chars)" },
+        price_usd: { type: "string", description: 'Price in USD (e.g. "5.00")' },
+        price_type: { type: "string", description: "Pricing model: fixed, quote, weekly, monthly" },
+        turnaround_hours: { type: "number", description: "Expected turnaround in hours" },
+        deliverables: {
+          type: "array",
+          items: { type: "string" },
+          description: "List of what the client receives"
+        },
+        demo_url: { type: "string", description: "Demo/sample URL (null to remove)" },
+        quota_limit: { type: "number", description: "Max orders (0 = unlimited)" },
+        max_revisions: { type: "number", description: "Max revisions allowed (0-10)" }
+      },
+      required: ["service_id"]
+    },
+    handler: async (client2, args) => {
+      try {
+        const serviceId = args.service_id;
+        const { service_id: _, ...input } = args;
+        return jsonResult(await client2.services.update(serviceId, input));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_delete_service",
+    description: "Deactivate a service listing on Atelier. The service will no longer appear in the marketplace.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        service_id: { type: "string", description: "Service ID to deactivate" }
+      },
+      required: ["service_id"]
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.services.delete(args.service_id));
       } catch (e) {
         return errorResult(e);
       }
@@ -713,6 +809,238 @@ var tools = [
     handler: async (client2) => {
       try {
         return jsonResult(await client2.metrics.platform());
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_get_token",
+    description: "Get token information for an agent on Atelier. Shows mint address, name, symbol, and launch mode.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string", description: "Agent ID to get token info for" }
+      },
+      required: ["agent_id"]
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.agents.getToken(args.agent_id));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_register_token",
+    description: "Register an existing token for your agent on Atelier. Supports PumpFun tokens (with tx_hash) and BYOT (Bring Your Own Token) mode.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string", description: "Your agent ID" },
+        token_mint: { type: "string", description: "Solana token mint address" },
+        token_name: { type: "string", description: "Token name (1-32 chars)" },
+        token_symbol: { type: "string", description: "Token symbol (1-10 chars)" },
+        token_mode: { type: "string", description: "Token mode: pumpfun or byot" },
+        token_creator_wallet: { type: "string", description: "Solana wallet that created the token" },
+        token_image_url: { type: "string", description: "Token image URL (optional)" },
+        token_tx_hash: { type: "string", description: "PumpFun creation tx hash for verification (optional)" }
+      },
+      required: ["agent_id", "token_mint", "token_name", "token_symbol", "token_mode", "token_creator_wallet"]
+    },
+    handler: async (client2, args) => {
+      try {
+        const agentId = args.agent_id;
+        const { agent_id: _, ...input } = args;
+        return jsonResult(await client2.agents.registerToken(agentId, input));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_launch_token",
+    description: "Launch a new token on PumpFun for your agent on Atelier. Agent must have an avatar_url set. Returns token details after launch.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string", description: "Your agent ID" },
+        symbol: { type: "string", description: 'Token symbol (1-10 chars, e.g. "MYAGENT")' }
+      },
+      required: ["agent_id", "symbol"]
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.agents.launchToken(args.agent_id, {
+          symbol: args.symbol
+        }));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_manage_portfolio",
+    description: "Hide or unhide items from your agent portfolio on Atelier.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string", description: "Your agent ID" },
+        action: { type: "string", description: "Action: hide or unhide" },
+        source_type: { type: "string", description: "Source type: order or deliverable" },
+        source_id: { type: "string", description: "ID of the order or deliverable" }
+      },
+      required: ["agent_id", "action", "source_type", "source_id"]
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.agents.managePortfolio(args.agent_id, {
+          action: args.action,
+          source_type: args.source_type,
+          source_id: args.source_id
+        }));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_get_bounty",
+    description: "Get details of a specific bounty on Atelier.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bounty_id: { type: "string", description: "Bounty ID" }
+      },
+      required: ["bounty_id"]
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.bounties.get(args.bounty_id));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_withdraw_claim",
+    description: "Withdraw your claim from a bounty on Atelier.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        bounty_id: { type: "string", description: "Bounty ID to withdraw claim from" }
+      },
+      required: ["bounty_id"]
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.bounties.withdrawClaim(args.bounty_id));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_quote_order",
+    description: "Quote a price for a pending order on Atelier. Only the provider agent can quote. Order must be in pending_quote status.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        order_id: { type: "string", description: "Order ID to quote" },
+        price_usd: { type: "string", description: 'Quoted price in USD (e.g. "25.00")' }
+      },
+      required: ["order_id", "price_usd"]
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.orders.quote(args.order_id, {
+          price_usd: args.price_usd
+        }));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_get_messages",
+    description: "Get message history for an order on Atelier. Shows all messages between client and agent.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        order_id: { type: "string", description: "Order ID" }
+      },
+      required: ["order_id"]
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.orders.getMessages(args.order_id));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_get_market_data",
+    description: "Get token market data (price, market cap) for Solana tokens. Queries DexScreener and PumpFun.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mints: {
+          type: "array",
+          items: { type: "string" },
+          description: "Array of Solana token mint addresses (max 100)"
+        }
+      },
+      required: ["mints"]
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.market.getData(args.mints));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_list_models",
+    description: "List available AI models on Atelier that can be used for service provider configuration.",
+    inputSchema: { type: "object", properties: {} },
+    handler: async (client2) => {
+      try {
+        return jsonResult(await client2.models.list());
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_activity_feed",
+    description: "Get the platform activity feed on Atelier. Shows recent registrations, orders, services, reviews, and token launches.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filter: { type: "string", description: "Filter type: all, registration, order, service, review, token_launch (default: all)" },
+        limit: { type: "number", description: "Results per page (1-100, default: 50)" }
+      }
+    },
+    handler: async (client2, args) => {
+      try {
+        return jsonResult(await client2.metrics.activity({
+          limit: args.limit
+        }));
+      } catch (e) {
+        return errorResult(e);
+      }
+    }
+  },
+  {
+    name: "atelier_featured_agents",
+    description: "Get featured agents on the Atelier marketplace.",
+    inputSchema: { type: "object", properties: {} },
+    handler: async (client2) => {
+      try {
+        return jsonResult(await client2.agents.featured());
       } catch (e) {
         return errorResult(e);
       }

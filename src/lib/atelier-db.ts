@@ -112,6 +112,7 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_tx_hash TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN privy_user_id TEXT`).catch(() => {});
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_privy_user_id ON atelier_agents(privy_user_id)').catch(() => {});
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN webhook_secret TEXT`).catch(() => {});
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS services (
@@ -991,7 +992,15 @@ export interface AtelierAgent {
   said_secret_key: string | null;
   said_tx_hash: string | null;
   privy_user_id: string | null;
+  webhook_secret: string | null;
   created_at: string;
+}
+
+export class DuplicateAgentError extends Error {
+  constructor(public readonly existingAgent: AtelierAgent) {
+    super('Duplicate agent detected');
+    this.name = 'DuplicateAgentError';
+  }
 }
 
 export function getPayoutWallet(agent: AtelierAgent): string | null {
@@ -1357,6 +1366,66 @@ export async function updateAgentLastPoll(agentId: string): Promise<void> {
   });
 }
 
+export async function findRecentDuplicateAgent(data: {
+  name: string;
+  description: string;
+  owner_wallet?: string;
+  twitter_username?: string;
+}): Promise<AtelierAgent | null> {
+  await initAtelierDb();
+
+  if (data.owner_wallet) {
+    const result = await atelierClient.execute({
+      sql: `SELECT * FROM atelier_agents
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+            AND owner_wallet = ?
+            AND active = 1
+            AND created_at > datetime('now', '-24 hours')
+            ORDER BY created_at DESC
+            LIMIT 1`,
+      args: [data.name, data.owner_wallet],
+    });
+    if (result.rows.length > 0) return result.rows[0] as unknown as AtelierAgent;
+  }
+
+  if (data.twitter_username) {
+    const result = await atelierClient.execute({
+      sql: `SELECT * FROM atelier_agents
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+            AND LOWER(twitter_username) = LOWER(?)
+            AND active = 1
+            AND created_at > datetime('now', '-24 hours')
+            ORDER BY created_at DESC
+            LIMIT 1`,
+      args: [data.name, data.twitter_username],
+    });
+    if (result.rows.length > 0) return result.rows[0] as unknown as AtelierAgent;
+  }
+
+  const result = await atelierClient.execute({
+    sql: `SELECT * FROM atelier_agents
+          WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+          AND LOWER(TRIM(description)) = LOWER(TRIM(?))
+          AND active = 1
+          AND created_at > datetime('now', '-1 hour')
+          ORDER BY created_at DESC
+          LIMIT 1`,
+    args: [data.name, data.description],
+  });
+  if (result.rows.length > 0) return result.rows[0] as unknown as AtelierAgent;
+
+  return null;
+}
+
+export async function getAtelierAgentsByTwitterUsername(twitterUsername: string): Promise<AtelierAgent[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM atelier_agents WHERE LOWER(twitter_username) = LOWER(?) AND active = 1',
+    args: [twitterUsername],
+  });
+  return result.rows as unknown as AtelierAgent[];
+}
+
 export async function registerAtelierAgent(data: {
   name: string;
   description: string;
@@ -1367,8 +1436,17 @@ export async function registerAtelierAgent(data: {
   owner_wallet?: string;
   twitter_verification_code?: string;
   twitter_username?: string;
-}): Promise<{ agent_id: string; api_key: string; slug: string; twitter_verification_code: string }> {
+}): Promise<{ agent_id: string; api_key: string; slug: string; twitter_verification_code: string; webhook_secret: string | null }> {
   await initAtelierDb();
+
+  const duplicate = await findRecentDuplicateAgent({
+    name: data.name,
+    description: data.description,
+    owner_wallet: data.owner_wallet,
+    twitter_username: data.twitter_username,
+  });
+  if (duplicate) throw new DuplicateAgentError(duplicate);
+
   const id = `ext_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const apiKey = `atelier_${randomBytes(24).toString('hex')}`;
   const capabilities = JSON.stringify(data.capabilities || []);
@@ -1385,25 +1463,26 @@ export async function registerAtelierAgent(data: {
   }
 
   const aiModels = data.ai_models?.length ? JSON.stringify(data.ai_models) : null;
+  const webhookSecret = data.endpoint_url ? `whsec_${randomBytes(32).toString('hex')}` : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username, ai_models)
-          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null, aiModels],
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username, ai_models, webhook_secret)
+          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null, aiModels, webhookSecret],
   });
 
-  return { agent_id: id, api_key: apiKey, slug, twitter_verification_code: verificationCode };
+  return { agent_id: id, api_key: apiKey, slug, twitter_verification_code: verificationCode, webhook_secret: webhookSecret };
 }
 
 export async function updateAtelierAgent(
   id: string,
-  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'ai_models' | 'payout_wallet' | 'owner_wallet' | 'twitter_username' | 'privy_user_id'>>
+  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'ai_models' | 'payout_wallet' | 'owner_wallet' | 'twitter_username' | 'privy_user_id' | 'webhook_secret'>>
 ): Promise<AtelierAgent | null> {
   await initAtelierDb();
   const setClauses: string[] = [];
   const args: (string | null)[] = [];
 
-  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'ai_models', 'payout_wallet', 'owner_wallet', 'twitter_username', 'privy_user_id'];
+  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'ai_models', 'payout_wallet', 'owner_wallet', 'twitter_username', 'privy_user_id', 'webhook_secret'];
   for (const field of fields) {
     if (updates[field] !== undefined) {
       setClauses.push(`${field} = ?`);

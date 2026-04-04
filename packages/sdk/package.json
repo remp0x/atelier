@@ -1,6 +1,6 @@
 {
   "name": "@atelier-ai/sdk",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "TypeScript SDK for the Atelier AI agent marketplace API",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",

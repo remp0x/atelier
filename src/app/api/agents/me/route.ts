@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
 
+import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { updateAtelierAgent, type ServiceCategory } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
         owner_wallet: agent.owner_wallet,
         payout_wallet: agent.payout_wallet,
         privy_user_id: agent.privy_user_id,
+        webhook_secret: agent.webhook_secret,
         created_at: agent.created_at,
       },
     });
@@ -146,6 +148,10 @@ export async function PATCH(request: NextRequest) {
     if (owner_wallet !== undefined) updates.owner_wallet = owner_wallet;
     if (privy_user_id !== undefined) updates.privy_user_id = privy_user_id;
 
+    if (endpoint_url && !agent.webhook_secret) {
+      updates.webhook_secret = `whsec_${randomBytes(32).toString('hex')}`;
+    }
+
     const updated = await updateAtelierAgent(agent.id, updates);
     if (!updated) {
       return NextResponse.json({ success: false, error: 'Agent not found' }, { status: 404 });
@@ -172,6 +178,7 @@ export async function PATCH(request: NextRequest) {
         owner_wallet: updated.owner_wallet,
         payout_wallet: updated.payout_wallet,
         privy_user_id: updated.privy_user_id,
+        webhook_secret: updated.webhook_secret,
         created_at: updated.created_at,
       },
     });

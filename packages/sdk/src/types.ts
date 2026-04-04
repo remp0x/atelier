@@ -58,6 +58,7 @@ export interface Agent {
   owner_wallet: string | null;
   payout_wallet: string | null;
   privy_user_id: string | null;
+  webhook_secret: string | null;
   created_at: string;
 }
 
@@ -211,6 +212,7 @@ export interface RegisterAgentResponse {
   agent_id: string;
   slug: string;
   api_key: string;
+  webhook_secret: string | null;
   verification_code: string;
   verification_tweet: string;
   protocol_spec: {
@@ -278,6 +280,19 @@ export interface CreateServiceInput {
   requirement_fields?: unknown[];
 }
 
+export interface UpdateServiceInput {
+  category?: ServiceCategory;
+  title?: string;
+  description?: string;
+  price_usd?: string;
+  price_type?: ServicePriceType;
+  turnaround_hours?: number;
+  deliverables?: string[];
+  demo_url?: string | null;
+  quota_limit?: number;
+  max_revisions?: number;
+}
+
 export interface ListServicesParams {
   search?: string;
   category?: ServiceCategory;
@@ -322,9 +337,117 @@ export interface ClaimBountyInput {
   message?: string;
 }
 
+export interface AgentToken {
+  agent_id: string;
+  token_mint: string;
+  token_name: string;
+  token_symbol: string;
+  token_mode: 'pumpfun' | 'byot';
+  token_image_url: string | null;
+  token_creator_wallet: string | null;
+  created_at: string;
+}
+
+export interface RegisterTokenInput {
+  token_mint: string;
+  token_name: string;
+  token_symbol: string;
+  token_mode: 'pumpfun' | 'byot';
+  token_creator_wallet: string;
+  token_image_url?: string;
+  token_tx_hash?: string;
+}
+
+export interface LaunchTokenInput {
+  symbol: string;
+}
+
+export interface ManagePortfolioInput {
+  action: 'hide' | 'unhide';
+  source_type: 'order' | 'deliverable';
+  source_id: string;
+}
+
+export interface QuoteOrderInput {
+  price_usd: string;
+}
+
+export interface MarketDataItem {
+  market_cap_usd: number | null;
+  price_usd: number | null;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  [key: string]: unknown;
+}
+
+export interface DuplicateAgentErrorResponse {
+  success: false;
+  error: 'duplicate_agent';
+  message: string;
+  existing_agent: {
+    agent_id: string;
+    slug: string;
+    name: string;
+    created_at: string;
+    api_key_hint: string | null;
+  };
+  recovery: string;
+}
+
+export interface RecoverAgentsInput {
+  owner_wallet: string;
+  wallet_sig: string;
+  wallet_sig_ts: number;
+  agent_name?: string;
+}
+
+export interface RecoveredAgent {
+  agent_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  api_key: string | null;
+  twitter_username: string | null;
+  verified: number;
+  created_at: string;
+}
+
+export interface RecoverAgentsResponse {
+  agents: RecoveredAgent[];
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
   total?: number;
 }
+
+// --- Webhook types ---
+
+export type WebhookEventType =
+  | 'order.created'
+  | 'order.quoted'
+  | 'order.paid'
+  | 'order.delivered'
+  | 'order.revision_requested'
+  | 'order.completed'
+  | 'order.cancelled'
+  | 'order.disputed'
+  | 'order.message'
+  | 'bounty.accepted'
+  | 'bounty.claim_rejected';
+
+export interface WebhookEvent {
+  event: WebhookEventType;
+  order_id: string;
+  data: Record<string, unknown>;
+}
+
+export type WebhookHandlerMap = {
+  [E in WebhookEventType]?: (event: WebhookEvent) => void | Promise<void>;
+};

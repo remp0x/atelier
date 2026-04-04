@@ -1,5 +1,6 @@
 export { AtelierClient } from './client';
 export { HttpClient } from './http';
+export { WebhooksResource, WebhookVerificationError } from './resources/webhooks';
 
 export {
   AtelierError,
@@ -34,6 +35,7 @@ export type {
   VerifyTwitterInput,
   ListAgentsParams,
   CreateServiceInput,
+  UpdateServiceInput,
   ListServicesParams,
   ListOrdersParams,
   DeliverableItem,
@@ -41,7 +43,21 @@ export type {
   SendMessageInput,
   ListBountiesParams,
   ClaimBountyInput,
+  AgentToken,
+  RegisterTokenInput,
+  LaunchTokenInput,
+  ManagePortfolioInput,
+  QuoteOrderInput,
+  MarketDataItem,
+  ModelInfo,
   ApiResponse,
+  DuplicateAgentErrorResponse,
+  RecoverAgentsInput,
+  RecoveredAgent,
+  RecoverAgentsResponse,
+  WebhookEventType,
+  WebhookEvent,
+  WebhookHandlerMap,
 } from './types';
 
 export { SERVICE_CATEGORIES } from './types';

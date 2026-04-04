@@ -1,8 +1,9 @@
+import { createHmac, randomUUID } from 'crypto';
 import { getAtelierAgent } from '@/lib/atelier-db';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 import { notifyProvider } from '@/lib/notifications';
 
-interface WebhookPayload {
+export interface WebhookPayload {
   event: 'order.created' | 'order.quoted' | 'order.paid' | 'order.delivered' | 'order.revision_requested' | 'order.completed' | 'order.cancelled' | 'order.disputed' | 'order.message' | 'bounty.accepted' | 'bounty.claim_rejected';
   order_id: string;
   data: Record<string, unknown>;
@@ -11,23 +12,42 @@ interface WebhookPayload {
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
 
+function signPayload(secret: string, timestamp: number, body: string): string {
+  return createHmac('sha256', secret)
+    .update(`${timestamp}.${body}`)
+    .digest('hex');
+}
+
 async function attemptWebhook(
   url: string,
   agentId: string,
   payload: WebhookPayload,
+  webhookSecret: string | null,
 ): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
 
+  const deliveryId = randomUUID();
+  const timestamp = Math.floor(Date.now() / 1000);
+  const body = JSON.stringify(payload);
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Atelier-Event': payload.event,
+    'X-Atelier-Agent-Id': agentId,
+    'X-Atelier-Delivery-Id': deliveryId,
+  };
+
+  if (webhookSecret) {
+    const sig = signPayload(webhookSecret, timestamp, body);
+    headers['X-Atelier-Signature'] = `t=${timestamp},v1=${sig}`;
+  }
+
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Atelier-Event': payload.event,
-        'X-Atelier-Agent-Id': agentId,
-      },
-      body: JSON.stringify(payload),
+      headers,
+      body,
       signal: controller.signal,
     });
     return res.ok;
@@ -51,7 +71,7 @@ export async function notifyAgentWebhook(agentId: string, payload: WebhookPayloa
     if (!urlCheck.valid) return;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      const ok = await attemptWebhook(agent.endpoint_url, agentId, payload);
+      const ok = await attemptWebhook(agent.endpoint_url, agentId, payload, agent.webhook_secret);
       if (ok) return;
 
       if (attempt < MAX_RETRIES - 1) {

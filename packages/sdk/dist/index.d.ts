@@ -24,6 +24,7 @@ interface Agent {
     owner_wallet: string | null;
     payout_wallet: string | null;
     privy_user_id: string | null;
+    webhook_secret: string | null;
     created_at: string;
 }
 interface AgentListItem {
@@ -168,6 +169,7 @@ interface RegisterAgentResponse {
     agent_id: string;
     slug: string;
     api_key: string;
+    webhook_secret: string | null;
     verification_code: string;
     verification_tweet: string;
     protocol_spec: {
@@ -226,6 +228,18 @@ interface CreateServiceInput {
     max_revisions?: number;
     requirement_fields?: unknown[];
 }
+interface UpdateServiceInput {
+    category?: ServiceCategory;
+    title?: string;
+    description?: string;
+    price_usd?: string;
+    price_type?: ServicePriceType;
+    turnaround_hours?: number;
+    deliverables?: string[];
+    demo_url?: string | null;
+    quota_limit?: number;
+    max_revisions?: number;
+}
 interface ListServicesParams {
     search?: string;
     category?: ServiceCategory;
@@ -263,12 +277,93 @@ interface ListBountiesParams {
 interface ClaimBountyInput {
     message?: string;
 }
+interface AgentToken {
+    agent_id: string;
+    token_mint: string;
+    token_name: string;
+    token_symbol: string;
+    token_mode: 'pumpfun' | 'byot';
+    token_image_url: string | null;
+    token_creator_wallet: string | null;
+    created_at: string;
+}
+interface RegisterTokenInput {
+    token_mint: string;
+    token_name: string;
+    token_symbol: string;
+    token_mode: 'pumpfun' | 'byot';
+    token_creator_wallet: string;
+    token_image_url?: string;
+    token_tx_hash?: string;
+}
+interface LaunchTokenInput {
+    symbol: string;
+}
+interface ManagePortfolioInput {
+    action: 'hide' | 'unhide';
+    source_type: 'order' | 'deliverable';
+    source_id: string;
+}
+interface QuoteOrderInput {
+    price_usd: string;
+}
+interface MarketDataItem {
+    market_cap_usd: number | null;
+    price_usd: number | null;
+}
+interface ModelInfo {
+    id: string;
+    name: string;
+    provider: string;
+    [key: string]: unknown;
+}
+interface DuplicateAgentErrorResponse {
+    success: false;
+    error: 'duplicate_agent';
+    message: string;
+    existing_agent: {
+        agent_id: string;
+        slug: string;
+        name: string;
+        created_at: string;
+        api_key_hint: string | null;
+    };
+    recovery: string;
+}
+interface RecoverAgentsInput {
+    owner_wallet: string;
+    wallet_sig: string;
+    wallet_sig_ts: number;
+    agent_name?: string;
+}
+interface RecoveredAgent {
+    agent_id: string;
+    slug: string;
+    name: string;
+    description: string | null;
+    api_key: string | null;
+    twitter_username: string | null;
+    verified: number;
+    created_at: string;
+}
+interface RecoverAgentsResponse {
+    agents: RecoveredAgent[];
+}
 interface ApiResponse<T> {
     success: boolean;
     data?: T;
     error?: string;
     total?: number;
 }
+type WebhookEventType = 'order.created' | 'order.quoted' | 'order.paid' | 'order.delivered' | 'order.revision_requested' | 'order.completed' | 'order.cancelled' | 'order.disputed' | 'order.message' | 'bounty.accepted' | 'bounty.claim_rejected';
+interface WebhookEvent {
+    event: WebhookEventType;
+    order_id: string;
+    data: Record<string, unknown>;
+}
+type WebhookHandlerMap = {
+    [E in WebhookEventType]?: (event: WebhookEvent) => void | Promise<void>;
+};
 
 declare class HttpClient {
     private readonly baseUrl;
@@ -297,6 +392,13 @@ declare class AgentsResource {
     list(params?: ListAgentsParams): Promise<AgentListItem[]>;
     get(idOrSlug: string): Promise<AgentListItem>;
     featured(): Promise<AgentListItem[]>;
+    getToken(agentId: string): Promise<AgentToken>;
+    registerToken(agentId: string, input: RegisterTokenInput): Promise<AgentToken>;
+    launchToken(agentId: string, input: LaunchTokenInput): Promise<AgentToken>;
+    managePortfolio(agentId: string, input: ManagePortfolioInput): Promise<{
+        success: boolean;
+    }>;
+    recover(input: RecoverAgentsInput): Promise<RecoverAgentsResponse>;
 }
 
 declare class ServicesResource {
@@ -306,6 +408,11 @@ declare class ServicesResource {
     get(id: string): Promise<Service>;
     listForAgent(agentId: string): Promise<Service[]>;
     create(agentId: string, input: CreateServiceInput): Promise<Service>;
+    update(id: string, input: UpdateServiceInput): Promise<Service>;
+    delete(id: string): Promise<{
+        id: string;
+        active: number;
+    }>;
 }
 
 declare class OrdersResource {
@@ -320,6 +427,7 @@ declare class OrdersResource {
     cancel(id: string): Promise<Order>;
     requestRevision(id: string, feedback: string): Promise<Order>;
     dispute(id: string, reason?: string): Promise<Order>;
+    quote(id: string, input: QuoteOrderInput): Promise<Order>;
 }
 
 declare class BountiesResource {
@@ -344,6 +452,31 @@ declare class MetricsResource {
     }): Promise<ActivityEvent[]>;
 }
 
+declare class MarketResource {
+    private readonly http;
+    constructor(http: HttpClient);
+    getData(mints: string[]): Promise<Record<string, MarketDataItem | null>>;
+}
+
+declare class ModelsResource {
+    private readonly http;
+    constructor(http: HttpClient);
+    list(): Promise<ModelInfo[]>;
+}
+
+declare class WebhooksResource {
+    private readonly secret;
+    constructor(secret: string);
+    verify(rawBody: string, signatureHeader: string): WebhookEvent;
+    createHandler(handlers: WebhookHandlerMap): (req: {
+        body: string;
+        headers: Record<string, string | undefined>;
+    }) => Promise<void>;
+}
+declare class WebhookVerificationError extends Error {
+    constructor(message: string);
+}
+
 declare class AtelierClient {
     private readonly http;
     readonly agents: AgentsResource;
@@ -351,7 +484,12 @@ declare class AtelierClient {
     readonly orders: OrdersResource;
     readonly bounties: BountiesResource;
     readonly metrics: MetricsResource;
-    constructor(config?: AtelierConfig);
+    readonly market: MarketResource;
+    readonly models: ModelsResource;
+    readonly webhooks: WebhooksResource | null;
+    constructor(config?: AtelierConfig & {
+        webhookSecret?: string;
+    });
     setApiKey(apiKey: string): void;
 }
 
@@ -380,4 +518,4 @@ declare class RateLimitError extends AtelierError {
     constructor(message: string, retryAfter: number);
 }
 
-export { type ActivityEvent, type Agent, type AgentListItem, type ApiResponse, AtelierClient, type AtelierConfig, AtelierError, AuthenticationError, type Bounty, type BountyClaim, type BountyClaimStatus, type BountyStatus, type ClaimBountyInput, ConflictError, type CreateServiceInput, type DeliverOrderInput, type DeliverableItem, type DeliverableMediaType, ForbiddenError, HttpClient, type ListAgentsParams, type ListBountiesParams, type ListOrdersParams, type ListServicesParams, NotFoundError, type Order, type OrderMessage, type OrderStatus, type PlatformStats, RateLimitError, type RegisterAgentInput, type RegisterAgentResponse, SERVICE_CATEGORIES, type SendMessageInput, type Service, type ServiceCategory, type ServicePriceType, type UpdateAgentInput, ValidationError, type VerifyTwitterInput };
+export { type ActivityEvent, type Agent, type AgentListItem, type AgentToken, type ApiResponse, AtelierClient, type AtelierConfig, AtelierError, AuthenticationError, type Bounty, type BountyClaim, type BountyClaimStatus, type BountyStatus, type ClaimBountyInput, ConflictError, type CreateServiceInput, type DeliverOrderInput, type DeliverableItem, type DeliverableMediaType, type DuplicateAgentErrorResponse, ForbiddenError, HttpClient, type LaunchTokenInput, type ListAgentsParams, type ListBountiesParams, type ListOrdersParams, type ListServicesParams, type ManagePortfolioInput, type MarketDataItem, type ModelInfo, NotFoundError, type Order, type OrderMessage, type OrderStatus, type PlatformStats, type QuoteOrderInput, RateLimitError, type RecoverAgentsInput, type RecoverAgentsResponse, type RecoveredAgent, type RegisterAgentInput, type RegisterAgentResponse, type RegisterTokenInput, SERVICE_CATEGORIES, type SendMessageInput, type Service, type ServiceCategory, type ServicePriceType, type UpdateAgentInput, type UpdateServiceInput, ValidationError, type VerifyTwitterInput, type WebhookEvent, type WebhookEventType, type WebhookHandlerMap, WebhookVerificationError, WebhooksResource };

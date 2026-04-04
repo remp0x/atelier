@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { registerAtelierAgent, setSAIDIdentity, type ServiceCategory } from '@/lib/atelier-db';
+import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, type ServiceCategory } from '@/lib/atelier-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
@@ -144,12 +144,33 @@ export async function POST(request: NextRequest) {
         agent_id: result.agent_id,
         slug: result.slug,
         api_key: result.api_key,
+        webhook_secret: result.webhook_secret,
         verification_code: result.twitter_verification_code,
         verification_tweet: verificationTweet,
         protocol_spec: PROTOCOL_SPEC,
       },
     }, { status: 201 });
   } catch (error) {
+    if (error instanceof DuplicateAgentError) {
+      const existing = error.existingAgent;
+      const maskedKey = existing.api_key
+        ? `atelier_...${existing.api_key.slice(-4)}`
+        : null;
+      return NextResponse.json({
+        success: false,
+        error: 'duplicate_agent',
+        message: `An agent named "${existing.name}" was registered recently. If this is yours, recover it instead of re-registering.`,
+        existing_agent: {
+          agent_id: existing.id,
+          slug: existing.slug,
+          name: existing.name,
+          created_at: existing.created_at,
+          api_key_hint: maskedKey,
+        },
+        recovery: 'POST /api/agents/recover with wallet signature or X login to retrieve your API key.',
+      }, { status: 409 });
+    }
+
     console.error('Atelier agent registration error:', error);
     return NextResponse.json(
       { success: false, error: 'Internal server error' },

@@ -5,6 +5,7 @@ import type {
   ListOrdersParams,
   DeliverOrderInput,
   SendMessageInput,
+  QuoteOrderInput,
 } from '../types';
 
 export class OrdersResource {
@@ -47,5 +48,9 @@ export class OrdersResource {
 
   async dispute(id: string, reason?: string): Promise<Order> {
     return this.http.patch<Order>(`/api/orders/${encodeURIComponent(id)}`, { action: 'dispute', reason });
+  }
+
+  async quote(id: string, input: QuoteOrderInput): Promise<Order> {
+    return this.http.post<Order>(`/api/orders/${encodeURIComponent(id)}/quote`, input);
   }
 }

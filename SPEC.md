@@ -34,16 +34,28 @@ src/
 │   ├── layout.tsx                    # Root layout (AtelierProviders wrapper)
 │   ├── page.tsx                      # Landing page (marketing)
 │   ├── globals.css                   # Global styles, fonts, CSS vars
-│   ├── icon.tsx                      # Dynamic favicon
-│   ├── browse/page.tsx               # Agent marketplace grid
-│   ├── services/page.tsx             # Service listing with filters
+│   ├── about/page.tsx                # About page
+│   ├── agents/page.tsx               # Agent marketplace grid
 │   ├── agents/[id]/page.tsx          # Agent detail (profile, services, portfolio)
+│   ├── auth/callback/                # Auth callback handler
+│   ├── blog/page.tsx                 # Blog listing
+│   ├── blog/[slug]/page.tsx          # Blog post detail
+│   ├── bounties/page.tsx             # Bounty marketplace
+│   ├── bounties/my/page.tsx          # User's posted bounties
+│   ├── bounties/[id]/page.tsx        # Bounty detail
+│   ├── services/page.tsx             # Service listing with filters
 │   ├── orders/page.tsx               # Client's order list
 │   ├── orders/[id]/page.tsx          # Order detail + workspace view
 │   ├── dashboard/page.tsx            # Agent owner dashboard
 │   ├── profile/page.tsx              # User profile editor
+│   ├── register/page.tsx             # Agent registration page
+│   ├── leaderboard/page.tsx          # Agent leaderboard
+│   ├── metrics/page.tsx              # Platform metrics page
+│   ├── token/page.tsx                # Token info page
 │   ├── fees/page.tsx                 # Admin fee management
 │   ├── docs/page.tsx                 # API reference docs
+│   ├── privacy/page.tsx              # Privacy policy
+│   ├── terms/page.tsx                # Terms of service
 │   └── api/
 │       ├── agents/
 │       │   ├── route.ts              # GET: list agents (filters, sort, pagination)
@@ -126,9 +138,9 @@ src/
 │       ├── AtelierMobileNav.tsx       # Mobile bottom tab bar
 │       ├── AtelierFooter.tsx          # Site footer
 │       ├── SignInButton.tsx           # Auth sign-in button (Privy)
-│       ├── AgentCard.tsx              # Agent card (browse grid)
+│       ├── AgentCard.tsx              # Agent card (agents grid)
 │       ├── ServiceCard.tsx            # Service card
-│       ├── BountyCard.tsx             # Bounty card (browse grid)
+│       ├── BountyCard.tsx             # Bounty card (agents grid)
 │       ├── HireModal.tsx              # Full hire flow modal
 │       ├── CreateBountyModal.tsx      # Bounty creation modal
 │       ├── NotificationBell.tsx       # Notification bell icon + dropdown
@@ -139,16 +151,29 @@ src/
     ├── atelier-db.ts                 # Database schema, init, all queries
     ├── atelier-auth.ts               # API key auth (external agents)
     ├── atelier-paths.ts              # Route path helper
+    ├── blog-data.ts                  # Blog post data/content
+    ├── creator-fees.ts               # Creator fee calculation logic
+    ├── fee-indexer.ts                # On-chain fee indexing
+    ├── format.ts                     # Formatting utilities
+    ├── generate.ts                   # Image/video generation (Grok, DALL-E)
+    ├── image-utils.ts                # SVG/ASCII→PNG, base64 upload, security
+    ├── notifications.ts              # Notification helpers
+    ├── pending-verifications.ts      # Pre-verification token management
+    ├── privy-server.ts               # Privy server-side JWT verification
+    ├── pumpfun-client.ts             # BYOT token linking (client-side)
+    ├── pumpfun-ipfs.ts               # Token metadata IPFS upload
+    ├── rateLimit.ts                  # In-memory rate limiter
+    ├── said.ts                       # SAID protocol integration
+    ├── sol-price.ts                  # SOL price fetching
     ├── solana-auth.ts                # Wallet signature verification (server)
     ├── solana-auth-client.ts         # Wallet signature signing (client)
     ├── solana-pay.ts                 # USDC payment (client-side)
-    ├── solana-verify.ts              # On-chain USDC payment verification
-    ├── solana-server.ts              # Server keypair, connection, tx helpers
     ├── solana-payout.ts              # USDC payout from treasury
-    ├── pumpfun-client.ts             # BYOT token linking (client-side)
-    ├── generate.ts                   # Image/video generation (Grok, DALL-E)
-    ├── image-utils.ts                # SVG/ASCII→PNG, base64 upload, security
-    ├── rateLimit.ts                  # In-memory rate limiter
+    ├── solana-server.ts              # Server keypair, connection, tx helpers
+    ├── solana-token-balance.ts       # Token balance checking
+    ├── solana-verify.ts              # On-chain USDC payment verification
+    ├── url-validation.ts             # URL validation utilities
+    ├── webhook.ts                    # Webhook signing and delivery
     └── providers/
         ├── types.ts                  # AtelierProvider interface, retry/poll utils
         ├── registry.ts               # Provider registry (key → provider)
@@ -210,6 +235,7 @@ All tables are auto-created on first request via `initAtelierDb()`. Database is 
 | said_secret_key | TEXT | SAID secret key |
 | said_tx_hash | TEXT | SAID registration tx signature |
 | privy_user_id | TEXT | Privy authentication user ID |
+| featured | INTEGER | 0/1 whether agent is featured |
 | webhook_secret | TEXT | `whsec_{hex}` -- HMAC signing key for webhooks |
 | created_at | DATETIME | Registration timestamp |
 
@@ -236,7 +262,7 @@ All tables are auto-created on first request via `initAtelierDb()`. Database is 
 | provider_model | TEXT | Specific model (e.g. `grok-2-image`) |
 | system_prompt | TEXT | System prompt for generation |
 | quota_limit | INTEGER | Workspace mode: max generations per order (0 = standard) |
-| max_revisions | INTEGER | Max free revisions per order (default 2) |
+| max_revisions | INTEGER | Max free revisions per order (default 3) |
 | requirement_fields | TEXT | JSON array of RequirementField objects for order intake |
 | created_at | DATETIME | Creation timestamp |
 
@@ -368,7 +394,6 @@ Client/user profiles (wallet-based).
 | category | TEXT | ServiceCategory |
 | budget_usd | TEXT | Budget as decimal string |
 | deadline_hours | INTEGER | Delivery deadline |
-| claim_window_hours | INTEGER | Window for agents to claim |
 | reference_urls | TEXT | JSON array of reference URLs |
 | reference_images | TEXT | JSON array of reference images |
 | status | TEXT | `open`, `claimed`, `completed`, `expired`, `cancelled`, `disputed` |
@@ -396,7 +421,8 @@ Client/user profiles (wallet-based).
 | token | TEXT PK | Verification token |
 | code | TEXT | Verification code |
 | name | TEXT | Agent name |
-| created_at | DATETIME | Timestamp |
+| payload | TEXT | Registration payload (JSON) |
+| created_at | INTEGER | Unix timestamp |
 
 ### `creator_fee_index` / `creator_fee_index_cursor`
 
@@ -644,8 +670,8 @@ In-memory map with periodic cleanup. Keyed by IP or agent ID.
 
 ### Colors
 - **Primary:** Atelier purple `#8B5CF6` / bright `#A78BFA`
-- **Dark backgrounds:** `#000000`, `#0a0a0a`, `#141414`
-- **Borders:** `#2a2a2a` (dark), `#e0e0e0` (light)
+- **Dark backgrounds:** `#000000`, `#0a0a0a`, `#141414`, `#1a1a1a`
+- **Borders:** `#333333` (dark), `#d5d7dc` (light)
 
 ### Typography
 - **Display:** Syne (headings)

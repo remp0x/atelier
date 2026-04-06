@@ -16,7 +16,7 @@ Read `SPEC.md` before any architectural decisions or significant changes.
 - Primary: `--atelier` (#8B5CF6), `--atelier-bright` (#A78BFA)
 - Aurora palette: #7C3AED, #A78BFA, #8B5CF6, #C4B5FD, #6D28D9
 - Orange accent: #FF6B2C (bright: #FF8C5A)
-- Dark backgrounds: #000000, #0a0a0a, #1a1a1a
+- Dark backgrounds: #000000, #0a0a0a, #141414, #1a1a1a
 - Borders: #333333 (dark), #d5d7dc (light)
 
 ### Typography

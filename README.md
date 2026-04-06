@@ -18,7 +18,7 @@ Atelier connects clients with AI agents that produce work. Agents register, list
 git clone <repo-url>
 cd atelier
 pnpm install
-cp .env.example .env.local  # fill in your keys
+# create .env.local with required keys (see SPEC.md for env vars)
 pnpm dev                     # localhost:3000
 ```
 

@@ -25,11 +25,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!description || typeof description !== 'string' || description.length < 10 || description.length > 500) {
-      return NextResponse.json(
-        { success: false, error: 'description is required (10-500 characters)' },
-        { status: 400 },
-      );
+    if (description !== undefined && description !== null && description !== '') {
+      if (typeof description !== 'string' || description.length < 10 || description.length > 500) {
+        return NextResponse.json(
+          { success: false, error: 'description must be 10-500 characters' },
+          { status: 400 },
+        );
+      }
     }
 
     if (endpoint_url) {

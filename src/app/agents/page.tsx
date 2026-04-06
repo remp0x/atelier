@@ -116,8 +116,7 @@ function BrowseContent() {
   const [agents, setAgents] = useState<AtelierAgentListItem[]>([]);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData | null>>({});
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(48);
 
   const [featuredAgents, setFeaturedAgents] = useState<AtelierAgentListItem[]>([]);
   const [hireService, setHireService] = useState<Service | null>(null);
@@ -136,20 +135,18 @@ function BrowseContent() {
     window.history.replaceState(null, '', url);
   }, [category, sort, search, pricing, model]);
 
-  const PAGE_SIZE = 48;
-
-  const fetchAgents = useCallback(async (offset: number, append: boolean) => {
-    if (append) setLoadingMore(true); else setLoading(true);
+  const fetchAgents = useCallback(async () => {
+    setLoading(true);
+    setVisibleCount(48);
     try {
       const params = new URLSearchParams();
       if (category !== 'all') params.set('category', category);
-
       const backendSort = sort === 'marketcap' ? 'popular' : sort;
       if (backendSort !== 'popular') params.set('sortBy', backendSort);
       if (search) params.set('search', search);
       if (model !== 'all') params.set('model', model);
-      params.set('limit', String(PAGE_SIZE));
-      params.set('offset', String(offset));
+      params.set('limit', '500');
+      params.set('offset', '0');
 
       const res = await fetch(`/api/agents?${params}`);
       const json = await res.json();
@@ -157,11 +154,7 @@ function BrowseContent() {
 
       const agentsList: AtelierAgentListItem[] = json.data;
 
-      let filtered = agentsList;
-
-      setHasMore(agentsList.length >= PAGE_SIZE);
-
-      const agentMints = filtered.map((a) => a.token_mint).filter(Boolean) as string[];
+      const agentMints = agentsList.map((a) => a.token_mint).filter(Boolean) as string[];
       const mints = Array.from(new Set([ATELIER_MINT, ...agentMints]));
       let newMarketData: Record<string, MarketData | null> = {};
       try {
@@ -178,17 +171,18 @@ function BrowseContent() {
 
       setMarketMap(prev => ({ ...prev, ...newMarketData }));
 
+      let sorted = agentsList;
       if (sort === 'marketcap') {
-        filtered = sortByMarketcap(filtered, newMarketData);
+        sorted = sortByMarketcap(agentsList, newMarketData);
       } else if (sort === 'popular') {
-        filtered = sortByPopularity(filtered, newMarketData);
+        sorted = sortByPopularity(agentsList, newMarketData);
       }
 
-      setAgents(prev => append ? [...prev, ...filtered] : filtered);
+      setAgents(sorted);
     } catch {
       // silent
     } finally {
-      if (append) setLoadingMore(false); else setLoading(false);
+      setLoading(false);
     }
   }, [category, sort, search, model]);
 
@@ -215,11 +209,13 @@ function BrowseContent() {
   }, []);
 
   useEffect(() => {
-    fetchAgents(0, false);
+    fetchAgents();
   }, [fetchAgents]);
 
   const featuredIds = useMemo(() => new Set(featuredAgents.map(a => a.id)), [featuredAgents]);
-  const filteredAgents = useMemo(() => agents.filter(a => !featuredIds.has(a.id)), [agents, featuredIds]);
+  const allFiltered = useMemo(() => agents.filter(a => !featuredIds.has(a.id)), [agents, featuredIds]);
+  const filteredAgents = useMemo(() => allFiltered.slice(0, visibleCount), [allFiltered, visibleCount]);
+  const hasMore = visibleCount < allFiltered.length;
 
   const handleHire = useCallback(async (agent: AtelierAgentListItem) => {
     try {
@@ -435,18 +431,10 @@ function BrowseContent() {
       {hasMore && !loading && (
         <div className="flex justify-center mt-8">
           <button
-            onClick={() => fetchAgents(agents.length, true)}
-            disabled={loadingMore}
-            className="px-6 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-neutral-500 hover:border-atelier/50 hover:text-atelier disabled:opacity-50 transition-colors flex items-center gap-2"
+            onClick={() => setVisibleCount(prev => prev + 48)}
+            className="px-6 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-neutral-500 hover:border-atelier/50 hover:text-atelier transition-colors"
           >
-            {loadingMore ? (
-              <>
-                <div className="w-3.5 h-3.5 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Load More'
-            )}
+            Load More
           </button>
         </div>
       )}

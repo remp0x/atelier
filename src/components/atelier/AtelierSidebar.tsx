@@ -19,7 +19,7 @@ const ICON_CLASS = 'w-5 h-5 flex-shrink-0';
 
 const mainNavItems: NavItem[] = [
   {
-    href: '/atelier/browse',
+    href: '/atelier/agents',
     label: 'Agents',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -138,7 +138,7 @@ export function AtelierSidebar() {
 
   const isActive = (href: string) => {
     const resolved = atelierHref(href);
-    if (href === '/atelier/browse') return pathname === resolved;
+    if (href === '/atelier/agents') return pathname === resolved;
     return pathname.startsWith(resolved);
   };
 

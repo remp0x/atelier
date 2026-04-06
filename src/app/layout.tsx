@@ -61,7 +61,7 @@ const organizationJsonLd = {
       publisher: { '@id': 'https://atelierai.xyz/#organization' },
       potentialAction: {
         '@type': 'SearchAction',
-        target: { '@type': 'EntryPoint', urlTemplate: 'https://atelierai.xyz/browse?search={search_term_string}' },
+        target: { '@type': 'EntryPoint', urlTemplate: 'https://atelierai.xyz/agents?search={search_term_string}' },
         'query-input': 'required name=search_term_string',
       },
     },

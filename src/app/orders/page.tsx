@@ -168,7 +168,7 @@ function OrdersContent() {
           <p className="text-gray-500 dark:text-neutral-400 font-mono text-sm mb-1">No orders yet</p>
           <p className="text-gray-400 dark:text-neutral-600 text-xs mb-4">Hire an AI agent to get started</p>
           <Link
-            href={atelierHref('/atelier/browse')}
+            href={atelierHref('/atelier/agents')}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded border border-atelier text-atelier text-sm font-mono font-medium hover:bg-atelier hover:text-white transition-all duration-200"
           >
             Browse Agents

@@ -9,7 +9,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const staticPages: MetadataRoute.Sitemap = [
     { url: BASE_URL, changeFrequency: 'weekly', priority: 1.0 },
-    { url: `${BASE_URL}/browse`, changeFrequency: 'daily', priority: 0.9 },
+    { url: `${BASE_URL}/agents`, changeFrequency: 'daily', priority: 0.9 },
     { url: `${BASE_URL}/token`, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${BASE_URL}/register`, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${BASE_URL}/docs`, changeFrequency: 'monthly', priority: 0.5 },

@@ -479,8 +479,8 @@ export default function AtelierLandingPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              if (heroSearch.trim()) router.push(atelierHref(`/atelier/browse?search=${encodeURIComponent(heroSearch.trim())}`));
-              else router.push(atelierHref('/atelier/browse'));
+              if (heroSearch.trim()) router.push(atelierHref(`/atelier/agents?search=${encodeURIComponent(heroSearch.trim())}`));
+              else router.push(atelierHref('/atelier/agents'));
             }}
             className="max-w-xl mx-auto mb-6"
           >
@@ -510,7 +510,7 @@ export default function AtelierLandingPage() {
             {POPULAR_SEARCHES.map((term) => (
               <Link
                 key={term}
-                href={atelierHref(`/atelier/browse?search=${encodeURIComponent(term)}`)}
+                href={atelierHref(`/atelier/agents?search=${encodeURIComponent(term)}`)}
                 className="px-3 py-1 rounded-full text-2xs font-mono text-gray-500 dark:text-neutral-400 border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 hover:text-atelier transition-colors"
               >
                 {term}
@@ -545,7 +545,7 @@ export default function AtelierLandingPage() {
                   <span className="w-3 h-3 rounded-full bg-green-400/60" />
                 </div>
                 <div className="flex-1 flex justify-center">
-                  <span className="text-2xs font-mono text-gray-400 dark:text-neutral-500 bg-gray-200 dark:bg-neutral-800 rounded px-3 py-0.5">atelierai.xyz/browse</span>
+                  <span className="text-2xs font-mono text-gray-400 dark:text-neutral-500 bg-gray-200 dark:bg-neutral-800 rounded px-3 py-0.5">atelierai.xyz/agents</span>
                 </div>
               </div>
               <div className="relative aspect-[16/9] overflow-hidden">
@@ -604,7 +604,7 @@ export default function AtelierLandingPage() {
                 transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
               >
                 <Link
-                  href={atelierHref(`/atelier/browse?category=${cat.category}`)}
+                  href={atelierHref(`/atelier/agents?category=${cat.category}`)}
                   className="group relative block p-6 rounded-xl bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 h-full overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-atelier/10 hover:-translate-y-1"
                 >
                   <div className="absolute inset-0 bg-gradient-to-br from-atelier/0 via-atelier/0 to-atelier/0 group-hover:from-atelier/5 group-hover:via-transparent group-hover:to-atelier/3 transition-all duration-500" />
@@ -722,7 +722,7 @@ export default function AtelierLandingPage() {
                     </div>
                   ))}
                   <Link
-                    href={atelierHref('/atelier/browse')}
+                    href={atelierHref('/atelier/agents')}
                     className="group inline-flex items-center gap-2 text-sm font-mono font-semibold text-atelier hover:text-atelier-bright transition-colors mt-2"
                   >
                     Browse Agents
@@ -985,7 +985,7 @@ export default function AtelierLandingPage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
-                href={atelierHref('/atelier/browse')}
+                href={atelierHref('/atelier/agents')}
                 className="group inline-flex items-center gap-2 px-8 py-3.5 border border-atelier/60 text-atelier font-medium rounded text-sm tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20"
               >
                 Browse Agents

@@ -19,7 +19,7 @@ export function AtelierMobileNav() {
 
   const isActive = (href: string) => {
     const resolved = atelierHref(href);
-    if (href === '/atelier/browse') return pathname === resolved;
+    if (href === '/atelier/agents') return pathname === resolved;
     return pathname.startsWith(resolved);
   };
 
@@ -44,9 +44,9 @@ export function AtelierMobileNav() {
         <div className="flex items-center justify-around h-14 px-2">
           {/* Browse */}
           <Link
-            href={atelierHref('/atelier/browse')}
+            href={atelierHref('/atelier/agents')}
             className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
-              isActive('/atelier/browse') ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400'
+              isActive('/atelier/agents') ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400'
             }`}
           >
             <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>

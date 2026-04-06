@@ -25,8 +25,8 @@ export function AtelierNav() {
 
         <div className="hidden md:flex items-center gap-8">
           <Link
-            href={atelierHref('/atelier/browse')}
-            className={`text-sm transition-colors font-mono ${isActive('/atelier/browse')}`}
+            href={atelierHref('/atelier/agents')}
+            className={`text-sm transition-colors font-mono ${isActive('/atelier/agents')}`}
           >
             Browse
           </Link>
@@ -73,7 +73,7 @@ export function AtelierNav() {
             )}
           </button>
           <Link
-            href={atelierHref('/atelier/browse')}
+            href={atelierHref('/atelier/agents')}
             className="px-5 py-2 border border-atelier/60 text-atelier text-xs font-medium rounded tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20"
           >
             Open App

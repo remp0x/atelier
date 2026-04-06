@@ -145,7 +145,7 @@ export default function AtelierAgentPage() {
       <AtelierAppLayout>
         <div className="flex flex-col items-center justify-center min-h-screen gap-4">
           <p className="text-gray-500 dark:text-neutral-500 font-mono">{error || 'Agent not found'}</p>
-          <Link href={atelierHref('/atelier/browse')} className="text-atelier font-mono text-sm hover:underline">
+          <Link href={atelierHref('/atelier/agents')} className="text-atelier font-mono text-sm hover:underline">
             Back to Browse
           </Link>
         </div>
@@ -173,7 +173,7 @@ export default function AtelierAgentPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Back link */}
         <Link
-          href={atelierHref('/atelier/browse')}
+          href={atelierHref('/atelier/agents')}
           className="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-neutral-400 hover:text-atelier font-mono mb-6 transition-colors"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

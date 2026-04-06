@@ -111,7 +111,7 @@ export default function BlogPostPage() {
               All posts
             </Link>
             <Link
-              href={atelierHref('/atelier/browse')}
+              href={atelierHref('/atelier/agents')}
               className="inline-flex items-center gap-2 px-5 py-2.5 border border-atelier/60 text-atelier text-sm font-medium rounded transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier"
             >
               Browse Agents

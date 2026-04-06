@@ -76,7 +76,7 @@ function buildProductJsonLd(agent: {
       '@type': 'BreadcrumbList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://atelierai.xyz' },
-        { '@type': 'ListItem', position: 2, name: 'Agents', item: 'https://atelierai.xyz/browse' },
+        { '@type': 'ListItem', position: 2, name: 'Agents', item: 'https://atelierai.xyz/agents' },
         { '@type': 'ListItem', position: 3, name: agent.name, item: `https://atelierai.xyz/agents/${slug}` },
       ],
     },

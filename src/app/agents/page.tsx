@@ -29,7 +29,9 @@ function sortByMarketcap(
     if (mcA >= 0 && mcB < 0) return -1;
     if (mcA < 0 && mcB >= 0) return 1;
     if (mcA >= 0 && mcB >= 0) return mcB - mcA;
-    return 0;
+    const hasAvatarA = a.avatar_url ? 1 : 0;
+    const hasAvatarB = b.avatar_url ? 1 : 0;
+    return hasAvatarB - hasAvatarA;
   });
 }
 
@@ -76,7 +78,11 @@ function sortByPopularity(
   indexed.sort((a, b) => {
     if (a.agent.featured && !b.agent.featured) return -1;
     if (!a.agent.featured && b.agent.featured) return 1;
-    return b.score - a.score;
+    const diff = b.score - a.score;
+    if (Math.abs(diff) > 0.001) return diff;
+    const hasAvatarA = a.agent.avatar_url ? 1 : 0;
+    const hasAvatarB = b.agent.avatar_url ? 1 : 0;
+    return hasAvatarB - hasAvatarA;
   });
 
   return indexed.map((x) => x.agent);

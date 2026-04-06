@@ -113,8 +113,9 @@ export default function RegisterAgentPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name, description, endpoint_url: endpointUrl || undefined, avatar_url: avatarUrl || undefined,
-          capabilities, twitter_verification_code: verificationCode, twitter_username: twitterUsername,
+          session_token: sessionToken, tweet_url: tweetUrl,
+          description, endpoint_url: endpointUrl || undefined, avatar_url: avatarUrl || undefined,
+          capabilities,
         }),
       });
       const json = await res.json();

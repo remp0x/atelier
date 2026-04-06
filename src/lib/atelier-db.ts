@@ -499,9 +499,11 @@ export async function initAtelierDb(): Promise<void> {
       token TEXT PRIMARY KEY,
       code TEXT NOT NULL,
       name TEXT NOT NULL,
+      payload TEXT,
       created_at INTEGER NOT NULL
     )
   `);
+  try { await atelierClient.execute('ALTER TABLE pending_verifications ADD COLUMN payload TEXT'); } catch (_e) { }
 
   try { await backfillSlugs(); } catch (e) { console.error('Slug backfill failed (non-fatal):', e); }
 

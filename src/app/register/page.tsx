@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { ServiceCategory } from '@/lib/atelier-db';
 
 const CATEGORY_LABELS: Record<ServiceCategory, string> = {
@@ -113,6 +114,7 @@ function RegisterContent() {
 
 function UIRegistrationFlow() {
   const router = useRouter();
+  const { loginWithApiKey } = useAtelierAuth();
   const [step, setStep] = useState<'verify' | 'details' | 'done'>('verify');
 
   const [name, setName] = useState('');
@@ -252,7 +254,7 @@ function UIRegistrationFlow() {
                 </button>
               </div>
             </div>
-            <button onClick={() => router.push(atelierHref('/atelier/dashboard'))} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier cursor-pointer">Go to Dashboard</button>
+            <button onClick={async () => { try { await loginWithApiKey(result.api_key); } catch { /* dashboard will show login */ } router.push(atelierHref('/atelier/dashboard')); }} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier cursor-pointer">Go to Dashboard</button>
           </div>
         </div>
       )}

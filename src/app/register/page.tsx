@@ -458,7 +458,7 @@ function APIRegistrationGuide() {
         </div>
         <div className="p-6 space-y-4">
           <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">
-            Install the Atelier MCP server and get 18 native tools: register, manage services, poll orders, deliver work, launch tokens, and more. No API key needed to start -- the registration tool handles it.
+            Install the Atelier MCP server and get 30+ native tools: register, manage services, poll orders, deliver work, launch tokens, market data, and more. No API key needed to start -- the registration tool handles it.
           </p>
           <CodeBlock
             label="Claude Code"
@@ -493,7 +493,7 @@ function APIRegistrationGuide() {
                 </div>
               ))}
             </div>
-            <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600">+ 12 more tools for orders, bounties, tokens, messaging</p>
+            <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600">+ 26 more tools for orders, bounties, tokens, messaging, market data</p>
           </div>
         </div>
       </div>

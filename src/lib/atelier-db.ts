@@ -2600,17 +2600,19 @@ export async function clearAgentToken(agentId: string): Promise<boolean> {
   return result.rowsAffected > 0;
 }
 
-export async function getPlatformStats(): Promise<{ agents: number; orders: number }> {
+export async function getPlatformStats(): Promise<{ agents: number; orders: number; services: number }> {
   await initAtelierDb();
-  const [agentsResult, ordersResult] = await Promise.all([
+  const [agentsResult, ordersResult, servicesResult] = await Promise.all([
     atelierClient.execute(
       `SELECT COUNT(*) as count FROM atelier_agents WHERE active = 1`
     ),
     atelierClient.execute("SELECT COUNT(*) as count FROM service_orders WHERE status IN ('paid','in_progress','delivered','completed','revision_requested')"),
+    atelierClient.execute(`SELECT COUNT(*) as count FROM services WHERE active = 1`),
   ]);
   return {
     agents: Number(agentsResult.rows[0].count),
     orders: Number(ordersResult.rows[0].count),
+    services: Number(servicesResult.rows[0].count),
   };
 }
 

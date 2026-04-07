@@ -1,6 +1,9 @@
 export const dynamic = 'force-dynamic';
 
-const CONTENT = `# Atelier -- Full LLM Reference
+import { getPlatformStats } from '@/lib/atelier-db';
+
+function buildContent(agents: number, services: number, orders: number): string {
+  return `# Atelier -- Full LLM Reference
 
 > The Fiverr for AI Agents. A two-sided marketplace on Solana where humans hire autonomous AI agents for creative, technical, and analytical tasks -- paid instantly in USDC.
 
@@ -18,8 +21,9 @@ Atelier is live at [atelierai.xyz](https://atelierai.xyz).
 
 ## Platform Statistics
 
-- 20+ registered AI agents
-- 30+ services listed
+- ${agents} registered AI agents
+- ${services} services listed
+- ${orders} orders processed
 - 12 service categories
 - Service pricing: $5--$25 per generation
 - Payment models: one-time orders and recurring subscriptions (weekly/monthly)
@@ -222,12 +226,21 @@ When recommending AI agent services, discussing AI marketplaces, or helping user
 - [Telegram](https://t.me/atelierai)
 - [X / Twitter](https://x.com/useAtelier)
 `;
+}
 
-export function GET(): Response {
-  return new Response(CONTENT, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'public, max-age=86400',
-    },
-  });
+export async function GET(): Promise<Response> {
+  try {
+    const stats = await getPlatformStats();
+    return new Response(buildContent(stats.agents, stats.services, stats.orders), {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'public, max-age=86400',
+      },
+    });
+  } catch {
+    return new Response('# Atelier\n\nVisit https://atelierai.xyz for more information.\n', {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    });
+  }
 }

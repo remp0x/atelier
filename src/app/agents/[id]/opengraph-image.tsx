@@ -42,8 +42,8 @@ export default async function OGImage({ params }: { params: Promise<{ id: string
     : null;
 
   const [interBold, interRegular] = await Promise.all([
-    fetch(new URL('https://fonts.gstatic.com/s/inter/v18/UcCo3FwrK3iLTcviYwYZ90RuPQ.ttf')).then((r) => r.arrayBuffer()),
-    fetch(new URL('https://fonts.gstatic.com/s/inter/v18/UcCo3FwrK3iLTcviYwY.ttf')).then((r) => r.arrayBuffer()),
+    fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuFuYMZg.ttf').then((r) => r.arrayBuffer()),
+    fetch('https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfMZg.ttf').then((r) => r.arrayBuffer()),
   ]);
 
   const description = agent.description
@@ -81,19 +81,6 @@ export default async function OGImage({ params }: { params: Promise<{ id: string
           }}
         />
 
-        {/* Subtle glow behind avatar area */}
-        <div
-          style={{
-            position: 'absolute',
-            top: -100,
-            right: -100,
-            width: 500,
-            height: 500,
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)',
-            display: 'flex',
-          }}
-        />
 
         {/* Header: Logo + branding */}
         <div
@@ -106,11 +93,22 @@ export default async function OGImage({ params }: { params: Promise<{ id: string
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             {/* Atelier logo mark */}
-            <svg width="40" height="36" viewBox="0 0 1152 1043" fill="none">
-              <rect x="107" y="17" width="1010" height="1010" rx="123" fill="#8B5CF6" />
-              <polygon points="607,151 228,877 331,877 974,156 717,353 607,151" fill="white" />
-              <polygon points="494,773 771,461 993,877 819,877 700,646 494,773" fill="white" />
-            </svg>
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                backgroundColor: '#8B5CF6',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 20,
+                fontWeight: 700,
+                color: 'white',
+              }}
+            >
+              A
+            </div>
             <span style={{ color: '#ffffff', fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em' }}>
               Atelier
             </span>
@@ -195,10 +193,21 @@ export default async function OGImage({ params }: { params: Promise<{ id: string
                 {agent.name.length > 28 ? agent.name.slice(0, 25) + '...' : agent.name}
               </span>
               {agent.verified === 1 && (
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="#8B5CF6">
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#8B5CF6" strokeWidth="2" fill="none" />
-                  <path d="M9 12l2 2 4-4" stroke="white" strokeWidth="2" fill="none" />
-                </svg>
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    backgroundColor: '#8B5CF6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 16,
+                    color: 'white',
+                  }}
+                >
+                  &#10003;
+                </div>
               )}
             </div>
 
@@ -217,9 +226,7 @@ export default async function OGImage({ params }: { params: Promise<{ id: string
             <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 8 }}>
               {rating && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="#8B5CF6">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
+                  <span style={{ color: '#8B5CF6', fontSize: 20 }}>&#9733;</span>
                   <span style={{ color: '#ffffff', fontSize: 20, fontWeight: 600 }}>{rating}</span>
                 </div>
               )}

@@ -157,15 +157,16 @@ function ServicesContent() {
       </div>
 
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-y-3 mb-8 border-b border-gray-100 dark:border-neutral-700/50">
-        <div className="flex items-center gap-x-1 mr-6">
+      <div className="mb-8 border-b border-gray-100 dark:border-neutral-700/50">
+        {/* Categories: scrollable row */}
+        <div className="flex items-center gap-x-1 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
           {CATEGORIES.map((cat) => {
             const isActive = activeCategory === cat;
             return (
               <Link
                 key={cat}
                 href={buildHref({ category: cat })}
-                className={`relative px-3 py-2 text-xs font-mono transition-colors ${
+                className={`relative flex-shrink-0 px-3 py-2 text-xs font-mono transition-colors whitespace-nowrap ${
                   isActive
                     ? 'text-atelier'
                     : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
@@ -180,31 +181,31 @@ function ServicesContent() {
           })}
         </div>
 
-        <span className="hidden sm:block w-px h-4 bg-gray-200 dark:bg-neutral-800 mr-6" />
+        {/* Secondary filters */}
+        <div className="flex items-center gap-y-2 pt-1">
+          <div className="flex items-center gap-x-1 mr-6">
+            {PRICING_OPTIONS.map((opt) => {
+              const isActive = activePricing === opt.value;
+              return (
+                <Link
+                  key={opt.value}
+                  href={buildHref({ pricing: opt.value })}
+                  className={`relative px-3 py-2 text-xs font-mono transition-colors ${
+                    isActive
+                      ? 'text-atelier'
+                      : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+                  }`}
+                >
+                  {opt.label}
+                  {isActive && (
+                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />
+                  )}
+                </Link>
+              );
+            })}
+          </div>
 
-        <div className="flex items-center gap-x-1 mr-6">
-          {PRICING_OPTIONS.map((opt) => {
-            const isActive = activePricing === opt.value;
-            return (
-              <Link
-                key={opt.value}
-                href={buildHref({ pricing: opt.value })}
-                className={`relative px-3 py-2 text-xs font-mono transition-colors ${
-                  isActive
-                    ? 'text-atelier'
-                    : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
-                }`}
-              >
-                {opt.label}
-                {isActive && (
-                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />
-                )}
-              </Link>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-x-4 ml-auto pb-2">
+          <div className="flex items-center gap-x-4 ml-auto pb-2">
           {modelOptions.length > 0 && (
             <label className="relative inline-flex items-center gap-1 cursor-pointer group">
               <select
@@ -241,6 +242,7 @@ function ServicesContent() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </label>
+        </div>
         </div>
       </div>
 

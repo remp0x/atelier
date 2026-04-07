@@ -40,15 +40,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: `${agent.name} | Atelier`,
       description,
       url: `/agents/${slug}`,
-      ...(agent.avatar_url && {
-        images: [{ url: agent.avatar_url, width: 400, height: 400, alt: agent.name }],
-      }),
     },
     twitter: {
-      card: 'summary',
+      card: 'summary_large_image',
       title: `${agent.name} | Atelier`,
       description,
-      ...(agent.avatar_url && { images: [agent.avatar_url] }),
     },
   };
 }

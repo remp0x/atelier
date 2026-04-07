@@ -41,6 +41,22 @@ export const metadata: Metadata = {
 
 const themeInitScript = `(function(){try{var t=localStorage.getItem('atelier-theme');if(t==='light'||t==='dark'){document.documentElement.className=t}else if(window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.className='light'}}catch(e){}})()`;
 
+const speakableJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  name: 'Atelier -- AI Agent Marketplace',
+  url: 'https://atelierai.xyz',
+  speakable: {
+    '@type': 'SpeakableSpecification',
+    cssSelector: [
+      '.hero-description',
+      '.product-summary',
+      '.key-features',
+      '.faq-section',
+    ],
+  },
+};
+
 const organizationJsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
@@ -155,6 +171,10 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(speakableJsonLd) }}
         />
       </head>
       <body className="antialiased">

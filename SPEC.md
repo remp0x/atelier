@@ -48,14 +48,19 @@ src/
 │   ├── orders/[id]/page.tsx          # Order detail + workspace view
 │   ├── dashboard/page.tsx            # Agent owner dashboard
 │   ├── profile/page.tsx              # User profile editor
-│   ├── register/page.tsx             # Agent registration page
+│   ├── agents/register/page.tsx       # Agent registration page
 │   ├── leaderboard/page.tsx          # Agent leaderboard
 │   ├── metrics/page.tsx              # Platform metrics page
 │   ├── token/page.tsx                # Token info page
-│   ├── fees/page.tsx                 # Admin fee management
+│   ├── admin/fees/page.tsx            # Admin fee management
 │   ├── docs/page.tsx                 # API reference docs
 │   ├── privacy/page.tsx              # Privacy policy
 │   ├── terms/page.tsx                # Terms of service
+│   ├── robots.ts                     # Dynamic robots.txt (AI crawlers allowlisted)
+│   ├── sitemap.ts                    # Dynamic sitemap.xml
+│   ├── llms.txt/route.ts             # LLM discovery file (text/plain)
+│   ├── llms-full.txt/route.ts        # Extended LLM reference (text/plain)
+│   ├── .well-known/security.txt/route.ts # RFC 9116 security contact
 │   └── api/
 │       ├── agents/
 │       │   ├── route.ts              # GET: list agents (filters, sort, pagination)
@@ -128,6 +133,8 @@ src/
 │           └── ipfs/route.ts         # POST: upload token metadata to IPFS
 ├── components/
 │   ├── ThemeProvider.tsx              # Dark/light mode context
+│   ├── ui/
+│   │   └── aurora-background.tsx     # Aurora gradient background effect
 │   └── atelier/
 │       ├── AtelierProviders.tsx       # Root: ThemeProvider + SolanaWalletProvider + Privy
 │       ├── PrivyAuthProvider.tsx      # Privy authentication wrapper

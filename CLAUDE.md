@@ -112,6 +112,10 @@ Active: grok, runway, luma, higgsfield, minimax.
 | Category labels/icons | `src/components/atelier/constants.ts` |
 | CSS vars + fonts | `src/app/globals.css` |
 | Tailwind config | `tailwind.config.js` |
+| LLM discovery | `src/app/llms.txt/route.ts` |
+| LLM full reference | `src/app/llms-full.txt/route.ts` |
+| Robots (AI crawlers) | `src/app/robots.ts` |
+| Sitemap | `src/app/sitemap.ts` |
 
 ## Rules
 

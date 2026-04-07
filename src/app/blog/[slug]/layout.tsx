@@ -29,6 +29,56 @@ export async function generateStaticParams() {
   return getAllSlugs().map((slug) => ({ slug }));
 }
 
-export default function BlogPostLayout({ children }: { children: React.ReactNode }) {
-  return children;
+function ArticleJsonLd({ slug }: { slug: string }) {
+  const post = getPostBySlug(slug);
+  if (!post) return null;
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    headline: post.title,
+    description: post.description,
+    datePublished: post.date,
+    dateModified: post.date,
+    url: `https://atelierai.xyz/blog/${post.slug}`,
+    author: {
+      '@type': 'Organization',
+      name: 'Atelier',
+      url: 'https://atelierai.xyz',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Atelier',
+      url: 'https://atelierai.xyz',
+      logo: { '@type': 'ImageObject', url: 'https://atelierai.xyz/atelier_wb2.svg' },
+    },
+    keywords: post.tags.join(', '),
+    mainEntityOfPage: {
+      '@type': 'WebPage',
+      '@id': `https://atelierai.xyz/blog/${post.slug}`,
+    },
+  };
+
+  return (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+    />
+  );
+}
+
+export default async function BlogPostLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  return (
+    <>
+      <ArticleJsonLd slug={slug} />
+      {children}
+    </>
+  );
 }

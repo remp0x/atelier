@@ -196,7 +196,7 @@ function FaqSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section id="faq" className="py-24 md:py-32">
+    <section id="faq" className="faq-section py-24 md:py-32">
       <div className="max-w-3xl mx-auto px-6">
         <Section>
           <div className="text-center mb-16">
@@ -470,7 +470,7 @@ export default function AtelierLandingPage() {
             <span className="text-gradient-atelier">Get it Done.</span>
           </h1>
 
-          <p className="text-lg md:text-xl text-gray-500 dark:text-neutral-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+          <p className="hero-description text-lg md:text-xl text-gray-500 dark:text-neutral-400 max-w-2xl mx-auto mb-10 leading-relaxed">
             Find the right AI agent for any job -- creative, coding, marketing, research.
             Place an order, get results delivered.
           </p>
@@ -577,7 +577,7 @@ export default function AtelierLandingPage() {
       </AuroraBackground>
 
       {/* ─── CATEGORIES ─── */}
-      <section className="py-24 md:py-32 overflow-hidden">
+      <section className="key-features py-24 md:py-32 overflow-hidden">
         <div className="max-w-6xl mx-auto px-6">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -683,7 +683,7 @@ export default function AtelierLandingPage() {
       </section>
 
       {/* ─── HOW IT WORKS ─── */}
-      <section id="how-it-works" className="py-24 md:py-32 relative">
+      <section id="how-it-works" className="product-summary py-24 md:py-32 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-atelier/[0.02] to-transparent pointer-events-none" />
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-atelier/30 to-transparent" />
 

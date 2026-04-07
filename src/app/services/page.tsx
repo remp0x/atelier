@@ -133,7 +133,7 @@ function ServicesContent() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-black dark:text-white font-display">
           Browse Services
@@ -145,86 +145,102 @@ function ServicesContent() {
 
       {/* Search */}
       <div className="mb-6">
-        <form onSubmit={(e) => { e.preventDefault(); router.push(buildHref({ search: searchInput || undefined })); }}>
+        <form className="relative max-w-sm" onSubmit={(e) => { e.preventDefault(); router.push(buildHref({ search: searchInput || undefined })); }}>
+          <svg className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+          </svg>
           <input
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search services..."
-            className="w-full max-w-md px-4 py-2 rounded-lg bg-gray-100/60 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-atelier"
+            className="w-full pl-6 pr-2 py-1.5 bg-transparent border-b border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-atelier transition-colors"
           />
         </form>
       </div>
 
-      {/* Category filters */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {CATEGORIES.map((cat) => {
-          const isActive = activeCategory === cat;
-          return (
-            <Link
-              key={cat}
-              href={buildHref({ category: cat })}
-              className={`px-4 py-2 rounded-full text-sm font-mono transition-colors ${
-                isActive
-                  ? 'border border-atelier text-atelier bg-atelier/10'
-                  : 'border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier/50 hover:text-atelier'
-              }`}
-            >
-              {CATEGORY_LABELS[cat]}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Price + Provider + Sort filters */}
-      <div className="flex flex-wrap items-center gap-4 mb-8">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono">Price:</span>
-          {PRICE_OPTIONS.map((opt) => (
-            <Link
-              key={opt.value}
-              href={buildHref({ price: opt.value })}
-              className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
-                activePrice === opt.value
-                  ? 'text-atelier bg-atelier/10'
-                  : 'text-gray-600 dark:text-neutral-300 hover:text-atelier'
-              }`}
-            >
-              {opt.label}
-            </Link>
-          ))}
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-y-3 mb-8 border-b border-gray-100 dark:border-neutral-700/50">
+        <div className="flex items-center gap-x-1 mr-6">
+          {CATEGORIES.map((cat) => {
+            const isActive = activeCategory === cat;
+            return (
+              <Link
+                key={cat}
+                href={buildHref({ category: cat })}
+                className={`relative px-3 py-2 text-xs font-mono transition-colors ${
+                  isActive
+                    ? 'text-atelier'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                {CATEGORY_LABELS[cat]}
+                {isActive && (
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />
+                )}
+              </Link>
+            );
+          })}
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono">Provider:</span>
-          <select
-            value={activeProvider}
-            onChange={(e) => {
-              window.location.href = buildHref({ provider: e.target.value });
-            }}
-            className="px-2 py-1 rounded text-xs font-mono bg-transparent border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 focus:outline-none focus:border-atelier"
-          >
-            {PROVIDER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+        <span className="hidden sm:block w-px h-4 bg-gray-200 dark:bg-neutral-800 mr-6" />
+
+        <div className="flex items-center gap-x-1 mr-6">
+          {PRICE_OPTIONS.map((opt) => {
+            const isActive = activePrice === opt.value;
+            return (
+              <Link
+                key={opt.value}
+                href={buildHref({ price: opt.value })}
+                className={`relative px-3 py-2 text-xs font-mono transition-colors ${
+                  isActive
+                    ? 'text-atelier'
+                    : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
+                }`}
+              >
+                {opt.label}
+                {isActive && (
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />
+                )}
+              </Link>
+            );
+          })}
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono">Sort:</span>
-          {SORT_OPTIONS.map((opt) => (
-            <Link
-              key={opt.value}
-              href={buildHref({ sort: opt.value })}
-              className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
-                activeSort === opt.value
-                  ? 'text-atelier bg-atelier/10'
-                  : 'text-gray-600 dark:text-neutral-300 hover:text-atelier'
-              }`}
+        <div className="flex items-center gap-x-4 ml-auto pb-2">
+          <label className="relative inline-flex items-center gap-1 cursor-pointer group">
+            <select
+              value={activeProvider}
+              onChange={(e) => {
+                router.push(buildHref({ provider: e.target.value }));
+              }}
+              className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
             >
-              {opt.label}
-            </Link>
-          ))}
+              {PROVIDER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </label>
+
+          <label className="relative inline-flex items-center gap-1 cursor-pointer group">
+            <select
+              value={activeSort}
+              onChange={(e) => {
+                router.push(buildHref({ sort: e.target.value }));
+              }}
+              className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </label>
         </div>
       </div>
 

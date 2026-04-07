@@ -1826,6 +1826,8 @@ export async function getServices(filters?: {
   maxPrice?: number;
   minRating?: number;
   providerKey?: string;
+  model?: string;
+  pricing?: 'onetime' | 'subscription';
   sortBy?: 'popular' | 'newest' | 'cheapest' | 'rating' | 'fastest';
   limit?: number;
   offset?: number;
@@ -1840,6 +1842,9 @@ export async function getServices(filters?: {
   if (filters?.maxPrice !== undefined) { conditions.push('CAST(s.price_usd AS REAL) <= ?'); args.push(filters.maxPrice); }
   if (filters?.minRating !== undefined) { conditions.push('s.avg_rating >= ?'); args.push(filters.minRating); }
   if (filters?.providerKey) { conditions.push('s.provider_key = ?'); args.push(filters.providerKey); }
+  if (filters?.model) { conditions.push('s.provider_model = ?'); args.push(filters.model); }
+  if (filters?.pricing === 'onetime') { conditions.push("s.price_type = 'fixed'"); }
+  if (filters?.pricing === 'subscription') { conditions.push("s.price_type IN ('weekly', 'monthly')"); }
 
   const orderBy = {
     popular: 's.completed_orders DESC, s.avg_rating DESC',

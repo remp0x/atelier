@@ -26,20 +26,10 @@ const CATEGORY_LABELS: Record<ServiceCategory | 'all', string> = {
 
 const CATEGORIES = Object.keys(CATEGORY_LABELS) as (ServiceCategory | 'all')[];
 
-const PRICE_OPTIONS = [
-  { value: 'all', label: 'Any Price' },
-  { value: 'under1', label: '< $1' },
-  { value: '1to5', label: '$1 - $5' },
-  { value: 'over5', label: '$5+' },
-] as const;
-
-const PROVIDER_OPTIONS = [
-  { value: 'all', label: 'All Providers' },
-  { value: 'grok', label: 'Grok' },
-{ value: 'runway', label: 'Runway' },
-  { value: 'luma', label: 'Luma' },
-  { value: 'higgsfield', label: 'Higgsfield' },
-  { value: 'minimax', label: 'MiniMax' },
+const PRICING_OPTIONS = [
+  { value: 'all', label: 'All pricing' },
+  { value: 'onetime', label: 'One-time' },
+  { value: 'subscription', label: 'Subscription' },
 ] as const;
 
 const SORT_OPTIONS = [
@@ -77,10 +67,11 @@ function ServicesContent() {
   const [hasMore, setHasMore] = useState(false);
   const [hireService, setHireService] = useState<ServiceWithAgent | null>(null);
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
+  const [modelOptions, setModelOptions] = useState<string[]>([]);
 
   const activeCategory = searchParams.get('category') || 'all';
-  const activePrice = searchParams.get('price') || 'all';
-  const activeProvider = searchParams.get('provider') || 'all';
+  const activePricing = searchParams.get('pricing') || 'all';
+  const activeModel = searchParams.get('model') || 'all';
   const activeSort = searchParams.get('sort') || 'popular';
   const search = searchParams.get('search') || '';
 
@@ -91,8 +82,8 @@ function ServicesContent() {
     try {
       const params = new URLSearchParams();
       if (activeCategory !== 'all') params.set('category', activeCategory);
-      if (activePrice !== 'all') params.set('price', activePrice);
-      if (activeProvider !== 'all') params.set('provider', activeProvider);
+      if (activePricing !== 'all') params.set('pricing', activePricing);
+      if (activeModel !== 'all') params.set('model', activeModel);
       if (activeSort !== 'popular') params.set('sortBy', activeSort);
       if (search) params.set('search', search);
       params.set('limit', String(PAGE_SIZE));
@@ -109,18 +100,24 @@ function ServicesContent() {
     } finally {
       if (append) setLoadingMore(false); else setLoading(false);
     }
-  }, [activeCategory, activePrice, activeProvider, activeSort, search]);
+  }, [activeCategory, activePricing, activeModel, activeSort, search]);
 
   useEffect(() => {
     fetchServices(0, false);
   }, [fetchServices]);
 
+  useEffect(() => {
+    fetch('/api/models').then(r => r.json()).then(json => {
+      if (json.success) setModelOptions(json.data);
+    }).catch(() => {});
+  }, []);
+
   function buildHref(overrides: Record<string, string | undefined>): string {
     const params = new URLSearchParams();
     const merged = {
       category: activeCategory,
-      price: activePrice,
-      provider: activeProvider,
+      pricing: activePricing,
+      model: activeModel,
       sort: activeSort,
       search,
       ...overrides,
@@ -186,12 +183,12 @@ function ServicesContent() {
         <span className="hidden sm:block w-px h-4 bg-gray-200 dark:bg-neutral-800 mr-6" />
 
         <div className="flex items-center gap-x-1 mr-6">
-          {PRICE_OPTIONS.map((opt) => {
-            const isActive = activePrice === opt.value;
+          {PRICING_OPTIONS.map((opt) => {
+            const isActive = activePricing === opt.value;
             return (
               <Link
                 key={opt.value}
-                href={buildHref({ price: opt.value })}
+                href={buildHref({ pricing: opt.value })}
                 className={`relative px-3 py-2 text-xs font-mono transition-colors ${
                   isActive
                     ? 'text-atelier'
@@ -208,22 +205,25 @@ function ServicesContent() {
         </div>
 
         <div className="flex items-center gap-x-4 ml-auto pb-2">
-          <label className="relative inline-flex items-center gap-1 cursor-pointer group">
-            <select
-              value={activeProvider}
-              onChange={(e) => {
-                router.push(buildHref({ provider: e.target.value }));
-              }}
-              className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
-            >
-              {PROVIDER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </label>
+          {modelOptions.length > 0 && (
+            <label className="relative inline-flex items-center gap-1 cursor-pointer group">
+              <select
+                value={activeModel}
+                onChange={(e) => {
+                  router.push(buildHref({ model: e.target.value }));
+                }}
+                className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
+              >
+                <option value="all">All models</option>
+                {modelOptions.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+              <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </label>
+          )}
 
           <label className="relative inline-flex items-center gap-1 cursor-pointer group">
             <select

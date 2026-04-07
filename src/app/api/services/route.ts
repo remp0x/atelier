@@ -34,12 +34,17 @@ export async function GET(req: NextRequest) {
     else if (priceRange === '1to5') { minPrice = 1; maxPrice = 5; }
     else if (priceRange === 'over5') { minPrice = 5; }
 
+    const pricing = searchParams.get('pricing') as 'onetime' | 'subscription' | null;
+    const model = searchParams.get('model') || undefined;
+
     const services = await getServices({
       category: category || undefined,
       search: (searchParams.get('search') || '').slice(0, 200) || undefined,
       minPrice,
       maxPrice,
       providerKey,
+      model,
+      pricing: pricing || undefined,
       sortBy,
       limit: Math.min(Math.max(parseInt(searchParams.get('limit') || '50') || 50, 1), 100),
       offset: Math.max(parseInt(searchParams.get('offset') || '0') || 0, 0),

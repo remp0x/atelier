@@ -45,7 +45,7 @@ export function AtelierMobileNav() {
           {/* Browse */}
           <Link
             href={atelierHref('/atelier/agents')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
+            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-colors ${
               isActive('/atelier/agents') ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400'
             }`}
           >
@@ -58,7 +58,7 @@ export function AtelierMobileNav() {
           {/* Services */}
           <Link
             href={atelierHref('/atelier/services')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
+            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-colors ${
               isActive('/atelier/services') ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400'
             }`}
           >
@@ -68,10 +68,36 @@ export function AtelierMobileNav() {
             <span className="text-[10px] font-mono">Services</span>
           </Link>
 
+          {/* Bounties */}
+          <Link
+            href={atelierHref('/atelier/bounties')}
+            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-colors ${
+              isActive('/atelier/bounties') ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400'
+            }`}
+          >
+            <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+            </svg>
+            <span className="text-[10px] font-mono">Bounties</span>
+          </Link>
+
+          {/* Orders */}
+          <Link
+            href={atelierHref('/atelier/orders')}
+            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-colors ${
+              isActive('/atelier/orders') ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400'
+            }`}
+          >
+            <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+            <span className="text-[10px] font-mono">Orders</span>
+          </Link>
+
           {/* More */}
           <button
             onClick={() => setMenuOpen(true)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
+            className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg transition-colors ${
               menuOpen ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400'
             }`}
           >
@@ -80,19 +106,6 @@ export function AtelierMobileNav() {
             </svg>
             <span className="text-[10px] font-mono">More</span>
           </button>
-
-          {/* $ATELIER */}
-          <Link
-            href={atelierHref('/atelier/token')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
-              isActive('/atelier/token') ? 'text-atelier' : 'text-atelier/70'
-            }`}
-          >
-            <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span className="text-[10px] font-mono font-semibold">$ATELIER</span>
-          </Link>
         </div>
       </nav>
 
@@ -135,24 +148,24 @@ export function AtelierMobileNav() {
             </Link>
 
             <Link
-              href={atelierHref('/atelier/bounties')}
+              href={atelierHref('/atelier/token')}
               onClick={() => setMenuOpen(false)}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive('/atelier/bounties')
+                isActive('/atelier/token')
                   ? 'text-atelier bg-atelier/10'
-                  : 'text-gray-700 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900'
+                  : 'text-atelier/70 hover:bg-atelier/5'
               }`}
             >
               <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span className="text-sm font-mono">Bounties</span>
+              <span className="text-sm font-mono font-semibold">$ATELIER</span>
             </Link>
 
             {[
-              { href: '/atelier/orders', label: 'My Orders', icon: <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg> },
               { href: '/atelier/bounties/my', label: 'My Bounties', icon: <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" /></svg> },
               { href: '/atelier/dashboard', label: 'Dashboard', icon: <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" /></svg> },
+              { href: '/atelier/profile', label: 'Profile', icon: <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg> },
             ].map((item) => {
               if (!authenticated) {
                 if (item.href === '/atelier/dashboard') {
@@ -197,7 +210,7 @@ export function AtelierMobileNav() {
             })}
 
             <Link
-              href={atelierHref('/atelier/register')}
+              href={atelierHref('/atelier/agents/register')}
               onClick={() => setMenuOpen(false)}
               className="flex items-center gap-3 px-4 py-3 rounded-lg transition-colors text-atelier hover:bg-atelier/5"
             >

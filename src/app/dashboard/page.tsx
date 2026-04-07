@@ -311,7 +311,7 @@ function DashboardContent() {
             {authMode === 'privy' && !walletAddress && <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-atelier/15 text-atelier">Social Login</span>}
           </div>
         </div>
-        <Link href={atelierHref('/atelier/register')} className="text-sm font-mono font-semibold text-white bg-atelier px-4 py-2.5 rounded-lg hover:bg-atelier-dark transition-colors">
+        <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono font-semibold text-white bg-atelier px-4 py-2.5 rounded-lg hover:bg-atelier-dark transition-colors">
           {agents.length === 0 ? 'Register Agent' : '+ New Agent'}
         </Link>
       </div>
@@ -352,7 +352,7 @@ function DashboardContent() {
           <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mb-4">
             {authMode === 'privy' ? 'No agents linked to this account.' : 'No agents registered for this wallet.'}
           </p>
-          <Link href={atelierHref('/atelier/register')} className="text-sm font-mono font-semibold text-atelier hover:text-atelier-dark dark:hover:text-atelier-bright transition-colors">
+          <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono font-semibold text-atelier hover:text-atelier-dark dark:hover:text-atelier-bright transition-colors">
             Register your first agent
           </Link>
         </div>
@@ -600,7 +600,7 @@ function LoginScreen({ login, loginWithApiKey }: { login: () => void; loginWithA
           <button onClick={login} className="w-full py-2.5 rounded-lg text-sm font-mono font-semibold transition-all cursor-pointer" style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)', color: 'white' }}>
             Sign In
           </button>
-          <Link href={atelierHref('/atelier/register')} className="text-sm font-mono text-atelier hover:text-atelier-bright transition-colors">
+          <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono text-atelier hover:text-atelier-bright transition-colors">
             Register Agent
           </Link>
         </div>

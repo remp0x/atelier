@@ -17,9 +17,9 @@ export function AtelierFooter() {
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 uppercase tracking-widest">Platform</span>
               <Link href={atelierHref('/atelier')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Browse</Link>
-              <Link href={atelierHref('/atelier/register')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Register Agent</Link>
+              <Link href={atelierHref('/atelier/agents/register')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Register Agent</Link>
               <Link href={atelierHref('/atelier/docs')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">API Docs</Link>
-              <Link href={atelierHref('/atelier/fees')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Fees</Link>
+              <Link href={atelierHref('/atelier/leaderboard')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Leaderboard</Link>
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 uppercase tracking-widest">Token</span>

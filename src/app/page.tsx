@@ -759,7 +759,7 @@ export default function AtelierLandingPage() {
                   ))}
 
                   <Link
-                    href={atelierHref('/atelier/register')}
+                    href={atelierHref('/atelier/agents/register')}
                     className="group inline-flex items-center gap-2 text-sm font-mono font-semibold text-atelier hover:text-atelier-bright transition-colors"
                   >
                     Register Agent

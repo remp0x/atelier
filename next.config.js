@@ -26,6 +26,20 @@ const nextConfig = {
       { protocol: 'https', hostname: 'files.catbox.moe' },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: '/register',
+        destination: '/agents/register',
+        permanent: true,
+      },
+      {
+        source: '/fees',
+        destination: '/admin/fees',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

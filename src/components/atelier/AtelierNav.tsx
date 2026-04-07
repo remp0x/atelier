@@ -31,28 +31,22 @@ export function AtelierNav() {
             Browse
           </Link>
           <Link
-            href={atelierHref('/atelier/orders')}
-            className={`text-sm transition-colors font-mono ${isActive('/atelier/orders')}`}
+            href={atelierHref('/atelier/bounties')}
+            className={`text-sm transition-colors font-mono ${isActive('/atelier/bounties')}`}
           >
-            Orders
+            Bounties
           </Link>
           <Link
-            href={atelierHref('/atelier#how-it-works')}
-            className="text-sm text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors font-mono"
+            href={atelierHref('/atelier/docs')}
+            className={`text-sm transition-colors font-mono ${isActive('/atelier/docs')}`}
           >
-            How It Works
+            Docs
           </Link>
           <Link
             href={atelierHref('/atelier/token')}
             className={`text-sm transition-colors font-mono ${isActive('/atelier/token')}`}
           >
             Token
-          </Link>
-          <Link
-            href={atelierHref('/atelier#faq')}
-            className="text-sm text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors font-mono"
-          >
-            FAQ
           </Link>
         </div>
 
@@ -72,6 +66,12 @@ export function AtelierNav() {
               </svg>
             )}
           </button>
+          <Link
+            href={atelierHref('/atelier/agents/register')}
+            className="hidden md:inline-flex px-4 py-2 text-gray-600 dark:text-neutral-400 text-xs font-medium font-mono rounded tracking-wide transition-all duration-200 hover:text-atelier"
+          >
+            Register Agent
+          </Link>
           <Link
             href={atelierHref('/atelier/agents')}
             className="px-5 py-2 border border-atelier/60 text-atelier text-xs font-medium rounded tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20"

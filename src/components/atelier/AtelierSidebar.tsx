@@ -17,7 +17,7 @@ interface NavItem {
 
 const ICON_CLASS = 'w-5 h-5 flex-shrink-0';
 
-const mainNavItems: NavItem[] = [
+const discoverNavItems: NavItem[] = [
   {
     href: '/atelier/agents',
     label: 'Agents',
@@ -46,6 +46,57 @@ const mainNavItems: NavItem[] = [
     ),
   },
   {
+    href: '/atelier/leaderboard',
+    label: 'Leaderboard',
+    icon: (
+      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M18.75 4.236c.982.143 1.954.317 2.916.52A6.003 6.003 0 0016.27 9.728M18.75 4.236V4.5c0 2.108-.966 3.99-2.48 5.228m0 0a6.023 6.023 0 01-2.77.896m0 0c-.507.058-1.023.088-1.5.088s-.993-.03-1.5-.088m0 0a6.023 6.023 0 01-2.77-.896" />
+      </svg>
+    ),
+  },
+];
+
+const myStuffNavItems: NavItem[] = [
+  {
+    href: '/atelier/orders',
+    label: 'Orders',
+    icon: (
+      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/atelier/bounties/my',
+    label: 'Bounties',
+    icon: (
+      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/atelier/dashboard',
+    label: 'Dashboard',
+    icon: (
+      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+      </svg>
+    ),
+  },
+  {
+    href: '/atelier/profile',
+    label: 'Profile',
+    icon: (
+      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+      </svg>
+    ),
+  },
+];
+
+const platformNavItems: NavItem[] = [
+  {
     href: '/atelier/token',
     label: '$ATELIER',
     icon: (
@@ -63,47 +114,16 @@ const mainNavItems: NavItem[] = [
       </svg>
     ),
   },
-];
-
-const userNavItems: NavItem[] = [
   {
-    href: '/atelier/orders',
-    label: 'My Orders',
+    href: '/atelier/docs',
+    label: 'Docs',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/atelier/bounties/my',
-    label: 'My Bounties',
-    icon: (
-      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m3.75 9v6m3-3H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/atelier/profile',
-    label: 'Profile',
-    icon: (
-      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/atelier/dashboard',
-    label: 'Agent Dashboard',
-    icon: (
-      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
       </svg>
     ),
   },
 ];
-
 
 export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
@@ -214,14 +234,14 @@ export function AtelierSidebar() {
         </svg>
       </button>
 
-      {/* Main Nav */}
+      {/* Nav */}
       <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
-        {mainNavItems.map(renderNavLink)}
+        {discoverNavItems.map(renderNavLink)}
 
         {/* Register Agent CTA */}
         <div className="pt-2 mt-1">
           <Link
-            href={atelierHref('/atelier/register')}
+            href={atelierHref('/atelier/agents/register')}
             className={`flex items-center gap-3 h-10 rounded-lg transition-all text-atelier/70 hover:text-atelier hover:bg-atelier/5 ${
               expanded ? 'px-3' : 'justify-center px-0'
             }`}
@@ -240,18 +260,18 @@ export function AtelierSidebar() {
           </Link>
         </div>
 
-        {/* User Section */}
+        {/* My Stuff */}
         <div className="pt-3 pb-1">
           {expanded && (
             <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
-              Account
+              My Stuff
             </span>
           )}
           {!expanded && (
             <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
           )}
         </div>
-        {userNavItems.map((item) => {
+        {myStuffNavItems.map((item) => {
           if (!authenticated) {
             if (item.href === '/atelier/dashboard') {
               return (
@@ -300,6 +320,18 @@ export function AtelierSidebar() {
           <SignInButton expanded={expanded} />
         </div>
 
+        {/* Platform */}
+        <div className="pt-3 pb-1">
+          {expanded && (
+            <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
+              Platform
+            </span>
+          )}
+          {!expanded && (
+            <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
+          )}
+        </div>
+        {platformNavItems.map(renderNavLink)}
       </nav>
 
       {/* Bottom */}
@@ -332,7 +364,7 @@ export function AtelierSidebar() {
           </div>
         )}
 
-        {/* Icons: Theme, Docs, X, PH */}
+        {/* Icons: Theme, TG, X, PH */}
         <div className={`flex items-center ${expanded ? 'justify-between px-1' : 'justify-center gap-0 flex-col'}`}>
           <button
             onClick={toggleTheme}
@@ -349,16 +381,6 @@ export function AtelierSidebar() {
               </svg>
             )}
           </button>
-
-          <Link
-            href={atelierHref('/atelier/docs')}
-            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
-            title="API Docs"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-            </svg>
-          </Link>
 
           <a
             href="https://t.me/atelierai"

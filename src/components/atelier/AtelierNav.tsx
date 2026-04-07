@@ -15,15 +15,15 @@ export function AtelierNav() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-gray-200 dark:border-neutral-800 bg-white/80 dark:bg-black/80 backdrop-blur-xl">
-      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <Link href={atelierHref('/atelier')} className="flex items-center gap-2">
+      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center">
+        <Link href={atelierHref('/atelier')} className="flex items-center gap-2 flex-shrink-0">
           <Image src="/atelier_wb2.svg" alt="Atelier" width={24} height={24} className="w-6 h-6 rounded" />
           <span className="text-base font-bold font-display text-black dark:text-white">
             Atelier
           </span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-8">
+        <div className="hidden md:flex items-center gap-8 flex-1 justify-center">
           <Link
             href={atelierHref('/atelier/agents')}
             className={`text-sm transition-colors font-mono ${isActive('/atelier/agents')}`}
@@ -50,10 +50,10 @@ export function AtelierNav() {
           </Link>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 ml-auto md:ml-0 flex-shrink-0">
           <button
             onClick={toggleTheme}
-            className="flex items-center justify-center w-8 h-8 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
+            className="flex items-center justify-center w-9 h-9 rounded-lg transition-all cursor-pointer text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
             title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
           >
             {theme === 'dark' ? (
@@ -68,7 +68,7 @@ export function AtelierNav() {
           </button>
           <Link
             href={atelierHref('/atelier/agents/register')}
-            className="hidden md:inline-flex px-4 py-2 text-gray-600 dark:text-neutral-400 text-xs font-medium font-mono rounded tracking-wide transition-all duration-200 hover:text-atelier"
+            className="hidden md:inline-flex px-4 py-2 text-xs font-medium font-mono rounded tracking-wide transition-all duration-200 border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-400 hover:border-atelier/40 hover:text-atelier"
           >
             Register Agent
           </Link>

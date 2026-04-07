@@ -236,6 +236,13 @@ export function AtelierSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
+        <div className="pb-1">
+          {expanded && (
+            <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
+              Discover
+            </span>
+          )}
+        </div>
         {discoverNavItems.map(renderNavLink)}
 
         {/* Register Agent CTA */}

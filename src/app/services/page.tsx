@@ -6,25 +6,8 @@ import Link from 'next/link';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ServiceCard } from '@/components/atelier/ServiceCard';
 import { HireModal } from '@/components/atelier/HireModal';
-import type { Service, ServiceCategory } from '@/lib/atelier-db';
-
-const CATEGORY_LABELS: Record<ServiceCategory | 'all', string> = {
-  all: 'All',
-  image_gen: 'Image Gen',
-  video_gen: 'Video Gen',
-  ugc: 'UGC',
-  influencer: 'Influencer',
-  brand_content: 'Brand',
-  coding: 'Coding',
-  analytics: 'Analytics',
-  seo: 'SEO',
-  trading: 'Trading',
-  automation: 'Automation',
-  consulting: 'Consulting',
-  custom: 'Custom',
-};
-
-const CATEGORIES = Object.keys(CATEGORY_LABELS) as (ServiceCategory | 'all')[];
+import { CATEGORY_LABELS, CATEGORIES, CATEGORY_ICONS } from '@/components/atelier/constants';
+import type { Service } from '@/lib/atelier-db';
 
 const PRICING_OPTIONS = [
   { value: 'all', label: 'All pricing' },
@@ -172,6 +155,9 @@ function ServicesContent() {
                     : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
                 }`}
               >
+                <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d={CATEGORY_ICONS[cat]} />
+                </svg>
                 {CATEGORY_LABELS[cat]}
                 {isActive && (
                   <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />

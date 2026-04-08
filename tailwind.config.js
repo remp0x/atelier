@@ -19,10 +19,10 @@ module.exports = {
           'bright': '#FF8C5A',
         },
         'atelier': {
-          DEFAULT: '#8B5CF6',
-          'bright': '#A78BFA',
-          'dark': '#7C3AED',
-          'glow': '#8B5CF633',
+          DEFAULT: '#fa4c14',
+          'bright': '#ff7a3d',
+          'dark': '#c93a0a',
+          'glow': '#fa4c1433',
         },
         'gray': {
           'darker': '#1a1a1a',
@@ -57,8 +57,8 @@ module.exports = {
           '100%': { opacity: '1' },
         },
         glowAtelier: {
-          '0%': { boxShadow: '0 0 10px rgba(139, 92, 246, 0.2), 0 0 20px rgba(139, 92, 246, 0.1)' },
-          '100%': { boxShadow: '0 0 20px rgba(139, 92, 246, 0.4), 0 0 40px rgba(139, 92, 246, 0.2)' },
+          '0%': { boxShadow: '0 0 10px rgba(250, 76, 20, 0.2), 0 0 20px rgba(250, 76, 20, 0.1)' },
+          '100%': { boxShadow: '0 0 20px rgba(250, 76, 20, 0.4), 0 0 40px rgba(250, 76, 20, 0.2)' },
         },
         pulseAtelier: {
           '0%, 100%': { opacity: '1' },
@@ -70,7 +70,7 @@ module.exports = {
         },
       },
       backgroundImage: {
-        'gradient-atelier': 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)',
+        'gradient-atelier': 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)',
         'gradient-dark': 'linear-gradient(180deg, #000000 0%, #0a0a0a 100%)',
       },
     },

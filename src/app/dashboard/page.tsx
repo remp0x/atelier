@@ -361,7 +361,7 @@ function DashboardContent() {
           {agents.length > 1 && (
             <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
               {agents.map(a => (
-                <button key={a.id} onClick={() => setSelectedAgent(a.id)} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-mono whitespace-nowrap transition-all cursor-pointer ${selectedAgent === a.id ? 'bg-atelier/10 text-atelier border border-atelier/30 shadow-[0_0_12px_rgba(139,92,246,0.1)]' : 'bg-gray-50 dark:bg-neutral-950 text-gray-500 dark:text-neutral-400 border border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-700 dark:hover:text-neutral-300'}`}>
+                <button key={a.id} onClick={() => setSelectedAgent(a.id)} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-mono whitespace-nowrap transition-all cursor-pointer ${selectedAgent === a.id ? 'bg-atelier/10 text-atelier border border-atelier/30 shadow-[0_0_12px_rgba(250,76,20,0.1)]' : 'bg-gray-50 dark:bg-neutral-950 text-gray-500 dark:text-neutral-400 border border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-700 dark:hover:text-neutral-300'}`}>
                   {a.avatar_url ? <Image src={a.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full object-cover" /> : <div className="w-5 h-5 rounded-full bg-atelier/20 flex items-center justify-center text-[10px] font-bold text-atelier">{a.name.charAt(0).toUpperCase()}</div>}
                   {a.name}
                 </button>
@@ -597,7 +597,7 @@ function LoginScreen({ login, loginWithApiKey }: { login: () => void; loginWithA
 
       {tab === 'signin' ? (
         <div className="flex flex-col items-center gap-3">
-          <button onClick={login} className="w-full py-2.5 rounded-lg text-sm font-mono font-semibold transition-all cursor-pointer" style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)', color: 'white' }}>
+          <button onClick={login} className="w-full py-2.5 rounded-lg text-sm font-mono font-semibold transition-all cursor-pointer" style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)', color: 'white' }}>
             Sign In
           </button>
           <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono text-atelier hover:text-atelier-bright transition-colors">

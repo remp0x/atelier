@@ -73,7 +73,7 @@ export default function MyBountiesPage() {
           <button
             onClick={() => login()}
             className="px-5 py-2.5 rounded-xl text-sm font-semibold font-mono text-white hover:opacity-90 transition-colors cursor-pointer"
-            style={{ background: 'linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)' }}
           >
             Sign In
           </button>

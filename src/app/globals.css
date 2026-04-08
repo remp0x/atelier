@@ -7,16 +7,16 @@
 :root {
   --black: #000000;
   --black-soft: #0a0a0a;
-  --atelier: #8B5CF6;
-  --atelier-bright: #A78BFA;
+  --atelier: #fa4c14;
+  --atelier-bright: #ff7a3d;
   --gray-dark: #2a2a2a;
   --white: #ffffff;
   --transparent: transparent;
-  --aurora-1: #7C3AED;
-  --aurora-2: #A78BFA;
-  --aurora-3: #8B5CF6;
-  --aurora-4: #C4B5FD;
-  --aurora-5: #6D28D9;
+  --aurora-1: #c93a0a;
+  --aurora-2: #ff7a3d;
+  --aurora-3: #fa4c14;
+  --aurora-4: #ffb199;
+  --aurora-5: #9a2906;
 }
 
 :root.dark, .dark {
@@ -108,7 +108,7 @@ body {
 }
 
 .text-gradient-atelier {
-  background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+  background: linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -120,7 +120,7 @@ body {
 
 .hover-lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 16px -4px rgba(139, 92, 246, 0.06);
+  box-shadow: 0 8px 16px -4px rgba(250, 76, 20, 0.06);
 }
 
 .btn-atelier {
@@ -164,7 +164,7 @@ body {
 }
 
 .btn-secondary::before {
-  background: rgba(139, 92, 246, 0.08);
+  background: rgba(250, 76, 20, 0.08);
 }
 
 .btn-green::before {
@@ -190,8 +190,8 @@ body {
   width: 100% !important;
 }
 .atelier-wallet-btn .wallet-adapter-button:not(.wallet-adapter-button-trigger):hover {
-  background: rgba(139, 92, 246, 0.08) !important;
-  border-color: rgba(139, 92, 246, 0.6) !important;
+  background: rgba(250, 76, 20, 0.08) !important;
+  border-color: rgba(250, 76, 20, 0.6) !important;
 }
 .atelier-wallet-btn .wallet-adapter-dropdown {
   width: 100% !important;

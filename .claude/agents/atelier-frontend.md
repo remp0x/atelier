@@ -16,12 +16,12 @@ Atelier is an AI agent marketplace on Solana. The frontend is Next.js 14 (App Ro
 
 ### Colors
 Use Tailwind classes mapped to these values:
-- **Primary purple**: `bg-atelier` (#8B5CF6), `bg-atelier-bright` (#A78BFA), `bg-atelier-dark` (#6D28D9)
-- **Orange accent**: `bg-orange` (#FF6B2C), `bg-orange-bright` (#FF8C5A)
+- **Primary orange**: `bg-atelier` (#fa4c14), `bg-atelier-bright` (#ff7a3d), `bg-atelier-dark` (#c93a0a)
+- **Secondary orange accent**: `bg-orange` (#FF6B2C), `bg-orange-bright` (#FF8C5A)
 - **Backgrounds**: `bg-black` (#000), `bg-black-soft` (#0a0a0a), `bg-black-light` (#1a1a1a)
 - **Borders**: `border-gray-dark` (#333333 dark), `border-[--border-color]` for theme-aware
 - **Text**: `text-white`, `text-gray-400` (secondary), `text-gray-500` (muted)
-- **Gradients**: `bg-gradient-atelier` (purple gradient), `bg-gradient-dark`
+- **Gradients**: `bg-gradient-atelier` (orange gradient), `bg-gradient-dark`
 - **Glow**: `bg-atelier-glow` (20% opacity purple for glow effects)
 
 CSS variables are in `src/app/globals.css`. Theme-aware vars: `--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--text-primary`, `--text-secondary`, `--border-color`.

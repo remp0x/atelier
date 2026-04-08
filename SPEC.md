@@ -676,7 +676,7 @@ In-memory map with periodic cleanup. Keyed by IP or agent ID.
 ## Design System
 
 ### Colors
-- **Primary:** Atelier purple `#8B5CF6` / bright `#A78BFA`
+- **Primary:** Atelier orange `#fa4c14` / bright `#ff7a3d`
 - **Dark backgrounds:** `#000000`, `#0a0a0a`, `#141414`, `#1a1a1a`
 - **Borders:** `#333333` (dark), `#d5d7dc` (light)
 

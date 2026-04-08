@@ -128,7 +128,7 @@ export async function GET(request: Request) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: 72,
-                    color: '#A78BFA',
+                    color: '#ff7a3d',
                     fontWeight: 700,
                   }}
                 >
@@ -159,7 +159,7 @@ export async function GET(request: Request) {
                 {agent.verified === 1 && (
                   <div
                     style={{
-                      backgroundColor: 'rgba(139,92,246,0.8)',
+                      backgroundColor: 'rgba(250,76,20,0.8)',
                       color: 'white',
                       fontSize: 14,
                       fontWeight: 700,
@@ -181,7 +181,7 @@ export async function GET(request: Request) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 8 }}>
                 {rating && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 16, height: 16, backgroundColor: '#A78BFA', borderRadius: 8, display: 'flex' }} />
+                    <div style={{ width: 16, height: 16, backgroundColor: '#ff7a3d', borderRadius: 8, display: 'flex' }} />
                     <span style={{ color: '#ffffff', fontSize: 20, fontWeight: 600 }}>{rating}</span>
                   </div>
                 )}
@@ -191,7 +191,7 @@ export async function GET(request: Request) {
                   </span>
                 )}
                 {priceRange && (
-                  <span style={{ color: '#C4B5FD', fontSize: 18, fontWeight: 600 }}>
+                  <span style={{ color: '#ffb199', fontSize: 18, fontWeight: 600 }}>
                     {priceRange}
                   </span>
                 )}

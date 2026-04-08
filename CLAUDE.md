@@ -13,8 +13,8 @@ Read `SPEC.md` before any architectural decisions or significant changes.
 ## Design System
 
 ### Colors (CSS vars in globals.css)
-- Primary: `--atelier` (#8B5CF6), `--atelier-bright` (#A78BFA)
-- Aurora palette: #7C3AED, #A78BFA, #8B5CF6, #C4B5FD, #6D28D9
+- Primary: `--atelier` (#fa4c14), `--atelier-bright` (#ff7a3d)
+- Aurora palette: #c93a0a, #ff7a3d, #fa4c14, #ffb199, #9a2906
 - Orange accent: #FF6B2C (bright: #FF8C5A)
 - Dark backgrounds: #000000, #0a0a0a, #141414, #1a1a1a
 - Borders: #333333 (dark), #d5d7dc (light)

@@ -22,9 +22,9 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_COLORS: Record<string, string> = {
   pending_quote: 'bg-gray-400 dark:bg-neutral-600',
-  quoted: 'bg-violet-400',
-  accepted: 'bg-violet-500',
-  paid: 'bg-violet-600',
+  quoted: 'bg-atelier-bright',
+  accepted: 'bg-atelier',
+  paid: 'bg-atelier-dark',
   in_progress: 'bg-amber-400',
   delivered: 'bg-emerald-400',
   revision_requested: 'bg-amber-500',
@@ -289,7 +289,7 @@ const ACTIVITY_FILTERS: { key: ActivityType | 'all'; label: string }[] = [
 ];
 
 const ACTIVITY_TYPE_CONFIG: Record<string, { label: string; color: string; dot: string }> = {
-  registration: { label: 'Registration', color: 'text-violet-400', dot: 'bg-violet-400' },
+  registration: { label: 'Registration', color: 'text-atelier-bright', dot: 'bg-atelier-bright' },
   order: { label: 'Order', color: 'text-amber-400', dot: 'bg-amber-400' },
   service: { label: 'Service', color: 'text-emerald-400', dot: 'bg-emerald-400' },
   review: { label: 'Review', color: 'text-cyan-400', dot: 'bg-cyan-400' },

@@ -306,12 +306,12 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
     return (
       <div className="mt-2 p-4 rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/50 max-w-md">
         <div className="flex items-center gap-2 mb-2">
-          <svg className="w-4 h-4 text-purple-500 dark:text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-atelier dark:text-atelier-bright shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
           </svg>
           <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Delivered Link</span>
         </div>
-        <a href={url} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-500 dark:text-purple-400 dark:hover:text-purple-300 font-mono text-sm underline underline-offset-2">
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-atelier-dark hover:text-atelier dark:text-atelier-bright dark:hover:text-atelier-bright font-mono text-sm underline underline-offset-2">
           {hostname}
         </a>
       </div>
@@ -326,12 +326,12 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
     return (
       <div className="mt-2 p-4 rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/50 max-w-md">
         <div className="flex items-center gap-2 mb-2">
-          <svg className="w-4 h-4 text-purple-500 dark:text-purple-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-atelier dark:text-atelier-bright shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
           </svg>
           <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">{label}</span>
         </div>
-        <a href={url} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:text-purple-500 dark:text-purple-400 dark:hover:text-purple-300 font-mono text-sm underline underline-offset-2">
+        <a href={url} target="_blank" rel="noopener noreferrer" className="text-atelier-dark hover:text-atelier dark:text-atelier-bright dark:hover:text-atelier-bright font-mono text-sm underline underline-offset-2">
           {linkLabel}
         </a>
         <div className="mt-2"><DownloadButton url={url} name="deliverable" /></div>
@@ -491,10 +491,10 @@ function DeliverablesGallery({ deliverables }: { deliverables: OrderDeliverable[
               />
             ) : (
               <div className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-3">
-                <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-6 h-6 text-atelier-bright" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
                 </svg>
-                <a href={d.deliverable_url!} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 text-xs font-mono text-center break-all underline underline-offset-2">
+                <a href={d.deliverable_url!} target="_blank" rel="noopener noreferrer" className="text-atelier-bright hover:text-atelier-bright text-xs font-mono text-center break-all underline underline-offset-2">
                   {d.deliverable_media_type}
                 </a>
               </div>
@@ -755,10 +755,10 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
                       />
                     ) : (
                       <div className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-3">
-                        <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="w-6 h-6 text-atelier-bright" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
                         </svg>
-                        <a href={d.deliverable_url} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 text-xs font-mono text-center break-all underline underline-offset-2">
+                        <a href={d.deliverable_url} target="_blank" rel="noopener noreferrer" className="text-atelier-bright hover:text-atelier-bright text-xs font-mono text-center break-all underline underline-offset-2">
                           {d.deliverable_media_type}
                         </a>
                       </div>

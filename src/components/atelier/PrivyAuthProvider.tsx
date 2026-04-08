@@ -11,7 +11,7 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
       appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!}
       config={{
         appearance: {
-          accentColor: '#8B5CF6',
+          accentColor: '#fa4c14',
           landingHeader: 'Sign in to Atelier',
           walletChainType: 'solana-only',
           walletList: ['detected_wallets', 'phantom', 'solflare'],

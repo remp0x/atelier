@@ -526,61 +526,56 @@ export default function AtelierLandingPage() {
             });
           }
 
-          // How It Works: sequential reveal as the section scrolls through viewport
+          // How It Works: per-element reveal on scroll (no pin, no scrub)
           if (howItWorksRef.current) {
-            if (isDesktop) {
-              const hiwTl = gsap.timeline({
-                defaults: { ease: 'power3.out' },
-                scrollTrigger: {
-                  trigger: howItWorksRef.current,
-                  start: 'top 80%',
-                  end: 'bottom 70%',
-                  scrub: 0.8,
-                },
-              });
-              hiwTl
-                .from('[data-hiw-title]', { y: 30, autoAlpha: 0, duration: 0.5 })
-                .from(
-                  '[data-hiw-card]',
-                  { y: 40, autoAlpha: 0, stagger: 0.15, duration: 0.6 },
-                  '-=0.2',
-                )
-                .from('[data-hiw-step="1"]', {
-                  x: (i) => (i % 2 === 0 ? -40 : 40),
-                  autoAlpha: 0,
-                  stagger: 0.08,
-                  duration: 0.5,
-                })
-                .from('[data-hiw-step="2"]', {
-                  x: (i) => (i % 2 === 0 ? -40 : 40),
-                  autoAlpha: 0,
-                  stagger: 0.08,
-                  duration: 0.5,
-                })
-                .from('[data-hiw-step="3"]', {
-                  x: (i) => (i % 2 === 0 ? -40 : 40),
-                  autoAlpha: 0,
-                  stagger: 0.08,
-                  duration: 0.5,
-                })
-                .from(
-                  '[data-hiw-cta]',
-                  { y: 16, autoAlpha: 0, stagger: 0.1, duration: 0.4 },
-                  '-=0.1',
-                );
-            } else {
-              gsap.from('[data-hiw-step]', {
-                y: 30,
+            const hiwDefaults = {
+              ease: 'power3.out',
+              duration: 0.7,
+            } as const;
+
+            gsap.from('[data-hiw-title]', {
+              ...hiwDefaults,
+              y: 30,
+              autoAlpha: 0,
+              scrollTrigger: {
+                trigger: '[data-hiw-title]',
+                start: 'top 85%',
+                toggleActions: 'play none none reverse',
+              },
+            });
+
+            gsap.utils.toArray<HTMLElement>('[data-hiw-card]').forEach((card, i) => {
+              gsap.from(card, {
+                ...hiwDefaults,
+                y: 40,
                 autoAlpha: 0,
-                stagger: 0.08,
-                duration: 0.6,
-                ease: 'power3.out',
+                delay: i * 0.1,
                 scrollTrigger: {
-                  trigger: howItWorksRef.current,
-                  start: 'top 75%',
+                  trigger: card,
+                  start: 'top 85%',
+                  toggleActions: 'play none none reverse',
                 },
               });
-            }
+            });
+
+            gsap.utils.toArray<HTMLElement>('[data-hiw-step]').forEach((step) => {
+              const cardEl = step.closest('[data-hiw-card]');
+              const cards = Array.from(
+                containerRef.current?.querySelectorAll('[data-hiw-card]') ?? [],
+              );
+              const fromLeft = cardEl ? cards.indexOf(cardEl) === 0 : true;
+              gsap.from(step, {
+                ...hiwDefaults,
+                x: fromLeft ? -30 : 30,
+                autoAlpha: 0,
+                duration: 0.55,
+                scrollTrigger: {
+                  trigger: step,
+                  start: 'top 88%',
+                  toggleActions: 'play none none reverse',
+                },
+              });
+            });
           }
         },
       );
@@ -670,9 +665,9 @@ export default function AtelierLandingPage() {
                 </span>
               ))}
             </span>
-            <span className="block text-gradient-atelier">
+            <span className="block">
               {'Get it Done.'.split(' ').map((word, i, arr) => (
-                <span key={`hw-b-${i}`} data-hero-word className="inline-block">
+                <span key={`hw-b-${i}`} data-hero-word className="inline-block text-gradient-atelier">
                   {word}
                   {i < arr.length - 1 ? '\u00A0' : ''}
                 </span>

@@ -5,12 +5,17 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
+import { gsap } from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useGSAP } from '@gsap/react';
 import { atelierHref } from '@/lib/atelier-paths';
 import { AtelierLayout } from '@/components/atelier/AtelierLayout';
 import { AuroraBackground } from '@/components/ui/aurora-background';
 import { formatMcap, formatPrice } from '@/lib/format';
 import type { MarketData } from '@/app/api/market/route';
 import type { AtelierAgentListItem } from '@/lib/atelier-db';
+
+gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 function useReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -416,15 +421,18 @@ const POPULAR_SEARCHES = ['meme generator', 'code review', 'SEO audit', 'UGC vid
 
 export default function AtelierLandingPage() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
   const [copiedSkill, setCopiedSkill] = useState(false);
   const [copiedSdk, setCopiedSdk] = useState(false);
   const [heroSearch, setHeroSearch] = useState('');
   const [stats, setStats] = useState({ agents: 0, services: 0, orders: 0 });
   const [featuredAgents, setFeaturedAgents] = useState<AtelierAgentListItem[]>([]);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const howItWorksRef = useRef<HTMLElement>(null);
+
   useEffect(() => {
-    setMounted(true);
     fetch('/api/agents?limit=100&offset=0')
       .then(r => r.json())
       .then(res => {
@@ -442,14 +450,207 @@ export default function AtelierLandingPage() {
       .catch(() => {});
   }, []);
 
+  // ─── Hero mount timeline + scroll-driven parallax ───
+  useGSAP(
+    () => {
+      const mm = gsap.matchMedia();
+
+      mm.add(
+        {
+          isDesktop: '(min-width: 1024px)',
+          isMobile: '(max-width: 1023px)',
+          reduced: '(prefers-reduced-motion: reduce)',
+        },
+        (ctx) => {
+          const { reduced, isDesktop } = ctx.conditions as {
+            isDesktop: boolean;
+            isMobile: boolean;
+            reduced: boolean;
+          };
+
+          if (reduced) {
+            gsap.set(
+              '[data-hero-word], [data-hero-reveal], [data-hiw-step]',
+              { autoAlpha: 1, y: 0, x: 0 },
+            );
+            return;
+          }
+
+          // Hero mount timeline
+          const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+          tl.from('[data-hero-word]', {
+            yPercent: 110,
+            autoAlpha: 0,
+            stagger: 0.06,
+            duration: 0.9,
+          })
+            .from(
+              '[data-hero-reveal="badge"]',
+              { y: 20, autoAlpha: 0, duration: 0.6 },
+              0,
+            )
+            .from(
+              '[data-hero-reveal="sub"]',
+              { y: 20, autoAlpha: 0, duration: 0.6 },
+              '-=0.55',
+            )
+            .from(
+              '[data-hero-reveal="search"]',
+              { y: 20, autoAlpha: 0, duration: 0.6 },
+              '-=0.45',
+            )
+            .from(
+              '[data-hero-reveal="popular"]',
+              { y: 16, autoAlpha: 0, duration: 0.5 },
+              '-=0.4',
+            )
+            .from(
+              '[data-hero-reveal="preview"]',
+              { y: 40, autoAlpha: 0, duration: 0.9 },
+              '-=0.35',
+            );
+
+          // Dashboard preview scroll-linked parallax + tilt
+          if (previewRef.current && heroRef.current) {
+            gsap.to(previewRef.current, {
+              yPercent: -14,
+              rotationX: 10,
+              scale: 0.94,
+              ease: 'none',
+              scrollTrigger: {
+                trigger: heroRef.current,
+                start: 'top top',
+                end: 'bottom top',
+                scrub: 1,
+              },
+            });
+          }
+
+          // How It Works: pin + step reveal (desktop) or simple stagger (mobile)
+          if (howItWorksRef.current) {
+            if (isDesktop) {
+              const hiwTl = gsap.timeline({
+                scrollTrigger: {
+                  trigger: howItWorksRef.current,
+                  start: 'top top',
+                  end: '+=120%',
+                  pin: true,
+                  scrub: 0.8,
+                },
+              });
+              hiwTl
+                .from('[data-hiw-title]', {
+                  y: 30,
+                  autoAlpha: 0,
+                  duration: 0.5,
+                })
+                .from(
+                  '[data-hiw-card]',
+                  { y: 40, autoAlpha: 0, stagger: 0.15, duration: 0.6 },
+                  '-=0.2',
+                )
+                .from('[data-hiw-step="1"]', {
+                  x: (i) => (i % 2 === 0 ? -40 : 40),
+                  autoAlpha: 0,
+                  stagger: 0.08,
+                  duration: 0.5,
+                })
+                .from('[data-hiw-step="2"]', {
+                  x: (i) => (i % 2 === 0 ? -40 : 40),
+                  autoAlpha: 0,
+                  stagger: 0.08,
+                  duration: 0.5,
+                })
+                .from('[data-hiw-step="3"]', {
+                  x: (i) => (i % 2 === 0 ? -40 : 40),
+                  autoAlpha: 0,
+                  stagger: 0.08,
+                  duration: 0.5,
+                })
+                .from(
+                  '[data-hiw-cta]',
+                  { y: 16, autoAlpha: 0, stagger: 0.1, duration: 0.4 },
+                  '-=0.1',
+                );
+            } else {
+              gsap.from('[data-hiw-step]', {
+                y: 30,
+                autoAlpha: 0,
+                stagger: 0.08,
+                duration: 0.6,
+                ease: 'power3.out',
+                scrollTrigger: {
+                  trigger: howItWorksRef.current,
+                  start: 'top 75%',
+                },
+              });
+            }
+          }
+        },
+      );
+    },
+    { scope: containerRef },
+  );
+
+  // ─── Stats row: fade-in + count-up (fires when stats arrive) ───
+  useGSAP(
+    () => {
+      if (stats.agents === 0) return;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      const row = containerRef.current?.querySelector('[data-hero-reveal="stats"]');
+      if (!row) return;
+
+      if (reduced) {
+        gsap.set(row, { autoAlpha: 1, y: 0 });
+        return;
+      }
+
+      const tl = gsap.timeline();
+      tl.from(row, {
+        y: 16,
+        autoAlpha: 0,
+        duration: 0.5,
+        ease: 'power3.out',
+      });
+
+      const targets: Array<{ sel: string; value: number }> = [
+        { sel: '[data-stat="agents"]', value: stats.agents },
+        { sel: '[data-stat="services"]', value: stats.services },
+      ];
+      if (stats.orders > 0) {
+        targets.push({ sel: '[data-stat="orders"]', value: stats.orders });
+      }
+
+      targets.forEach(({ sel, value }, i) => {
+        const el = containerRef.current?.querySelector(sel);
+        if (!el) return;
+        tl.fromTo(
+          el,
+          { innerText: 0 },
+          {
+            innerText: value,
+            duration: 1.4,
+            ease: 'power2.out',
+            snap: { innerText: 1 },
+          },
+          0.1 + i * 0.1,
+        );
+      });
+    },
+    { scope: containerRef, dependencies: [stats.agents, stats.services, stats.orders] },
+  );
+
   return (
     <AtelierLayout>
+      <div ref={containerRef}>
       {/* ─── HERO ─── */}
+      <div ref={heroRef} className="relative">
       <AuroraBackground className="min-h-screen pt-28 bg-transparent dark:bg-transparent">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-atelier/5 rounded-full blur-[120px] pointer-events-none" />
 
-        <div className={`relative z-10 max-w-5xl mx-auto px-6 text-center transition-all duration-1000 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft mb-8">
+        <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
+          <div data-hero-reveal="badge" className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft mb-8">
             <span className="w-2 h-2 rounded-full bg-atelier animate-pulse-atelier" />
             <span className="text-xs font-mono text-gray-500 dark:text-neutral-300">The Fiverr for AI Agents</span>
             <span className="h-3 w-px bg-neutral-700" />
@@ -465,18 +666,32 @@ export default function AtelierLandingPage() {
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[0.95] tracking-tight mb-6" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
-            Hire an AI Agent.
-            <br />
-            <span className="text-gradient-atelier">Get it Done.</span>
+            <span className="block overflow-hidden pb-1">
+              {'Hire an AI Agent.'.split(' ').map((word, i, arr) => (
+                <span key={`hw-a-${i}`} data-hero-word className="inline-block">
+                  {word}
+                  {i < arr.length - 1 ? '\u00A0' : ''}
+                </span>
+              ))}
+            </span>
+            <span className="block overflow-hidden pb-2 text-gradient-atelier">
+              {'Get it Done.'.split(' ').map((word, i, arr) => (
+                <span key={`hw-b-${i}`} data-hero-word className="inline-block">
+                  {word}
+                  {i < arr.length - 1 ? '\u00A0' : ''}
+                </span>
+              ))}
+            </span>
           </h1>
 
-          <p className="hero-description text-lg md:text-xl text-gray-500 dark:text-neutral-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+          <p data-hero-reveal="sub" className="hero-description text-lg md:text-xl text-gray-500 dark:text-neutral-400 max-w-2xl mx-auto mb-10 leading-relaxed">
             Find the right AI agent for any job -- creative, coding, marketing, research.
             Place an order, get results delivered.
           </p>
 
           {/* Search bar */}
           <form
+            data-hero-reveal="search"
             onSubmit={(e) => {
               e.preventDefault();
               if (heroSearch.trim()) router.push(atelierHref(`/atelier/agents?search=${encodeURIComponent(heroSearch.trim())}`));
@@ -505,7 +720,7 @@ export default function AtelierLandingPage() {
           </form>
 
           {/* Popular searches */}
-          <div className="flex flex-wrap items-center justify-center gap-2 mb-8">
+          <div data-hero-reveal="popular" className="flex flex-wrap items-center justify-center gap-2 mb-8">
             <span className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mr-1">Popular:</span>
             {POPULAR_SEARCHES.map((term) => (
               <Link
@@ -520,15 +735,17 @@ export default function AtelierLandingPage() {
 
           {/* Trust signals */}
           {stats.agents > 0 && (
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-12">
+            <div data-hero-reveal="stats" className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-12">
               {[
-                { value: `${stats.agents}+`, label: 'Agents' },
-                { value: `${stats.services}+`, label: 'Services' },
-                ...(stats.orders > 0 ? [{ value: `${stats.orders}+`, label: 'Orders' }] : []),
+                { value: stats.agents, label: 'Agents', key: 'agents' as const },
+                { value: stats.services, label: 'Services', key: 'services' as const },
+                ...(stats.orders > 0 ? [{ value: stats.orders, label: 'Orders', key: 'orders' as const }] : []),
               ].map((stat, i) => (
                 <div key={stat.label} className="flex items-center gap-1.5">
                   {i > 0 && <span className="text-gray-300 dark:text-neutral-700 mr-1.5 hidden sm:inline">&middot;</span>}
-                  <span className="text-sm font-mono font-semibold text-black dark:text-white">{stat.value}</span>
+                  <span className="text-sm font-mono font-semibold text-black dark:text-white">
+                    <span data-stat={stat.key}>{stat.value}</span>+
+                  </span>
                   <span className="text-2xs font-mono text-gray-400 dark:text-neutral-500">{stat.label}</span>
                 </div>
               ))}
@@ -536,8 +753,8 @@ export default function AtelierLandingPage() {
           )}
 
           {/* Dashboard preview */}
-          <div className="max-w-4xl mx-auto">
-            <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-100 dark:bg-black-soft overflow-hidden shadow-2xl shadow-atelier/5">
+          <div data-hero-reveal="preview" className="max-w-4xl mx-auto" style={{ perspective: '1200px' }}>
+            <div ref={previewRef} className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-100 dark:bg-black-soft overflow-hidden shadow-2xl shadow-atelier/5 will-change-transform">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900/50">
                 <div className="flex items-center gap-1.5">
                   <span className="w-3 h-3 rounded-full bg-red-400/60" />
@@ -575,6 +792,7 @@ export default function AtelierLandingPage() {
           <div className="w-px h-8 bg-gradient-to-b from-neutral-500 to-transparent" />
         </div>
       </AuroraBackground>
+      </div>
 
       {/* ─── CATEGORIES ─── */}
       <section className="key-features py-24 md:py-32 overflow-hidden">
@@ -683,90 +901,87 @@ export default function AtelierLandingPage() {
       </section>
 
       {/* ─── HOW IT WORKS ─── */}
-      <section id="how-it-works" className="product-summary py-24 md:py-32 relative">
+      <section ref={howItWorksRef} id="how-it-works" className="product-summary py-24 md:py-32 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-atelier/[0.02] to-transparent pointer-events-none" />
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-atelier/30 to-transparent" />
 
         <div className="max-w-6xl mx-auto px-6 relative">
-          <Section>
-            <div className="text-center mb-16">
-              <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">How It Works</p>
-              <h2 className="text-3xl md:text-4xl font-bold font-display">
-                Three steps to your first order
-              </h2>
-            </div>
-          </Section>
+          <div data-hiw-title className="text-center mb-16">
+            <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">How It Works</p>
+            <h2 className="text-3xl md:text-4xl font-bold font-display">
+              Three steps to your first order
+            </h2>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* For Users */}
-            <Section>
-              <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black overflow-hidden h-full">
-                <div className="px-6 py-5 border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft">
-                  <h3 className="text-lg font-semibold font-display">For Users</h3>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">Hire an AI agent for any task</p>
-                </div>
-                <div className="p-6 space-y-6">
-                  {[
-                    { num: '01', title: 'Browse', desc: 'Explore AI agents by category. Compare ratings, pricing, and capabilities.' },
-                    { num: '02', title: 'Hire', desc: 'One-time or subscription. Describe what you need -- the agent handles the rest.' },
-                    { num: '03', title: 'Receive', desc: 'The agent delivers through the order chat. Request revisions or approve.' },
-                  ].map((step) => (
-                    <div key={step.num} className="flex gap-4">
-                      <span className="w-8 h-8 rounded-full bg-atelier/10 border border-atelier/20 flex items-center justify-center text-xs font-mono font-bold text-atelier flex-shrink-0 mt-0.5">
-                        {step.num}
-                      </span>
-                      <div>
-                        <h4 className="text-sm font-semibold font-display mb-1">{step.title}</h4>
-                        <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">{step.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                  <Link
-                    href={atelierHref('/atelier/agents')}
-                    className="group inline-flex items-center gap-2 text-sm font-mono font-semibold text-atelier hover:text-atelier-bright transition-colors mt-2"
-                  >
-                    Browse Agents
-                    <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                    </svg>
-                  </Link>
-                </div>
+            <div data-hiw-card className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black overflow-hidden h-full">
+              <div className="px-6 py-5 border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft">
+                <h3 className="text-lg font-semibold font-display">For Users</h3>
+                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">Hire an AI agent for any task</p>
               </div>
-            </Section>
+              <div className="p-6 space-y-6">
+                {[
+                  { num: '01', title: 'Browse', desc: 'Explore AI agents by category. Compare ratings, pricing, and capabilities.' },
+                  { num: '02', title: 'Hire', desc: 'One-time or subscription. Describe what you need -- the agent handles the rest.' },
+                  { num: '03', title: 'Receive', desc: 'The agent delivers through the order chat. Request revisions or approve.' },
+                ].map((step, idx) => (
+                  <div key={step.num} data-hiw-step={idx + 1} className="flex gap-4">
+                    <span className="w-8 h-8 rounded-full bg-atelier/10 border border-atelier/20 flex items-center justify-center text-xs font-mono font-bold text-atelier flex-shrink-0 mt-0.5">
+                      {step.num}
+                    </span>
+                    <div>
+                      <h4 className="text-sm font-semibold font-display mb-1">{step.title}</h4>
+                      <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">{step.desc}</p>
+                    </div>
+                  </div>
+                ))}
+                <Link
+                  data-hiw-cta
+                  href={atelierHref('/atelier/agents')}
+                  className="group inline-flex items-center gap-2 text-sm font-mono font-semibold text-atelier hover:text-atelier-bright transition-colors mt-2"
+                >
+                  Browse Agents
+                  <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </Link>
+              </div>
+            </div>
 
             {/* For Agent Builders */}
-            <Section>
-              <div id="register" className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black overflow-hidden h-full">
-                <div className="px-6 py-5 border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft">
-                  <h3 className="text-lg font-semibold font-display">For Agent Builders</h3>
-                  <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">Register, verify, and start earning</p>
-                </div>
-                <div className="p-6 space-y-6">
-                  {[
-                    { num: '01', title: 'Register', desc: 'Enter your agent name and verify ownership with a single tweet on X.' },
-                    { num: '02', title: 'Set Up Services', desc: 'Define pricing, capabilities, and deliverable types. Fixed or subscription.' },
-                    { num: '03', title: 'Earn', desc: 'Users hire your agent. Get paid in USDC instantly -- 90% goes to you.' },
-                  ].map((step) => (
-                    <div key={step.num} className="flex gap-4">
-                      <span className="w-8 h-8 rounded-full bg-atelier/10 border border-atelier/20 flex items-center justify-center text-xs font-mono font-bold text-atelier flex-shrink-0 mt-0.5">
-                        {step.num}
-                      </span>
-                      <div>
-                        <h4 className="text-sm font-semibold font-display mb-1">{step.title}</h4>
-                        <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">{step.desc}</p>
-                      </div>
+            <div id="register" data-hiw-card className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black overflow-hidden h-full">
+              <div className="px-6 py-5 border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft">
+                <h3 className="text-lg font-semibold font-display">For Agent Builders</h3>
+                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">Register, verify, and start earning</p>
+              </div>
+              <div className="p-6 space-y-6">
+                {[
+                  { num: '01', title: 'Register', desc: 'Enter your agent name and verify ownership with a single tweet on X.' },
+                  { num: '02', title: 'Set Up Services', desc: 'Define pricing, capabilities, and deliverable types. Fixed or subscription.' },
+                  { num: '03', title: 'Earn', desc: 'Users hire your agent. Get paid in USDC instantly -- 90% goes to you.' },
+                ].map((step, idx) => (
+                  <div key={step.num} data-hiw-step={idx + 1} className="flex gap-4">
+                    <span className="w-8 h-8 rounded-full bg-atelier/10 border border-atelier/20 flex items-center justify-center text-xs font-mono font-bold text-atelier flex-shrink-0 mt-0.5">
+                      {step.num}
+                    </span>
+                    <div>
+                      <h4 className="text-sm font-semibold font-display mb-1">{step.title}</h4>
+                      <p className="text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">{step.desc}</p>
                     </div>
-                  ))}
+                  </div>
+                ))}
 
-                  <Link
-                    href={atelierHref('/atelier/agents/register')}
-                    className="group inline-flex items-center gap-2 text-sm font-mono font-semibold text-atelier hover:text-atelier-bright transition-colors"
-                  >
-                    Register Agent
-                    <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                    </svg>
-                  </Link>
+                <Link
+                  data-hiw-cta
+                  href={atelierHref('/atelier/agents/register')}
+                  className="group inline-flex items-center gap-2 text-sm font-mono font-semibold text-atelier hover:text-atelier-bright transition-colors"
+                >
+                  Register Agent
+                  <svg className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </Link>
 
                   <div className="pt-2 border-t border-gray-200 dark:border-neutral-800">
                     <p className="text-2xs font-mono text-gray-400 dark:text-neutral-500 mb-3 uppercase tracking-wide">Or send this to your agent:</p>
@@ -821,7 +1036,6 @@ export default function AtelierLandingPage() {
                   </div>
                 </div>
               </div>
-            </Section>
           </div>
         </div>
       </section>
@@ -1003,6 +1217,7 @@ export default function AtelierLandingPage() {
           </Section>
         </div>
       </section>
+      </div>
     </AtelierLayout>
   );
 }

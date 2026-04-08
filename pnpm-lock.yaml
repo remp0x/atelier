@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@gsap/react':
+        specifier: ^2.1.2
+        version: 2.1.2(gsap@3.14.2)(react@18.3.1)
       '@libsql/client':
         specifier: ^0.17.0
         version: 0.17.2(bufferutil@4.1.0)(utf-8-validate@5.0.10)
@@ -50,12 +53,15 @@ importers:
       framer-motion:
         specifier: ^12.35.0
         version: 12.38.0(@emotion/is-prop-valid@1.4.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      gsap:
+        specifier: ^3.14.2
+        version: 3.14.2
       next:
         specifier: 14.2.5
         version: 14.2.5(@babel/core@7.29.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       openai:
         specifier: ^6.22.0
-        version: 6.33.0(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@5.0.10))(zod@4.3.6)
+        version: 6.33.0(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(zod@4.3.6)
       react:
         specifier: ^18
         version: 18.3.1
@@ -558,6 +564,12 @@ packages:
     resolution: {integrity: sha512-Z4aHi3ECFf5oWYWM3F1rW83GJfB9OvhBYPTmb5q+VyK3uvzvS48lwo+jwh2eOoCRWEuT/crpb9Vwp2QaS5JqgQ==}
     peerDependencies:
       viem: '>=2.0.0'
+
+  '@gsap/react@2.1.2':
+    resolution: {integrity: sha512-JqliybO1837UcgH2hVOM4VO+38APk3ECNrsuSM4MuXp+rbf+/2IG2K1YJiqfTcXQHH7XlA0m3ykniFYstfq0Iw==}
+    peerDependencies:
+      gsap: ^3.12.5
+      react: '>=17'
 
   '@hcaptcha/loader@2.3.0':
     resolution: {integrity: sha512-i4lnNxKBe+COf3R1nFZEWaZoHIoJjvDgWqvcNrdZq8ehoSNMN6KVZ56dcQ02qKie2h3+BkbkwlJA9DOIuLlK/g==}
@@ -3747,6 +3759,9 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
+  gsap@3.14.2:
+    resolution: {integrity: sha512-P8/mMxVLU7o4+55+1TCnQrPmgjPKnwkzkXOK1asnR9Jg2lna4tEY5qBJjMmAaOBDDZWtlRjBXjLa0w53G/uBLA==}
+
   h3@1.15.10:
     resolution: {integrity: sha512-YzJeWSkDZxAhvmp8dexjRK5hxziRO7I9m0N53WhvYL5NiWfkUkzssVzY9jvGu0HBoLFW6+duYmNSn6MaZBCCtg==}
 
@@ -6006,7 +6021,7 @@ snapshots:
       idb-keyval: 6.2.1
       ox: 0.6.9(typescript@5.9.3)(zod@3.25.76)
       preact: 10.24.2
-      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       zustand: 5.0.3(@types/react@18.3.28)(react@18.3.1)(use-sync-external-store@1.4.0(react@18.3.1))
     transitivePeerDependencies:
       - '@types/react'
@@ -6072,7 +6087,7 @@ snapshots:
       idb-keyval: 6.2.1
       ox: 0.6.9(typescript@5.9.3)(zod@3.25.76)
       preact: 10.24.2
-      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       zustand: 5.0.3(@types/react@18.3.28)(react@18.3.1)(use-sync-external-store@1.4.0(react@18.3.1))
     transitivePeerDependencies:
       - '@types/react'
@@ -6312,6 +6327,11 @@ snapshots:
       viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
     transitivePeerDependencies:
       - supports-color
+
+  '@gsap/react@2.1.2(gsap@3.14.2)(react@18.3.1)':
+    dependencies:
+      gsap: 3.14.2
+      react: 18.3.1
 
   '@hcaptcha/loader@2.3.0': {}
 
@@ -7229,7 +7249,7 @@ snapshots:
     dependencies:
       big.js: 6.2.2
       dayjs: 1.11.13
-      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
       - typescript
@@ -7264,7 +7284,7 @@ snapshots:
       '@reown/appkit-wallet': 1.7.8(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@walletconnect/universal-provider': 2.21.0(@react-native-async-storage/async-storage@1.24.0(react-native@0.84.1(@babel/core@7.29.0)(@types/react@18.3.28)(bufferutil@4.1.0)(react@18.3.1)(utf-8-validate@5.0.10)))(@vercel/blob@2.3.2)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       valtio: 1.13.2(@types/react@18.3.28)(react@18.3.1)
-      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -7562,7 +7582,7 @@ snapshots:
       '@walletconnect/logger': 2.1.2
       '@walletconnect/universal-provider': 2.21.0(@react-native-async-storage/async-storage@1.24.0(react-native@0.84.1(@babel/core@7.29.0)(@types/react@18.3.28)(bufferutil@4.1.0)(react@18.3.1)(utf-8-validate@5.0.10)))(@vercel/blob@2.3.2)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       valtio: 1.13.2(@types/react@18.3.28)(react@18.3.1)
-      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -7666,7 +7686,7 @@ snapshots:
       '@walletconnect/universal-provider': 2.21.0(@react-native-async-storage/async-storage@1.24.0(react-native@0.84.1(@babel/core@7.29.0)(@types/react@18.3.28)(bufferutil@4.1.0)(react@18.3.1)(utf-8-validate@5.0.10)))(@vercel/blob@2.3.2)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
       bs58: 6.0.0
       valtio: 1.13.2(@types/react@18.3.28)(react@18.3.1)
-      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -7828,7 +7848,7 @@ snapshots:
   '@safe-global/safe-apps-sdk@9.1.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)':
     dependencies:
       '@safe-global/safe-gateway-typescript-sdk': 3.23.1
-      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      viem: 2.47.4(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
       - typescript
@@ -11415,6 +11435,8 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
+  gsap@3.14.2: {}
+
   h3@1.15.10:
     dependencies:
       cookie-es: 1.2.2
@@ -12202,9 +12224,9 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
-  openai@6.33.0(ws@7.5.10(bufferutil@4.1.0)(utf-8-validate@5.0.10))(zod@4.3.6):
+  openai@6.33.0(ws@8.18.3(bufferutil@4.1.0)(utf-8-validate@5.0.10))(zod@4.3.6):
     optionalDependencies:
-      ws: 7.5.10(bufferutil@4.1.0)(utf-8-validate@5.0.10)
+      ws: 8.18.3(bufferutil@4.1.0)(utf-8-validate@5.0.10)
       zod: 4.3.6
 
   openapi-fetch@0.13.8:

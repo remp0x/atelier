@@ -168,16 +168,18 @@ export default function RootLayout({
           {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-49WBZKMQEK')`}
         </Script>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body className="antialiased">
         <script
           type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
         />
         <script
           type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{ __html: JSON.stringify(speakableJsonLd) }}
         />
-      </head>
-      <body className="antialiased">
         <AtelierProviders>
           {children}
         </AtelierProviders>

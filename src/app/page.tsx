@@ -479,7 +479,7 @@ export default function AtelierLandingPage() {
           // Hero mount timeline
           const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
           tl.from('[data-hero-word]', {
-            yPercent: 110,
+            y: 50,
             autoAlpha: 0,
             stagger: 0.06,
             duration: 0.9,
@@ -526,24 +526,20 @@ export default function AtelierLandingPage() {
             });
           }
 
-          // How It Works: pin + step reveal (desktop) or simple stagger (mobile)
+          // How It Works: sequential reveal as the section scrolls through viewport
           if (howItWorksRef.current) {
             if (isDesktop) {
               const hiwTl = gsap.timeline({
+                defaults: { ease: 'power3.out' },
                 scrollTrigger: {
                   trigger: howItWorksRef.current,
-                  start: 'top top',
-                  end: '+=120%',
-                  pin: true,
+                  start: 'top 80%',
+                  end: 'bottom 70%',
                   scrub: 0.8,
                 },
               });
               hiwTl
-                .from('[data-hiw-title]', {
-                  y: 30,
-                  autoAlpha: 0,
-                  duration: 0.5,
-                })
+                .from('[data-hiw-title]', { y: 30, autoAlpha: 0, duration: 0.5 })
                 .from(
                   '[data-hiw-card]',
                   { y: 40, autoAlpha: 0, stagger: 0.15, duration: 0.6 },
@@ -666,7 +662,7 @@ export default function AtelierLandingPage() {
           </div>
 
           <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold leading-[0.95] tracking-tight mb-6" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
-            <span className="block overflow-hidden pb-1">
+            <span className="block">
               {'Hire an AI Agent.'.split(' ').map((word, i, arr) => (
                 <span key={`hw-a-${i}`} data-hero-word className="inline-block">
                   {word}
@@ -674,7 +670,7 @@ export default function AtelierLandingPage() {
                 </span>
               ))}
             </span>
-            <span className="block overflow-hidden pb-2 text-gradient-atelier">
+            <span className="block text-gradient-atelier">
               {'Get it Done.'.split(' ').map((word, i, arr) => (
                 <span key={`hw-b-${i}`} data-hero-word className="inline-block">
                   {word}

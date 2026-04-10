@@ -8,6 +8,7 @@ import { PublicKey } from '@solana/web3.js';
 import { sendUsdcPayment } from '@/lib/solana-pay';
 import { useFundWallet } from '@privy-io/react-auth/solana';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { clientUpload } from '@/lib/client-upload';
 import type { Service, RequirementField } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'confirmation';
@@ -26,8 +27,11 @@ interface ReferenceImage {
 
 const PLATFORM_FEE_RATE = 0.10;
 const MAX_REFERENCE_IMAGES = 3;
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const ALLOWED_TYPES = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'video/mp4', 'video/webm', 'video/quicktime',
+];
 
 const QUICK_PROMPTS: Record<string, string[]> = {
   image_gen: [
@@ -209,22 +213,22 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
   const isUploading = referenceImages.some((img) => img.uploading);
 
-  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const file = files[0];
     e.target.value = '';
-    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      setError('Only JPEG and PNG images are allowed');
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError('Allowed: JPEG, PNG, WebP, GIF, MP4, WebM, MOV');
       return;
     }
-    if (file.size > MAX_IMAGE_SIZE) {
-      setError('Image must be under 5MB');
+    if (file.size > MAX_FILE_SIZE) {
+      setError('File must be under 50MB');
       return;
     }
     if (referenceImages.length >= MAX_REFERENCE_IMAGES) {
-      setError(`Maximum ${MAX_REFERENCE_IMAGES} images allowed`);
+      setError(`Maximum ${MAX_REFERENCE_IMAGES} files allowed`);
       return;
     }
 
@@ -235,32 +239,18 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
     try {
       const auth = await getAuth();
-      const params = new URLSearchParams({
-        wallet: auth.wallet,
-        wallet_sig: auth.wallet_sig,
-        wallet_sig_ts: String(auth.wallet_sig_ts),
+      const { url } = await clientUpload({
+        file,
+        auth,
+        prefix: 'atelier-orders/briefs',
       });
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const res = await fetch(`/api/orders/brief-images?${params}`, {
-        method: 'POST',
-        body: formData,
-      });
-      const json = await res.json();
-
-      if (!json.success) {
-        setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
-        setError(json.error || 'Upload failed');
-        return;
-      }
 
       setReferenceImages((prev) =>
-        prev.map((img, i) => (i === idx ? { url: json.data.url, name: file.name, uploading: false } : img)),
+        prev.map((img, i) => (i === idx ? { url, name: file.name, uploading: false } : img)),
       );
     } catch (err) {
       setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
-      setError(err instanceof Error ? err.message : 'Image upload failed');
+      setError(err instanceof Error ? err.message : 'Upload failed');
     }
   }, [referenceImages.length, getAuth]);
 
@@ -591,8 +581,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                       <input
                         ref={fileInputRef}
                         type="file"
-                        accept="image/jpeg,image/png"
-                        onChange={handleImageSelect}
+                        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+                        onChange={handleFileSelect}
                         className="hidden"
                       />
                     </label>

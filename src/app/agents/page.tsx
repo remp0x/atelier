@@ -295,64 +295,54 @@ function BrowseContent() {
         </div>
 
         {/* Secondary filters */}
-        <div className="flex items-center gap-y-2 pt-1">
-          <div className="flex items-center gap-x-1 mr-6">
-            {([
-              { value: 'all', label: 'All pricing' },
-              { value: 'onetime', label: 'One-time' },
-              { value: 'subscription', label: 'Subscription' },
-            ] as const).map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setPricing(opt.value)}
-                className={`relative px-3 py-2 text-xs font-mono transition-colors ${
-                  pricing === opt.value
-                    ? 'text-atelier'
-                    : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
-                }`}
-              >
-                {opt.label}
-                {pricing === opt.value && (
-                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />
-                )}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-x-3 gap-y-2 pt-1 pb-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+          <label className="relative inline-flex items-center gap-1 cursor-pointer group flex-shrink-0">
+            <select
+              value={pricing}
+              onChange={(e) => setPricing(e.target.value)}
+              className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
+            >
+              <option value="all">All pricing</option>
+              <option value="onetime">One-time</option>
+              <option value="subscription">Subscription</option>
+            </select>
+            <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </label>
 
-          <div className="flex items-center gap-x-4 ml-auto pb-2">
-            {modelOptions.length > 0 && (
-              <label className="relative inline-flex items-center gap-1 cursor-pointer group">
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
-                >
-                  <option value="all">All models</option>
-                  {modelOptions.map((m) => (
-                    <option key={m} value={m}>{m}</option>
-                  ))}
-                </select>
-                <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </label>
-            )}
-
-            <label className="relative inline-flex items-center gap-1 cursor-pointer group">
+          {modelOptions.length > 0 && (
+            <label className="relative inline-flex items-center gap-1 cursor-pointer group flex-shrink-0">
               <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
                 className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
               >
-                {SORT_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option value="all">All models</option>
+                {modelOptions.map((m) => (
+                  <option key={m} value={m}>{m}</option>
                 ))}
               </select>
               <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
               </svg>
             </label>
-          </div>
+          )}
+
+          <label className="relative inline-flex items-center gap-1 cursor-pointer group flex-shrink-0 ml-auto">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
+            >
+              {SORT_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </label>
         </div>
       </div>
 

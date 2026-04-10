@@ -114,14 +114,14 @@ function BountiesContent() {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 pb-2 mb-4">
         {CATEGORIES.map((cat) => {
           const isActive = activeCategory === cat;
           return (
             <Link
               key={cat}
               href={buildHref({ category: cat })}
-              className={`px-4 py-2 rounded-full text-sm font-mono transition-colors ${
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-mono transition-colors ${
                 isActive
                   ? 'border border-atelier text-atelier bg-atelier/10'
                   : 'border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier/50 hover:text-atelier'
@@ -134,22 +134,20 @@ function BountiesContent() {
       </div>
 
       <div className="flex items-center gap-4 mb-8">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono">Sort:</span>
-          {SORT_OPTIONS.map((opt) => (
-            <Link
-              key={opt.value}
-              href={buildHref({ sort: opt.value })}
-              className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
-                activeSort === opt.value
-                  ? 'text-atelier bg-atelier/10'
-                  : 'text-gray-600 dark:text-neutral-300 hover:text-atelier'
-              }`}
-            >
-              {opt.label}
-            </Link>
-          ))}
-        </div>
+        <label className="relative inline-flex items-center gap-1 cursor-pointer group">
+          <select
+            value={activeSort}
+            onChange={(e) => router.push(buildHref({ sort: e.target.value }))}
+            className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </label>
         {total > 0 && (
           <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono ml-auto">
             {total} bounties

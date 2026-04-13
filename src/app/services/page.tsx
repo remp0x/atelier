@@ -51,6 +51,17 @@ function ServicesContent() {
   const [hireService, setHireService] = useState<ServiceWithAgent | null>(null);
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   const [modelOptions, setModelOptions] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? window.localStorage.getItem('atelier:services:view') : null;
+    if (saved === 'grid' || saved === 'list') setViewMode(saved);
+  }, []);
+
+  const handleViewChange = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    if (typeof window !== 'undefined') window.localStorage.setItem('atelier:services:view', mode);
+  };
 
   const activeCategory = searchParams.get('category') || 'all';
   const activePricing = searchParams.get('pricing') || 'all';
@@ -202,7 +213,40 @@ function ServicesContent() {
             </label>
           )}
 
-          <label className="relative inline-flex items-center gap-1 cursor-pointer group flex-shrink-0 ml-auto">
+          <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => handleViewChange('grid')}
+              aria-label="Grid view"
+              aria-pressed={viewMode === 'grid'}
+              className={`p-1.5 rounded transition-colors ${
+                viewMode === 'grid'
+                  ? 'text-atelier'
+                  : 'text-gray-400 dark:text-neutral-500 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewChange('list')}
+              aria-label="List view"
+              aria-pressed={viewMode === 'list'}
+              className={`p-1.5 rounded transition-colors ${
+                viewMode === 'list'
+                  ? 'text-atelier'
+                  : 'text-gray-400 dark:text-neutral-500 hover:text-black dark:hover:text-white'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+              </svg>
+            </button>
+          </div>
+
+          <label className="relative inline-flex items-center gap-1 cursor-pointer group flex-shrink-0">
             <select
               value={activeSort}
               onChange={(e) => router.push(buildHref({ sort: e.target.value }))}
@@ -225,11 +269,12 @@ function ServicesContent() {
           <div className="w-6 h-6 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
         </div>
       ) : services.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className={viewMode === 'list' ? 'flex flex-col gap-3' : 'grid grid-cols-1 md:grid-cols-2 gap-5'}>
           {services.map((svc) => (
             <ServiceCard
               key={svc.id}
               service={svc}
+              variant={viewMode}
               showAgent
               agent={{
                 id: svc.agent_id,

@@ -1682,6 +1682,115 @@ export async function getAtelierAgents(filters?: {
   });
 }
 
+// ─── Seller Leaderboard ───
+
+export interface SellerLeaderboardItem {
+  id: string;
+  slug: string;
+  name: string;
+  avatar_url: string | null;
+  source: 'atelier' | 'external' | 'official';
+  verified: number;
+  blue_check: number;
+  is_atelier_official: number;
+  partner_badge: string | null;
+  featured: number;
+  services_count: number;
+  avg_rating: number | null;
+  completed_orders: number;
+  total_revenue: number;
+  weekly_completed_orders: number;
+  weekly_revenue: number;
+  token_mint: string | null;
+  token_symbol: string | null;
+  token_image_url: string | null;
+  twitter_username: string | null;
+  week_start: string;
+}
+
+function formatSqliteDatetime(d: Date): string {
+  return d.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function isoWeekStartSqlite(now: Date = new Date()): string {
+  const day = now.getUTCDay();
+  const daysBackToMonday = (day + 6) % 7;
+  const monday = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - daysBackToMonday,
+    0, 0, 0, 0,
+  ));
+  return formatSqliteDatetime(monday);
+}
+
+export async function getSellerLeaderboard(limit = 100): Promise<SellerLeaderboardItem[]> {
+  await initAtelierDb();
+  const weekStart = isoWeekStartSqlite();
+
+  const result = await atelierClient.execute({
+    sql: `SELECT
+            a.id, a.slug, a.name, a.avatar_url, a.source,
+            a.verified, a.blue_check, a.is_atelier_official, a.partner_badge, a.featured,
+            COUNT(DISTINCT s.id) as services_count,
+            MAX(s.avg_rating) as avg_rating,
+            (SELECT COUNT(*) FROM service_orders
+              WHERE provider_agent_id = a.id AND status = 'completed') as completed_orders,
+            (SELECT COALESCE(SUM(CAST(quoted_price_usd AS REAL)), 0) FROM service_orders
+              WHERE provider_agent_id = a.id AND status = 'completed') as total_revenue,
+            (SELECT COUNT(*) FROM service_orders
+              WHERE provider_agent_id = a.id AND status = 'completed'
+              AND completed_at >= ?) as weekly_completed_orders,
+            (SELECT COALESCE(SUM(CAST(quoted_price_usd AS REAL)), 0) FROM service_orders
+              WHERE provider_agent_id = a.id AND status = 'completed'
+              AND completed_at >= ?) as weekly_revenue,
+            a.token_mint, a.token_symbol, a.token_image_url, a.twitter_username
+          FROM atelier_agents a
+          LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
+          WHERE a.active = 1
+          GROUP BY a.id
+          LIMIT ?`,
+    args: [weekStart, weekStart, limit],
+  });
+
+  return result.rows.map((row) => {
+    const r = row as unknown as {
+      id: string; slug: string; name: string; avatar_url: string | null;
+      source: 'atelier' | 'external' | 'official';
+      verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
+      featured: number;
+      services_count: number; avg_rating: number | null;
+      completed_orders: number; total_revenue: number;
+      weekly_completed_orders: number; weekly_revenue: number;
+      token_mint: string | null; token_symbol: string | null; token_image_url: string | null;
+      twitter_username: string | null;
+    };
+    return {
+      id: r.id,
+      slug: r.slug,
+      name: r.name,
+      avatar_url: r.avatar_url,
+      source: r.source,
+      verified: r.verified,
+      blue_check: r.blue_check,
+      is_atelier_official: r.is_atelier_official,
+      partner_badge: r.partner_badge,
+      featured: r.featured || 0,
+      services_count: r.services_count,
+      avg_rating: r.avg_rating,
+      completed_orders: r.completed_orders,
+      total_revenue: r.total_revenue || 0,
+      weekly_completed_orders: r.weekly_completed_orders,
+      weekly_revenue: r.weekly_revenue || 0,
+      token_mint: r.token_mint,
+      token_symbol: r.token_symbol,
+      token_image_url: r.token_image_url,
+      twitter_username: r.twitter_username,
+      week_start: weekStart,
+    };
+  });
+}
+
 // ─── Holder Functions ───
 
 export async function updateHolderStatus(agentId: string, isHolder: boolean): Promise<void> {

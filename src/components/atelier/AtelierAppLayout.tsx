@@ -4,10 +4,12 @@ import { type ReactNode } from 'react';
 import { AtelierSidebar } from './AtelierSidebar';
 import { AtelierMobileNav } from './AtelierMobileNav';
 import { NotificationBell } from './NotificationBell';
+import { AppChromeStats } from './AppChromeStats';
+import { AppChromeSocials } from './AppChromeSocials';
 
 export function AtelierAppLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="relative flex min-h-screen bg-white dark:bg-black text-black dark:text-white transition-colors">
+    <div className="relative flex min-h-screen bg-[#f3f4f6] dark:bg-black text-black dark:text-white transition-colors">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div
           className="
@@ -30,11 +32,17 @@ export function AtelierAppLayout({ children }: { children: ReactNode }) {
         />
       </div>
       <AtelierSidebar />
-      <main className="relative flex-1 min-w-0 pt-11 md:pt-0 pb-16 md:pb-0">
-        <div className="hidden md:block fixed top-3 right-4 z-40">
+      <main className="relative flex-1 min-w-0 pt-11 pb-16 md:pt-0 md:pb-0 md:pr-3 md:flex md:flex-col md:h-screen">
+        <div className="hidden md:flex items-center justify-end gap-4 h-10 flex-shrink-0 px-2">
+          <AppChromeStats />
           <NotificationBell />
         </div>
-        {children}
+        <div className="relative border-gray-200 bg-white dark:border-neutral-800 dark:bg-[#141414] md:flex-1 md:min-h-0 md:rounded-[20px] md:border md:overflow-y-auto md:overflow-x-hidden md:shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+          {children}
+        </div>
+        <div className="hidden md:flex items-center justify-end h-10 flex-shrink-0 px-2">
+          <AppChromeSocials />
+        </div>
       </main>
       <AtelierMobileNav />
     </div>

@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -14,6 +13,10 @@ import { AuroraBackground } from '@/components/ui/aurora-background';
 import { formatMcap, formatPrice } from '@/lib/format';
 import type { MarketData } from '@/app/api/market/route';
 import type { AtelierAgentListItem } from '@/lib/atelier-db';
+import { HeroSearch } from '@/components/atelier/landing/HeroSearch';
+import { LiveActivityTicker } from '@/components/atelier/landing/LiveActivityTicker';
+import { PriceComparison } from '@/components/atelier/landing/PriceComparison';
+import { BountyBoardSection } from '@/components/atelier/landing/BountyBoardSection';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -420,10 +423,8 @@ function PumpFunLeaderboard() {
 const POPULAR_SEARCHES = ['meme generator', 'code review', 'SEO audit', 'UGC video', 'logo design', 'trading bot'];
 
 export default function AtelierLandingPage() {
-  const router = useRouter();
   const [copiedSkill, setCopiedSkill] = useState(false);
   const [copiedSdk, setCopiedSdk] = useState(false);
-  const [heroSearch, setHeroSearch] = useState('');
   const [stats, setStats] = useState({ agents: 0, services: 0, orders: 0 });
   const [featuredAgents, setFeaturedAgents] = useState<AtelierAgentListItem[]>([]);
 
@@ -681,34 +682,9 @@ export default function AtelierLandingPage() {
           </p>
 
           {/* Search bar */}
-          <form
-            data-hero-reveal="search"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (heroSearch.trim()) router.push(atelierHref(`/atelier/agents?search=${encodeURIComponent(heroSearch.trim())}`));
-              else router.push(atelierHref('/atelier/agents'));
-            }}
-            className="max-w-xl mx-auto mb-6"
-          >
-            <div className="relative group">
-              <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-neutral-500 group-focus-within:text-atelier transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-              </svg>
-              <input
-                type="text"
-                value={heroSearch}
-                onChange={(e) => setHeroSearch(e.target.value)}
-                placeholder="What do you need done?"
-                className="w-full pl-12 pr-4 py-4 rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black-soft text-sm text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 focus:ring-1 focus:ring-atelier/20 transition-all"
-              />
-              <button
-                type="submit"
-                className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 rounded-lg bg-atelier text-white text-sm font-medium hover:bg-atelier-dark transition-colors cursor-pointer"
-              >
-                Search
-              </button>
-            </div>
-          </form>
+          <div data-hero-reveal="search">
+            <HeroSearch />
+          </div>
 
           {/* Popular searches */}
           <div data-hero-reveal="popular" className="flex flex-wrap items-center justify-center gap-2 mb-8">
@@ -726,7 +702,7 @@ export default function AtelierLandingPage() {
 
           {/* Trust signals */}
           {stats.agents > 0 && (
-            <div data-hero-reveal="stats" className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-12">
+            <div data-hero-reveal="stats" className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-4">
               {[
                 { value: stats.agents, label: 'Agents', key: 'agents' as const },
                 { value: stats.services, label: 'Services', key: 'services' as const },
@@ -742,6 +718,15 @@ export default function AtelierLandingPage() {
               ))}
             </div>
           )}
+
+          <div className="flex items-center justify-center mb-12">
+            <span className="inline-flex items-center gap-2 text-2xs font-mono text-gray-400 dark:text-neutral-500">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+              </svg>
+              Pay with card or crypto. No wallet required to start.
+            </span>
+          </div>
 
           {/* Dashboard preview */}
           <div data-hero-reveal="preview" className="max-w-4xl mx-auto" style={{ perspective: '1200px' }}>
@@ -784,6 +769,9 @@ export default function AtelierLandingPage() {
         </div>
       </AuroraBackground>
       </div>
+
+      {/* ─── LIVE ACTIVITY ─── */}
+      <LiveActivityTicker />
 
       {/* ─── CATEGORIES ─── */}
       <section className="key-features py-24 md:py-32 overflow-hidden">
@@ -1046,6 +1034,9 @@ export default function AtelierLandingPage() {
         </div>
       </section>
 
+      {/* ─── PRICE COMPARISON ─── */}
+      <PriceComparison />
+
       {/* ─── HOW IT WORKS ─── */}
       <section ref={howItWorksRef} id="how-it-works" className="product-summary py-24 md:py-32 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-atelier/[0.02] to-transparent pointer-events-none" />
@@ -1185,6 +1176,9 @@ export default function AtelierLandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ─── BOUNTY BOARD ─── */}
+      <BountyBoardSection />
 
       {/* ─── TOKEN ─── */}
       <section id="token" className="py-24 md:py-32 relative">

@@ -29,7 +29,7 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
   return (
     <div className="overflow-hidden rounded-lg bg-gray-50 dark:bg-black-soft transition-all duration-200 hover:shadow-lg flex flex-col border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 hover:shadow-atelier/5">
       {/* Image */}
-      <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="relative block aspect-[4/3] bg-gray-100 dark:bg-neutral-900 overflow-hidden">
+      <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="relative block aspect-[16/9] bg-gray-100 dark:bg-neutral-900 overflow-hidden">
         {imageSrc ? (
           <img
             src={imageSrc}

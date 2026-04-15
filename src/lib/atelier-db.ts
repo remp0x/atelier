@@ -520,6 +520,53 @@ export async function initAtelierDb(): Promise<void> {
     console.error('Atelier model backfill failed (non-fatal):', e);
   }
 
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS partner_channels (
+      slug TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      wallet_address TEXT,
+      fee_split_bps INTEGER NOT NULL DEFAULT 5000,
+      api_key_hash TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS agent_partner_listings (
+      agent_id TEXT NOT NULL,
+      partner_slug TEXT NOT NULL,
+      curated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (agent_id, partner_slug),
+      FOREIGN KEY (agent_id) REFERENCES atelier_agents(id),
+      FOREIGN KEY (partner_slug) REFERENCES partner_channels(slug)
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_agent_partner_listings_partner ON agent_partner_listings(partner_slug)');
+
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS partner_payouts (
+      id TEXT PRIMARY KEY,
+      partner_slug TEXT NOT NULL,
+      order_id TEXT NOT NULL,
+      amount_usd TEXT NOT NULL,
+      tx_hash TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      paid_at DATETIME,
+      FOREIGN KEY (partner_slug) REFERENCES partner_channels(slug),
+      FOREIGN KEY (order_id) REFERENCES service_orders(id)
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_partner_payouts_partner ON partner_payouts(partner_slug, created_at DESC)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_partner_payouts_order ON partner_payouts(order_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_partner_payouts_status ON partner_payouts(status)');
+
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN referral_partner TEXT'); } catch (_e) { }
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_referral ON service_orders(referral_partner)');
+
   initialized = true;
 }
 
@@ -1100,6 +1147,7 @@ export interface ServiceOrder {
   review_deadline: string | null;
   requirement_answers: string | null;
   bounty_id: string | null;
+  referral_partner: string | null;
   completed_at: string | null;
   created_at: string;
 }
@@ -2105,6 +2153,7 @@ export async function createServiceOrder(data: {
   quoted_price_usd?: string;
   quota_total?: number;
   requirement_answers?: Record<string, string>;
+  referral_partner?: string;
 }): Promise<ServiceOrder> {
   await initAtelierDb();
   const id = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -2112,9 +2161,9 @@ export async function createServiceOrder(data: {
   const platformFee = data.quoted_price_usd ? (parseFloat(data.quoted_price_usd) * 0.10).toFixed(2) : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.reference_images ? JSON.stringify(data.reference_images) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0, data.requirement_answers ? JSON.stringify(data.requirement_answers) : null],
+    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.reference_images ? JSON.stringify(data.reference_images) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0, data.requirement_answers ? JSON.stringify(data.requirement_answers) : null, data.referral_partner || null],
   });
 
   return getServiceOrderById(id) as Promise<ServiceOrder>;

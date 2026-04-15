@@ -155,4 +155,7 @@ export const rateLimiters = {
 
   // 30 file uploads per hour per IP
   upload: rateLimit(30, 60 * 60 * 1000),
+
+  // 300 partner API calls per hour per IP (authenticated with API key)
+  partnerApi: rateLimit(300, 60 * 60 * 1000),
 };

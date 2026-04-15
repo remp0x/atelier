@@ -9,6 +9,7 @@ import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { verifySolanaUsdcPayment, verifySolanaUsdcReceived } from '@/lib/solana-verify';
 import { sendUsdcPayout } from '@/lib/solana-payout';
+import { settlePartnerSplit } from '@/lib/partner-settlement';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { notifyBuyer, notifyProvider } from '@/lib/notifications';
 
@@ -252,6 +253,7 @@ export async function PATCH(
       const platformFee = parseFloat(order.platform_fee_usd || '0');
       const payoutAmount = Math.round((quotedPrice - platformFee) * 100) / 100;
       let payoutFailed = false;
+      let agentPaid = false;
       if (payoutAmount > 0) {
         try {
           const agent = await getAtelierAgent(order.provider_agent_id);
@@ -259,6 +261,7 @@ export async function PATCH(
           if (destination) {
             const txHash = await sendUsdcPayout(destination, payoutAmount);
             await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
+            agentPaid = true;
           } else {
             payoutFailed = true;
             console.error(`Payout skipped for order ${id}: no destination wallet`);
@@ -267,6 +270,16 @@ export async function PATCH(
           payoutFailed = true;
           console.error(`Payout failed for order ${id}:`, payoutErr);
         }
+      }
+
+      if (agentPaid && order.referral_partner && platformFee > 0) {
+        settlePartnerSplit({
+          orderId: id,
+          partnerSlug: order.referral_partner,
+          platformFeeUsd: platformFee,
+        }).catch(err => {
+          console.error(`Partner settlement failed for order ${id}:`, err);
+        });
       }
 
       const finalOrder = await getServiceOrderById(id);

@@ -9,6 +9,7 @@ import { sendUsdcPayment } from '@/lib/solana-pay';
 import { useFundWallet } from '@privy-io/react-auth/solana';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { clientUpload } from '@/lib/client-upload';
+import { readReferralCookie } from './ReferralCapture';
 import type { Service, RequirementField } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'confirmation';
@@ -298,6 +299,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       const auth = await getAuth();
 
       setLoadingMsg('Creating order...');
+      const referralPartner = readReferralCookie();
       const createRes = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -309,6 +311,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
           requirement_answers: Object.keys(reqAnswers).length > 0 ? reqAnswers : undefined,
           client_wallet: walletAddress!,
+          ...(referralPartner ? { referral_partner: referralPartner } : {}),
         }),
       });
       const createJson = await createRes.json();

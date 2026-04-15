@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceById, createServiceOrder, getOrdersByWallet, ensureProfileExists } from '@/lib/atelier-db';
+import { isActivePartnerSlug } from '@/lib/partners-db';
 import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
@@ -103,6 +104,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    let referralPartner: string | undefined;
+    const rawReferral = typeof body.referral_partner === 'string' ? body.referral_partner.trim().toLowerCase() : '';
+    if (rawReferral && /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(rawReferral)) {
+      if (await isActivePartnerSlug(rawReferral)) {
+        referralPartner = rawReferral;
+      }
+    }
+
     const quotedPrice = ['fixed', 'weekly', 'monthly'].includes(service.price_type) ? service.price_usd : undefined;
 
     const order = await createServiceOrder({
@@ -115,6 +124,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       quoted_price_usd: quotedPrice,
       quota_total: service.quota_limit || 0,
       requirement_answers: requirement_answers || undefined,
+      referral_partner: referralPartner,
     });
 
     notifyAgentWebhook(service.agent_id, {

@@ -76,7 +76,7 @@ const myStuffNavItems: NavItem[] = [
   },
   {
     href: '/atelier/dashboard',
-    label: 'Dashboard',
+    label: 'Agents',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
@@ -251,62 +251,22 @@ export function AtelierSidebar() {
           </Link>
         </div>
 
-        {/* My Stuff */}
-        <div className="pt-3 pb-1">
-          {expanded && (
-            <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
-              My Stuff
-            </span>
-          )}
-          {!expanded && (
-            <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
-          )}
-        </div>
-        {myStuffNavItems.map((item) => {
-          if (!authenticated) {
-            if (item.href === '/atelier/dashboard') {
-              return (
-                <Link
-                  key={item.href}
-                  href={atelierHref(item.href)}
-                  className={`sidebar-locked-item flex items-center gap-3 h-10 rounded-lg transition-all ${
-                    expanded ? 'px-3' : 'justify-center px-0'
-                  } hover:bg-gray-100 dark:hover:bg-neutral-900`}
-                  title={!expanded ? item.label : undefined}
-                >
-                  {item.icon}
-                  <span
-                    className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${
-                      expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
-                    }`}
-                  >
-                    {item.label}
-                  </span>
-                </Link>
-              );
-            }
-            return (
-              <button
-                key={item.href}
-                onClick={() => login()}
-                className={`sidebar-locked-item w-full flex items-center gap-3 h-10 rounded-lg transition-all cursor-pointer ${
-                  expanded ? 'px-3' : 'justify-center px-0'
-                } hover:bg-gray-100 dark:hover:bg-neutral-900`}
-                title={!expanded ? item.label : undefined}
-              >
-                {item.icon}
-                <span
-                  className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${
-                    expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
-                  }`}
-                >
-                  {item.label}
+        {/* My Stuff — only visible when signed in */}
+        {authenticated && (
+          <>
+            <div className="pt-3 pb-1">
+              {expanded && (
+                <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
+                  My Stuff
                 </span>
-              </button>
-            );
-          }
-          return renderNavLink(item);
-        })}
+              )}
+              {!expanded && (
+                <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
+              )}
+            </div>
+            {myStuffNavItems.map(renderNavLink)}
+          </>
+        )}
         <div className={`pt-1 ${expanded ? '' : 'flex justify-center'}`}>
           <SignInButton expanded={expanded} />
         </div>

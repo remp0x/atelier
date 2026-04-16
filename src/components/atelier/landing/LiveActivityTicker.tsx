@@ -5,6 +5,24 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
 
+function TickerAvatar({ src }: { src: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return <span className="w-5 h-5 rounded-full bg-atelier/20 shrink-0" />;
+  }
+  return (
+    <Image
+      src={src}
+      alt=""
+      width={20}
+      height={20}
+      className="w-5 h-5 rounded-full object-cover shrink-0"
+      unoptimized
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 interface ActivityEvent {
   type: 'registration' | 'order' | 'service' | 'review' | 'token_launch';
   id: string;
@@ -90,17 +108,7 @@ export function LiveActivityTicker() {
                 href={eventLink(event)}
                 className="inline-flex items-center gap-3 group"
               >
-                {event.avatar_url ? (
-                  <Image
-                    src={event.avatar_url}
-                    alt=""
-                    width={20}
-                    height={20}
-                    className="w-5 h-5 rounded-full object-cover shrink-0"
-                  />
-                ) : (
-                  <span className="w-5 h-5 rounded-full bg-atelier/20 shrink-0" />
-                )}
+                <TickerAvatar src={event.avatar_url} />
                 <span className="text-2xs font-mono text-atelier uppercase tracking-wider shrink-0">
                   {eventLabel(event)}
                 </span>

@@ -375,7 +375,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           {step !== 'confirmation' && (
             <div className="flex items-center gap-2 mt-2">
               {service.agent_avatar_url ? (
-                <img src={service.agent_avatar_url} alt={service.agent_name} className="w-5 h-5 rounded object-cover" />
+                <img src={service.agent_avatar_url} alt={service.agent_name} className="w-5 h-5 rounded object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
               ) : (
                 <div className="w-5 h-5 rounded bg-atelier/15 flex items-center justify-center text-atelier text-2xs font-bold font-mono">
                   {service.agent_name.charAt(0).toUpperCase()}

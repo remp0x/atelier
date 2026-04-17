@@ -362,7 +362,7 @@ function DashboardContent() {
             <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
               {agents.map(a => (
                 <button key={a.id} onClick={() => setSelectedAgent(a.id)} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-mono whitespace-nowrap transition-all cursor-pointer ${selectedAgent === a.id ? 'bg-atelier/10 text-atelier border border-atelier/30 shadow-[0_0_12px_rgba(250,76,20,0.1)]' : 'bg-gray-50 dark:bg-neutral-950 text-gray-500 dark:text-neutral-400 border border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-700 dark:hover:text-neutral-300'}`}>
-                  {a.avatar_url ? <Image src={a.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full object-cover" /> : <div className="w-5 h-5 rounded-full bg-atelier/20 flex items-center justify-center text-[10px] font-bold text-atelier">{a.name.charAt(0).toUpperCase()}</div>}
+                  {a.avatar_url ? <Image src={a.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full object-cover" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <div className="w-5 h-5 rounded-full bg-atelier/20 flex items-center justify-center text-[10px] font-bold text-atelier">{a.name.charAt(0).toUpperCase()}</div>}
                   {a.name}
                 </button>
               ))}
@@ -383,7 +383,7 @@ function DashboardContent() {
               <section className="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-xl p-5 sm:p-6">
                 <div className="flex items-start gap-4">
                   {agent.avatar_url ? (
-                    <Image src={agent.avatar_url} alt={agent.name} width={56} height={56} className="w-14 h-14 rounded-xl object-cover flex-shrink-0 ring-2 ring-gray-200 dark:ring-neutral-800" unoptimized />
+                    <Image src={agent.avatar_url} alt={agent.name} width={56} height={56} className="w-14 h-14 rounded-xl object-cover flex-shrink-0 ring-2 ring-gray-200 dark:ring-neutral-800" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   ) : (
                     <div className="w-14 h-14 rounded-xl bg-atelier/10 flex items-center justify-center text-atelier text-xl font-bold font-display flex-shrink-0 ring-2 ring-atelier/20">{agent.name.charAt(0).toUpperCase()}</div>
                   )}
@@ -765,7 +765,7 @@ function EditAgentModal({ agent, apiKey, getAuth, authMode, onClose, onSuccess }
           <div className="flex items-center gap-3 mt-1">
             <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatarUpload} className="hidden" />
             <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="relative w-16 h-16 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 group flex-shrink-0 cursor-pointer">
-              {avatarUrl ? <Image src={avatarUrl} alt="Avatar" fill sizes="64px" className="object-cover" unoptimized /> : <div className="w-full h-full bg-atelier/10 flex items-center justify-center text-atelier text-xl font-bold font-display">{name ? name.charAt(0).toUpperCase() : '?'}</div>}
+              {avatarUrl ? <Image src={avatarUrl} alt="Avatar" fill sizes="64px" className="object-cover" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <div className="w-full h-full bg-atelier/10 flex items-center justify-center text-atelier text-xl font-bold font-display">{name ? name.charAt(0).toUpperCase() : '?'}</div>}
               {uploading ? <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /></div> : <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"><svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" /></svg></div>}
             </button>
             <span className="text-xs font-mono text-gray-400 dark:text-neutral-500">{uploading ? 'Uploading...' : 'Click to upload'}</span>

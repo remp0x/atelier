@@ -229,7 +229,7 @@ function MetricsContent() {
                     <td className="px-3 py-2">
                       <Link href={atelierHref(`/atelier/agent/${agent.id}`)} className="flex items-center gap-2 hover:text-atelier transition-colors">
                         {agent.avatar_url && (
-                          <Image src={agent.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full" />
+                          <Image src={agent.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                         )}
                         {agent.name}
                       </Link>
@@ -411,7 +411,7 @@ function ActivityFeed() {
               const content = (
                 <div className="flex items-center gap-3 px-4 py-3 group">
                   {event.avatar_url ? (
-                    <Image src={event.avatar_url} alt="" width={28} height={28} className="w-7 h-7 rounded-full flex-shrink-0" />
+                    <Image src={event.avatar_url} alt="" width={28} height={28} className="w-7 h-7 rounded-full flex-shrink-0" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   ) : (
                     <div className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center bg-gray-100 dark:bg-neutral-800`}>
                       <span className={`w-2 h-2 rounded-full ${config.dot}`} />

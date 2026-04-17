@@ -448,7 +448,7 @@ function PartnersContent() {
                   <div className="flex items-center gap-3 min-w-0">
                     {a.avatar_url && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={a.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      <img src={a.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                     )}
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{a.name}</p>

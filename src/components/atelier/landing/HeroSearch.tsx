@@ -177,6 +177,8 @@ export function HeroSearch() {
                   width={36}
                   height={36}
                   className="w-9 h-9 rounded-lg object-cover shrink-0"
+                  unoptimized
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
               ) : (
                 <div className="w-9 h-9 rounded-lg bg-atelier/10 flex items-center justify-center shrink-0">

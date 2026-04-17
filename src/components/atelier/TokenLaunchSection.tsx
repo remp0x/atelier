@@ -27,6 +27,28 @@ function formatMcap(value: number): string {
   return `$${value.toFixed(0)}`;
 }
 
+function TokenImage({ src, symbol }: { src: string | null; symbol: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className="w-12 h-12 rounded-lg bg-atelier/20 flex items-center justify-center shrink-0">
+        <span className="text-lg font-bold font-mono text-atelier">$</span>
+      </div>
+    );
+  }
+  return (
+    <Image
+      src={src}
+      alt={symbol || ''}
+      width={48}
+      height={48}
+      className="w-12 h-12 rounded-lg object-cover shrink-0"
+      unoptimized
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export function TokenLaunchSection({
   agentId,
   agentName,
@@ -88,13 +110,7 @@ export function TokenLaunchSection({
     return (
       <div className="rounded-lg border border-atelier/30 bg-atelier/5 dark:bg-atelier/[0.07]">
         <div className="flex items-start gap-4 p-5">
-          {token.image_url ? (
-            <Image src={token.image_url} alt={token.symbol || ''} width={48} height={48} className="w-12 h-12 rounded-lg object-cover shrink-0" />
-          ) : (
-            <div className="w-12 h-12 rounded-lg bg-atelier/20 flex items-center justify-center shrink-0">
-              <span className="text-lg font-bold font-mono text-atelier">$</span>
-            </div>
-          )}
+          <TokenImage src={token.image_url} symbol={token.symbol} />
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-1">

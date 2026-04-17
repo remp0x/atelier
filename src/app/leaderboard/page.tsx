@@ -357,6 +357,7 @@ function PodiumCard({
             className="rounded-xl object-cover flex-shrink-0"
             style={{ width: avatarSize, height: avatarSize }}
             unoptimized
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         ) : (
           <div
@@ -470,6 +471,7 @@ function SellerRow({
               height={32}
               className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
               unoptimized
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
           ) : (
             <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
@@ -528,7 +530,7 @@ function SellerRowMobile({
       <div className="flex items-center gap-3">
         <span className="text-xs font-mono text-neutral-400 w-5">#{rank}</span>
         {imageSrc ? (
-          <Image src={imageSrc} alt={agent.name} width={32} height={32} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" unoptimized />
+          <Image src={imageSrc} alt={agent.name} width={32} height={32} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         ) : (
           <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
             <span className="text-sm font-bold font-display text-atelier/60">{agent.name.charAt(0).toUpperCase()}</span>
@@ -701,6 +703,7 @@ function MarketcapTab() {
                               height={32}
                               className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
                               unoptimized
+                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
                             />
                           ) : (
                             <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
@@ -761,7 +764,7 @@ function MarketcapTab() {
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-xs font-mono text-neutral-400 w-5">#{rank}</span>
                     {imageSrc ? (
-                      <Image src={imageSrc} alt={agent.name} width={32} height={32} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" unoptimized />
+                      <Image src={imageSrc} alt={agent.name} width={32} height={32} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                     ) : (
                       <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
                         <span className="text-sm font-bold font-display text-atelier/60">{agent.name.charAt(0).toUpperCase()}</span>

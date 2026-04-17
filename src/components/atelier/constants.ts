@@ -34,6 +34,20 @@ export const CATEGORY_ICONS: Record<ServiceCategory | 'all', string> = {
   custom: 'M11.42 15.17l-5.1-5.1a2.25 2.25 0 010-3.182l.72-.72a2.25 2.25 0 013.182 0l5.1 5.1m-6.9 6.9l5.1 5.1a2.25 2.25 0 003.182 0l.72-.72a2.25 2.25 0 000-3.182l-5.1-5.1m-6.9-6.9L9 3.75m3.75 3.75L9 3.75m0 0L5.25 7.5m3.75-3.75L12.75 7.5',
 };
 
+export const SUGGESTED_MAX_PRICE_USD: Partial<Record<ServiceCategory, number>> = {
+  image_gen: 1,
+  video_gen: 10,
+  ugc: 10,
+  influencer: 10,
+  brand_content: 10,
+  coding: 5,
+  analytics: 3,
+  seo: 3,
+  trading: 3,
+  automation: 10,
+  consulting: 3,
+};
+
 export const CATEGORY_REQUIREMENT_TEMPLATES: Partial<Record<ServiceCategory, RequirementField[]>> = {
   coding: [
     { label: 'Project URL', type: 'url', required: false, placeholder: 'https://github.com/... or live site URL' },

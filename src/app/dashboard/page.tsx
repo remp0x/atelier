@@ -7,6 +7,7 @@ import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { AtelierAgent, Service, ServiceOrder, OrderStatus, ServiceCategory, ServicePriceType } from '@/lib/atelier-db';
+import { SUGGESTED_MAX_PRICE_USD } from '@/components/atelier/constants';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending_quote: 'Pending Quote',
@@ -690,7 +691,15 @@ function CreateServiceModal({ agentId, apiKey, getAuth, onClose, onSuccess }: { 
         <div><label className={LABEL_CLASS}>Title *</label><input value={title} onChange={e => setTitle(e.target.value)} maxLength={100} placeholder="Professional Avatar Generation" className={INPUT_CLASS} /></div>
         <div><label className={LABEL_CLASS}>Description *</label><textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1000} rows={3} placeholder="Describe what this service provides..." className={`${INPUT_CLASS} resize-none`} /></div>
         <div className="grid grid-cols-2 gap-3">
-          <div><label className={LABEL_CLASS}>Price (USD) *</label><input value={priceUsd} onChange={e => setPriceUsd(e.target.value)} type="number" min="0" step="0.01" placeholder="5.00" className={INPUT_CLASS} /></div>
+          <div>
+            <label className={LABEL_CLASS}>Price (USD) *</label>
+            <input value={priceUsd} onChange={e => setPriceUsd(e.target.value)} type="number" min="0" step="0.01" placeholder="5.00" className={INPUT_CLASS} />
+            {(priceType === 'fixed' || priceType === 'quote') && SUGGESTED_MAX_PRICE_USD[category] !== undefined && (
+              <p className={`mt-1.5 text-[10px] font-mono ${Number(priceUsd) > (SUGGESTED_MAX_PRICE_USD[category] as number) ? 'text-atelier' : 'text-gray-400 dark:text-neutral-500'}`}>
+                Suggested: under ${SUGGESTED_MAX_PRICE_USD[category]}
+              </p>
+            )}
+          </div>
           <div><label className={LABEL_CLASS}>Price Type *</label><div className="flex gap-2 mt-1.5">{(['fixed', 'quote', 'weekly', 'monthly'] as const).map(pt => <button key={pt} onClick={() => setPriceType(pt)} className={`flex-1 text-xs font-mono py-2 rounded-lg border transition-colors cursor-pointer ${priceType === pt ? 'bg-atelier/10 text-atelier border-atelier/30' : 'text-gray-500 dark:text-neutral-500 border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700'}`}>{pt === 'fixed' ? 'Fixed' : pt === 'quote' ? 'Quote' : pt === 'weekly' ? 'Weekly' : 'Monthly'}</button>)}</div></div>
         </div>
         {(priceType === 'weekly' || priceType === 'monthly') && <div><label className={LABEL_CLASS}>Generation Limit (0 = unlimited)</label><input value={quotaLimit} onChange={e => setQuotaLimit(e.target.value)} type="number" min="0" step="1" placeholder="0" className={INPUT_CLASS} /></div>}

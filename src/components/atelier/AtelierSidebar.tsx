@@ -126,6 +126,7 @@ const platformNavItems: NavItem[] = [
 
 export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const pathname = usePathname();
   const { authenticated, login } = useAtelierAuth();
 
@@ -140,25 +141,31 @@ export function AtelierSidebar() {
     localStorage.setItem('atelier_sidebar_expanded', String(next));
   };
 
+  const toggleMore = () => {
+    setMoreOpen((v) => !v);
+  };
+
   const isActive = (href: string) => {
     const resolved = atelierHref(href);
     if (href === '/atelier/agents') return pathname === resolved;
     return pathname.startsWith(resolved);
   };
 
-  const renderNavLink = (item: NavItem) => {
+  const platformHasActive = platformNavItems.some((item) => isActive(item.href));
+  const showPlatformItems = !expanded || moreOpen || platformHasActive;
+
+  const renderNavLink = (item: NavItem, opts?: { muted?: boolean }) => {
     const active = isActive(item.href);
+    const inactiveClass = opts?.muted
+      ? 'text-gray-400 dark:text-neutral-500 opacity-40 hover:opacity-100 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-gray-700 dark:hover:text-neutral-300'
+      : 'text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white';
     return (
       <Link
         key={item.href}
         href={atelierHref(item.href)}
         className={`flex items-center gap-3 h-10 rounded-lg transition-all ${
           expanded ? 'px-3' : 'justify-center px-0'
-        } ${
-          active
-            ? 'bg-atelier/10 text-atelier'
-            : 'text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white'
-        }`}
+        } ${active ? 'bg-atelier/10 text-atelier' : inactiveClass}`}
         title={!expanded ? item.label : undefined}
       >
         {item.icon}
@@ -219,7 +226,7 @@ export function AtelierSidebar() {
       </button>
 
       {/* Nav */}
-      <nav className="flex-1 py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
+      <nav className="flex-1 flex flex-col py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
         <div className="pb-1">
           {expanded && (
             <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
@@ -227,18 +234,74 @@ export function AtelierSidebar() {
             </span>
           )}
         </div>
-        {discoverNavItems.map(renderNavLink)}
+        {discoverNavItems.map((item) => renderNavLink(item))}
 
-        {/* Register Agent CTA */}
-        <div className="pt-2 mt-1">
+        {/* Platform — collapsed into a subdued toggle when sidebar is expanded */}
+        {expanded ? (
+          <>
+            <div className="pt-2">
+              <button
+                onClick={toggleMore}
+                aria-expanded={showPlatformItems}
+                aria-controls="sidebar-platform-items"
+                className="w-full flex items-center gap-3 h-8 px-3 rounded-lg transition-colors text-gray-400 dark:text-neutral-600 hover:text-gray-600 dark:hover:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 cursor-pointer"
+              >
+                <span className="text-[10px] font-mono uppercase tracking-wider">Platform</span>
+                <svg
+                  className={`w-3 h-3 ml-auto transition-transform duration-200 ${showPlatformItems ? 'rotate-180' : ''}`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+            </div>
+            {showPlatformItems && (
+              <div id="sidebar-platform-items">
+                {platformNavItems.map((item) => renderNavLink(item, { muted: true }))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="pt-3 pb-1">
+              <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
+            </div>
+            {platformNavItems.map((item) => renderNavLink(item, { muted: true }))}
+          </>
+        )}
+
+        {/* My Stuff — only visible when signed in, pushed to the bottom of the nav */}
+        {authenticated && (
+          <div className="mt-auto space-y-0.5">
+            <div className="pt-3 pb-1">
+              {expanded && (
+                <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
+                  My Stuff
+                </span>
+              )}
+              {!expanded && (
+                <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
+              )}
+            </div>
+            {myStuffNavItems.map((item) => renderNavLink(item))}
+          </div>
+        )}
+      </nav>
+
+      {/* Bottom section: Register Agent above the divider, Connect/Account below */}
+      <div className="flex-shrink-0">
+        <div className={`p-2 ${expanded ? '' : 'flex justify-center'}`}>
           <Link
             href={atelierHref('/atelier/agents/register')}
-            className={`flex items-center gap-3 h-10 rounded-lg transition-all text-atelier/70 hover:text-atelier hover:bg-atelier/5 ${
-              expanded ? 'px-3' : 'justify-center px-0'
+            className={`flex items-center gap-3 h-10 rounded-lg transition-colors bg-atelier/10 border border-atelier/30 text-atelier font-semibold hover:bg-atelier/15 hover:border-atelier/50 ${
+              expanded ? 'w-full px-3' : 'w-10 justify-center px-0'
             }`}
             title={!expanded ? 'Register Agent' : undefined}
           >
-            <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
             <span
@@ -251,40 +314,11 @@ export function AtelierSidebar() {
           </Link>
         </div>
 
-        {/* Platform */}
-        <div className="pt-3 pb-1">
-          {expanded && (
-            <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
-              Platform
-            </span>
-          )}
-          {!expanded && (
-            <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
-          )}
+        <div className="border-t border-gray-200 dark:border-neutral-900" />
+
+        <div className={`p-2 ${expanded ? '' : 'flex justify-center'}`}>
+          <SignInButton expanded={expanded} secondary={!authenticated} />
         </div>
-        {platformNavItems.map(renderNavLink)}
-
-        {/* My Stuff — only visible when signed in, pinned just above Connect */}
-        {authenticated && (
-          <>
-            <div className="pt-3 pb-1">
-              {expanded && (
-                <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
-                  My Stuff
-                </span>
-              )}
-              {!expanded && (
-                <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
-              )}
-            </div>
-            {myStuffNavItems.map(renderNavLink)}
-          </>
-        )}
-      </nav>
-
-      {/* Connect / Account — pinned to bottom */}
-      <div className={`flex-shrink-0 border-t border-gray-200 dark:border-neutral-900 p-2 ${expanded ? '' : 'flex justify-center'}`}>
-        <SignInButton expanded={expanded} />
       </div>
 
     </aside>

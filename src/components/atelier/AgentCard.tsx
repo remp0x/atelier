@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { AtelierAgentListItem, ServiceCategory } from '@/lib/atelier-db';
@@ -12,12 +13,17 @@ interface AgentCardProps {
   onHire?: () => void;
 }
 
+type ChipKey = 'skills' | 'models';
+
 export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
   const [copied, setCopied] = useState(false);
+  const [openChip, setOpenChip] = useState<ChipKey | null>(null);
+
   const avatarLetter = agent.name.charAt(0).toUpperCase();
   const imageSrc = agent.token_image_url || agent.avatar_url;
-  const primaryCategory = agent.categories[0];
   const hasToken = !!agent.token_symbol;
+  const skills = agent.categories;
+  const models = agent.provider_models;
 
   function copyCA() {
     if (!agent.token_mint) return;
@@ -27,9 +33,9 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg bg-gray-50 dark:bg-black-soft transition-all duration-200 hover:shadow-lg flex flex-col border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 hover:shadow-atelier/5">
+    <div className="rounded-lg bg-gray-50 dark:bg-black-soft transition-all duration-200 hover:shadow-lg flex flex-col border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 hover:shadow-atelier/5">
       {/* Image */}
-      <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="relative block aspect-[16/9] bg-gray-100 dark:bg-neutral-900 overflow-hidden">
+      <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="relative block aspect-[16/9] bg-gray-100 dark:bg-neutral-900 overflow-hidden rounded-t-lg">
         {imageSrc ? (
           <img
             src={imageSrc}
@@ -42,23 +48,6 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
             <span className="text-4xl font-bold font-display text-atelier/60">{avatarLetter}</span>
           </div>
         )}
-        <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-2">
-          {primaryCategory && (
-            <span className="px-2 py-0.5 rounded-full text-2xs font-mono font-semibold bg-black/60 text-white backdrop-blur-sm">
-              {CATEGORY_LABELS[primaryCategory as ServiceCategory] || primaryCategory}
-            </span>
-          )}
-          {agent.is_atelier_official === 1 && (
-            <span className="px-2 py-0.5 rounded-full text-2xs font-mono font-semibold bg-atelier text-white ml-auto">
-              by ATELIER
-            </span>
-          )}
-          {agent.partner_badge && agent.is_atelier_official !== 1 && (
-            <span className="px-2 py-0.5 rounded-full text-2xs font-mono font-semibold bg-white/90 text-black ml-auto">
-              {agent.partner_badge}
-            </span>
-          )}
-        </div>
       </Link>
 
       {/* Name */}
@@ -106,14 +95,45 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
         <p className="text-xs text-gray-500 dark:text-neutral-400 line-clamp-2 px-3 pt-1.5">{agent.description}</p>
       )}
 
-      {/* Model tags */}
-      {agent.provider_models.length > 0 && (
-        <div className="flex flex-wrap gap-1 px-3 pt-1.5">
-          {agent.provider_models.map((m) => (
-            <span key={m} className="px-1.5 py-0.5 rounded text-2xs font-mono bg-gray-200 dark:bg-neutral-800/60 text-gray-500 dark:text-neutral-400">
-              {m}
-            </span>
-          ))}
+      {/* Skills + Models dropdowns */}
+      {(skills.length > 0 || models.length > 0) && (
+        <div className="flex items-center gap-1.5 px-3 pt-2">
+          {skills.length > 0 && (
+            <ChipDropdown
+              label="Skills"
+              count={skills.length}
+              open={openChip === 'skills'}
+              onToggle={() => setOpenChip(openChip === 'skills' ? null : 'skills')}
+              onClose={() => setOpenChip(null)}
+            >
+              {skills.map((cat) => (
+                <div
+                  key={cat}
+                  className="px-2 py-1.5 rounded-md text-xs font-mono text-gray-700 dark:text-neutral-300"
+                >
+                  {CATEGORY_LABELS[cat as ServiceCategory] || cat}
+                </div>
+              ))}
+            </ChipDropdown>
+          )}
+          {models.length > 0 && (
+            <ChipDropdown
+              label="AI Models"
+              count={models.length}
+              open={openChip === 'models'}
+              onToggle={() => setOpenChip(openChip === 'models' ? null : 'models')}
+              onClose={() => setOpenChip(null)}
+            >
+              {models.map((m) => (
+                <div
+                  key={m}
+                  className="px-2 py-1.5 rounded-md text-xs font-mono text-gray-700 dark:text-neutral-300"
+                >
+                  {m}
+                </div>
+              ))}
+            </ChipDropdown>
+          )}
         </div>
       )}
 
@@ -152,5 +172,115 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
         </button>
       </div>
     </div>
+  );
+}
+
+const CHIP_DROPDOWN_WIDTH = 176;
+const CHIP_DROPDOWN_GAP = 6;
+
+type ChipDropdownPosition =
+  | { placement: 'down'; left: number; top: number }
+  | { placement: 'up'; left: number; bottom: number };
+
+function chipDropdownPositionStyle(p: ChipDropdownPosition): React.CSSProperties {
+  if (p.placement === 'down') return { left: p.left, top: p.top, width: CHIP_DROPDOWN_WIDTH };
+  return { left: p.left, bottom: p.bottom, width: CHIP_DROPDOWN_WIDTH };
+}
+
+function ChipDropdown({
+  label,
+  count,
+  open,
+  onToggle,
+  onClose,
+  children,
+}: {
+  label: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const [position, setPosition] = useState<ChipDropdownPosition | null>(null);
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target)) return;
+      if (portalRef.current?.contains(target)) return;
+      onClose();
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open, onClose]);
+
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current) return;
+    const updatePosition = () => {
+      const anchor = triggerRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const maxLeft = Math.max(CHIP_DROPDOWN_GAP, vw - CHIP_DROPDOWN_WIDTH - CHIP_DROPDOWN_GAP);
+      const left = Math.min(Math.max(CHIP_DROPDOWN_GAP, rect.left), maxLeft);
+      const spaceBelow = vh - rect.bottom;
+      const spaceAbove = rect.top;
+      if (spaceBelow < 180 && spaceAbove > spaceBelow) {
+        setPosition({ placement: 'up', left, bottom: vh - rect.top + CHIP_DROPDOWN_GAP });
+      } else {
+        setPosition({ placement: 'down', left, top: rect.bottom + CHIP_DROPDOWN_GAP });
+      }
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-[11px] font-mono whitespace-nowrap border bg-gray-50 dark:bg-neutral-900/50 border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-400 hover:border-atelier/50 hover:bg-atelier/5 dark:hover:bg-atelier/10 hover:text-black dark:hover:text-atelier transition-colors cursor-pointer"
+      >
+        <span>{label}</span>
+        <span className="text-gray-400 dark:text-neutral-500">·</span>
+        <span className="font-semibold">{count}</span>
+        <svg className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && mounted && position && createPortal(
+        <div
+          ref={portalRef}
+          className="fixed rounded-lg bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 shadow-lg z-50 p-1 max-h-60 overflow-y-auto"
+          style={chipDropdownPositionStyle(position)}
+        >
+          {children}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }

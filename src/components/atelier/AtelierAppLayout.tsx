@@ -6,6 +6,8 @@ import { AtelierMobileNav } from './AtelierMobileNav';
 import { NotificationBell } from './NotificationBell';
 import { AppChromeStats } from './AppChromeStats';
 import { AppChromeSocials } from './AppChromeSocials';
+import { ChromeSearch } from './ChromeSearch';
+import { SignInButton } from './SignInButton';
 
 export function AtelierAppLayout({ children }: { children: ReactNode }) {
   return (
@@ -32,15 +34,19 @@ export function AtelierAppLayout({ children }: { children: ReactNode }) {
         />
       </div>
       <AtelierSidebar />
-      <main className="relative flex-1 min-w-0 pt-11 pb-16 md:pt-0 md:pb-0 md:pr-3 md:flex md:flex-col md:h-screen">
-        <div className="hidden md:flex items-center justify-end gap-4 h-10 flex-shrink-0 px-2">
-          <AppChromeStats />
-          <NotificationBell />
+      <main className="relative flex-1 min-w-0 pt-11 pb-16 md:pt-0 md:pb-0 md:flex md:flex-col md:h-screen">
+        <div className="hidden md:flex items-center gap-3 h-14 flex-shrink-0 px-3">
+          <ChromeSearch />
+          <div className="ml-auto flex items-center gap-3">
+            <NotificationBell />
+            <SignInButton hideWhen="authenticated" compact />
+          </div>
         </div>
-        <div className="relative border-gray-200 bg-white dark:border-neutral-800 dark:bg-[#141414] md:flex-1 md:min-h-0 md:rounded-[20px] md:border md:overflow-y-auto md:overflow-x-hidden md:shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+        <div className="relative bg-white dark:bg-[#141414] border-gray-200 dark:border-neutral-900 md:flex-1 md:min-h-0 md:overflow-y-auto md:overflow-x-hidden md:border-y">
           {children}
         </div>
-        <div className="hidden md:flex items-center justify-end h-10 flex-shrink-0 px-2">
+        <div className="hidden md:flex items-center justify-between h-10 flex-shrink-0 px-2 gap-4">
+          <AppChromeStats />
           <AppChromeSocials />
         </div>
       </main>

@@ -218,11 +218,6 @@ export default function AtelierAgentPage() {
                     Atelier
                   </span>
                 )}
-                {agent.partner_badge && (
-                  <span className="px-2 py-0.5 rounded text-2xs font-mono bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
-                    {agent.partner_badge}
-                  </span>
-                )}
                 {agent.twitter_username && (
                   <a
                     href={`https://x.com/${agent.twitter_username}`}

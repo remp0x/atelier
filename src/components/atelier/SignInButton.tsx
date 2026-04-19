@@ -9,6 +9,9 @@ const POPOVER_MARGIN = 8;
 
 interface SignInButtonProps {
   expanded?: boolean;
+  compact?: boolean;
+  secondary?: boolean;
+  hideWhen?: 'authenticated' | 'unauthenticated';
 }
 
 interface ProfileSnapshot {
@@ -122,19 +125,28 @@ function Avatar({ url, size = 28, label }: { url: string | null; size?: number; 
 
 type PopoverView = 'menu' | 'apikey';
 
-interface PopoverPosition {
-  left: number;
-  bottom: number;
-}
+type PopoverPosition =
+  | { placement: 'down'; left: number; top: number }
+  | { placement: 'up'; left: number; bottom: number };
 
 function computePosition(rect: DOMRect): PopoverPosition {
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
   const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+  const maxLeft = Math.max(POPOVER_MARGIN, viewportWidth - POPOVER_WIDTH - POPOVER_MARGIN);
+  const openDown = rect.top < viewportHeight / 2;
+  if (openDown) {
+    const preferredLeft = rect.right - POPOVER_WIDTH;
+    const left = Math.min(Math.max(POPOVER_MARGIN, preferredLeft), maxLeft);
+    return { placement: 'down', left, top: rect.bottom + POPOVER_MARGIN };
+  }
   const preferredLeft = rect.left;
-  const maxLeft = viewportWidth - POPOVER_WIDTH - POPOVER_MARGIN;
-  const left = Math.min(Math.max(POPOVER_MARGIN, preferredLeft), Math.max(POPOVER_MARGIN, maxLeft));
-  const bottom = Math.max(POPOVER_MARGIN, viewportHeight - rect.top + POPOVER_MARGIN);
-  return { left, bottom };
+  const left = Math.min(Math.max(POPOVER_MARGIN, preferredLeft), maxLeft);
+  return { placement: 'up', left, bottom: Math.max(POPOVER_MARGIN, viewportHeight - rect.top + POPOVER_MARGIN) };
+}
+
+function positionStyle(p: PopoverPosition): React.CSSProperties {
+  if (p.placement === 'down') return { left: p.left, top: p.top, width: POPOVER_WIDTH };
+  return { left: p.left, bottom: p.bottom, width: POPOVER_WIDTH };
 }
 
 function ConnectPopover({
@@ -222,7 +234,7 @@ function ConnectPopover({
       role="dialog"
       aria-label="Connect"
       className="fixed z-[100] rounded-xl bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 shadow-2xl overflow-hidden animate-slide-up"
-      style={{ left: position.left, bottom: position.bottom, width: POPOVER_WIDTH }}
+      style={positionStyle(position)}
     >
       {view === 'menu' ? (
         <div className="p-1.5">
@@ -355,7 +367,7 @@ function AccountDropdown({
       ref={dropdownRef}
       role="menu"
       className="fixed z-[100] rounded-xl bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 shadow-2xl overflow-hidden animate-slide-up"
-      style={{ left: position.left, bottom: position.bottom, width: POPOVER_WIDTH }}
+      style={positionStyle(position)}
     >
       {walletAddress && (
         <button
@@ -385,7 +397,7 @@ function AccountDropdown({
   return createPortal(content, document.body);
 }
 
-export function SignInButton({ expanded = true }: SignInButtonProps) {
+export function SignInButton({ expanded = true, compact = false, secondary = false, hideWhen }: SignInButtonProps) {
   const auth = useAtelierAuth();
   const profile = useProfileSnapshot(auth.walletAddress);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -408,7 +420,39 @@ export function SignInButton({ expanded = true }: SignInButtonProps) {
     closePopover();
   }, [auth, closePopover]);
 
+  if (hideWhen === 'authenticated' && auth.authenticated) return null;
+  if (hideWhen === 'unauthenticated' && !auth.authenticated) return null;
+
   if (!auth.authenticated) {
+    if (compact) {
+      return (
+        <>
+          <button
+            ref={triggerRef}
+            onClick={() => setPopoverOpen((v) => !v)}
+            className="h-9 px-3.5 rounded-lg text-xs font-semibold font-mono tracking-wide cursor-pointer transition-all inline-flex items-center gap-1.5 text-white/90 bg-gradient-to-br from-[#7a2808] via-[#9a2906] to-[#c93a0a] hover:from-[#9a2906] hover:via-[#c93a0a] hover:to-[#fa4c14] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-atelier/40"
+            aria-haspopup="dialog"
+            aria-expanded={popoverOpen}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5L21 3m0 0h-5.25M21 3v5.25M10.5 6H6.75A2.25 2.25 0 004.5 8.25v10.5A2.25 2.25 0 006.75 21h10.5a2.25 2.25 0 002.25-2.25V15" />
+            </svg>
+            Connect
+          </button>
+          {popoverOpen && triggerRef.current && (
+            <ConnectPopover
+              anchor={triggerRef.current}
+              view={view}
+              onClose={closePopover}
+              onSocialLogin={handleSocialLogin}
+              onApiKeySubmit={handleApiKeySubmit}
+              onBack={() => setView('menu')}
+              onSwitchToApiKey={() => setView('apikey')}
+            />
+          )}
+        </>
+      );
+    }
     if (!expanded) {
       return (
         <>
@@ -439,12 +483,15 @@ export function SignInButton({ expanded = true }: SignInButtonProps) {
       );
     }
 
+    const fullClass = secondary
+      ? 'w-full h-9 px-3 rounded-lg text-xs font-mono tracking-wide cursor-pointer transition-colors flex items-center justify-center gap-2 border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-500 hover:text-atelier hover:border-atelier/40 hover:bg-atelier/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-atelier/40'
+      : 'w-full h-10 px-3 rounded-lg text-xs font-semibold font-mono tracking-wide cursor-pointer transition-all flex items-center justify-center gap-2 text-white/90 bg-gradient-to-br from-[#7a2808] via-[#9a2906] to-[#c93a0a] hover:from-[#9a2906] hover:via-[#c93a0a] hover:to-[#fa4c14] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-atelier/40';
     return (
       <>
         <button
           ref={triggerRef}
           onClick={() => setPopoverOpen((v) => !v)}
-          className="w-full h-10 px-3 rounded-lg text-xs font-semibold font-mono tracking-wide cursor-pointer transition-all flex items-center justify-center gap-2 bg-atelier text-white hover:bg-atelier-bright shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-atelier/40"
+          className={fullClass}
           aria-haspopup="dialog"
           aria-expanded={popoverOpen}
         >

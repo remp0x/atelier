@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { AgentCard } from '@/components/atelier/AgentCard';
@@ -8,7 +8,6 @@ import { HireModal } from '@/components/atelier/HireModal';
 import { CATEGORY_LABELS, CATEGORIES, CATEGORY_ICONS } from '@/components/atelier/constants';
 import type { AtelierAgentListItem, Service } from '@/lib/atelier-db';
 import type { MarketData } from '@/app/api/market/route';
-import { formatMcap } from '@/lib/format';
 import { rankAgents } from '@/lib/agent-ranking';
 
 const ATELIER_MINT = '7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump';
@@ -88,6 +87,11 @@ function BrowseContent() {
   const [featuredAgents, setFeaturedAgents] = useState<AtelierAgentListItem[]>([]);
   const [hireService, setHireService] = useState<Service | null>(null);
   const [servicePicker, setServicePicker] = useState<{ agentName: string; services: Service[] } | null>(null);
+
+  const urlSearch = searchParams.get('search') ?? '';
+  useEffect(() => {
+    setSearch(urlSearch);
+  }, [urlSearch]);
 
   useEffect(() => {
     if (window.location.search.includes('privy')) return;
@@ -220,123 +224,63 @@ function BrowseContent() {
         </p>
       </div>
 
-      {/* Search */}
-      <div className="mb-6">
-        <div className="relative max-w-sm">
-          <svg className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      {/* Search — mobile only; desktop uses the chrome search */}
+      <div className="mb-8 md:hidden">
+        <div className="relative max-w-2xl">
+          <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
           </svg>
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search agents..."
-            className="w-full pl-6 pr-2 py-1.5 bg-transparent border-b border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-atelier transition-colors"
+            placeholder="What services are you looking for today?"
+            className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-base font-sans placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:border-atelier focus:ring-2 focus:ring-atelier/20 shadow-sm transition-all"
           />
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div className="mb-8 border-b border-gray-100 dark:border-neutral-700/50">
-        {/* Categories: scrollable row */}
-        <div className="flex items-center gap-x-1 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={`relative flex-shrink-0 px-3 py-2 text-xs font-mono transition-colors whitespace-nowrap ${
-                category === cat
-                  ? 'text-atelier'
-                  : 'text-gray-500 dark:text-neutral-400 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5 inline-block mr-1 -mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d={CATEGORY_ICONS[cat]} />
-              </svg>
-              {CATEGORY_LABELS[cat]}
-              {category === cat && (
-                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4/5 h-0.5 bg-atelier rounded-full" />
-              )}
-            </button>
-          ))}
+      {/* Filter bar — categories scroll horizontally, Filters + Sort pinned right */}
+      <div className="mb-8 flex items-center gap-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div
+          className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto scrollbar-hide pr-4"
+          style={{
+            WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+            maskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+          }}
+        >
+          {CATEGORIES.map((cat) => {
+            const active = category === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setCategory(cat)}
+                className={`flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-mono whitespace-nowrap border transition-colors duration-150 ${
+                  active
+                    ? 'bg-atelier/10 border-atelier/40 text-atelier'
+                    : 'bg-gray-50 dark:bg-neutral-900/50 border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-400 hover:border-atelier/60 hover:bg-atelier/5 dark:hover:bg-atelier/10 hover:text-black dark:hover:text-atelier'
+                }`}
+              >
+                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.6}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d={CATEGORY_ICONS[cat]} />
+                </svg>
+                {CATEGORY_LABELS[cat]}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Secondary filters */}
-        <div className="flex items-center gap-x-3 gap-y-2 pt-1 pb-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-          <label className="relative inline-flex items-center gap-1 cursor-pointer group flex-shrink-0">
-            <select
-              value={pricing}
-              onChange={(e) => setPricing(e.target.value)}
-              className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
-            >
-              <option value="all">All pricing</option>
-              <option value="onetime">One-time</option>
-              <option value="subscription">Subscription</option>
-            </select>
-            <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </label>
-
-          {modelOptions.length > 0 && (
-            <label className="relative inline-flex items-center gap-1 cursor-pointer group flex-shrink-0">
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
-              >
-                <option value="all">All models</option>
-                {modelOptions.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-              <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </label>
-          )}
-
-          <label className="relative inline-flex items-center gap-1 cursor-pointer group flex-shrink-0 ml-auto">
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-              className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
-            >
-              {SORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-            </svg>
-          </label>
+        <div className="flex-shrink-0 flex items-center gap-2 pl-4 border-l border-gray-200 dark:border-neutral-800">
+          <FiltersDropdown
+            pricing={pricing}
+            setPricing={setPricing}
+            model={model}
+            setModel={setModel}
+            modelOptions={modelOptions}
+          />
+          <SortDropdown sort={sort} setSort={setSort} />
         </div>
       </div>
-
-      {/* $ATELIER banner */}
-      {marketMap[ATELIER_MINT] && (
-        <a
-          href={`https://pump.fun/coin/${ATELIER_MINT}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block mb-6 rounded-lg border border-atelier/30 bg-atelier/5 hover:bg-atelier/10 transition-colors px-5 py-3"
-        >
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-bold font-display text-atelier">$ATELIER</span>
-              {marketMap[ATELIER_MINT]!.market_cap_usd > 0 && (
-                <>
-                  <span className="text-neutral-500 text-xs">·</span>
-                  <span className="text-xs font-mono text-neutral-500">mcap {formatMcap(marketMap[ATELIER_MINT]!.market_cap_usd)}</span>
-                </>
-              )}
-            </div>
-            <span className="text-2xs font-mono text-neutral-400">
-              <span className="text-neutral-500">CA:</span> {ATELIER_MINT}
-            </span>
-          </div>
-        </a>
-      )}
 
       {/* Featured Holders */}
       {featuredAgents.length > 0 && (
@@ -445,6 +389,193 @@ function BrowseContent() {
           open={!!hireService}
           onClose={() => setHireService(null)}
         />
+      )}
+    </div>
+  );
+}
+
+function useDropdown() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [open]);
+  return { open, setOpen, ref };
+}
+
+function TriggerButton({
+  onClick,
+  active,
+  children,
+  expanded,
+}: {
+  onClick: () => void;
+  active?: boolean;
+  children: React.ReactNode;
+  expanded: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={expanded}
+      className={`flex-shrink-0 inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg text-xs font-mono whitespace-nowrap border transition-all duration-150 cursor-pointer ${
+        active
+          ? 'bg-atelier/10 border-atelier/40 text-atelier'
+          : 'bg-gray-50 dark:bg-neutral-900/50 border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-400 hover:border-atelier/30 hover:bg-white dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white'
+      }`}
+    >
+      {children}
+      <svg className={`w-3 h-3 transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    </button>
+  );
+}
+
+function FiltersDropdown({
+  pricing,
+  setPricing,
+  model,
+  setModel,
+  modelOptions,
+}: {
+  pricing: string;
+  setPricing: (v: string) => void;
+  model: string;
+  setModel: (v: string) => void;
+  modelOptions: string[];
+}) {
+  const { open, setOpen, ref } = useDropdown();
+  const activeCount = (pricing !== 'all' ? 1 : 0) + (model !== 'all' ? 1 : 0);
+
+  return (
+    <div className="relative flex-shrink-0" ref={ref}>
+      <TriggerButton onClick={() => setOpen((v) => !v)} active={activeCount > 0} expanded={open}>
+        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+        </svg>
+        Filters
+        {activeCount > 0 && (
+          <span className="ml-0.5 inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] rounded-full bg-atelier text-white text-[9px] font-bold px-1">
+            {activeCount}
+          </span>
+        )}
+      </TriggerButton>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 shadow-xl z-40 p-3 space-y-3 animate-slide-up">
+          <FilterGroup label="Pricing">
+            {[
+              { value: 'all', label: 'All pricing' },
+              { value: 'onetime', label: 'One-time' },
+              { value: 'subscription', label: 'Subscription' },
+            ].map((opt) => (
+              <FilterOption
+                key={opt.value}
+                selected={pricing === opt.value}
+                onClick={() => setPricing(opt.value)}
+                label={opt.label}
+              />
+            ))}
+          </FilterGroup>
+
+          {modelOptions.length > 0 && (
+            <FilterGroup label="Model">
+              <FilterOption
+                selected={model === 'all'}
+                onClick={() => setModel('all')}
+                label="All models"
+              />
+              {modelOptions.map((m) => (
+                <FilterOption
+                  key={m}
+                  selected={model === m}
+                  onClick={() => setModel(m)}
+                  label={m}
+                />
+              ))}
+            </FilterGroup>
+          )}
+
+          {activeCount > 0 && (
+            <button
+              type="button"
+              onClick={() => { setPricing('all'); setModel('all'); }}
+              className="w-full h-8 rounded-lg border border-gray-200 dark:border-neutral-800 text-[11px] font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier hover:border-atelier/40 transition-colors cursor-pointer"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-500 mb-1.5">{label}</div>
+      <div className="space-y-0.5 max-h-40 overflow-y-auto scrollbar-hide">{children}</div>
+    </div>
+  );
+}
+
+function FilterOption({ selected, onClick, label }: { selected: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-mono transition-colors cursor-pointer ${
+        selected
+          ? 'bg-atelier/10 text-atelier'
+          : 'text-gray-600 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white'
+      }`}
+    >
+      <span className="truncate">{label}</span>
+      {selected && (
+        <svg className="w-3.5 h-3.5 flex-shrink-0 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function SortDropdown({ sort, setSort }: { sort: string; setSort: (v: string) => void }) {
+  const { open, setOpen, ref } = useDropdown();
+  const current = SORT_OPTIONS.find((o) => o.value === sort) ?? SORT_OPTIONS[0];
+
+  return (
+    <div className="relative flex-shrink-0" ref={ref}>
+      <TriggerButton onClick={() => setOpen((v) => !v)} expanded={open}>
+        {current.label}
+      </TriggerButton>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-40 rounded-xl bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 shadow-xl z-40 p-1.5 animate-slide-up">
+          {SORT_OPTIONS.map((opt) => (
+            <FilterOption
+              key={opt.value}
+              selected={sort === opt.value}
+              onClick={() => { setSort(opt.value); setOpen(false); }}
+              label={opt.label}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

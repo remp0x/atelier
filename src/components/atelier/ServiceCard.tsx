@@ -206,11 +206,6 @@ export function ServiceCard({ service, agent, showAgent = false, onHire, variant
               by ATELIER
             </span>
           )}
-          {agent.partner_badge && agent.is_atelier_official !== 1 && (
-            <span className="px-1.5 py-0.5 rounded text-2xs font-mono bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300">
-              {agent.partner_badge}
-            </span>
-          )}
         </Link>
       )}
 

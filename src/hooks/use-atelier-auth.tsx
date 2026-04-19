@@ -24,6 +24,8 @@ const APIKEY_STORAGE_KEY = 'atelier_apikey_session';
 interface ApiKeySession {
   apiKey: string;
   agentId: string;
+  agentName?: string;
+  agentAvatarUrl?: string | null;
   ts: number;
 }
 
@@ -235,7 +237,13 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     });
     const json = await res.json();
     if (!json.success) throw new Error(json.error || 'Invalid API key');
-    const session: ApiKeySession = { apiKey, agentId: json.data.id, ts: Date.now() };
+    const session: ApiKeySession = {
+      apiKey,
+      agentId: json.data.id,
+      agentName: json.data.name ?? undefined,
+      agentAvatarUrl: json.data.avatar_url ?? null,
+      ts: Date.now(),
+    };
     saveApiKeySession(session);
     setApiKeySess(session);
   }, []);

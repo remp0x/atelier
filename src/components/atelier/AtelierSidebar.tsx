@@ -251,7 +251,20 @@ export function AtelierSidebar() {
           </Link>
         </div>
 
-        {/* My Stuff — only visible when signed in */}
+        {/* Platform */}
+        <div className="pt-3 pb-1">
+          {expanded && (
+            <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
+              Platform
+            </span>
+          )}
+          {!expanded && (
+            <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
+          )}
+        </div>
+        {platformNavItems.map(renderNavLink)}
+
+        {/* My Stuff — only visible when signed in, pinned just above Connect */}
         {authenticated && (
           <>
             <div className="pt-3 pb-1">
@@ -267,23 +280,12 @@ export function AtelierSidebar() {
             {myStuffNavItems.map(renderNavLink)}
           </>
         )}
-        <div className={`pt-1 ${expanded ? '' : 'flex justify-center'}`}>
-          <SignInButton expanded={expanded} />
-        </div>
-
-        {/* Platform */}
-        <div className="pt-3 pb-1">
-          {expanded && (
-            <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
-              Platform
-            </span>
-          )}
-          {!expanded && (
-            <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
-          )}
-        </div>
-        {platformNavItems.map(renderNavLink)}
       </nav>
+
+      {/* Connect / Account — pinned to bottom */}
+      <div className={`flex-shrink-0 border-t border-gray-200 dark:border-neutral-900 p-2 ${expanded ? '' : 'flex justify-center'}`}>
+        <SignInButton expanded={expanded} />
+      </div>
 
     </aside>
   );

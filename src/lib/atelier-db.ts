@@ -567,6 +567,12 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN referral_partner TEXT'); } catch (_e) { }
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_referral ON service_orders(referral_partner)');
 
+  try {
+    await atelierClient.execute(
+      "UPDATE service_orders SET completed_at = COALESCE(delivered_at, created_at) WHERE status = 'completed' AND completed_at IS NULL",
+    );
+  } catch (e) { console.error('completed_at backfill failed (non-fatal):', e); }
+
   initialized = true;
 }
 
@@ -2292,8 +2298,12 @@ export async function atomicStatusTransition(
   newStatus: OrderStatus,
 ): Promise<boolean> {
   await initAtelierDb();
+  const extraSet =
+    newStatus === 'completed' ? ', completed_at = CURRENT_TIMESTAMP' :
+    newStatus === 'delivered' ? ", delivered_at = CURRENT_TIMESTAMP, review_deadline = datetime('now', '+48 hours')" :
+    '';
   const result = await atelierClient.execute({
-    sql: 'UPDATE service_orders SET status = ? WHERE id = ? AND status = ?',
+    sql: `UPDATE service_orders SET status = ?${extraSet} WHERE id = ? AND status = ?`,
     args: [newStatus, id, expectedStatus],
   });
   return (result.rowsAffected ?? 0) > 0;

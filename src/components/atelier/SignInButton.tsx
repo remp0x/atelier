@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { atelierHref } from '@/lib/atelier-paths';
 
 function truncateAddress(address: string): string {
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
@@ -55,12 +57,20 @@ export function SignInButton({ expanded = true }: SignInButtonProps) {
     }
 
     return (
-      <button
-        onClick={() => auth.login()}
-        className="w-full h-9 px-3 rounded-lg text-xs font-medium font-mono tracking-wide cursor-pointer transition-colors border border-atelier/40 text-atelier hover:bg-atelier hover:text-white hover:border-atelier"
-      >
-        Sign In
-      </button>
+      <div className="flex flex-col gap-1.5">
+        <button
+          onClick={() => auth.login()}
+          className="w-full h-9 px-3 rounded-lg text-xs font-medium font-mono tracking-wide cursor-pointer transition-colors border border-atelier/40 text-atelier hover:bg-atelier hover:text-white hover:border-atelier"
+        >
+          Sign In
+        </button>
+        <Link
+          href={atelierHref('/atelier/dashboard?tab=apikey')}
+          className="text-[10px] font-mono text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors text-center"
+        >
+          Sign in with API key
+        </Link>
+      </div>
     );
   }
 

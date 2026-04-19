@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
@@ -557,7 +558,9 @@ function DashboardContent() {
 }
 
 function LoginScreen({ login, loginWithApiKey }: { login: () => void; loginWithApiKey: (key: string) => Promise<void> }) {
-  const [tab, setTab] = useState<'signin' | 'apikey'>('signin');
+  const searchParams = useSearchParams();
+  const initialTab = searchParams?.get('tab') === 'apikey' ? 'apikey' : 'signin';
+  const [tab, setTab] = useState<'signin' | 'apikey'>(initialTab);
   const [apiKey, setApiKey] = useState('');
   const [validating, setValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);

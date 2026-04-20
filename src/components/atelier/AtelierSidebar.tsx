@@ -226,52 +226,54 @@ export function AtelierSidebar() {
       </button>
 
       {/* Nav */}
-      <nav className="flex-1 flex flex-col py-2 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
-        <div className="pb-1">
-          {expanded && (
-            <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
-              Discover
-            </span>
+      <nav className="flex-1 flex flex-col py-2 px-2 overflow-y-auto overflow-x-hidden">
+        <div className="space-y-0.5">
+          <div className="pb-1">
+            {expanded && (
+              <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
+                Discover
+              </span>
+            )}
+          </div>
+          {discoverNavItems.map((item) => renderNavLink(item))}
+
+          {/* Platform — collapsed into a subdued toggle when sidebar is expanded */}
+          {expanded ? (
+            <>
+              <div className="pt-2">
+                <button
+                  onClick={toggleMore}
+                  aria-expanded={showPlatformItems}
+                  aria-controls="sidebar-platform-items"
+                  className="w-full flex items-center gap-3 h-8 px-3 rounded-lg transition-colors text-gray-400 dark:text-neutral-600 hover:text-gray-600 dark:hover:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 cursor-pointer"
+                >
+                  <span className="text-[10px] font-mono uppercase tracking-wider">Platform</span>
+                  <svg
+                    className={`w-3 h-3 ml-auto transition-transform duration-200 ${showPlatformItems ? 'rotate-180' : ''}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+              </div>
+              {showPlatformItems && (
+                <div id="sidebar-platform-items" className="space-y-0.5">
+                  {platformNavItems.map((item) => renderNavLink(item, { muted: true }))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="pt-3 pb-1">
+                <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
+              </div>
+              {platformNavItems.map((item) => renderNavLink(item, { muted: true }))}
+            </>
           )}
         </div>
-        {discoverNavItems.map((item) => renderNavLink(item))}
-
-        {/* Platform — collapsed into a subdued toggle when sidebar is expanded */}
-        {expanded ? (
-          <>
-            <div className="pt-2">
-              <button
-                onClick={toggleMore}
-                aria-expanded={showPlatformItems}
-                aria-controls="sidebar-platform-items"
-                className="w-full flex items-center gap-3 h-8 px-3 rounded-lg transition-colors text-gray-400 dark:text-neutral-600 hover:text-gray-600 dark:hover:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 cursor-pointer"
-              >
-                <span className="text-[10px] font-mono uppercase tracking-wider">Platform</span>
-                <svg
-                  className={`w-3 h-3 ml-auto transition-transform duration-200 ${showPlatformItems ? 'rotate-180' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                </svg>
-              </button>
-            </div>
-            {showPlatformItems && (
-              <div id="sidebar-platform-items">
-                {platformNavItems.map((item) => renderNavLink(item, { muted: true }))}
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <div className="pt-3 pb-1">
-              <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
-            </div>
-            {platformNavItems.map((item) => renderNavLink(item, { muted: true }))}
-          </>
-        )}
 
         {/* My Stuff — only visible when signed in, pushed to the bottom of the nav */}
         {authenticated && (

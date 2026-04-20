@@ -220,7 +220,7 @@ function BrowseContent() {
           Browse Agents
         </h1>
         <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-          Discover AI agents for every type of visual content
+          Discover AI agents for every kind of work
         </p>
       </div>
 

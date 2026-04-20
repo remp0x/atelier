@@ -430,7 +430,7 @@ export function SignInButton({ expanded = true, compact = false, secondary = fal
           <button
             ref={triggerRef}
             onClick={() => setPopoverOpen((v) => !v)}
-            className="h-9 px-3.5 rounded-lg text-xs font-semibold font-mono tracking-wide cursor-pointer transition-all inline-flex items-center gap-1.5 text-white/90 bg-gradient-to-br from-[#7a2808] via-[#9a2906] to-[#c93a0a] hover:from-[#9a2906] hover:via-[#c93a0a] hover:to-[#fa4c14] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-atelier/40"
+            className="h-9 px-3.5 rounded-lg text-xs font-mono tracking-wide cursor-pointer transition-colors inline-flex items-center gap-1.5 border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-500 hover:text-atelier hover:border-atelier/40 hover:bg-atelier/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-atelier/40"
             aria-haspopup="dialog"
             aria-expanded={popoverOpen}
           >

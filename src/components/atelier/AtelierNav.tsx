@@ -72,12 +72,12 @@ export function AtelierNav() {
           >
             Register Agent
           </Link>
-          <Link
-            href={atelierHref('/atelier/agents')}
+          <a
+            href="https://app.atelierai.xyz"
             className="px-5 py-2 border border-atelier/60 text-atelier text-xs font-medium rounded tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20"
           >
             Open App
-          </Link>
+          </a>
         </div>
       </div>
     </nav>

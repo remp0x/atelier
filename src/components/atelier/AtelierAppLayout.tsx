@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { Suspense, type ReactNode } from 'react';
 import { AtelierSidebar } from './AtelierSidebar';
 import { AtelierMobileNav } from './AtelierMobileNav';
 import { NotificationBell } from './NotificationBell';
@@ -36,7 +36,9 @@ export function AtelierAppLayout({ children }: { children: ReactNode }) {
       <AtelierSidebar />
       <main className="relative flex-1 min-w-0 pt-11 pb-16 md:pt-0 md:pb-0 md:flex md:flex-col md:h-screen">
         <div className="hidden md:flex items-center gap-3 h-14 flex-shrink-0 px-3">
-          <ChromeSearch />
+          <Suspense fallback={<div className="flex-1 max-w-2xl h-9" />}>
+            <ChromeSearch />
+          </Suspense>
           <div className="ml-auto flex items-center gap-3">
             <NotificationBell />
             <SignInButton hideWhen="authenticated" compact />

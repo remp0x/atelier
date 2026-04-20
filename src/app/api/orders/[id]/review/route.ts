@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, getReviewByOrderId, createServiceReview, getAtelierProfile, resolveAgent } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 import { rateLimiters } from '@/lib/rateLimit';
 import { submitSAIDFeedback } from '@/lib/said';
 
@@ -19,7 +20,7 @@ export async function POST(
 
     let wallet: string;
     try {
-      wallet = requireWalletAuth(body);
+      wallet = await authenticateUserRequest(request, body);
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });

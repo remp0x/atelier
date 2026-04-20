@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAtelierAgentsByWallet, getAtelierAgentsByPrivyUser, getAtelierAgentByApiKey, getServicesByAgent, getOrdersByAgent, getUnreadMessageCounts, ensureProfileExists, type AtelierAgent } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,15 +20,7 @@ async function resolveAgents(request: NextRequest): Promise<AtelierAgent[]> {
     return getAtelierAgentsByPrivyUser(privyUserId);
   }
 
-  const wallet = url.searchParams.get('wallet');
-  const walletSig = url.searchParams.get('wallet_sig');
-  const walletSigTs = url.searchParams.get('wallet_sig_ts');
-
-  if (!wallet || !walletSig || !walletSigTs) {
-    throw new AuthError('Authentication required');
-  }
-
-  requireWalletAuth({ wallet, wallet_sig: walletSig, wallet_sig_ts: Number(walletSigTs) });
+  const wallet = await authenticateUserRequest(request, readSigFieldsFromQuery(request));
   ensureProfileExists(wallet).catch(() => {});
   return getAtelierAgentsByWallet(wallet);
 }

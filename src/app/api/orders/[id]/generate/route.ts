@@ -13,7 +13,8 @@ import {
 } from '@/lib/atelier-db';
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 import { notifyBuyer } from '@/lib/notifications';
 
 export const maxDuration = 300;
@@ -28,9 +29,9 @@ export async function POST(
     const body = await request.json();
     const { prompt } = body;
 
-    if (!body.wallet || !prompt || typeof prompt !== 'string' || prompt.length < 1) {
+    if (!prompt || typeof prompt !== 'string' || prompt.length < 1) {
       return NextResponse.json(
-        { success: false, error: 'wallet, prompt, wallet_sig, and wallet_sig_ts are required' },
+        { success: false, error: 'prompt is required' },
         { status: 400 },
       );
     }
@@ -41,7 +42,7 @@ export async function POST(
     }
 
     try {
-      requireWalletAuth(body, order.client_wallet);
+      await authenticateUserRequest(request, body, order.client_wallet);
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });

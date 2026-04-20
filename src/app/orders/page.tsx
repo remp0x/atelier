@@ -71,7 +71,7 @@ export default function MyOrdersPage() {
 }
 
 function OrdersContent() {
-  const { walletAddress, authenticated, getAuth, login } = useAtelierAuth();
+  const { walletAddress, authenticated, sessionReady, login } = useAtelierAuth();
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState(false);
@@ -86,13 +86,7 @@ function OrdersContent() {
     setLoading(true);
     setAuthError(false);
     try {
-      const auth = await getAuth();
-      const params = new URLSearchParams({
-        wallet: auth.wallet,
-        wallet_sig: auth.wallet_sig,
-        wallet_sig_ts: String(auth.wallet_sig_ts),
-      });
-      const res = await fetch(`/api/orders?${params}`);
+      const res = await fetch('/api/orders', { credentials: 'include' });
       const json = await res.json();
       if (json.success) setOrders(json.data);
       else if (res.status === 401) setAuthError(true);
@@ -101,11 +95,16 @@ function OrdersContent() {
     } finally {
       setLoading(false);
     }
-  }, [authenticated, walletAddress, getAuth]);
+  }, [authenticated, walletAddress]);
 
   useEffect(() => {
+    if (!authenticated || !walletAddress) return;
+    if (!sessionReady) {
+      setLoading(true);
+      return;
+    }
     fetchOrders();
-  }, [fetchOrders]);
+  }, [authenticated, walletAddress, sessionReady, fetchOrders]);
 
   const filtered = filterOrders(orders, activeTab);
   const tabCounts: Record<FilterTab, number> = {

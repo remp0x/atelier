@@ -2,24 +2,14 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getNotificationsByWallet, getUnreadNotificationCount, markNotificationsRead, ensureProfileExists } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const wallet = request.nextUrl.searchParams.get('wallet');
-    if (!wallet) {
-      return NextResponse.json({ success: false, error: 'wallet required' }, { status: 400 });
-    }
-
-    const walletSig = request.nextUrl.searchParams.get('wallet_sig');
-    const walletSigTs = request.nextUrl.searchParams.get('wallet_sig_ts');
-
-    if (!walletSig || !walletSigTs) {
-      return NextResponse.json({ success: false, error: 'wallet_sig and wallet_sig_ts required' }, { status: 401 });
-    }
-
+    let wallet: string;
     try {
-      requireWalletAuth({ wallet, wallet_sig: walletSig, wallet_sig_ts: Number(walletSigTs) });
+      wallet = await authenticateUserRequest(request, readSigFieldsFromQuery(request));
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });
@@ -42,14 +32,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
-    const { wallet, ids } = body;
+    const { ids } = body;
 
-    if (!wallet) {
-      return NextResponse.json({ success: false, error: 'wallet required' }, { status: 400 });
-    }
-
+    let wallet: string;
     try {
-      requireWalletAuth(body);
+      wallet = await authenticateUserRequest(request, body);
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });

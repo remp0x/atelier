@@ -1,14 +1,22 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceById, createServiceOrder, getOrdersByWallet, ensureProfileExists } from '@/lib/atelier-db';
+import { getServiceById, createServiceOrder, getOrdersByWallet, ensureProfileExists, isEscrowTxHashUsed } from '@/lib/atelier-db';
 import { isActivePartnerSlug } from '@/lib/partners-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { notifyProvider } from '@/lib/notifications';
+import {
+  parseX402Header,
+  buildPaymentRequirements,
+  buildPaymentRequiredResponse,
+  verifyX402Payment,
+  computeTotalWithFee,
+} from '@/lib/x402';
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<NextResponse | Response> {
   const rateLimitResponse = rateLimiters.orders(request);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -16,29 +24,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const body = await request.json();
     const { service_id, brief, reference_urls, reference_images, requirement_answers, client_wallet } = body;
 
-    if (!service_id || !brief || !client_wallet) {
+    if (!service_id || !brief) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: service_id, brief, client_wallet' },
+        { success: false, error: 'Missing required fields: service_id, brief' },
         { status: 400 },
       );
     }
-
-    let verifiedWallet: string;
-    try {
-      verifiedWallet = requireWalletAuth(body);
-    } catch (err) {
-      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
-      return NextResponse.json({ success: false, error: msg }, { status: 401 });
-    }
-
-    if (verifiedWallet !== client_wallet) {
-      return NextResponse.json(
-        { success: false, error: 'Authenticated wallet does not match client_wallet' },
-        { status: 403 },
-      );
-    }
-
-    ensureProfileExists(verifiedWallet).catch(() => {});
 
     if (typeof brief !== 'string' || brief.length < 10 || brief.length > 1000) {
       return NextResponse.json(
@@ -104,6 +95,37 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    const txSignature = parseX402Header(request.headers.get('X-PAYMENT'));
+
+    if (txSignature) {
+      return handleX402Order(body, service, txSignature);
+    }
+
+    if (!client_wallet) {
+      if (!service.price_usd || service.price_type === 'quote') {
+        return NextResponse.json(
+          { success: false, error: 'Quote-based services require wallet auth. x402 is only available for fixed-price services.' },
+          { status: 400 },
+        );
+      }
+      const requirements = buildPaymentRequirements({
+        priceUsd: service.price_usd,
+        serviceTitle: service.title,
+        serviceId: service.id,
+      });
+      return buildPaymentRequiredResponse(requirements);
+    }
+
+    let verifiedWallet: string;
+    try {
+      verifiedWallet = await authenticateUserRequest(request, body, client_wallet);
+    } catch (err) {
+      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+      return NextResponse.json({ success: false, error: msg }, { status: 401 });
+    }
+
+    ensureProfileExists(verifiedWallet).catch(() => {});
+
     let referralPartner: string | undefined;
     const rawReferral = typeof body.referral_partner === 'string' ? body.referral_partner.trim().toLowerCase() : '';
     if (rawReferral && /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(rawReferral)) {
@@ -149,31 +171,103 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 }
 
+async function handleX402Order(
+  body: Record<string, unknown>,
+  service: { id: string; agent_id: string; title: string; price_usd: string; price_type: string; quota_limit: number | null },
+  txSignature: string,
+): Promise<NextResponse> {
+  const { brief, reference_urls, reference_images, requirement_answers } = body as {
+    brief: string;
+    reference_urls?: string[];
+    reference_images?: string[];
+    requirement_answers?: Record<string, string>;
+  };
+
+  if (!service.price_usd || service.price_type === 'quote') {
+    return NextResponse.json(
+      { success: false, error: 'Quote-based services cannot be paid via x402' },
+      { status: 400 },
+    );
+  }
+
+  const alreadyUsed = await isEscrowTxHashUsed(txSignature);
+  if (alreadyUsed) {
+    return NextResponse.json(
+      { success: false, error: 'Transaction signature already used for a previous order' },
+      { status: 409 },
+    );
+  }
+
+  const { totalUsd, feeUsd } = computeTotalWithFee(service.price_usd);
+
+  const verification = await verifyX402Payment(txSignature, totalUsd);
+  if (!verification.verified) {
+    return NextResponse.json(
+      { success: false, error: `Payment verification failed: ${verification.error}` },
+      { status: 402 },
+    );
+  }
+
+  const order = await createServiceOrder({
+    service_id: service.id,
+    client_wallet: verification.payerWallet!,
+    provider_agent_id: service.agent_id,
+    brief,
+    reference_urls: reference_urls || undefined,
+    reference_images: reference_images || undefined,
+    quoted_price_usd: service.price_usd,
+    quota_total: service.quota_limit || 0,
+    requirement_answers: requirement_answers || undefined,
+    client_type: 'agent_x402',
+    payment_tx_signature: txSignature,
+    status_override: 'paid',
+  });
+
+  notifyAgentWebhook(service.agent_id, {
+    event: 'order.created',
+    order_id: order.id,
+    data: {
+      service_id: service.id,
+      brief,
+      reference_images: reference_images || undefined,
+      requirement_answers: requirement_answers || undefined,
+      status: 'paid',
+      service_title: service.title,
+      payment_method: 'x402',
+    },
+  });
+
+  notifyProvider('provider_order_received', service.agent_id, {
+    orderId: order.id,
+    agentName: service.title,
+    serviceTitle: service.title,
+  });
+
+  return NextResponse.json({
+    success: true,
+    data: order,
+    x402: {
+      payment_verified: true,
+      payer_wallet: verification.payerWallet,
+      total_charged_usd: totalUsd,
+      platform_fee_usd: feeUsd,
+      tx_signature: txSignature,
+    },
+  });
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = rateLimiters.orders(request);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    const wallet = request.nextUrl.searchParams.get('wallet');
-    if (!wallet) {
-      return NextResponse.json(
-        { success: false, error: 'wallet query parameter required' },
-        { status: 400 },
-      );
-    }
-
-    const walletSig = request.nextUrl.searchParams.get('wallet_sig');
-    const walletSigTs = request.nextUrl.searchParams.get('wallet_sig_ts');
-
-    if (!walletSig || !walletSigTs) {
-      return NextResponse.json(
-        { success: false, error: 'wallet_sig and wallet_sig_ts query parameters required' },
-        { status: 401 },
-      );
-    }
-
+    let wallet: string;
     try {
-      requireWalletAuth({ wallet, wallet_sig: walletSig, wallet_sig_ts: Number(walletSigTs) });
+      wallet = await authenticateUserRequest(request, {
+        wallet: request.nextUrl.searchParams.get('wallet'),
+        wallet_sig: request.nextUrl.searchParams.get('wallet_sig'),
+        wallet_sig_ts: request.nextUrl.searchParams.get('wallet_sig_ts'),
+      });
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });

@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { getAtelierAgent, getAgentTokenInfo, updateAgentToken, clearAgentToken } from '@/lib/atelier-db';
 import { rateLimit } from '@/lib/rateLimit';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 import { PublicKey } from '@solana/web3.js';
 import { getServerConnection } from '@/lib/solana-server';
 
@@ -67,7 +68,7 @@ export async function POST(
 
     let verifiedWallet: string;
     try {
-      verifiedWallet = requireWalletAuth(body);
+      verifiedWallet = await authenticateUserRequest(request, body);
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });

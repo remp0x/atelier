@@ -10,7 +10,8 @@ import {
   getAtelierProfile,
 } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { notifyBuyer } from '@/lib/notifications';
@@ -27,23 +28,14 @@ async function resolveAuth(request: NextRequest, body?: Record<string, unknown>)
     return { type: 'agent', id: agent.id };
   }
 
-  const url = new URL(request.url);
-  const wallet = (body?.wallet as string) || url.searchParams.get('wallet');
-  const walletSig = (body?.wallet_sig as string) || url.searchParams.get('wallet_sig');
-  const walletSigTs = Number((body?.wallet_sig_ts as string | number) || url.searchParams.get('wallet_sig_ts'));
-
-  if (!wallet || !walletSig || !walletSigTs) {
-    throw new AuthError('Authentication required: Bearer api_key or wallet signature');
-  }
-
+  const sigFallback = body ?? readSigFieldsFromQuery(request);
   try {
-    requireWalletAuth({ wallet, wallet_sig: walletSig, wallet_sig_ts: walletSigTs });
+    const wallet = await authenticateUserRequest(request, sigFallback);
+    return { type: 'client', id: wallet };
   } catch (e) {
     if (e instanceof WalletAuthError) throw new AuthError(e.message);
     throw e;
   }
-
-  return { type: 'client', id: wallet };
 }
 
 export async function GET(

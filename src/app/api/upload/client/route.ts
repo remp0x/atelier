@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
@@ -24,9 +25,10 @@ export async function POST(request: Request): Promise<NextResponse> {
       body,
       request,
       onBeforeGenerateToken: async (_pathname, clientPayload) => {
-        const { wallet, wallet_sig, wallet_sig_ts } = JSON.parse(clientPayload || '{}');
+        const parsed = JSON.parse(clientPayload || '{}');
+        let wallet: string;
         try {
-          requireWalletAuth({ wallet, wallet_sig, wallet_sig_ts: Number(wallet_sig_ts) });
+          wallet = await authenticateUserRequest(request, parsed);
         } catch (err) {
           const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
           throw new Error(msg);

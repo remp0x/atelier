@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getBountyById, getClaimsForBounty, cancelBounty, getClaimsCountForBounty } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 
 export async function GET(
   request: NextRequest,
@@ -18,14 +19,8 @@ export async function GET(
     const includeClaims = request.nextUrl.searchParams.get('include_claims') === '1';
 
     if (includeClaims) {
-      const sp = request.nextUrl.searchParams;
-      const authPayload = {
-        wallet: sp.get('wallet') || '',
-        wallet_sig: sp.get('wallet_sig') || '',
-        wallet_sig_ts: Number(sp.get('wallet_sig_ts') || 0),
-      };
       try {
-        const verifiedWallet = requireWalletAuth(authPayload);
+        const verifiedWallet = await authenticateUserRequest(request, readSigFieldsFromQuery(request));
         if (verifiedWallet === bounty.poster_wallet) {
           const claims = await getClaimsForBounty(bounty.id);
           return NextResponse.json({
@@ -34,7 +29,6 @@ export async function GET(
           });
         }
       } catch {
-        // Auth failed — fall through to return without claims
       }
     }
 
@@ -66,11 +60,10 @@ export async function PATCH(
 
     let verifiedWallet: string;
     try {
-      verifiedWallet = requireWalletAuth({
-        wallet: client_wallet,
-        wallet_sig: body.wallet_sig,
-        wallet_sig_ts: body.wallet_sig_ts,
-      });
+      verifiedWallet = await authenticateUserRequest(
+        request,
+        { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
+      );
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });

@@ -5,7 +5,8 @@ import { put } from '@vercel/blob';
 import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet, isEscrowTxHashUsed, atomicStatusTransition, incrementRevisionCount } from '@/lib/atelier-db';
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest, getSessionWallet } from '@/lib/session';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { verifySolanaUsdcPayment, verifySolanaUsdcReceived } from '@/lib/solana-verify';
 import { sendUsdcPayout } from '@/lib/solana-payout';
@@ -56,7 +57,9 @@ export async function GET(
     const deliverables = await getOrderDeliverables(id);
 
     const url = new URL(request.url);
-    const wallet = url.searchParams.get('wallet');
+    const queryWallet = url.searchParams.get('wallet');
+    const sessionWallet = await getSessionWallet(request);
+    const wallet = sessionWallet ?? queryWallet;
     const isOwner = wallet && (wallet === order.client_wallet || wallet === order.provider_agent_id);
 
     const safeOrder = isOwner ? order : {
@@ -103,14 +106,8 @@ export async function PATCH(
 
     let wallet: string;
     if (action === 'pay') {
-      if (!body.wallet) {
-        return NextResponse.json(
-          { success: false, error: 'Wallet signature required for pay action' },
-          { status: 400 },
-        );
-      }
       try {
-        wallet = requireWalletAuth(body, order.client_wallet);
+        wallet = await authenticateUserRequest(request, body, order.client_wallet);
       } catch (err) {
         const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
         return NextResponse.json({ success: false, error: msg }, { status: 401 });
@@ -136,18 +133,13 @@ export async function PATCH(
           }
           throw err;
         }
-      } else if (body.wallet) {
+      } else {
         try {
-          wallet = requireWalletAuth(body, order.client_wallet);
+          wallet = await authenticateUserRequest(request, body, order.client_wallet);
         } catch (err) {
           const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
           return NextResponse.json({ success: false, error: msg }, { status: 401 });
         }
-      } else {
-        return NextResponse.json(
-          { success: false, error: 'Authentication required: Bearer api_key or wallet signature' },
-          { status: 401 },
-        );
       }
     }
 

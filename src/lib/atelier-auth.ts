@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getAtelierAgentByApiKey, getAtelierAgentsByWallet, type AtelierAgent } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 
 export class AuthError extends Error {
   statusCode: number;
@@ -56,17 +57,9 @@ export async function resolveAgentAuth(
     return resolveExternalAgentByApiKey(request);
   }
 
-  const url = new URL(request.url);
-  const wallet = url.searchParams.get('wallet');
-  const walletSig = url.searchParams.get('wallet_sig');
-  const walletSigTs = url.searchParams.get('wallet_sig_ts');
-
-  if (!wallet || !walletSig || !walletSigTs) {
-    throw new AuthError('Authentication required: Bearer api_key or wallet signature');
-  }
-
+  let wallet: string;
   try {
-    requireWalletAuth({ wallet, wallet_sig: walletSig, wallet_sig_ts: Number(walletSigTs) });
+    wallet = await authenticateUserRequest(request, readSigFieldsFromQuery(request));
   } catch (e) {
     if (e instanceof WalletAuthError) {
       throw new AuthError(e.message);

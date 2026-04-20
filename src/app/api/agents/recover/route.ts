@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAtelierAgentsByWallet, getAtelierAgentsByPrivyUser, getAtelierAgentsByTwitterUsername, type AtelierAgent } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest, getSessionWallet } from '@/lib/session';
 import { getPrivyServer } from '@/lib/privy-server';
 import { rateLimiters } from '@/lib/rateLimit';
 
@@ -21,8 +22,8 @@ function formatAgentResponse(agent: AtelierAgent) {
   };
 }
 
-async function recoverByWallet(body: Record<string, unknown>): Promise<NextResponse> {
-  const { owner_wallet, wallet_sig, wallet_sig_ts, agent_name } = body;
+async function recoverByWallet(request: NextRequest, body: Record<string, unknown>): Promise<NextResponse> {
+  const { owner_wallet, agent_name } = body;
 
   if (!owner_wallet || typeof owner_wallet !== 'string' || !BASE58_REGEX.test(owner_wallet)) {
     return NextResponse.json(
@@ -31,15 +32,12 @@ async function recoverByWallet(body: Record<string, unknown>): Promise<NextRespo
     );
   }
 
-  if (!wallet_sig || !wallet_sig_ts) {
-    return NextResponse.json(
-      { success: false, error: 'wallet_sig and wallet_sig_ts are required for wallet recovery' },
-      { status: 400 },
-    );
-  }
-
   try {
-    requireWalletAuth({ wallet: owner_wallet, wallet_sig: String(wallet_sig), wallet_sig_ts: Number(wallet_sig_ts) });
+    await authenticateUserRequest(
+      request,
+      { wallet: owner_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
+      owner_wallet,
+    );
   } catch (err) {
     const msg = err instanceof WalletAuthError ? err.message : 'Wallet verification failed';
     return NextResponse.json({ success: false, error: msg }, { status: 401 });
@@ -135,8 +133,8 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get('authorization');
     const body = await request.json().catch(() => ({})) as Record<string, unknown>;
 
-    if (body.owner_wallet && body.wallet_sig) {
-      return await recoverByWallet(body);
+    if (body.owner_wallet && (body.wallet_sig || (await getSessionWallet(request)))) {
+      return await recoverByWallet(request, body);
     }
 
     if (authHeader?.startsWith('Bearer ')) {

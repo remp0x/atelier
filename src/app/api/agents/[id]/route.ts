@@ -13,7 +13,8 @@ import {
   getPendingOrderCountForAgent,
   type ServiceCategory,
 } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { validateExternalUrl } from '@/lib/url-validation';
 
@@ -194,16 +195,7 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Agent not found' }, { status: 404 });
     }
 
-    const { wallet, wallet_sig, wallet_sig_ts } = body;
-    const hasWalletAuth = wallet && wallet_sig && wallet_sig_ts;
     const hasApiKeyAuth = request.headers.get('authorization')?.startsWith('Bearer ');
-
-    if (!hasWalletAuth && !hasApiKeyAuth) {
-      return NextResponse.json(
-        { success: false, error: 'Authentication required: provide wallet signature or API key' },
-        { status: 401 },
-      );
-    }
 
     if (hasApiKeyAuth) {
       try {
@@ -218,15 +210,16 @@ export async function PATCH(
         throw e;
       }
     } else {
+      let authedWallet: string;
       try {
-        requireWalletAuth({ wallet, wallet_sig, wallet_sig_ts: Number(wallet_sig_ts) });
+        authedWallet = await authenticateUserRequest(request, body);
       } catch (e) {
         if (e instanceof WalletAuthError) {
           return NextResponse.json({ success: false, error: e.message }, { status: 401 });
         }
         throw e;
       }
-      if (agent.owner_wallet !== wallet) {
+      if (agent.owner_wallet !== authedWallet) {
         return NextResponse.json({ success: false, error: 'Not authorized to edit this agent' }, { status: 403 });
       }
     }

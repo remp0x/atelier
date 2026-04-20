@@ -18,8 +18,37 @@ import { signWalletAuth, type WalletAuthPayload, type SignableWallet } from '@/l
 import type { TransactionSignableWallet } from '@/lib/solana-pay';
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
+const SERVER_SESSION_TTL = 6 * 24 * 60 * 60 * 1000;
 const STORAGE_KEY_PREFIX = 'atelier_auth_';
 const APIKEY_STORAGE_KEY = 'atelier_apikey_session';
+const SERVER_SESSION_KEY_PREFIX = 'atelier_server_session_';
+
+function loadServerSessionMarker(wallet: string): boolean {
+  try {
+    const raw = localStorage.getItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`);
+    if (!raw) return false;
+    const ts = Number(raw);
+    if (!Number.isFinite(ts) || Date.now() - ts >= SERVER_SESSION_TTL) {
+      localStorage.removeItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function saveServerSessionMarker(wallet: string): void {
+  try {
+    localStorage.setItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`, String(Date.now()));
+  } catch {}
+}
+
+function clearServerSessionMarker(wallet: string): void {
+  try {
+    localStorage.removeItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`);
+  } catch {}
+}
 
 interface ApiKeySession {
   apiKey: string;
@@ -107,6 +136,7 @@ interface AtelierAuthContextValue {
   user: User | null;
   walletAddress: string | null;
   walletReady: boolean;
+  sessionReady: boolean;
   getAuth: (opts?: { silent?: boolean }) => Promise<WalletAuthPayload>;
   clearAuth: () => void;
   getSignableWallet: () => SignableWallet | null;
@@ -123,6 +153,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready, login, logout, user } = usePrivy();
   const [solanaWallet, setSolanaWallet] = useState<SolanaWalletState | null>(null);
   const [apiKeySess, setApiKeySess] = useState<ApiKeySession | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
@@ -225,6 +256,39 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [walletAddress]);
 
+  useEffect(() => {
+    if (!walletReady || !walletAddress) {
+      setSessionReady(false);
+      return;
+    }
+    if (loadServerSessionMarker(walletAddress)) {
+      setSessionReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const payload = await getAuth();
+        if (cancelled) return;
+        const res = await fetch('/api/auth/session', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (json?.success) {
+          saveServerSessionMarker(walletAddress);
+          setSessionReady(true);
+        }
+      } catch {}
+    })();
+
+    return () => { cancelled = true; };
+  }, [walletReady, walletAddress, getAuth]);
+
   const clearAuth = useCallback(() => {
     cacheRef.current = null;
     inflightRef.current = null;
@@ -254,11 +318,16 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleLogout = useCallback(async () => {
+    if (walletAddress) clearServerSessionMarker(walletAddress);
+    try {
+      await fetch('/api/auth/session', { method: 'DELETE', credentials: 'include' });
+    } catch {}
+    setSessionReady(false);
     clearAuth();
     logoutApiKey();
     setSolanaWallet(null);
     await logout();
-  }, [clearAuth, logoutApiKey, logout]);
+  }, [clearAuth, logoutApiKey, logout, walletAddress]);
 
   const value = useMemo<AtelierAuthContextValue>(
     () => ({
@@ -269,6 +338,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       user: user ?? null,
       walletAddress,
       walletReady,
+      sessionReady,
       getAuth,
       clearAuth,
       getSignableWallet,
@@ -286,6 +356,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       user,
       walletAddress,
       walletReady,
+      sessionReady,
       getAuth,
       clearAuth,
       getSignableWallet,

@@ -8,7 +8,8 @@ import {
 } from '@/lib/atelier-db';
 import type { AtelierAgent } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest, readSigFieldsFromQuery, getSessionWallet } from '@/lib/session';
 import { rateLimiters } from '@/lib/rateLimit';
 
 export async function POST(
@@ -34,21 +35,17 @@ export async function POST(
         const msg = err instanceof AuthError ? err.message : 'Authentication failed';
         return NextResponse.json({ success: false, error: msg }, { status });
       }
-    } else if (client_wallet) {
+    } else {
       let verifiedWallet: string;
       try {
-        verifiedWallet = requireWalletAuth({
-          wallet: client_wallet,
-          wallet_sig: body.wallet_sig,
-          wallet_sig_ts: body.wallet_sig_ts,
-        });
+        verifiedWallet = await authenticateUserRequest(
+          request,
+          { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
+          client_wallet || null,
+        );
       } catch (err) {
         const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
         return NextResponse.json({ success: false, error: msg }, { status: 401 });
-      }
-
-      if (verifiedWallet !== client_wallet) {
-        return NextResponse.json({ success: false, error: 'Wallet mismatch' }, { status: 403 });
       }
 
       if (!agent_id) {
@@ -65,8 +62,6 @@ export async function POST(
       }
 
       claimantWallet = verifiedWallet;
-    } else {
-      return NextResponse.json({ success: false, error: 'Authentication required (API key or wallet signature)' }, { status: 401 });
     }
 
     if (!agent!.twitter_username) {
@@ -137,19 +132,23 @@ export async function DELETE(
       }
     } else {
       const url = new URL(request.url);
-      const wallet = url.searchParams.get('client_wallet');
       const agentIdParam = url.searchParams.get('agent_id');
-
-      if (!wallet || !agentIdParam) {
-        return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
+      if (!agentIdParam) {
+        return NextResponse.json({ success: false, error: 'agent_id required' }, { status: 400 });
       }
 
+      const sessionWallet = await getSessionWallet(request);
+      const sigFallback = sessionWallet
+        ? null
+        : {
+            wallet: url.searchParams.get('client_wallet'),
+            wallet_sig: url.searchParams.get('wallet_sig'),
+            wallet_sig_ts: url.searchParams.get('wallet_sig_ts'),
+          };
+
+      let wallet: string;
       try {
-        requireWalletAuth({
-          wallet,
-          wallet_sig: url.searchParams.get('wallet_sig') || '',
-          wallet_sig_ts: Number(url.searchParams.get('wallet_sig_ts') || 0),
-        });
+        wallet = sessionWallet ?? (await authenticateUserRequest(request, sigFallback));
       } catch (err) {
         const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
         return NextResponse.json({ success: false, error: msg }, { status: 401 });

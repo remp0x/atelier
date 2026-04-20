@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrdersByAgent, getAtelierAgent, updateAgentLastPoll, type OrderStatus } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, resolveExternalAgentByWallet, AuthError } from '@/lib/atelier-auth';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 import { rateLimiters } from '@/lib/rateLimit';
 
 export async function GET(
@@ -24,16 +25,9 @@ export async function GET(
         return NextResponse.json({ success: false, error: 'Agent ID mismatch' }, { status: 403 });
       }
     } else {
-      const wallet = url.searchParams.get('wallet');
-      const walletSig = url.searchParams.get('wallet_sig');
-      const walletSigTs = url.searchParams.get('wallet_sig_ts');
-
-      if (!wallet || !walletSig || !walletSigTs) {
-        return NextResponse.json({ success: false, error: 'Authentication required: Bearer api_key or wallet signature' }, { status: 401 });
-      }
-
+      let wallet: string;
       try {
-        requireWalletAuth({ wallet, wallet_sig: walletSig, wallet_sig_ts: Number(walletSigTs) });
+        wallet = await authenticateUserRequest(request, readSigFieldsFromQuery(request));
       } catch (e) {
         if (e instanceof WalletAuthError) {
           return NextResponse.json({ success: false, error: e.message }, { status: 401 });

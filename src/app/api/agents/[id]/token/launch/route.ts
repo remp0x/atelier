@@ -8,7 +8,7 @@ import {
 } from '@solana/web3.js';
 import { PUMP_SDK } from '@pump-fun/pump-sdk';
 import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted } from '@/lib/atelier-db';
-import { requireWalletAuth } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
 import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
@@ -39,7 +39,7 @@ export async function POST(
     // Auth: wallet auth from body, or API key from Authorization header
     let verifiedWallet: string | null = null;
     try {
-      verifiedWallet = requireWalletAuth(body);
+      verifiedWallet = await authenticateUserRequest(request, body);
     } catch {
       // Wallet auth failed — try API key
       try {

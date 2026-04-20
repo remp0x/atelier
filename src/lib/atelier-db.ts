@@ -567,13 +567,67 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN referral_partner TEXT'); } catch (_e) { }
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_referral ON service_orders(referral_partner)');
 
+  try { await atelierClient.execute("ALTER TABLE service_orders ADD COLUMN client_type TEXT NOT NULL DEFAULT 'wallet'"); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN payment_tx_signature TEXT'); } catch (_e) { }
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_client_type ON service_orders(client_type)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_payment_tx ON service_orders(payment_tx_signature)');
+
   try {
     await atelierClient.execute(
       "UPDATE service_orders SET completed_at = COALESCE(delivered_at, created_at) WHERE status = 'completed' AND completed_at IS NULL",
     );
   } catch (e) { console.error('completed_at backfill failed (non-fatal):', e); }
 
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS atelier_sessions (
+      id TEXT PRIMARY KEY,
+      wallet TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      last_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_sessions_wallet ON atelier_sessions(wallet)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_sessions_expires ON atelier_sessions(expires_at)');
+
   initialized = true;
+}
+
+export async function createAtelierSession(id: string, wallet: string, expiresAt: Date): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'INSERT INTO atelier_sessions (id, wallet, expires_at) VALUES (?, ?, ?)',
+    args: [id, wallet, expiresAt.toISOString()],
+  });
+}
+
+export async function getAtelierSession(id: string): Promise<{ wallet: string; expires_at: string } | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT wallet, expires_at FROM atelier_sessions WHERE id = ? AND expires_at > CURRENT_TIMESTAMP',
+    args: [id],
+  });
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0] as unknown as { wallet: string; expires_at: string };
+  return { wallet: row.wallet, expires_at: row.expires_at };
+}
+
+export async function touchAtelierSession(id: string, newExpiresAt: Date): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE atelier_sessions SET last_seen_at = CURRENT_TIMESTAMP, expires_at = ? WHERE id = ?',
+    args: [newExpiresAt.toISOString(), id],
+  });
+}
+
+export async function deleteAtelierSession(id: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({ sql: 'DELETE FROM atelier_sessions WHERE id = ?', args: [id] });
+}
+
+export async function deleteExpiredAtelierSessions(): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute('DELETE FROM atelier_sessions WHERE expires_at < CURRENT_TIMESTAMP');
 }
 
 async function backfillSlugs(): Promise<void> {
@@ -2148,16 +2202,19 @@ export async function createServiceOrder(data: {
   quota_total?: number;
   requirement_answers?: Record<string, string>;
   referral_partner?: string;
+  client_type?: 'wallet' | 'agent_x402';
+  payment_tx_signature?: string;
+  status_override?: OrderStatus;
 }): Promise<ServiceOrder> {
   await initAtelierDb();
   const id = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  const status = data.quoted_price_usd ? 'quoted' : 'pending_quote';
+  const status = data.status_override ?? (data.quoted_price_usd ? 'quoted' : 'pending_quote');
   const platformFee = data.quoted_price_usd ? (parseFloat(data.quoted_price_usd) * 0.10).toFixed(2) : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.reference_images ? JSON.stringify(data.reference_images) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0, data.requirement_answers ? JSON.stringify(data.requirement_answers) : null, data.referral_partner || null],
+    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner, client_type, payment_tx_signature)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.reference_images ? JSON.stringify(data.reference_images) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0, data.requirement_answers ? JSON.stringify(data.requirement_answers) : null, data.referral_partner || null, data.client_type || 'wallet', data.payment_tx_signature || null],
   });
 
   return getServiceOrderById(id) as Promise<ServiceOrder>;

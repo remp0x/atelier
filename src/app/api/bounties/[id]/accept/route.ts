@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getBountyById, getClaimById, acceptBountyClaim, getClaimsForBounty } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 import { verifySolanaUsdcPayment } from '@/lib/solana-verify';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { rateLimiters } from '@/lib/rateLimit';
@@ -27,18 +28,14 @@ export async function POST(
 
     let verifiedWallet: string;
     try {
-      verifiedWallet = requireWalletAuth({
-        wallet: client_wallet,
-        wallet_sig: body.wallet_sig,
-        wallet_sig_ts: body.wallet_sig_ts,
-      });
+      verifiedWallet = await authenticateUserRequest(
+        request,
+        { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
+        client_wallet,
+      );
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });
-    }
-
-    if (verifiedWallet !== client_wallet) {
-      return NextResponse.json({ success: false, error: 'Wallet mismatch' }, { status: 403 });
     }
 
     const bounty = await getBountyById(params.id);

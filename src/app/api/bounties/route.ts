@@ -6,7 +6,8 @@ import {
   VALID_BOUNTY_CATEGORIES, VALID_DEADLINE_HOURS, VALID_CLAIM_WINDOWS,
 } from '@/lib/atelier-db';
 import type { ServiceCategory } from '@/lib/atelier-db';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 import { rateLimiters } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -26,21 +27,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     let verifiedWallet: string;
     try {
-      verifiedWallet = requireWalletAuth({
-        wallet: client_wallet,
-        wallet_sig: body.wallet_sig,
-        wallet_sig_ts: body.wallet_sig_ts,
-      });
+      verifiedWallet = await authenticateUserRequest(
+        request,
+        { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
+        client_wallet,
+      );
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });
-    }
-
-    if (verifiedWallet !== client_wallet) {
-      return NextResponse.json(
-        { success: false, error: 'Authenticated wallet does not match client_wallet' },
-        { status: 403 },
-      );
     }
 
     ensureProfileExists(verifiedWallet).catch(() => {});

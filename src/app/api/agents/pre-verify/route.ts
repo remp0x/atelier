@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimiters } from '@/lib/rateLimit';
 import { cleanExpired, createPendingVerification, type PendingPayload } from '@/lib/pending-verifications';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { WalletAuthError } from '@/lib/solana-auth';
+import { authenticateUserRequest } from '@/lib/session';
 import { validateExternalUrl } from '@/lib/url-validation';
 import type { ServiceCategory } from '@/lib/atelier-db';
 
@@ -51,15 +52,12 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
-      const { wallet_sig, wallet_sig_ts } = body;
-      if (!wallet_sig || !wallet_sig_ts) {
-        return NextResponse.json(
-          { success: false, error: 'wallet_sig and wallet_sig_ts required when setting owner_wallet' },
-          { status: 400 },
-        );
-      }
       try {
-        requireWalletAuth({ wallet: owner_wallet, wallet_sig, wallet_sig_ts: Number(wallet_sig_ts) });
+        await authenticateUserRequest(
+          request,
+          { wallet: owner_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
+          owner_wallet,
+        );
       } catch (err) {
         const msg = err instanceof WalletAuthError ? err.message : 'Wallet verification failed';
         return NextResponse.json({ success: false, error: msg }, { status: 401 });

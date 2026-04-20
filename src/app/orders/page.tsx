@@ -71,7 +71,7 @@ export default function MyOrdersPage() {
 }
 
 function OrdersContent() {
-  const { walletAddress, authenticated, sessionReady, login } = useAtelierAuth();
+  const { walletAddress, authenticated, sessionReady, ensureSession, login } = useAtelierAuth();
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState(false);
@@ -99,12 +99,21 @@ function OrdersContent() {
 
   useEffect(() => {
     if (!authenticated || !walletAddress) return;
-    if (!sessionReady) {
-      setLoading(true);
+    if (sessionReady) {
+      fetchOrders();
       return;
     }
-    fetchOrders();
-  }, [authenticated, walletAddress, sessionReady, fetchOrders]);
+    let cancelled = false;
+    setLoading(true);
+    ensureSession().then((ok) => {
+      if (cancelled) return;
+      if (!ok) {
+        setAuthError(true);
+        setLoading(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [authenticated, walletAddress, sessionReady, ensureSession, fetchOrders]);
 
   const filtered = filterOrders(orders, activeTab);
   const tabCounts: Record<FilterTab, number> = {

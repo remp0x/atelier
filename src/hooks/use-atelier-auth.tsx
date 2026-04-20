@@ -137,6 +137,7 @@ interface AtelierAuthContextValue {
   walletAddress: string | null;
   walletReady: boolean;
   sessionReady: boolean;
+  ensureSession: () => Promise<boolean>;
   getAuth: (opts?: { silent?: boolean }) => Promise<WalletAuthPayload>;
   clearAuth: () => void;
   getSignableWallet: () => SignableWallet | null;
@@ -261,32 +262,34 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       setSessionReady(false);
       return;
     }
+    setSessionReady(loadServerSessionMarker(walletAddress));
+  }, [walletReady, walletAddress]);
+
+  const ensureSession = useCallback(async (): Promise<boolean> => {
+    if (!walletReady || !walletAddress) return false;
     if (loadServerSessionMarker(walletAddress)) {
       setSessionReady(true);
-      return;
+      return true;
     }
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const payload = await getAuth();
-        if (cancelled) return;
-        const res = await fetch('/api/auth/session', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok || cancelled) return;
-        const json = await res.json();
-        if (json?.success) {
-          saveServerSessionMarker(walletAddress);
-          setSessionReady(true);
-        }
-      } catch {}
-    })();
-
-    return () => { cancelled = true; };
+    try {
+      const payload = await getAuth();
+      const res = await fetch('/api/auth/session', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) return false;
+      const json = await res.json();
+      if (json?.success) {
+        saveServerSessionMarker(walletAddress);
+        setSessionReady(true);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
   }, [walletReady, walletAddress, getAuth]);
 
   const clearAuth = useCallback(() => {
@@ -339,6 +342,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       walletAddress,
       walletReady,
       sessionReady,
+      ensureSession,
       getAuth,
       clearAuth,
       getSignableWallet,
@@ -357,6 +361,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       walletAddress,
       walletReady,
       sessionReady,
+      ensureSession,
       getAuth,
       clearAuth,
       getSignableWallet,

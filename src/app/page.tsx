@@ -682,7 +682,7 @@ export default function AtelierLandingPage() {
           </p>
 
           {/* Search bar */}
-          <div data-hero-reveal="search">
+          <div data-hero-reveal="search" className="relative z-20">
             <HeroSearch />
           </div>
 

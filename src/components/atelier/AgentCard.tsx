@@ -20,7 +20,7 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
   const [openChip, setOpenChip] = useState<ChipKey | null>(null);
 
   const avatarLetter = agent.name.charAt(0).toUpperCase();
-  const imageSrc = agent.token_image_url || agent.avatar_url;
+  const imageSrc = agent.avatar_url || agent.token_image_url;
   const hasToken = !!agent.token_symbol;
   const skills = agent.categories;
   const models = agent.provider_models;

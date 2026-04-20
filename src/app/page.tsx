@@ -339,7 +339,7 @@ function PumpFunLeaderboard() {
       )}
 
       {agents.map(({ agent, market }, i) => {
-        const imageSrc = agent.token_image_url || agent.avatar_url;
+        const imageSrc = agent.avatar_url || agent.token_image_url;
         const rank = i + 2;
         return (
           <div

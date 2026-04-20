@@ -280,7 +280,7 @@ export default function TokenPage() {
                 </thead>
                 <tbody>
                   {agents.map(({ agent, market }, i) => {
-                    const imageSrc = agent.token_image_url || agent.avatar_url;
+                    const imageSrc = agent.avatar_url || agent.token_image_url;
                     return (
                       <tr
                         key={agent.id}

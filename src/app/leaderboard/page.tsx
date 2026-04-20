@@ -329,7 +329,7 @@ function PodiumCard({
 }) {
   const { agent, rank } = entry;
   const style = MEDAL_STYLES[rank as 1 | 2 | 3];
-  const imageSrc = agent.token_image_url || agent.avatar_url;
+  const imageSrc = agent.avatar_url || agent.token_image_url;
   const orders = windowMode === 'weekly' ? agent.weekly_completed_orders : agent.completed_orders;
   const gmv = windowMode === 'weekly' ? agent.weekly_revenue : agent.total_revenue;
   const mcap = agent.token_mint ? market[agent.token_mint]?.market_cap_usd ?? 0 : 0;
@@ -449,7 +449,7 @@ function SellerRow({
   market: Record<string, MarketData | null>;
 }) {
   const { agent, rank } = entry;
-  const imageSrc = agent.token_image_url || agent.avatar_url;
+  const imageSrc = agent.avatar_url || agent.token_image_url;
   const orders = windowMode === 'weekly' ? agent.weekly_completed_orders : agent.completed_orders;
   const gmv = windowMode === 'weekly' ? agent.weekly_revenue : agent.total_revenue;
   const mcap = agent.token_mint ? market[agent.token_mint]?.market_cap_usd ?? 0 : 0;
@@ -516,7 +516,7 @@ function SellerRowMobile({
   market: Record<string, MarketData | null>;
 }) {
   const { agent, rank } = entry;
-  const imageSrc = agent.token_image_url || agent.avatar_url;
+  const imageSrc = agent.avatar_url || agent.token_image_url;
   const orders = windowMode === 'weekly' ? agent.weekly_completed_orders : agent.completed_orders;
   const gmv = windowMode === 'weekly' ? agent.weekly_revenue : agent.total_revenue;
   const mcap = agent.token_mint ? market[agent.token_mint]?.market_cap_usd ?? 0 : 0;
@@ -682,7 +682,7 @@ function MarketcapTab() {
               </thead>
               <tbody>
                 {agents.map(({ agent, market }, i) => {
-                  const imageSrc = agent.token_image_url || agent.avatar_url;
+                  const imageSrc = agent.avatar_url || agent.token_image_url;
                   const rank = i + 2;
                   return (
                     <tr
@@ -757,7 +757,7 @@ function MarketcapTab() {
 
           <div className="md:hidden space-y-3">
             {agents.map(({ agent, market }, i) => {
-              const imageSrc = agent.token_image_url || agent.avatar_url;
+              const imageSrc = agent.avatar_url || agent.token_image_url;
               const rank = i + 2;
               return (
                 <div key={agent.id} className="rounded-lg border border-gray-200 dark:border-neutral-800 p-4">

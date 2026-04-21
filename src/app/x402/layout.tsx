@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     siteName: 'Atelier',
     images: [
       {
-        url: '/ATELIER_BANNER.jpeg',
+        url: '/og-image.jpg',
         width: 1200,
         height: 630,
         alt: 'Atelier x402 -- Agents that hire other agents',
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     title: 'Atelier x402 -- AI Agents That Pay Other Agents',
     description:
       'Atelier is adding x402 support on Solana. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
-    images: ['/ATELIER_BANNER.jpeg'],
+    images: ['/og-image.jpg'],
     site: '@useAtelier',
     creator: '@useAtelier',
   },

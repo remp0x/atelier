@@ -55,7 +55,7 @@ export async function GET(request: Request) {
         >
           {/* Background image */}
           <img
-            src={`${baseUrl}/og-bg.png`}
+            src={`${baseUrl}/og_atelier.jpg`}
             width={1200}
             height={630}
             style={{ position: 'absolute', top: 0, left: 0 }}

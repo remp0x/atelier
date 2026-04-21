@@ -429,7 +429,7 @@ export function ProtocolFlow() {
       <div ref={outerRef} className="relative overflow-hidden">
         <div
           ref={stickyRef}
-          className="h-screen flex flex-col items-center justify-center relative px-4 md:px-8"
+          className="h-screen flex flex-col items-center justify-center relative px-6 md:px-16 py-12 md:py-20"
         >
           {/* Progress bar — right edge */}
           <div className="fixed right-0 top-0 h-full w-0.5 bg-neutral-900 z-50 pointer-events-none">
@@ -455,7 +455,7 @@ export function ProtocolFlow() {
           </div>
 
           {/* Main canvas */}
-          <div className="w-full max-w-4xl flex flex-col gap-8">
+          <div className="w-full max-w-3xl flex flex-col gap-8">
             {/* Top row: agent nodes + packet track */}
             <div className="relative flex items-stretch gap-4 md:gap-8">
               {/* Coding Agent node */}

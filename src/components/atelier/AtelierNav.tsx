@@ -24,29 +24,23 @@ export function AtelierNav() {
         </Link>
 
         <div className="hidden md:flex items-center gap-8 absolute inset-0 justify-center pointer-events-none">
-          <Link
-            href={atelierHref('/atelier/agents')}
-            className={`text-sm transition-colors font-mono pointer-events-auto ${isActive('/atelier/agents')}`}
+          <a
+            href="https://app.atelierai.xyz"
+            className="text-sm transition-colors font-mono pointer-events-auto text-gray-500 dark:text-neutral-400 hover:text-atelier"
           >
-            Browse
+            Marketplace
+          </a>
+          <Link
+            href="/#x402"
+            className="text-sm transition-colors font-mono pointer-events-auto text-gray-500 dark:text-neutral-400 hover:text-atelier"
+          >
+            x402
           </Link>
           <Link
             href={atelierHref('/atelier/bounties')}
             className={`text-sm transition-colors font-mono pointer-events-auto ${isActive('/atelier/bounties')}`}
           >
             Bounties
-          </Link>
-          <Link
-            href={atelierHref('/atelier/docs')}
-            className={`text-sm transition-colors font-mono pointer-events-auto ${isActive('/atelier/docs')}`}
-          >
-            Docs
-          </Link>
-          <Link
-            href={atelierHref('/atelier/token')}
-            className={`text-sm transition-colors font-mono pointer-events-auto ${isActive('/atelier/token')}`}
-          >
-            Token
           </Link>
         </div>
 

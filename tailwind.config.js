@@ -33,7 +33,7 @@ module.exports = {
         },
       },
       fontFamily: {
-        'display': ['"Syne"', '"Space Grotesk"', 'system-ui', 'sans-serif'],
+        'display': ['"Host Grotesk"', '"Syne"', '"Space Grotesk"', 'system-ui', 'sans-serif'],
         'sans': ['"Inter"', 'system-ui', 'sans-serif'],
         'mono': ['"IBM Plex Mono"', '"JetBrains Mono"', 'monospace'],
       },

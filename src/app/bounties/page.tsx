@@ -1,30 +1,12 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { BountyCard } from '@/components/atelier/BountyCard';
 import { CreateBountyModal } from '@/components/atelier/CreateBountyModal';
+import { CategoryPillRow, SortDropdown } from '@/components/atelier/BrowseFilters';
 import type { BountyListItem, ServiceCategory } from '@/lib/atelier-db';
-
-const CATEGORY_LABELS: Record<ServiceCategory | 'all', string> = {
-  all: 'All',
-  image_gen: 'Image',
-  video_gen: 'Video',
-  ugc: 'UGC',
-  influencer: 'Influencer',
-  brand_content: 'Brand',
-  coding: 'Coding',
-  analytics: 'Analytics',
-  seo: 'SEO',
-  trading: 'Trading',
-  automation: 'Automation',
-  consulting: 'Consulting',
-  custom: 'Custom',
-};
-
-const CATEGORIES = Object.keys(CATEGORY_LABELS) as (ServiceCategory | 'all')[];
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
@@ -32,6 +14,8 @@ const SORT_OPTIONS = [
   { value: 'deadline_asc', label: 'Ending Soon' },
   { value: 'claims_count', label: 'Most Claims' },
 ] as const;
+
+type BountiesSort = typeof SORT_OPTIONS[number]['value'];
 
 export default function BountiesPage() {
   return (
@@ -56,7 +40,7 @@ function BountiesContent() {
   const [showCreate, setShowCreate] = useState(false);
 
   const activeCategory = searchParams.get('category') || 'all';
-  const activeSort = searchParams.get('sort') || 'newest';
+  const activeSort = (searchParams.get('sort') || 'newest') as BountiesSort;
   const PAGE_SIZE = 20;
 
   const fetchBounties = useCallback(async () => {
@@ -85,7 +69,7 @@ function BountiesContent() {
     fetchBounties();
   }, [fetchBounties]);
 
-  function buildHref(overrides: Record<string, string | undefined>): string {
+  const buildHref = useCallback((overrides: Record<string, string | undefined>): string => {
     const params = new URLSearchParams();
     const merged = { category: activeCategory, sort: activeSort, ...overrides };
     for (const [k, v] of Object.entries(merged)) {
@@ -93,7 +77,15 @@ function BountiesContent() {
     }
     const qs = params.toString();
     return `/bounties${qs ? `?${qs}` : ''}`;
-  }
+  }, [activeCategory, activeSort]);
+
+  const handleCategorySelect = (cat: ServiceCategory | 'all') => {
+    router.push(buildHref({ category: cat }));
+  };
+
+  const handleSortSelect = (value: BountiesSort) => {
+    router.push(buildHref({ sort: value }));
+  };
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -114,46 +106,20 @@ function BountiesContent() {
         </button>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 pb-2 mb-4">
-        {CATEGORIES.map((cat) => {
-          const isActive = activeCategory === cat;
-          return (
-            <Link
-              key={cat}
-              href={buildHref({ category: cat })}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-mono transition-colors ${
-                isActive
-                  ? 'border border-atelier text-atelier bg-atelier/10'
-                  : 'border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier/50 hover:text-atelier'
-              }`}
-            >
-              {CATEGORY_LABELS[cat]}
-            </Link>
-          );
-        })}
+      {/* Filter bar — categories scroll horizontally, Sort pinned right */}
+      <div className="mb-8 flex items-center gap-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+        <CategoryPillRow activeCategory={activeCategory} onSelect={handleCategorySelect} />
+
+        <div className="flex-shrink-0 flex items-center gap-2 pl-4 border-l border-gray-200 dark:border-neutral-800">
+          <SortDropdown sort={activeSort} setSort={handleSortSelect} options={SORT_OPTIONS} />
+        </div>
       </div>
 
-      <div className="flex items-center gap-4 mb-8">
-        <label className="relative inline-flex items-center gap-1 cursor-pointer group">
-          <select
-            value={activeSort}
-            onChange={(e) => router.push(buildHref({ sort: e.target.value }))}
-            className="appearance-none pr-4 py-0.5 text-xs font-mono bg-transparent text-gray-500 dark:text-neutral-400 group-hover:text-black dark:group-hover:text-white focus:outline-none focus:text-atelier cursor-pointer transition-colors"
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <svg className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 dark:text-neutral-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </label>
-        {total > 0 && (
-          <span className="text-xs text-gray-400 dark:text-neutral-400 font-mono ml-auto">
-            {total} bounties
-          </span>
-        )}
-      </div>
+      {total > 0 && !loading && (
+        <div className="mb-4 text-xs text-gray-400 dark:text-neutral-400 font-mono">
+          {total} {total === 1 ? 'bounty' : 'bounties'}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-20">

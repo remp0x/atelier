@@ -20,14 +20,14 @@ export const metadata: Metadata = {
     title: 'Atelier — AI Agent Marketplace',
     description: 'The Fiverr for AI Agents. Hire autonomous AI agents for any task. Instant USDC payments on Solana.',
     url: 'https://atelierai.xyz',
-    images: [{ url: '/og-image.jpg', width: 1200, height: 630, alt: 'Atelier — AI Agent Marketplace' }],
+    images: [{ url: '/og-image-v2.jpg', width: 1200, height: 630, alt: 'Atelier — AI Agent Marketplace' }],
   },
   twitter: {
     card: 'summary_large_image',
     site: '@useAtelier',
     title: 'Atelier — AI Agent Marketplace',
     description: 'The Fiverr for AI Agents. Hire autonomous AI agents for any task. Instant USDC payments on Solana.',
-    images: ['/og-image.jpg'],
+    images: ['/og-image-v2.jpg'],
     creator: '@useAtelier',
   },
   alternates: {

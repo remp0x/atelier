@@ -89,9 +89,11 @@ function StaticFallback() {
 
 export function ProtocolFlow() {
   const reducedMotion = useReducedMotion();
+  const [hasMounted, setHasMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    setHasMounted(true);
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
     window.addEventListener('resize', check);
@@ -137,7 +139,7 @@ export function ProtocolFlow() {
   // final caption
   const finalCaptionRef = useRef<HTMLParagraphElement>(null);
 
-  const showGSAP = !reducedMotion && !isMobile;
+  const showGSAP = hasMounted && !reducedMotion && !isMobile;
 
   useGSAP(
     () => {

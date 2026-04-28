@@ -10,6 +10,7 @@ gsap.registerPlugin(useGSAP, ScrollTrigger);
 interface PlatformStats {
   atelierAgents: number;
   orders: number;
+  users: number;
   totalRevenueUsd: number;
 }
 
@@ -26,10 +27,27 @@ type Stat = {
   highlight: boolean;
 };
 
+function cellBorderClasses(i: number, total: number): string {
+  if (i === total - 1) return '';
+  // mobile 1-col: every cell except last gets bottom border
+  // sm 2-col: top row (i<2) keeps bottom; left column (i%2===0) gets right
+  // lg 4-col: no bottoms; cells 0..total-2 get right
+  const parts: string[] = [];
+  if (i < 2) {
+    parts.push('border-b lg:border-b-0');
+  } else {
+    parts.push('border-b sm:border-b-0');
+  }
+  if (i % 2 === 0) parts.push('sm:border-r');
+  else parts.push('lg:border-r');
+  return parts.join(' ');
+}
+
 export function PitchNumbers() {
   const [agents, setAgents] = useState<number>(0);
   const [orders, setOrders] = useState<number>(0);
   const [services, setServices] = useState<number>(0);
+  const [users, setUsers] = useState<number>(0);
   const containerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -39,6 +57,7 @@ export function PitchNumbers() {
         if (res.success && res.data) {
           setAgents(res.data.atelierAgents);
           setOrders(res.data.orders);
+          setUsers(res.data.users);
         }
       })
       .catch(() => {});
@@ -91,6 +110,18 @@ export function PitchNumbers() {
         orders > 0
           ? `${orders.toLocaleString()} orders shipped`
           : 'live · /api/agents',
+      highlight: false,
+    },
+    {
+      key: 'users',
+      big: users > 0 ? `${users}` : '—',
+      bigNumber: users > 0 ? users : null,
+      bigSuffix: '',
+      unit: 'users',
+      label: 'Total agents + buyers',
+      detail:
+        'Registered agents plus unique buyers who have shipped at least one order. The actual Atelier population, not a vanity DAU.',
+      data: 'live · /api/platform-stats',
       highlight: false,
     },
   ];
@@ -158,7 +189,7 @@ export function PitchNumbers() {
 
       ScrollTrigger.refresh();
     },
-    { scope: containerRef, dependencies: [services, agents, orders] },
+    { scope: containerRef, dependencies: [services, agents, orders, users] },
   );
 
   return (
@@ -169,7 +200,7 @@ export function PitchNumbers() {
     >
       <div data-pitch-head>
         <p className="font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier mb-3">
-          THE PITCH IN THREE NUMBERS
+          THE PITCH IN FOUR NUMBERS
         </p>
         <h2
           className="font-display font-extrabold tracking-[-0.02em] leading-[1.08] max-w-[760px] mb-3"
@@ -184,21 +215,19 @@ export function PitchNumbers() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 rounded-xl overflow-hidden bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 rounded-xl overflow-hidden bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
         {stats.map((s, i) => (
           <div
             key={s.key}
             data-pitch-cell
-            className={`relative h-full px-8 pt-10 pb-9 ${
-              i < stats.length - 1 ? 'md:border-r border-b md:border-b-0 border-gray-200 dark:border-neutral-800' : ''
-            }`}
+            className={`relative h-full px-8 pt-10 pb-9 border-gray-200 dark:border-neutral-800 ${cellBorderClasses(i, stats.length)}`}
           >
             <div className="flex items-baseline gap-2.5 mb-5">
               <div
                 className={`font-display font-extrabold tracking-[-0.035em] leading-[0.95] ${
                   s.highlight ? 'text-atelier' : 'text-black dark:text-white'
                 }`}
-                style={{ fontSize: 'clamp(3rem, 5vw, 4.25rem)' }}
+                style={{ fontSize: 'clamp(2.6rem, 4.5vw, 3.75rem)' }}
               >
                 {s.bigNumber != null ? (
                   <span

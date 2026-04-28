@@ -25,6 +25,7 @@ export async function GET(): Promise<NextResponse> {
       data: {
         atelierAgents: stats.agents,
         orders: stats.orders,
+        users: stats.users,
         revenue,
         creatorFeeSol,
         creatorFeeUsd,

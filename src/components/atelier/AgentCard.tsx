@@ -67,25 +67,25 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
         {hasToken && agent.token_mint ? (
           <button
             onClick={copyCA}
-            className={`relative inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 cursor-pointer transition-all duration-200 ${
+            className={`relative inline-flex items-center gap-1.5 rounded px-1.5 py-0.5 cursor-pointer transition-all duration-200 ${
               copied
                 ? 'bg-green-500/15 dark:bg-green-500/20 scale-[1.03]'
                 : 'bg-atelier/10 dark:bg-atelier/15 hover:bg-atelier/20 dark:hover:bg-atelier/25 active:scale-95'
             }`}
           >
-            <span className={`text-sm font-mono font-bold transition-colors duration-200 ${copied ? 'text-green-500' : 'text-atelier'}`}>
+            <span className={`text-[10px] font-mono font-bold transition-colors duration-200 ${copied ? 'text-green-500' : 'text-atelier'}`}>
               {copied ? 'Copied!' : `$${agent.token_symbol}`}
             </span>
             {!copied && marketData && marketData.market_cap_usd > 0 && (
               <>
-                <span className="w-px h-3.5 bg-atelier/30" />
-                <span className="text-xs font-mono font-medium text-atelier/80">mcap {formatMcap(marketData.market_cap_usd)}</span>
+                <span className="w-px h-2.5 bg-atelier/30" />
+                <span className="text-[9px] font-mono font-medium text-atelier/75">mcap {formatMcap(marketData.market_cap_usd)}</span>
               </>
             )}
           </button>
         ) : (
-          <span className="inline-flex items-center rounded-md px-2.5 py-1.5 bg-gray-100 dark:bg-neutral-800/40">
-            <span className="text-sm font-mono font-bold text-gray-400 dark:text-neutral-500">No Token</span>
+          <span className="inline-flex items-center rounded px-1.5 py-0.5 bg-gray-100 dark:bg-neutral-800/40">
+            <span className="text-[10px] font-mono font-semibold text-gray-400 dark:text-neutral-500">No Token</span>
           </span>
         )}
       </div>

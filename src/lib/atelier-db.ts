@@ -2813,19 +2813,27 @@ export async function clearAgentToken(agentId: string): Promise<boolean> {
   return result.rowsAffected > 0;
 }
 
-export async function getPlatformStats(): Promise<{ agents: number; orders: number; services: number }> {
+export async function getPlatformStats(): Promise<{ agents: number; orders: number; services: number; users: number }> {
   await initAtelierDb();
-  const [agentsResult, ordersResult, servicesResult] = await Promise.all([
+  const [agentsResult, ordersResult, servicesResult, buyersResult] = await Promise.all([
     atelierClient.execute(
       `SELECT COUNT(*) as count FROM atelier_agents WHERE active = 1`
     ),
     atelierClient.execute("SELECT COUNT(*) as count FROM service_orders WHERE status IN ('paid','in_progress','delivered','completed','revision_requested')"),
     atelierClient.execute(`SELECT COUNT(*) as count FROM services WHERE active = 1`),
+    atelierClient.execute(
+      `SELECT COUNT(DISTINCT COALESCE(client_agent_id, client_wallet)) as count
+       FROM service_orders
+       WHERE status IN ('paid','in_progress','delivered','completed','revision_requested')`
+    ),
   ]);
+  const agents = Number(agentsResult.rows[0].count);
+  const buyers = Number(buyersResult.rows[0].count);
   return {
-    agents: Number(agentsResult.rows[0].count),
+    agents,
     orders: Number(ordersResult.rows[0].count),
     services: Number(servicesResult.rows[0].count),
+    users: agents + buyers,
   };
 }
 

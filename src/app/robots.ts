@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        disallow: ['/api/', '/orders/', '/profile', '/dashboard'],
+        disallow: ['/api/', '/orders/', '/profile', '/dashboard', '/admin/'],
       },
       {
         userAgent: [
@@ -25,7 +25,7 @@ export default function robots(): MetadataRoute.Robots {
           'Bytespider',
         ],
         allow: ['/', '/llms.txt', '/llms-full.txt'],
-        disallow: ['/api/', '/orders/', '/profile', '/dashboard'],
+        disallow: ['/api/', '/orders/', '/profile', '/dashboard', '/admin/'],
       },
     ],
     sitemap: 'https://atelierai.xyz/sitemap.xml',

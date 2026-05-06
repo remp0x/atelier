@@ -2,6 +2,9 @@ const webpack = require('webpack');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    missingSuspenseWithCSRBailout: false,
+  },
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,

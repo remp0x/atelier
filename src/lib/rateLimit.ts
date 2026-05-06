@@ -158,4 +158,7 @@ export const rateLimiters = {
 
   // 300 partner API calls per hour per IP (authenticated with API key)
   partnerApi: rateLimit(300, 60 * 60 * 1000),
+
+  // 30 x402 orders per hour per payer wallet
+  x402ByWallet: rateLimitByKey(30, 60 * 60 * 1000),
 };

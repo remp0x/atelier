@@ -9,7 +9,9 @@
   --black-soft: #0a0a0a;
   --atelier: #fa4c14;
   --atelier-bright: #ff7a3d;
+  --atelier-dark: #c93a0a;
   --gray-dark: #2a2a2a;
+  --gray-border: #333333;
   --white: #ffffff;
   --transparent: transparent;
   --aurora-1: #c93a0a;
@@ -17,6 +19,28 @@
   --aurora-3: #fa4c14;
   --aurora-4: #ffb199;
   --aurora-5: #9a2906;
+
+  /* foreground scale */
+  --fg-1: #ffffff;
+  --fg-2: #d4d4d4;
+  --fg-3: #a3a3a3;
+  --fg-4: #6a6a6a;
+
+  /* border tokens */
+  --border-soft: #1f1f1f;
+
+  /* semantic */
+  --success: #22c55e;
+  --danger: #ef4444;
+  --blue-check: #60a5fa;
+
+  /* type */
+  --font-display: 'Host Grotesk', 'Syne', 'Inter', system-ui, sans-serif;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root.dark, .dark {
@@ -239,4 +263,79 @@ body {
   top: auto !important;
   bottom: 100% !important;
   margin-bottom: 4px !important;
+}
+
+/* ============================================================
+   Atelier Market — animations & utilities
+   ============================================================ */
+
+@keyframes tickerRoll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@keyframes scan {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes flicker {
+  0%, 92%, 100% { opacity: 1; }
+  93%, 96%      { opacity: 0.72; }
+  94%           { opacity: 0.95; }
+}
+
+@keyframes slotBlink {
+  0%, 100% { border-color: rgba(250,76,20,0.35); box-shadow: 0 0 0 0 rgba(250,76,20,0); }
+  50%      { border-color: rgba(250,76,20,0.85); box-shadow: 0 0 16px 0 rgba(250,76,20,0.35); }
+}
+
+@keyframes capsulePulse {
+  0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
+  50%      { transform: translateY(-6px) rotate(var(--r, 0deg)); }
+}
+
+/* card hover effects used by SkuCard and CreatorCard */
+.sku-card {
+  transition: transform 260ms var(--ease-out), border-color 200ms ease, box-shadow 200ms ease;
+}
+.sku-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(250,76,20,0.55);
+  box-shadow: 0 20px 40px -20px rgba(250,76,20,0.35), 0 0 0 1px rgba(250,76,20,0.25);
+}
+.sku-card:hover .sku-buy {
+  background: var(--atelier);
+  color: #fff;
+}
+.sku-card:hover .sku-preview-glow {
+  opacity: 1;
+}
+
+/* market link hover */
+.mk-link {
+  cursor: pointer;
+  transition: color 180ms var(--ease-out);
+}
+.mk-link:hover {
+  color: var(--atelier) !important;
+}
+
+/* trending table row hover */
+.row-hover:hover {
+  background: rgba(250,76,20,0.04);
+}
+
+/* responsive grid overrides */
+@media (max-width: 1024px) {
+  .hero-grid { grid-template-columns: 1fr !important; }
+  .hero-capsule-stage { display: none !important; }
+}
+@media (max-width: 820px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+  .grid-3 { grid-template-columns: 1fr !important; }
+  .creator-split { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 520px) {
+  .grid-4 { grid-template-columns: 1fr !important; }
 }

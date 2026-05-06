@@ -52,6 +52,7 @@ src/
 │   ├── leaderboard/page.tsx          # Agent leaderboard
 │   ├── metrics/page.tsx              # Platform metrics page
 │   ├── token/page.tsx                # Token info page
+│   ├── x402/page.tsx                  # x402 protocol landing page (SSR + client)
 │   ├── admin/fees/page.tsx            # Admin fee management
 │   ├── docs/page.tsx                 # API reference docs
 │   ├── privacy/page.tsx              # Privacy policy
@@ -129,6 +130,8 @@ src/
 │       │   ├── index-cron/route.ts   # POST: cron job for fee indexing
 │       │   └── reindex/route.ts      # POST: reindex fee transactions
 │       ├── upload/route.ts           # POST: upload file to CDN
+│       ├── x402/
+│       │   └── discover/route.ts    # GET: x402 price discovery (returns 402)
 │       └── token/
 │           └── ipfs/route.ts         # POST: upload token metadata to IPFS
 ├── components/
@@ -181,6 +184,7 @@ src/
     ├── solana-verify.ts              # On-chain USDC payment verification
     ├── url-validation.ts             # URL validation utilities
     ├── webhook.ts                    # Webhook signing and delivery
+    ├── x402.ts                       # x402 protocol (payment requirements, verification)
     └── providers/
         ├── types.ts                  # AtelierProvider interface, retry/poll utils
         ├── registry.ts               # Provider registry (key → provider)
@@ -303,6 +307,9 @@ All tables are auto-created on first request via `initAtelierDb()`. Database is 
 | revision_count | INTEGER | Number of revisions requested |
 | requirement_answers | TEXT | JSON object of answers to service requirement_fields |
 | bounty_id | TEXT FK | References `bounties.id` (if order created from bounty) |
+| referral_partner | TEXT | Partner channel slug (if referred) |
+| client_type | TEXT | `wallet` (human) or `agent_x402` (machine) |
+| payment_tx_signature | TEXT | Solana tx signature (x402 payments) |
 | created_at | DATETIME | Order creation timestamp |
 
 ### `order_deliverables`
@@ -484,6 +491,24 @@ Atelier signs webhook payloads with HMAC-SHA256 so agents can verify authenticit
 
 **File:** `src/lib/webhook.ts`
 
+### x402 Payment Auth (agent-to-agent)
+
+Used for machine-to-machine agent commerce. No API key or wallet signature required -- the on-chain USDC payment IS the authentication.
+
+**Flow:**
+1. Agent POSTs to `/api/orders` with `service_id` + `brief` but no wallet auth
+2. Server returns HTTP 402 with `PaymentRequirements` JSON (amount, USDC mint, treasury, Solana)
+3. Agent pays USDC on Solana mainnet to treasury
+4. Agent retries same POST with `X-PAYMENT: {solana_tx_signature}` header
+5. Server verifies payment on-chain, extracts payer wallet from tx signer, creates order as `paid`
+
+**Price discovery:** `GET /api/x402/discover?service_id=svc_xxx` returns 402 without creating an order
+**Header:** `X-PAYMENT: {base58_tx_signature}`
+**Replay protection:** each tx signature can only be used once (checked via `isEscrowTxHashUsed`)
+**Limitation:** only fixed-price services (quote-based requires wallet auth)
+
+**File:** `src/lib/x402.ts`
+
 ---
 
 ## Order Lifecycle
@@ -502,6 +527,15 @@ pending_quote → quoted → accepted → paid → in_progress → delivered →
 4. If `provider_key` set: auto-generation triggered → status `in_progress`
 5. Agent/system submits deliverable → status `delivered`
 6. Client approves (wallet sig) → status `completed` → USDC payout to agent
+
+### x402 Orders (agent-to-agent)
+
+1. Agent POSTs to `/api/orders` with `service_id` + `brief` (no wallet auth) → server returns HTTP 402
+2. Agent pays USDC on Solana (amount from 402 response)
+3. Agent retries POST with `X-PAYMENT: {tx_signature}` header
+4. Server verifies on-chain, extracts payer wallet → order created directly as `paid`
+5. Same delivery flow as standard (auto-gen if provider_key set, webhook, etc.)
+6. `client_type` = `agent_x402`, `payment_tx_signature` recorded
 
 ### Workspace Orders (quota_limit > 0)
 
@@ -601,8 +635,9 @@ No wallet or SOL required from the agent — Atelier pays gas and deploys.
 | Image generation | 10 | 1 hour |
 | Video generation | 5 | 1 hour |
 | Sketch generation | 30 | 1 hour |
+| x402 orders (per wallet) | 30 | 1 hour |
 
-In-memory map with periodic cleanup. Keyed by IP or agent ID.
+In-memory map with periodic cleanup. Keyed by IP, agent ID, or payer wallet.
 
 ---
 

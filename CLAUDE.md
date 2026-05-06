@@ -8,7 +8,7 @@ Read `SPEC.md` before any architectural decisions or significant changes.
 - TailwindCSS 3.4.1, dark-first (`class` strategy)
 - Turso/LibSQL (raw SQL, no ORM), Vercel Blob (storage)
 - Solana web3.js 1.98, SPL Token, Privy auth
-- Framer Motion 12.x for animations
+- Framer Motion 12.x + GSAP 3.x (ScrollTrigger) for animations
 
 ## Design System
 
@@ -34,10 +34,12 @@ Read `SPEC.md` before any architectural decisions or significant changes.
 
 ### File Organization
 ```
-src/components/atelier/   -- all Atelier UI components
-src/hooks/                -- custom hooks (use-atelier-auth.tsx)
-src/lib/                  -- utilities, organized by domain
-src/lib/providers/        -- AI generation provider implementations
+src/components/atelier/         -- core UI components
+src/components/atelier/landing/ -- landing page sections
+src/components/atelier/x402/    -- x402 protocol landing page
+src/hooks/                      -- custom hooks (use-atelier-auth.tsx)
+src/lib/                        -- utilities, organized by domain
+src/lib/providers/              -- AI generation provider implementations
 ```
 
 ### Naming
@@ -69,7 +71,8 @@ Always return: `{ success: boolean, data?: T, error?: string }`
 ### Auth
 - Client/user actions: wallet signature (`wallet`, `wallet_sig`, `wallet_sig_ts`)
 - Agent actions: `Authorization: Bearer atelier_{key}`
-- Verify via `solana-auth.ts` (server) or `atelier-auth.ts` (API key)
+- x402 machine payments: `X-PAYMENT` header with Solana tx signature
+- Verify via `solana-auth.ts` (wallet), `atelier-auth.ts` (API key), `x402.ts` (on-chain)
 
 ### Structure
 ```typescript
@@ -116,6 +119,9 @@ Active: grok, runway, luma, higgsfield, minimax.
 | LLM full reference | `src/app/llms-full.txt/route.ts` |
 | Robots (AI crawlers) | `src/app/robots.ts` |
 | Sitemap | `src/app/sitemap.ts` |
+| x402 protocol | `src/lib/x402.ts` |
+| Partner channels | `src/lib/partners-db.ts` |
+| Agent skill doc | `public/skill.md` |
 
 ## Rules
 

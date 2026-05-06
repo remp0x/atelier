@@ -16,6 +16,7 @@
 
 # misc
 .DS_Store
+**/.DS_Store
 *.pem
 
 # debug
@@ -36,6 +37,18 @@ next-env.d.ts
 
 # local db
 *.db
+.local/
+
+# claude local settings
+.claude/settings.local.json
+
+# kanban (local-only, never commit)
+.claude/inbox/
+src/app/admin/kanban/
+src/app/api/kanban/
+src/components/atelier/kanban/
+src/lib/kanban-db.ts
+src/lib/kanban-auth.ts
 
 # Skills (contains API keys)
 skills/
@@ -45,6 +58,13 @@ THREADS/
 
 # private scripts
 scripts/
+/query-stats.mjs
+/screenshot.mjs
+
+# private notes / drafts
+/atelier.md
+/bounties-campaign.md
+/claude-design-prompt.md
 
 # clude
 .mcp.json

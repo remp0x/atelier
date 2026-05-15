@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback } from 'react';
+import { Suspense, useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ServiceCard } from '@/components/atelier/ServiceCard';
@@ -13,7 +13,11 @@ import {
   TriggerButton,
   useDropdown,
 } from '@/components/atelier/BrowseFilters';
+import { CATEGORY_LABELS } from '@/components/atelier/constants';
 import type { Service, ServiceCategory } from '@/lib/atelier-db';
+
+const FEATURED_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'coding'];
+const FEATURED_LIMIT = 10;
 
 const SORT_OPTIONS = [
   { value: 'popular', label: 'Popular' },
@@ -54,6 +58,7 @@ function ServicesContent() {
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   const [modelOptions, setModelOptions] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [featuredByCategory, setFeaturedByCategory] = useState<Record<string, ServiceWithAgent[]>>({});
 
   useEffect(() => {
     const saved = typeof window !== 'undefined' ? window.localStorage.getItem('atelier:services:view') : null;
@@ -70,6 +75,13 @@ function ServicesContent() {
   const activeModel = searchParams.get('model') || 'all';
   const activeSort = (searchParams.get('sort') || 'popular') as ServicesSort;
   const search = searchParams.get('search') || '';
+
+  const noFilters =
+    activeCategory === 'all' &&
+    activePricing === 'all' &&
+    activeModel === 'all' &&
+    activeSort === 'popular' &&
+    !search;
 
   const PAGE_SIZE = 50;
 
@@ -107,6 +119,42 @@ function ServicesContent() {
       if (json.success) setModelOptions(json.data);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!noFilters) return;
+    if (Object.keys(featuredByCategory).length === FEATURED_CATEGORIES.length) return;
+
+    let cancelled = false;
+    Promise.all(
+      FEATURED_CATEGORIES.map(async (cat) => {
+        try {
+          const res = await fetch(`/api/services?category=${cat}&limit=${FEATURED_LIMIT}&offset=0`);
+          const json = await res.json();
+          return [cat, json.success ? (json.data as ServiceWithAgent[]) : []] as const;
+        } catch {
+          return [cat, []] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) return;
+      setFeaturedByCategory(Object.fromEntries(entries));
+    });
+
+    return () => { cancelled = true; };
+  }, [noFilters, featuredByCategory]);
+
+  const popularServices = useMemo(
+    () => (noFilters ? services.slice(0, FEATURED_LIMIT) : []),
+    [noFilters, services],
+  );
+
+  const featuredRows = useMemo(
+    () =>
+      FEATURED_CATEGORIES
+        .map((cat) => ({ category: cat, services: featuredByCategory[cat] ?? [] }))
+        .filter((row) => row.services.length >= 4),
+    [featuredByCategory],
+  );
 
   const buildHref = useCallback((overrides: Record<string, string | undefined>): string => {
     const params = new URLSearchParams();
@@ -185,6 +233,33 @@ function ServicesContent() {
         </div>
       </div>
 
+      {/* Featured rows (shown when no filters applied) */}
+      {noFilters && !loading && popularServices.length > 0 && (
+        <div className="space-y-10 mb-12">
+          <ServiceRow
+            title="Most Popular Services"
+            subtitle="Top-performing services operators hire on Atelier"
+            services={popularServices}
+            onHire={(svc) => svc.price_type === 'fixed' && setHireService(svc)}
+          />
+          {featuredRows.map((row) => (
+            <ServiceRow
+              key={row.category}
+              title={`Services · ${CATEGORY_LABELS[row.category]}`}
+              services={row.services}
+              onSeeAll={() => router.push(buildHref({ category: row.category }))}
+              onHire={(svc) => svc.price_type === 'fixed' && setHireService(svc)}
+            />
+          ))}
+        </div>
+      )}
+
+      {noFilters && !loading && services.length > 0 && (
+        <div className="mb-6 flex items-baseline justify-between">
+          <h2 className="font-display font-bold text-lg text-black dark:text-white">All Services</h2>
+        </div>
+      )}
+
       {/* Service grid */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -247,6 +322,68 @@ function ServicesContent() {
         />
       )}
     </div>
+  );
+}
+
+function ServiceRow({
+  title,
+  subtitle,
+  services,
+  onSeeAll,
+  onHire,
+}: {
+  title: string;
+  subtitle?: string;
+  services: ServiceWithAgent[];
+  onSeeAll?: () => void;
+  onHire: (svc: ServiceWithAgent) => void;
+}) {
+  if (services.length === 0) return null;
+  return (
+    <section>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <div>
+          <h2 className="font-display font-bold text-lg text-black dark:text-white">
+            {title}
+          </h2>
+          {subtitle && (
+            <p className="text-xs text-gray-500 dark:text-neutral-500 mt-0.5">{subtitle}</p>
+          )}
+        </div>
+        {onSeeAll && (
+          <button
+            type="button"
+            onClick={onSeeAll}
+            className="text-2xs font-mono text-gray-500 dark:text-neutral-500 hover:text-atelier transition-colors flex-shrink-0"
+          >
+            See all →
+          </button>
+        )}
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
+        {services.map((svc) => (
+          <div
+            key={`${title}-${svc.id}`}
+            className="w-[300px] sm:w-[340px] flex-shrink-0 snap-start"
+          >
+            <ServiceCard
+              service={svc}
+              showAgent
+              agent={{
+                id: svc.agent_id,
+                slug: svc.agent_slug,
+                name: svc.agent_name,
+                avatar_url: svc.agent_avatar_url,
+                source: svc.is_atelier_official === 1 ? 'official' : 'atelier',
+                is_atelier_official: svc.is_atelier_official,
+                partner_badge: svc.partner_badge,
+              }}
+              onHire={svc.price_type === 'fixed' ? () => onHire(svc) : undefined}
+            />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

@@ -55,6 +55,31 @@ function HeroSection() {
           },
         });
       }
+
+      const blobConfigs = [
+        { sel: '[data-blob="1"]', x: 18, y: 14, dur: 11 },
+        { sel: '[data-blob="2"]', x: 22, y: 18, dur: 13 },
+        { sel: '[data-blob="3"]', x: 14, y: 20, dur: 15 },
+      ];
+      blobConfigs.forEach(({ sel, x, y, dur }, i) => {
+        gsap.to(sel, {
+          x,
+          y,
+          duration: dur,
+          ease: 'sine.inOut',
+          yoyo: true,
+          repeat: -1,
+          delay: i * 0.8,
+        });
+        gsap.to(sel, {
+          scale: 1.06,
+          duration: dur * 0.7,
+          ease: 'sine.inOut',
+          yoyo: true,
+          repeat: -1,
+          delay: i * 1.2,
+        });
+      });
     },
     { scope: sectionRef },
   );
@@ -67,16 +92,51 @@ function HeroSection() {
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
           ref={auroraRef}
-          className="absolute -inset-[10%] will-change-transform"
-          style={{
-            filter: 'blur(10px)',
-            background: `
-              radial-gradient(ellipse 55% 55% at 18% 8%,  rgba(201,58,10,0.38), transparent 55%),
-              radial-gradient(ellipse 45% 45% at 82% 18%, rgba(255,122,61,0.27), transparent 55%),
-              radial-gradient(ellipse 70% 55% at 50% 100%, rgba(250,76,20,0.32), transparent 62%)
-            `,
-          }}
-        />
+          className="absolute inset-0 will-change-transform"
+        >
+          <div
+            data-blob="1"
+            className="absolute will-change-transform"
+            style={{
+              top: '-12%',
+              left: '-10%',
+              width: '560px',
+              height: '560px',
+              background:
+                'radial-gradient(circle at center, rgba(201,58,10,0.55), rgba(201,58,10,0) 65%)',
+              filter: 'blur(50px)',
+              mixBlendMode: 'screen',
+            }}
+          />
+          <div
+            data-blob="2"
+            className="absolute will-change-transform"
+            style={{
+              top: '-8%',
+              right: '-12%',
+              width: '500px',
+              height: '500px',
+              background:
+                'radial-gradient(circle at center, rgba(250,76,20,0.45), rgba(250,76,20,0) 65%)',
+              filter: 'blur(55px)',
+              mixBlendMode: 'screen',
+            }}
+          />
+          <div
+            data-blob="3"
+            className="absolute will-change-transform"
+            style={{
+              bottom: '-25%',
+              left: 'calc(50% - 340px)',
+              width: '680px',
+              height: '680px',
+              background:
+                'radial-gradient(circle at center, rgba(255,122,61,0.38), rgba(255,122,61,0) 65%)',
+              filter: 'blur(60px)',
+              mixBlendMode: 'screen',
+            }}
+          />
+        </div>
       </div>
       <div
         className="absolute left-0 right-0 bottom-0 h-px pointer-events-none"

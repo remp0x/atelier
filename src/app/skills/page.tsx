@@ -67,6 +67,24 @@ function BrowseContent() {
   const [pack, setPack] = useState(searchParams.get('pack') || 'all');
 
   const [visibleCount, setVisibleCount] = useState(48);
+  const [communitySkills, setCommunitySkills] = useState<SkillExample[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/skills/community')
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return;
+        if (json.success) setCommunitySkills(json.data as SkillExample[]);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const allSkills = useMemo<SkillExample[]>(
+    () => [...communitySkills, ...SKILL_EXAMPLES],
+    [communitySkills],
+  );
 
   const urlSearch = searchParams.get('search') ?? '';
   useEffect(() => {
@@ -88,7 +106,7 @@ function BrowseContent() {
 
   const filteredSkills = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const matches = SKILL_EXAMPLES.filter((skill) => {
+    const matches = allSkills.filter((skill) => {
       if (category !== 'all') {
         const slug = SKILL_CATEGORIES.find(c => c.slug === category);
         if (!slug) return false;
@@ -114,7 +132,7 @@ function BrowseContent() {
       sorted.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
     }
     return sorted;
-  }, [category, search, pricing, pack, sort]);
+  }, [category, search, pricing, pack, sort, allSkills]);
 
   useEffect(() => {
     setVisibleCount(48);
@@ -131,21 +149,21 @@ function BrowseContent() {
     category === 'all' && !search && pricing === 'all' && pack === 'all';
 
   const popularSkills = useMemo(() => {
-    const byName = new Map(SKILL_EXAMPLES.map((s) => [s.name, s]));
+    const byName = new Map(allSkills.map((s) => [s.name, s]));
     return POPULAR_SKILL_NAMES
       .map((n) => byName.get(n))
       .filter((s): s is SkillExample => Boolean(s));
-  }, []);
+  }, [allSkills]);
 
   const featuredRows = useMemo(() => {
     const pick = (cat: string, limit = 10) =>
-      SKILL_EXAMPLES.filter((s) => s.category.toLowerCase() === cat.toLowerCase()).slice(0, limit);
+      allSkills.filter((s) => s.category.toLowerCase() === cat.toLowerCase()).slice(0, limit);
     return [
       { title: 'Coding & Engineering', slug: 'coding', skills: pick('Coding', 10) },
       { title: 'Design & Content', slug: 'design', skills: pick('Design', 10) },
       { title: 'Research & Data', slug: 'research', skills: pick('Research', 10) },
     ].filter((r) => r.skills.length >= 4);
-  }, []);
+  }, [allSkills]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

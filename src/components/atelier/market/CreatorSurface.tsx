@@ -4,9 +4,14 @@ import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'r
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { SKILL_CATEGORIES } from './marketData';
 
-const MAX_MD_BYTES = 1024 * 1024; // 1 MB
+const MAX_MD_BYTES = 256 * 1024; // 256 KB — server enforces same limit
 const MAX_NAME = 60;
 const MAX_DESCRIPTION = 200;
+
+interface PublishedSkill {
+  slug: string;
+  url: string;
+}
 
 const INPUT_CLS =
   'w-full rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-black/50 px-3 py-2 font-mono text-[13px] text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 outline-none focus:border-atelier/60 focus:ring-1 focus:ring-atelier/30 transition-colors';
@@ -35,7 +40,7 @@ export function CreatorSurface(): JSX.Element {
   const [pricing, setPricing] = useState<'free' | 'paid'>('free');
   const [usdcAmount, setUsdcAmount] = useState('5');
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [published, setPublished] = useState<PublishedSkill | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [pendingAuthSubmit, setPendingAuthSubmit] = useState(false);
@@ -83,13 +88,34 @@ export function CreatorSurface(): JSX.Element {
   }
 
   async function publish(): Promise<void> {
+    if (!file) {
+      setError('A .md file is required.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await new Promise((r) => setTimeout(r, 700));
-      setSubmitted(true);
-    } catch {
-      setError('Submission failed. Try again in a moment.');
+      const sig = await auth.getAuth();
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('name', name.trim());
+      fd.append('description', description.trim());
+      fd.append('category', category.slug);
+      fd.append('pricing', pricing);
+      fd.append('price_usdc', pricing === 'paid' ? String(parsedUsdc) : '0');
+      fd.append('wallet', sig.wallet);
+      fd.append('wallet_sig', sig.wallet_sig);
+      fd.append('wallet_sig_ts', String(sig.wallet_sig_ts));
+
+      const res = await fetch('/api/skills/submit', { method: 'POST', body: fd });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setError(json.error || 'Submission failed. Try again in a moment.');
+        return;
+      }
+      setPublished({ slug: json.data.slug, url: json.data.url });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Submission failed. Try again in a moment.');
     } finally {
       setSubmitting(false);
     }
@@ -127,7 +153,7 @@ export function CreatorSurface(): JSX.Element {
     setPricing('free');
     setUsdcAmount('5');
     setError(null);
-    setSubmitted(false);
+    setPublished(null);
     setPendingAuthSubmit(false);
   }
 
@@ -168,8 +194,8 @@ export function CreatorSurface(): JSX.Element {
           </p>
         </div>
 
-        {submitted ? (
-          <SubmittedState onPublishAnother={resetForm} />
+        {published ? (
+          <SubmittedState onPublishAnother={resetForm} skillUrl={published.url} />
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,520px)_minmax(0,440px)] gap-6 lg:gap-8 items-start justify-start">
             {/* FORM */}
@@ -370,7 +396,7 @@ export function CreatorSurface(): JSX.Element {
                 </button>
                 <p className="mt-2.5 font-mono text-[10.5px] leading-[1.5] text-gray-500 dark:text-neutral-400">
                   {auth.walletReady
-                    ? 'Manually reviewed during v0.1. Live skills credit your wallet as creator.'
+                    ? 'Goes live instantly. Your wallet is credited as creator. Only .md files accepted.'
                     : 'Fill the form, then sign in at submit to claim it with your wallet.'}
                 </p>
               </div>
@@ -457,7 +483,13 @@ function IdentityChip({
   );
 }
 
-function SubmittedState({ onPublishAnother }: { onPublishAnother: () => void }): JSX.Element {
+function SubmittedState({
+  onPublishAnother,
+  skillUrl,
+}: {
+  onPublishAnother: () => void;
+  skillUrl: string;
+}): JSX.Element {
   return (
     <div className="max-w-[560px] mx-auto rounded-xl border border-atelier/40 bg-atelier/[0.04] backdrop-blur-md p-6 md:p-8 text-center">
       <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-atelier/[0.10] border border-atelier/40 mb-5">
@@ -466,28 +498,26 @@ function SubmittedState({ onPublishAnother }: { onPublishAnother: () => void }):
         </svg>
       </div>
       <h3 className="font-display font-bold text-xl md:text-2xl tracking-[-0.02em] mb-2">
-        Submitted
+        Live on the marketplace
       </h3>
       <p className="text-[14.5px] leading-[1.55] text-gray-600 dark:text-neutral-400 max-w-[420px] mx-auto mb-6">
-        Your skill is in the review queue. We&apos;ll feature it at launch and ping you on
-        Telegram with the cohort updates.
+        Your skill is now visible at <span className="font-mono text-atelier">{skillUrl}</span>.
+        Your wallet is credited as creator.
       </p>
       <div className="flex flex-wrap items-center justify-center gap-3">
+        <a
+          href={skillUrl}
+          className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded bg-atelier text-white font-mono text-[13px] font-medium tracking-wide transition-all hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)]"
+        >
+          View skill →
+        </a>
         <button
           type="button"
           onClick={onPublishAnother}
-          className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded bg-atelier text-white font-mono text-[13px] font-medium tracking-wide transition-all hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)]"
-        >
-          Publish another →
-        </button>
-        <a
-          href="https://t.me/atelierai"
-          target="_blank"
-          rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded border border-atelier/60 text-atelier font-mono text-[13px] font-medium tracking-wide transition-colors hover:bg-atelier hover:text-white"
         >
-          Open Telegram
-        </a>
+          Publish another
+        </button>
       </div>
     </div>
   );

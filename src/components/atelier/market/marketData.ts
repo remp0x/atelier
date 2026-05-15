@@ -32,7 +32,7 @@ export type Persona = {
 
 export const PERSONAS: Persona[] = [];
 
-export type SkillPackId = 'medical' | 'anthropic' | 'skillsmp';
+export type SkillPackId = 'medical' | 'anthropic' | 'skillsmp' | 'community';
 
 export type SkillPack = {
   id: SkillPackId;
@@ -62,6 +62,13 @@ export const SKILL_PACKS: Record<SkillPackId, SkillPack> = {
     rawUrl: 'https://skillsmp.com/skills',
     external: true,
   },
+  community: {
+    id: 'community',
+    label: 'Community',
+    repoUrl: '/skills-and-personas',
+    rawUrl: '',
+    external: true,
+  },
 };
 
 export type SkillExample = {
@@ -73,15 +80,19 @@ export type SkillExample = {
   price?: number;
   pack: SkillPackId;
   slug: string;
+  download_url?: string;
+  creator_wallet?: string;
 };
 
 export function getSourceUrl(skill: SkillExample): string {
+  if (skill.download_url) return skill.download_url;
   const pack = SKILL_PACKS[skill.pack];
   if (pack.external) return `${pack.rawUrl}/${encodeURIComponent(skill.slug)}`;
   return `${pack.repoUrl}/${skill.slug}`;
 }
 
 export function getDownloadUrl(skill: SkillExample): string {
+  if (skill.download_url) return skill.download_url;
   const pack = SKILL_PACKS[skill.pack];
   if (pack.external) return `${pack.rawUrl}/${encodeURIComponent(skill.slug)}`;
   return `/api/skills/download?pack=${skill.pack}&slug=${encodeURIComponent(skill.slug)}`;

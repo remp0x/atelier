@@ -3,6 +3,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import {
+  SKILL_CATEGORIES,
   SKILL_EXAMPLES,
   SKILL_PACKS,
   getDownloadUrl,
@@ -11,13 +12,32 @@ import {
   type SkillExample,
   type SkillPackId,
 } from '@/components/atelier/market/marketData';
+import { getSubmittedSkillBySlug } from '@/lib/atelier-db';
 import { SkillGetButton } from './SkillGetButton';
 
 interface PageProps {
   params: { pack: string; slug: string };
 }
 
-function findSkill(pack: string, slug: string): SkillExample | undefined {
+const CATEGORY_NAME_BY_SLUG = new Map(SKILL_CATEGORIES.map((c) => [c.slug, c.name]));
+
+async function findSkill(pack: string, slug: string): Promise<SkillExample | undefined> {
+  if (pack === 'community') {
+    const row = await getSubmittedSkillBySlug(slug);
+    if (!row || row.status !== 'live') return undefined;
+    return {
+      name: row.name,
+      tagline: row.description,
+      category: CATEGORY_NAME_BY_SLUG.get(row.category) ?? row.category,
+      tools: ['Markdown'],
+      kb: `Submitted ${new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+      price: row.pricing === 'free' ? 0 : row.price_usdc,
+      pack: 'community',
+      slug: row.slug,
+      download_url: row.file_url,
+      creator_wallet: row.creator_wallet,
+    };
+  }
   return SKILL_EXAMPLES.find((s) => s.pack === pack && s.slug === slug);
 }
 
@@ -25,8 +45,8 @@ export function generateStaticParams() {
   return SKILL_EXAMPLES.map((s) => ({ pack: s.pack, slug: s.slug }));
 }
 
-export function generateMetadata({ params }: PageProps): Metadata {
-  const skill = findSkill(params.pack, params.slug);
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const skill = await findSkill(params.pack, params.slug);
   if (!skill) return { title: 'Skill not found' };
   const title = `${skill.name} — Skill on Atelier`;
   return {
@@ -48,14 +68,15 @@ const ANATOMY = [
   { label: 'Evals', d: 'Tests the creator ran so you trust the output.' },
 ];
 
-export default function SkillDetailPage({ params }: PageProps) {
-  const skill = findSkill(params.pack, params.slug);
+export default async function SkillDetailPage({ params }: PageProps) {
+  const skill = await findSkill(params.pack, params.slug);
   if (!skill) notFound();
 
   const isFree = (skill.price ?? 0) === 0;
   const price = skill.price ?? 0;
   const pack = SKILL_PACKS[skill.pack as SkillPackId];
   const external = isExternalSkill(skill);
+  const isCommunity = skill.pack === 'community';
   const sourceUrl = getSourceUrl(skill);
 
   return (
@@ -86,7 +107,7 @@ export default function SkillDetailPage({ params }: PageProps) {
 
           <div className="flex items-center flex-wrap gap-2 mt-5">
             <Pill>{skill.category}</Pill>
-            {!external && <Pill>{pack.label}</Pill>}
+            {(!external || isCommunity) && <Pill>{pack.label}</Pill>}
             <Pill>{skill.tools.length} tool{skill.tools.length !== 1 ? 's' : ''}</Pill>
             <Pill highlight>{isFree ? 'Free' : `$${price.toFixed(price % 1 === 0 ? 0 : 2)}`}</Pill>
           </div>
@@ -115,6 +136,15 @@ export default function SkillDetailPage({ params }: PageProps) {
                       {pack.label}
                     </a>
                     {' '}on GitHub.
+                  </>
+                )}
+                {isCommunity && skill.creator_wallet && (
+                  <>
+                    {' '}Submitted by community wallet{' '}
+                    <span className="font-mono text-atelier">
+                      {`${skill.creator_wallet.slice(0, 4)}…${skill.creator_wallet.slice(-4)}`}
+                    </span>
+                    .
                   </>
                 )}
               </p>
@@ -196,12 +226,31 @@ export default function SkillDetailPage({ params }: PageProps) {
               </Panel>
             )}
 
+            {isCommunity && skill.creator_wallet && (
+              <Panel>
+                <PanelTitle>Creator</PanelTitle>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded bg-atelier/15 flex items-center justify-center text-atelier font-bold font-mono">
+                    {skill.creator_wallet.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-black dark:text-white truncate font-mono">
+                      {`${skill.creator_wallet.slice(0, 4)}…${skill.creator_wallet.slice(-4)}`}
+                    </div>
+                    <span className="text-2xs font-mono text-gray-500 dark:text-neutral-500">
+                      Community submission
+                    </span>
+                  </div>
+                </div>
+              </Panel>
+            )}
+
             <Panel>
               <PanelTitle>Details</PanelTitle>
               <dl className="space-y-2 text-xs font-mono">
                 <Row label="Type" value="Skill" />
                 <Row label="Category" value={skill.category} />
-                {!external && <Row label="Pack" value={pack.label} />}
+                {(!external || isCommunity) && <Row label="Pack" value={pack.label} />}
                 <Row label="Price" value={isFree ? 'Free' : `$${price.toFixed(price % 1 === 0 ? 0 : 2)}`} />
                 <Row label="Format" value="Markdown (.md)" />
                 <Row label="License" value="One-time install" />

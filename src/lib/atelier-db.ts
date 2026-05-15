@@ -590,7 +590,129 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_sessions_wallet ON atelier_sessions(wallet)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_sessions_expires ON atelier_sessions(expires_at)');
 
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS submitted_skills (
+      id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      creator_wallet TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      file_url TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      pricing TEXT NOT NULL CHECK(pricing IN ('free','paid')),
+      price_usdc REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'live' CHECK(status IN ('live','removed')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_status ON submitted_skills(status)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_category ON submitted_skills(category)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_wallet ON submitted_skills(creator_wallet)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_created ON submitted_skills(created_at)');
+
   initialized = true;
+}
+
+export interface SubmittedSkill {
+  id: string;
+  slug: string;
+  creator_wallet: string;
+  name: string;
+  description: string;
+  category: string;
+  file_url: string;
+  file_size: number;
+  pricing: 'free' | 'paid';
+  price_usdc: number;
+  status: 'live' | 'removed';
+  created_at: string;
+}
+
+export async function insertSubmittedSkill(input: {
+  id: string;
+  slug: string;
+  creator_wallet: string;
+  name: string;
+  description: string;
+  category: string;
+  file_url: string;
+  file_size: number;
+  pricing: 'free' | 'paid';
+  price_usdc: number;
+}): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `INSERT INTO submitted_skills (id, slug, creator_wallet, name, description, category, file_url, file_size, pricing, price_usdc, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live')`,
+    args: [
+      input.id,
+      input.slug,
+      input.creator_wallet,
+      input.name,
+      input.description,
+      input.category,
+      input.file_url,
+      input.file_size,
+      input.pricing,
+      input.price_usdc,
+    ],
+  });
+}
+
+export async function listSubmittedSkills(opts?: {
+  status?: 'live' | 'removed' | 'all';
+  category?: string;
+  limit?: number;
+}): Promise<SubmittedSkill[]> {
+  await initAtelierDb();
+  const status = opts?.status ?? 'live';
+  const where: string[] = [];
+  const args: Array<string | number> = [];
+  if (status !== 'all') {
+    where.push('status = ?');
+    args.push(status);
+  }
+  if (opts?.category) {
+    where.push('category = ?');
+    args.push(opts.category);
+  }
+  const limit = Math.min(Math.max(opts?.limit ?? 500, 1), 1000);
+  const sql = `SELECT id, slug, creator_wallet, name, description, category, file_url, file_size, pricing, price_usdc, status, created_at
+               FROM submitted_skills
+               ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
+               ORDER BY created_at DESC
+               LIMIT ?`;
+  args.push(limit);
+  const result = await atelierClient.execute({ sql, args });
+  return result.rows as unknown as SubmittedSkill[];
+}
+
+export async function getSubmittedSkillBySlug(slug: string): Promise<SubmittedSkill | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT id, slug, creator_wallet, name, description, category, file_url, file_size, pricing, price_usdc, status, created_at
+          FROM submitted_skills WHERE slug = ? LIMIT 1`,
+    args: [slug],
+  });
+  if (result.rows.length === 0) return null;
+  return result.rows[0] as unknown as SubmittedSkill;
+}
+
+export async function deleteSubmittedSkill(id: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `DELETE FROM submitted_skills WHERE id = ?`,
+    args: [id],
+  });
+}
+
+export async function setSubmittedSkillStatus(id: string, status: 'live' | 'removed'): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `UPDATE submitted_skills SET status = ? WHERE id = ?`,
+    args: [status, id],
+  });
 }
 
 export async function createAtelierSession(id: string, wallet: string, expiresAt: Date): Promise<void> {

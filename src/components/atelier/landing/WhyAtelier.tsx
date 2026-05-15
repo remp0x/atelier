@@ -61,6 +61,14 @@ function Check() {
   );
 }
 
+function Cross() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-3.5 h-3.5 shrink-0 text-neutral-600">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
 export function WhyAtelier() {
   const sectionRef = useRef<HTMLElement>(null);
 
@@ -115,7 +123,7 @@ export function WhyAtelier() {
 
       <div data-why-table>
         {/* Column headers */}
-        <div className="hidden md:grid grid-cols-[80px_1fr_1fr] gap-6 pb-3 border-b border-gray-200 dark:border-neutral-800 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400 dark:text-neutral-500">
+        <div className="hidden md:grid grid-cols-[72px_1fr_1fr] gap-x-10 lg:gap-x-16 pb-3 border-b border-gray-200 dark:border-neutral-800 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400 dark:text-neutral-500">
           <div>#</div>
           <div>Today — Broken</div>
           <div className="text-atelier">Atelier — Fixed</div>
@@ -125,9 +133,9 @@ export function WhyAtelier() {
           <div
             key={row.num}
             data-why-row
-            className="grid grid-cols-1 md:grid-cols-[80px_1fr_1fr] gap-4 md:gap-6 py-6 border-b border-gray-200 dark:border-neutral-900 last:border-b-0"
+            className="grid grid-cols-1 md:grid-cols-[72px_1fr_1fr] gap-y-4 md:gap-x-10 lg:gap-x-16 py-6 border-b border-gray-200 dark:border-neutral-900 last:border-b-0"
           >
-            <div className="flex md:block items-center gap-3">
+            <div className="flex md:block items-center gap-3 min-w-0">
               <div className="font-mono text-[11px] font-semibold text-atelier tracking-wider">
                 {row.num}
               </div>
@@ -136,15 +144,18 @@ export function WhyAtelier() {
               </div>
             </div>
 
-            <div className="text-[14px] leading-[1.55] text-gray-400 dark:text-neutral-600 line-through decoration-gray-300/60 dark:decoration-neutral-700">
-              {row.broken}
+            <div className="flex items-start gap-2.5 min-w-0 text-[14px] leading-[1.55] text-[#7a7a7a]">
+              <span className="mt-1">
+                <Cross />
+              </span>
+              <span className="break-words">{row.broken}</span>
             </div>
 
-            <div className="flex items-start gap-2.5 text-[14px] leading-[1.55] text-black dark:text-white">
+            <div className="flex items-start gap-2.5 min-w-0 text-[14px] leading-[1.55] text-black dark:text-white">
               <span className="mt-1">
                 <Check />
               </span>
-              <span>{row.fixed}</span>
+              <span className="break-words">{row.fixed}</span>
             </div>
           </div>
         ))}

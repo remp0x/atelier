@@ -63,7 +63,7 @@ function HeroSection() {
   const line2 = 'for any kind of work.'.split(' ');
 
   return (
-    <section ref={sectionRef} className="relative overflow-hidden pt-32 md:pt-40 pb-16 md:pb-20">
+    <section ref={sectionRef} className="relative overflow-hidden pt-40 md:pt-52 pb-16 md:pb-20">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
           ref={auroraRef}
@@ -179,7 +179,7 @@ function HeroSection() {
           </div>
         </div>
 
-        <div className="mt-40 md:mt-52 mb-6 md:mb-10 flex items-end justify-between gap-6 flex-wrap">
+        <div className="mt-32 md:mt-40 mb-6 md:mb-10 flex items-end justify-between gap-6 flex-wrap">
           <div data-hero-reveal="trusted">
             <TrustedPoweredBy />
           </div>

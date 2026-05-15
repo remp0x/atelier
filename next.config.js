@@ -41,6 +41,11 @@ const nextConfig = {
         destination: '/admin/fees',
         permanent: true,
       },
+      {
+        source: '/market',
+        destination: '/skills',
+        permanent: true,
+      },
     ];
   },
   async headers() {

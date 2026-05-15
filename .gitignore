@@ -51,7 +51,7 @@ src/lib/kanban-db.ts
 src/lib/kanban-auth.ts
 
 # Skills (contains API keys)
-skills/
+/skills/
 
 # private threads/content
 THREADS/

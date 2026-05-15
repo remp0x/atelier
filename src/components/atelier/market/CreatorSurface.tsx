@@ -1,624 +1,584 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { SKILL_CATEGORIES } from './marketData';
 
-function Aurora({ intensity = 1, position = 'bottom' }: { intensity?: number; position?: 'top' | 'bottom' }) {
-  const positions: Record<string, string> = {
-    top: `
-      radial-gradient(ellipse 55% 55% at 18% 8%,  rgba(201,58,10,${0.45 * intensity}), transparent 55%),
-      radial-gradient(ellipse 45% 45% at 82% 18%, rgba(255,122,61,${0.32 * intensity}), transparent 55%),
-      radial-gradient(ellipse 70% 55% at 50% 100%, rgba(250,76,20,${0.38 * intensity}), transparent 62%)`,
-    bottom: `
-      radial-gradient(ellipse 70% 60% at 50% 100%, rgba(250,76,20,${0.50 * intensity}), transparent 62%),
-      radial-gradient(ellipse 50% 40% at 15% 90%, rgba(201,58,10,${0.35 * intensity}), transparent 58%),
-      radial-gradient(ellipse 50% 40% at 85% 85%, rgba(255,122,61,${0.30 * intensity}), transparent 58%)`,
-  };
+const MAX_MD_BYTES = 1024 * 1024; // 1 MB
+const MAX_NAME = 60;
+const MAX_DESCRIPTION = 200;
+
+const INPUT_CLS =
+  'w-full rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-black/50 px-3 py-2 font-mono text-[13px] text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 outline-none focus:border-atelier/60 focus:ring-1 focus:ring-atelier/30 transition-colors';
+
+function truncate(s: string, n: number): string {
+  return s.length <= n ? s : `${s.slice(0, n - 1)}…`;
+}
+
+function shortWallet(addr: string): string {
+  return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+}
+
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+export function CreatorSurface(): JSX.Element {
+  const auth = useAtelierAuth();
+
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [categoryIdx, setCategoryIdx] = useState(0);
+  const [file, setFile] = useState<File | null>(null);
+  const [pricing, setPricing] = useState<'free' | 'paid'>('free');
+  const [usdcAmount, setUsdcAmount] = useState('5');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [pendingAuthSubmit, setPendingAuthSubmit] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const category = SKILL_CATEGORIES[categoryIdx];
+  const parsedUsdc = Number(usdcAmount);
+  const previewPrice = pricing === 'free' ? 0 : Number.isFinite(parsedUsdc) ? parsedUsdc : 0;
+
+  function handleFile(f: File | null): void {
+    if (!f) return;
+    if (!f.name.toLowerCase().endsWith('.md')) {
+      setError('Only .md files are accepted.');
+      return;
+    }
+    if (f.size > MAX_MD_BYTES) {
+      setError(`File too large. Max ${formatBytes(MAX_MD_BYTES)}.`);
+      return;
+    }
+    setFile(f);
+    setError(null);
+  }
+
+  function handleDrop(e: DragEvent<HTMLLabelElement>): void {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFile(e.dataTransfer.files?.[0] ?? null);
+  }
+
+  function handleInputChange(e: ChangeEvent<HTMLInputElement>): void {
+    handleFile(e.target.files?.[0] ?? null);
+    e.target.value = '';
+  }
+
+  function validate(): string | null {
+    if (!name.trim()) return 'Skill name is required.';
+    if (!description.trim()) return 'Description is required.';
+    if (!file) return 'A .md file is required.';
+    if (pricing === 'paid') {
+      if (!Number.isFinite(parsedUsdc) || parsedUsdc <= 0) {
+        return 'Set a USDC price greater than zero, or choose Free.';
+      }
+    }
+    return null;
+  }
+
+  async function publish(): Promise<void> {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await new Promise((r) => setTimeout(r, 700));
+      setSubmitted(true);
+    } catch {
+      setError('Submission failed. Try again in a moment.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleSubmit(): void {
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
+
+    if (!auth.walletReady) {
+      setPendingAuthSubmit(true);
+      auth.login();
+      return;
+    }
+
+    void publish();
+  }
+
+  useEffect(() => {
+    if (!pendingAuthSubmit || !auth.walletReady) return;
+    setPendingAuthSubmit(false);
+    void publish();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAuthSubmit, auth.walletReady]);
+
+  function resetForm(): void {
+    setName('');
+    setDescription('');
+    setCategoryIdx(0);
+    setFile(null);
+    setPricing('free');
+    setUsdcAmount('5');
+    setError(null);
+    setSubmitted(false);
+    setPendingAuthSubmit(false);
+  }
+
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-      <div
-        style={{
-          position: 'absolute',
-          inset: '-10%',
-          background: positions[position] ?? positions.bottom,
-          filter: 'blur(10px)',
-        }}
-      />
-    </div>
+    <section
+      id="become-a-creator"
+      className="relative overflow-hidden border-t border-gray-200 dark:border-neutral-900 py-14 md:py-20"
+    >
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div
+          className="absolute -inset-[10%]"
+          style={{
+            filter: 'blur(12px)',
+            background: `
+              radial-gradient(ellipse 70% 60% at 50% 100%, rgba(250,76,20,0.18), transparent 62%),
+              radial-gradient(ellipse 50% 40% at 15% 90%, rgba(201,58,10,0.12), transparent 58%),
+              radial-gradient(ellipse 50% 40% at 85% 85%, rgba(255,122,61,0.10), transparent 58%)
+            `,
+          }}
+        />
+      </div>
+
+      <div className="relative max-w-[1180px] mx-auto px-6">
+        <div className="max-w-[600px] mb-8 md:mb-10">
+          <p className="font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier mb-3">
+            FOR CREATORS
+          </p>
+          <h2
+            className="font-display font-extrabold tracking-[-0.03em] leading-[1.05] mb-3"
+            style={{ fontSize: 'clamp(1.625rem, 3.2vw, 2.375rem)' }}
+          >
+            Got a workflow that ships?{' '}
+            <span className="text-gradient-atelier">Publish it.</span>
+          </h2>
+          <p className="text-[14.5px] md:text-[15.5px] leading-[1.55] text-gray-700 dark:text-neutral-300">
+            Upload a skill as a Markdown file. Pick a category, set a price (or give it away),
+            and put it in front of operators. Your wallet is your identity.
+          </p>
+        </div>
+
+        {submitted ? (
+          <SubmittedState onPublishAnother={resetForm} />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,520px)_minmax(0,440px)] gap-6 lg:gap-8 items-start justify-start">
+            {/* FORM */}
+            <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white/70 dark:bg-black-soft/70 backdrop-blur-sm p-5">
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200 dark:border-neutral-800">
+                <div className="font-mono text-[10px] tracking-[0.18em] text-atelier">
+                  PUBLISH A SKILL
+                </div>
+                <IdentityChip
+                  walletAddress={auth.walletAddress}
+                  walletReady={auth.walletReady}
+                  onDisconnect={auth.logout}
+                />
+              </div>
+
+              <Field label="Skill name" hint={`${name.length}/${MAX_NAME}`}>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value.slice(0, MAX_NAME))}
+                  placeholder="e.g. Outbound Copywriter"
+                  className={INPUT_CLS}
+                />
+              </Field>
+
+              <Field label="Description" hint={`${description.length}/${MAX_DESCRIPTION}`}>
+                <textarea
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION))}
+                  placeholder="One sentence. What does it do?"
+                  className={`${INPUT_CLS} font-sans text-[13.5px] leading-[1.5] resize-none`}
+                />
+              </Field>
+
+              <Field label="Category">
+                <div className="flex flex-wrap gap-1.5">
+                  {SKILL_CATEGORIES.map((c, i) => (
+                    <button
+                      key={c.slug}
+                      type="button"
+                      onClick={() => setCategoryIdx(i)}
+                      className={`h-7 px-2.5 inline-flex items-center rounded-md font-mono text-[10.5px] tracking-wide border transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/50 ${
+                        i === categoryIdx
+                          ? 'border-atelier/60 bg-atelier/[0.10] text-atelier'
+                          : 'border-gray-200 dark:border-neutral-700 text-gray-700 dark:text-neutral-300 hover:border-atelier/40 hover:text-atelier'
+                      }`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
+              <Field label="Skill file" hint=".md, max 1 MB">
+                <label
+                  htmlFor="skill-md-file"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  className={`flex items-center gap-2.5 cursor-pointer rounded-md border border-dashed px-3 h-11 transition-colors ${
+                    isDragging
+                      ? 'border-atelier/60 bg-atelier/[0.08]'
+                      : file
+                        ? 'border-atelier/50 bg-atelier/[0.05]'
+                        : 'border-gray-300 dark:border-neutral-700 hover:border-atelier/40 bg-white/60 dark:bg-black/30'
+                  }`}
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className={`w-4 h-4 shrink-0 ${file ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400'}`}>
+                    {file ? (
+                      <>
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <path d="M14 2v6h6M9 13h6M9 17h6M9 9h2" />
+                      </>
+                    ) : (
+                      <>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <path d="M17 8l-5-5-5 5M12 3v12" />
+                      </>
+                    )}
+                  </svg>
+                  <div className="flex-1 min-w-0 flex items-baseline gap-2">
+                    {file ? (
+                      <>
+                        <span className="font-mono text-[12px] text-atelier truncate">
+                          {file.name}
+                        </span>
+                        <span className="font-mono text-[10px] text-gray-500 dark:text-neutral-400 shrink-0">
+                          {formatBytes(file.size)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-mono text-[12px] text-gray-700 dark:text-neutral-200 truncate">
+                        Drop a .md file, or click to browse
+                      </span>
+                    )}
+                  </div>
+                  {file && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setFile(null);
+                      }}
+                      className="font-mono text-[10px] text-gray-500 dark:text-neutral-400 hover:text-atelier shrink-0"
+                      aria-label="Remove file"
+                    >
+                      remove
+                    </button>
+                  )}
+                  <input
+                    id="skill-md-file"
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".md,text/markdown"
+                    onChange={handleInputChange}
+                    className="sr-only"
+                  />
+                </label>
+              </Field>
+
+              <Field label="Price">
+                <div className="flex items-center gap-2">
+                  <div className="inline-flex h-9 rounded-md border border-gray-200 dark:border-neutral-700 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setPricing('free')}
+                      className={`px-3 h-full font-mono text-[11px] tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/50 ${
+                        pricing === 'free'
+                          ? 'bg-atelier/[0.12] text-atelier'
+                          : 'text-gray-600 dark:text-neutral-400 hover:text-atelier'
+                      }`}
+                    >
+                      FREE
+                    </button>
+                    <div className="w-px bg-gray-200 dark:bg-neutral-700" />
+                    <button
+                      type="button"
+                      onClick={() => setPricing('paid')}
+                      className={`px-3 h-full font-mono text-[11px] tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/50 ${
+                        pricing === 'paid'
+                          ? 'bg-atelier/[0.12] text-atelier'
+                          : 'text-gray-600 dark:text-neutral-400 hover:text-atelier'
+                      }`}
+                    >
+                      USDC
+                    </button>
+                  </div>
+                  {pricing === 'paid' && (
+                    <div className="flex items-center gap-1.5 h-9 rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-black/50 px-2.5 focus-within:border-atelier/60 transition-colors">
+                      <span className="font-mono text-[11px] text-gray-500 dark:text-neutral-400">$</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0.01"
+                        value={usdcAmount}
+                        onChange={(e) => setUsdcAmount(e.target.value)}
+                        className="w-14 bg-transparent outline-none font-mono text-[13px] text-black dark:text-white"
+                        aria-label="USDC price per install"
+                      />
+                      <span className="font-mono text-[10px] text-gray-500 dark:text-neutral-400 whitespace-nowrap">USDC / install</span>
+                    </div>
+                  )}
+                </div>
+              </Field>
+
+              {error && (
+                <div
+                  role="alert"
+                  className="-mt-1 mb-3 px-3 py-2 rounded-md border border-red-500/50 bg-red-500/[0.08] font-mono text-[11px] text-red-600 dark:text-red-300"
+                >
+                  {error}
+                </div>
+              )}
+
+              <div className="mt-4 pt-4 border-t border-gray-200 dark:border-neutral-800">
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={submitting || pendingAuthSubmit}
+                  className={`w-full inline-flex items-center justify-center gap-2 px-5 h-11 rounded font-mono text-[13px] font-medium tracking-wide transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black-soft ${
+                    submitting || pendingAuthSubmit
+                      ? 'bg-atelier/60 text-white/80 cursor-wait'
+                      : 'bg-atelier text-white hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)]'
+                  }`}
+                >
+                  {submitting
+                    ? 'Submitting…'
+                    : pendingAuthSubmit
+                      ? 'Waiting for sign-in…'
+                      : auth.walletReady
+                        ? 'Publish skill →'
+                        : 'Sign in & publish →'}
+                </button>
+                <p className="mt-2.5 font-mono text-[10.5px] leading-[1.5] text-gray-500 dark:text-neutral-400">
+                  {auth.walletReady
+                    ? 'Manually reviewed during v0.1. Live skills credit your wallet as creator.'
+                    : 'Fill the form, then sign in at submit to claim it with your wallet.'}
+                </p>
+              </div>
+            </div>
+
+            {/* LIVE PREVIEW */}
+            <div className="lg:sticky lg:top-24">
+              <SkillPreview
+                name={name || 'Your skill name'}
+                description={
+                  description || `${category.example} — packaged for one-click install.`
+                }
+                category={category.name}
+                price={previewPrice}
+                pricing={pricing}
+                fileName={file?.name ?? null}
+                walletAddress={auth.walletAddress}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  borderRadius: 6,
-  border: '1px solid var(--gray-border)',
-  background: 'var(--black)',
-  color: 'var(--fg-1)',
-  fontSize: 13,
-  fontFamily: 'var(--font-sans)',
-  outline: 'none',
-  transition: 'border-color 160ms ease',
-};
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}): JSX.Element {
   return (
-    <div>
-      <div
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 9,
-          color: 'var(--fg-4)',
-          letterSpacing: '0.14em',
-          marginBottom: 8,
-        }}
-      >
-        {label}
+    <div className="mb-3.5 last:mb-0">
+      <div className="flex items-baseline justify-between mb-1.5">
+        <div className="font-mono text-[10px] tracking-[0.14em] text-gray-600 dark:text-neutral-400 uppercase">
+          {label}
+        </div>
+        {hint && (
+          <div className="font-mono text-[9.5px] tracking-wide text-gray-500 dark:text-neutral-500">
+            {hint}
+          </div>
+        )}
       </div>
       {children}
     </div>
   );
 }
 
-const STEPS = [
-  {
-    n: '01',
-    t: 'Package',
-    d: 'Drop a prompt bundle, tool config, or persona spec. We compile it into an installable capsule.',
-  },
-  { n: '02', t: 'Price', d: 'Free, one-time, or per-install. Changeable anytime. No exclusivity.' },
-  {
-    n: '03',
-    t: 'Publish',
-    d: 'Verified creators get the check badge and a featured slot rotation.',
-  },
-  {
-    n: '04',
-    t: 'Get paid',
-    d: 'Earnings stream to your wallet on every install. Open ledger, no lockup.',
-  },
-] as const;
+function IdentityChip({
+  walletAddress,
+  walletReady,
+  onDisconnect,
+}: {
+  walletAddress: string | null;
+  walletReady: boolean;
+  onDisconnect: () => void;
+}): JSX.Element {
+  if (!walletReady) {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-mono text-[10px] tracking-[0.12em] text-gray-600 dark:text-neutral-300 border border-gray-300 dark:border-neutral-600 bg-gray-100 dark:bg-neutral-900/80">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-neutral-400" />
+        ANON
+      </span>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-mono text-[10px] tracking-[0.12em] text-atelier border border-atelier/50 bg-atelier/[0.10]">
+        <span className="w-1.5 h-1.5 rounded-full bg-atelier" />
+        {walletAddress ? shortWallet(walletAddress) : 'CONNECTED'}
+      </span>
+      <button
+        type="button"
+        onClick={onDisconnect}
+        className="font-mono text-[10px] text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors"
+      >
+        disconnect
+      </button>
+    </div>
+  );
+}
 
-type PricingTier = 'free' | 'paid' | 'per';
-type ListingKind = 'skill' | 'persona';
+function SubmittedState({ onPublishAnother }: { onPublishAnother: () => void }): JSX.Element {
+  return (
+    <div className="max-w-[560px] mx-auto rounded-xl border border-atelier/40 bg-atelier/[0.04] backdrop-blur-md p-6 md:p-8 text-center">
+      <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-atelier/[0.10] border border-atelier/40 mb-5">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5 text-atelier">
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      </div>
+      <h3 className="font-display font-bold text-xl md:text-2xl tracking-[-0.02em] mb-2">
+        Submitted
+      </h3>
+      <p className="text-[14.5px] leading-[1.55] text-gray-600 dark:text-neutral-400 max-w-[420px] mx-auto mb-6">
+        Your skill is in the review queue. We&apos;ll feature it at launch and ping you on
+        Telegram with the cohort updates.
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={onPublishAnother}
+          className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded bg-atelier text-white font-mono text-[13px] font-medium tracking-wide transition-all hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)]"
+        >
+          Publish another →
+        </button>
+        <a
+          href="https://t.me/atelierai"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded border border-atelier/60 text-atelier font-mono text-[13px] font-medium tracking-wide transition-colors hover:bg-atelier hover:text-white"
+        >
+          Open Telegram
+        </a>
+      </div>
+    </div>
+  );
+}
 
-export function CreatorSurface(): JSX.Element {
-  const [price, setPrice] = useState(12);
-  const [kind, setKind] = useState<ListingKind>('skill');
-  const [tier, setTier] = useState<PricingTier>('paid');
-  const [name, setName] = useState('RFQ Negotiator');
-  const [tagline, setTagline] = useState('Closes pricing loops without losing the deal.');
-
-  const takeRate = tier === 'free' ? 0 : 12;
-  const earn = Math.round(price * (1 - takeRate / 100) * 100) / 100;
-
-  const previewMonogram = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join('')
-    .toUpperCase();
-
-  const kindTabs: { k: ListingKind; l: string }[] = [
-    { k: 'skill', l: '◈ SKILL' },
-    { k: 'persona', l: '☉ PERSONA' },
-  ];
-
-  const pricingTabs: { k: PricingTier; l: string }[] = [
-    { k: 'free', l: 'FREE' },
-    { k: 'paid', l: 'ONE-TIME' },
-    { k: 'per', l: 'PER-INSTALL' },
-  ];
+function SkillPreview({
+  name,
+  description,
+  category,
+  price,
+  pricing,
+  fileName,
+  walletAddress,
+}: {
+  name: string;
+  description: string;
+  category: string;
+  price: number;
+  pricing: 'free' | 'paid';
+  fileName: string | null;
+  walletAddress: string | null;
+}): JSX.Element {
+  const isFree = pricing === 'free' || price === 0;
 
   return (
-    <section
-      style={{
-        position: 'relative',
-        borderBottom: '1px solid var(--gray-border)',
-        overflow: 'hidden',
-      }}
-    >
-      <Aurora intensity={0.6} position="bottom" />
-      <div
-        style={{
-          position: 'relative',
-          zIndex: 2,
-          maxWidth: 1360,
-          margin: '0 auto',
-          padding: '80px 28px 96px',
-        }}
-      >
-        <div
-          className="creator-split"
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1.1fr', gap: 56, alignItems: 'start' }}
-        >
-          <div>
-            <div
-              style={{
-                color: 'var(--atelier)',
-                letterSpacing: '0.18em',
-                fontSize: 11,
-                fontWeight: 600,
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              ◈ FRAME 05 · FOR CREATORS
-            </div>
-            <h2
-              style={{
-                margin: '10px 0 16px',
-                fontFamily: 'var(--font-display)',
-                fontSize: 'clamp(40px, 4.5vw, 60px)',
-                letterSpacing: '-0.03em',
-                lineHeight: 1.0,
-              }}
-            >
-              Built a skill that works?
-              <br />
-              <span style={{ color: 'var(--atelier)' }}>Put it on the shelf.</span>
-            </h2>
-            <p style={{ color: 'var(--fg-3)', fontSize: 16, lineHeight: 1.6, maxWidth: 520 }}>
-              Publish a persona or skill in under five minutes. Set your own price &#8212; or list it free.
-              Every install settles in USDC on Solana. You keep 88%.
-            </p>
+    <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white/70 dark:bg-black-soft/70 backdrop-blur-sm overflow-hidden transition-all">
+      <div className="flex items-center justify-between px-5 py-2.5 border-b border-gray-200 dark:border-neutral-800 bg-gray-50/60 dark:bg-black/40">
+        <span className="font-mono text-[10px] tracking-[0.18em] text-atelier">LIVE PREVIEW</span>
+        <span className="font-mono text-[9.5px] tracking-[0.14em] text-gray-500 dark:text-neutral-400">
+          STOREFRONT
+        </span>
+      </div>
 
-            <ol
-              style={{
-                listStyle: 'none',
-                padding: 0,
-                margin: '32px 0 0',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 14,
-              }}
-            >
-              {STEPS.map((s) => (
-                <li
-                  key={s.n}
-                  style={{ display: 'grid', gridTemplateColumns: '44px 1fr', gap: 16, alignItems: 'start' }}
-                >
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-display)',
-                      fontWeight: 800,
-                      fontSize: 22,
-                      color: 'var(--atelier)',
-                      letterSpacing: '-0.02em',
-                    }}
-                  >
-                    {s.n}
-                  </span>
-                  <div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 17 }}>
-                      {s.t}
-                    </div>
-                    <div style={{ color: 'var(--fg-3)', fontSize: 13, marginTop: 3, lineHeight: 1.5 }}>
-                      {s.d}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
-
-            <div style={{ display: 'flex', gap: 10, marginTop: 30 }}>
-              <button
-                style={{
-                  background: 'var(--atelier)',
-                  color: '#fff',
-                  border: '1px solid transparent',
-                  padding: '14px 22px',
-                  borderRadius: 4,
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  transition: 'background 180ms ease',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--atelier-bright)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--atelier)'; }}
-              >
-                Start a listing &#8594;
-              </button>
-              <button
-                style={{
-                  background: 'transparent',
-                  color: 'var(--fg-3)',
-                  border: '1px solid var(--gray-border)',
-                  padding: '14px 22px',
-                  borderRadius: 4,
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  transition: 'color 180ms ease, background 180ms ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = 'var(--atelier)';
-                  e.currentTarget.style.background = 'rgba(250,76,20,0.08)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = 'var(--fg-3)';
-                  e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                Creator docs
-              </button>
-            </div>
-          </div>
-
-          <div
-            style={{
-              border: '1px solid var(--gray-border)',
-              borderRadius: 14,
-              background: 'rgba(10,10,10,0.85)',
-              backdropFilter: 'blur(10px)',
-              overflow: 'hidden',
-            }}
+      <div className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full font-mono text-[9.5px] tracking-[0.14em] text-atelier border border-atelier/50 bg-atelier/[0.10]">
+            {category.toUpperCase()}
+          </span>
+          <span
+            className={`font-mono text-[10px] tracking-[0.14em] uppercase ${
+              isFree ? 'text-atelier' : 'text-gray-700 dark:text-neutral-200'
+            }`}
           >
-            <div
-              style={{
-                padding: '12px 16px',
-                borderBottom: '1px solid var(--gray-border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 10,
-                color: 'var(--fg-4)',
-                letterSpacing: '0.14em',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    background: 'var(--atelier)',
-                    display: 'inline-block',
-                  }}
-                />
-                NEW LISTING · DRAFT
-              </div>
-              <span>AUTO-SAVED 00:02 AGO</span>
-            </div>
+            {isFree ? 'FREE' : `$${price.toFixed(price % 1 === 0 ? 0 : 2)}`}
+          </span>
+        </div>
 
-            <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 18 }}>
-              <Field label="LISTING TYPE">
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {kindTabs.map(({ k, l }) => (
-                    <button
-                      key={k}
-                      onClick={() => setKind(k)}
-                      style={{
-                        flex: 1,
-                        padding: '10px 12px',
-                        borderRadius: 6,
-                        border: `1px solid ${kind === k ? 'var(--atelier)' : 'var(--gray-border)'}`,
-                        background: kind === k ? 'rgba(250,76,20,0.12)' : 'transparent',
-                        color: kind === k ? 'var(--atelier)' : 'var(--fg-2)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 11,
-                        letterSpacing: '0.12em',
-                        cursor: 'pointer',
-                        transition: 'all 150ms ease',
-                      }}
-                    >
-                      {l}
-                    </button>
-                  ))}
-                </div>
-              </Field>
+        <h4 className="font-display font-bold text-[22px] leading-[1.15] tracking-[-0.02em] mb-2 text-black dark:text-white break-words">
+          {truncate(name, MAX_NAME)}
+        </h4>
+        <p className="text-[13px] leading-[1.55] text-gray-700 dark:text-neutral-300 mb-4 break-words">
+          {truncate(description, MAX_DESCRIPTION)}
+        </p>
 
-              <Field label="NAME">
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--atelier)'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--gray-border)'; }}
-                />
-              </Field>
+        <div className="pt-3 border-t border-gray-200 dark:border-neutral-800 space-y-1.5">
+          <Row label="File" value={fileName ?? 'none yet'} muted={!fileName} />
+          <Row
+            label="Creator"
+            value={walletAddress ? shortWallet(walletAddress) : 'anon — signs in at submit'}
+            muted={!walletAddress}
+          />
+        </div>
 
-              <Field label="TAGLINE · ONE LINE">
-                <input
-                  type="text"
-                  value={tagline}
-                  onChange={(e) => setTagline(e.target.value)}
-                  style={inputStyle}
-                  onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--atelier)'; }}
-                  onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--gray-border)'; }}
-                />
-              </Field>
-
-              <Field label="UPLOAD CAPSULE">
-                <div
-                  style={{
-                    border: '1px dashed rgba(250,76,20,0.4)',
-                    borderRadius: 8,
-                    padding: 18,
-                    background: 'rgba(250,76,20,0.04)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-1)' }}>
-                      capsule.atelier · 14.2 KB
-                    </div>
-                    <div
-                      style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)', marginTop: 3 }}
-                    >
-                      ✓ 4 tools · 2 prompts · 1 knowledge pack
-                    </div>
-                  </div>
-                  <button
-                    style={{
-                      background: 'transparent',
-                      color: 'var(--atelier)',
-                      border: '1px solid rgba(250,76,20,0.60)',
-                      padding: '7px 12px',
-                      borderRadius: 4,
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
-                      cursor: 'pointer',
-                      transition: 'all 180ms ease',
-                    }}
-                  >
-                    Replace
-                  </button>
-                </div>
-              </Field>
-
-              <Field label="PRICING">
-                <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-                  {pricingTabs.map(({ k, l }) => (
-                    <button
-                      key={k}
-                      onClick={() => setTier(k)}
-                      style={{
-                        flex: 1,
-                        padding: '8px 10px',
-                        borderRadius: 6,
-                        border: `1px solid ${tier === k ? 'var(--atelier)' : 'var(--gray-border)'}`,
-                        background: tier === k ? 'rgba(250,76,20,0.12)' : 'transparent',
-                        color: tier === k ? 'var(--atelier)' : 'var(--fg-2)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 10,
-                        letterSpacing: '0.12em',
-                        cursor: 'pointer',
-                        transition: 'all 150ms ease',
-                      }}
-                    >
-                      {l}
-                    </button>
-                  ))}
-                </div>
-
-                {tier !== 'free' && (
-                  <div
-                    style={{
-                      background: 'var(--black)',
-                      border: '1px solid var(--gray-border)',
-                      borderRadius: 8,
-                      padding: 16,
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-end',
-                        justifyContent: 'space-between',
-                        marginBottom: 12,
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontFamily: 'var(--font-mono)',
-                            fontSize: 9,
-                            color: 'var(--fg-4)',
-                            letterSpacing: '0.14em',
-                          }}
-                        >
-                          LIST PRICE
-                        </div>
-                        <div
-                          style={{
-                            fontFamily: 'var(--font-display)',
-                            fontWeight: 700,
-                            fontSize: 40,
-                            letterSpacing: '-0.02em',
-                            color: 'var(--fg-1)',
-                            marginTop: 2,
-                          }}
-                        >
-                          {price}{' '}
-                          <span style={{ color: 'var(--atelier)', fontSize: 18 }}>USDC</span>
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          textAlign: 'right',
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 10,
-                          color: 'var(--fg-3)',
-                        }}
-                      >
-                        <div style={{ color: 'var(--fg-4)', letterSpacing: '0.14em' }}>YOU RECEIVE</div>
-                        <div
-                          style={{
-                            color: 'var(--atelier)',
-                            fontSize: 20,
-                            fontFamily: 'var(--font-display)',
-                            fontWeight: 700,
-                            marginTop: 2,
-                          }}
-                        >
-                          {earn} USDC
-                        </div>
-                        <div style={{ color: 'var(--fg-4)', marginTop: 2 }}>88% / install</div>
-                      </div>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="99"
-                      value={price}
-                      onChange={(e) => setPrice(Number(e.target.value))}
-                      style={{ width: '100%', accentColor: 'var(--atelier)' }}
-                    />
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9,
-                        color: 'var(--fg-4)',
-                        marginTop: 4,
-                      }}
-                    >
-                      <span>$0</span>
-                      <span>$99</span>
-                    </div>
-                  </div>
-                )}
-              </Field>
-
-              <div>
-                <div
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 9,
-                    color: 'var(--fg-4)',
-                    letterSpacing: '0.14em',
-                    marginBottom: 8,
-                  }}
-                >
-                  ◈ LIVE PREVIEW · HOW IT LISTS
-                </div>
-                <div
-                  style={{
-                    border: '1px solid rgba(250,76,20,0.3)',
-                    borderRadius: 10,
-                    background: 'linear-gradient(180deg, var(--black-soft), var(--black))',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <div
-                    style={{
-                      height: 110,
-                      position: 'relative',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background:
-                        'repeating-linear-gradient(135deg, rgba(250,76,20,0.08) 0 2px, transparent 2px 14px), linear-gradient(135deg, rgba(250,76,20,0.04), rgba(255,122,61,0.03))',
-                      border: '1px solid rgba(250,76,20,0.22)',
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        fontSize: 30,
-                        fontWeight: 700,
-                        letterSpacing: '-0.03em',
-                      }}
-                    >
-                      {previewMonogram || '??'}
-                    </div>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 10,
-                        left: 10,
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9,
-                        color: 'var(--atelier)',
-                        letterSpacing: '0.14em',
-                        border: '1px solid rgba(250,76,20,0.4)',
-                        padding: '2px 7px',
-                        borderRadius: 3,
-                        background: 'rgba(0,0,0,0.5)',
-                      }}
-                    >
-                      v0.1 · DRAFT
-                    </div>
-                  </div>
-                  <div style={{ padding: 14 }}>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 9,
-                        color: kind === 'persona' ? 'var(--fg-3)' : 'var(--atelier)',
-                        letterSpacing: '0.14em',
-                      }}
-                    >
-                      {kind === 'persona' ? '☉ PERSONA' : '◈ SKILL'} · YOUR CATEGORY
-                    </div>
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-display)',
-                        fontSize: 18,
-                        fontWeight: 600,
-                        marginTop: 6,
-                        letterSpacing: '-0.01em',
-                      }}
-                    >
-                      {name || 'Untitled listing'}
-                    </div>
-                    <div style={{ color: 'var(--fg-3)', fontSize: 12, marginTop: 4, lineHeight: 1.45 }}>
-                      {tagline || 'Add a one-line tagline to help buyers scan the shelf.'}
-                    </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        marginTop: 14,
-                        paddingTop: 10,
-                        borderTop: '1px solid var(--border-soft)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 10,
-                        color: 'var(--fg-4)',
-                      }}
-                    >
-                      <span>★ — · 0 installs</span>
-                      <span
-                        style={{
-                          color: tier === 'free' ? 'var(--atelier)' : 'var(--fg-1)',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {tier === 'free' ? 'FREE' : `${price} USDC`}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                style={{
-                  background: 'var(--atelier)',
-                  color: '#fff',
-                  border: '1px solid transparent',
-                  padding: '14px 22px',
-                  borderRadius: 4,
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  marginTop: 4,
-                  transition: 'background 180ms ease',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--atelier-bright)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--atelier)'; }}
-              >
-                Publish listing →
-              </button>
-            </div>
-          </div>
+        <div className="mt-4 pt-3 border-t border-gray-200 dark:border-neutral-800 flex items-center justify-end">
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            className="px-3.5 h-9 inline-flex items-center rounded bg-atelier/40 text-white/80 font-mono text-[12px] font-medium tracking-wide cursor-not-allowed"
+          >
+            {isFree ? 'Get free →' : 'Equip →'}
+          </button>
         </div>
       </div>
-    </section>
+    </div>
+  );
+}
+
+function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }): JSX.Element {
+  return (
+    <div className="flex items-center gap-2 text-[11px] font-mono">
+      <span className="text-gray-500 dark:text-neutral-400 tracking-[0.14em] uppercase shrink-0 w-14">
+        {label}
+      </span>
+      <span
+        className={`truncate ${
+          muted ? 'text-gray-500 dark:text-neutral-400 italic' : 'text-gray-800 dark:text-neutral-200'
+        }`}
+      >
+        {value}
+      </span>
+    </div>
   );
 }

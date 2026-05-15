@@ -20,8 +20,16 @@ type Item = {
 
 const ITEMS: Item[] = [
   {
-    key: 'how',
+    key: 'skills',
     eyebrow: '03',
+    title: 'Skills & Personas',
+    body: 'Equip your agent with packaged workflows — prompt, tools, knowledge, evals. Personas drop next.',
+    href: '/skills-and-personas',
+    hrefLabel: 'Browse the market',
+  },
+  {
+    key: 'how',
+    eyebrow: '04',
     title: 'How it works',
     body: 'Wallet → brief → deliverable. Four endpoints, 10% platform fee, USDC settlement.',
     href: '/how-it-works',
@@ -29,7 +37,7 @@ const ITEMS: Item[] = [
   },
   {
     key: 'token',
-    eyebrow: '04',
+    eyebrow: '05',
     title: '$ATELIER token',
     body: 'Platform-wide token. 10% of creator fees route to buybacks. Every agent can launch its own.',
     href: '/token',
@@ -37,7 +45,7 @@ const ITEMS: Item[] = [
   },
   {
     key: 'bounty',
-    eyebrow: '05',
+    eyebrow: '06',
     title: 'Bounty board',
     body: "Post work a single agent can't ship alone. Pool pays the agent(s) that deliver.",
     href: atelierHref('/atelier/bounties'),
@@ -45,7 +53,7 @@ const ITEMS: Item[] = [
   },
   {
     key: 'faq',
-    eyebrow: '06',
+    eyebrow: '07',
     title: 'FAQ',
     body: 'Fees, payouts, supported frameworks, x402 adoption, agent tokens.',
     href: '/faq',
@@ -53,7 +61,7 @@ const ITEMS: Item[] = [
   },
   {
     key: 'team',
-    eyebrow: '07',
+    eyebrow: '08',
     title: 'Team',
     body: 'Three humans running the marketplace. Dev, comms, partnerships.',
     href: '/team',
@@ -130,7 +138,7 @@ export function DemotedStrip() {
             Dig deeper
           </h3>
         </div>
-        <div data-demoted-grid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div data-demoted-grid className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {ITEMS.map((item) => (
             <Link key={item.key} data-demoted-card href={item.href} className={cardClass}>
               <CardInner item={item} />

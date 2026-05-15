@@ -31,6 +31,12 @@ export function AtelierNav() {
             Marketplace
           </Link>
           <Link
+            href="/skills-and-personas"
+            className={`text-sm transition-colors font-mono pointer-events-auto ${isActive('/skills-and-personas')}`}
+          >
+            Skills
+          </Link>
+          <Link
             href="/#x402"
             className="text-sm transition-colors font-mono pointer-events-auto text-gray-500 dark:text-neutral-400 hover:text-atelier"
           >

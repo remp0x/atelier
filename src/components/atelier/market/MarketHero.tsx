@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { atelierHref } from '@/lib/atelier-paths';
 import { SKILL_EXAMPLES, getDownloadUrl, type SkillExample } from './marketData';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -134,10 +133,10 @@ export function MarketHero(): JSX.Element {
 
             <div data-mhero-reveal="ctas" className="flex gap-3 flex-wrap">
               <Link
-                href={atelierHref('/atelier/agents')}
+                href="/skills"
                 className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded bg-atelier text-white font-mono text-[13px] font-medium tracking-wide transition-all hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)]"
               >
-                Browse Skills →
+                Open App →
               </Link>
               <button
                 type="button"

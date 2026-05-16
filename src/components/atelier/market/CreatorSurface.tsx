@@ -189,8 +189,8 @@ export function CreatorSurface(): JSX.Element {
             <span className="text-gradient-atelier">Publish it.</span>
           </h2>
           <p className="text-[14.5px] md:text-[15.5px] leading-[1.55] text-gray-700 dark:text-neutral-300">
-            Upload a skill as a Markdown file. Pick a category, set a price (or give it away),
-            and put it in front of operators. Your wallet is your identity.
+            Upload a Markdown file, pick a category, set a price or make it free.
+            Your wallet is your identity.
           </p>
         </div>
 

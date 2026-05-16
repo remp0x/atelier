@@ -66,8 +66,8 @@ export function MarketHero(): JSX.Element {
     { scope: sectionRef },
   );
 
-  const line1 = 'Skills and personas'.split(' ');
-  const line2 = 'for any AI agent.'.split(' ');
+  const line1 = 'Build a smarter agent'.split(' ');
+  const line2 = 'in one click.'.split(' ');
 
   return (
     <section ref={sectionRef} className="relative overflow-hidden pt-32 md:pt-40 pb-16 md:pb-20">
@@ -98,7 +98,7 @@ export function MarketHero(): JSX.Element {
               data-mhero-reveal="eyebrow"
               className="flex items-center gap-2.5 mb-5 font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier flex-wrap"
             >
-              <span>PLUG-AND-PLAY CAPABILITIES</span>
+              <span>SKILLS MARKETPLACE</span>
             </div>
 
             <h1
@@ -127,8 +127,8 @@ export function MarketHero(): JSX.Element {
               data-mhero-reveal="sub"
               className="text-[18px] leading-[1.55] text-gray-600 dark:text-neutral-300 max-w-[560px] mb-8"
             >
-              A skill is a workflow in a box — prompt, tools, knowledge. Drop it into your agent.
-              Personas are personalities. Drop those in too.
+              Browse skills that make your agent better at real work. Free or paid, built by
+              people who actually use them.
             </p>
 
             <div data-mhero-reveal="ctas" className="flex gap-3 flex-wrap">
@@ -136,16 +136,14 @@ export function MarketHero(): JSX.Element {
                 href="/skills"
                 className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded bg-atelier text-white font-mono text-[13px] font-medium tracking-wide transition-all hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)]"
               >
-                Open App →
+                Browse Skills →
               </Link>
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded border border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-600 font-mono text-[13px] font-medium tracking-wide cursor-not-allowed"
+              <Link
+                href="#become-a-creator"
+                className="inline-flex items-center gap-1.5 px-5 py-3.5 rounded border border-gray-300 dark:border-neutral-700 text-black dark:text-white font-mono text-[13px] font-medium tracking-wide transition-all hover:border-atelier hover:text-atelier"
               >
-                Personas — soon
-              </button>
+                Publish a Skill
+              </Link>
             </div>
 
             <div
@@ -153,7 +151,6 @@ export function MarketHero(): JSX.Element {
               className="mt-10 flex flex-wrap items-center gap-6 sm:gap-10"
             >
               <Stat value={String(SKILL_EXAMPLES.length)} label="Skills" />
-              <Stat value="FREE" label="At launch" accent />
             </div>
           </div>
 
@@ -181,9 +178,11 @@ function Stat({ value, label, accent }: { value: string; label: string; accent?:
       >
         {value}
       </div>
-      <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500 dark:text-neutral-500">
-        {label}
-      </div>
+      {label && (
+        <div className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500 dark:text-neutral-500">
+          {label}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import {
   ANTHROPIC_SKILLS,
   MEDICAL_SKILLS,
@@ -7,13 +8,44 @@ import {
   getPackLabel,
   getSourceUrl,
   type SkillExample,
+  type SkillPackId,
 } from './marketData';
 
+const ROW_LIMIT = 3;
+
+type LandingPack = {
+  id: SkillPackId;
+  title: string;
+  description: string;
+  sourceLabel: string;
+  sourceHref: string;
+  skills: SkillExample[];
+};
+
+const LANDING_PACKS: LandingPack[] = [
+  {
+    id: 'anthropic',
+    title: 'Anthropic Official',
+    description: 'The full library of skills published by Anthropic — document toolkits (PDF, DOCX, PPTX, XLSX), design utilities, the MCP builder, Claude API patterns, and the skill-creator itself. Drop any of these into your agent.',
+    sourceLabel: 'Source · anthropics/skills ↗',
+    sourceHref: 'https://github.com/anthropics/skills/tree/main/skills',
+    skills: ANTHROPIC_SKILLS,
+  },
+  {
+    id: 'medical',
+    title: 'Medical Pack',
+    description: 'Ten core clinical-research skills curated from the OpenClaw Medical Skills library — literature search, clinical documentation, guidelines lookup, drug research, and trial matching. All free at launch.',
+    sourceLabel: 'Source · OpenClaw ↗',
+    sourceHref: 'https://github.com/FreedomIntelligence/OpenClaw-Medical-Skills',
+    skills: MEDICAL_SKILLS,
+  },
+];
+
 const ANATOMY = [
-  { label: 'Prompt',     d: 'The system prompt and chain that makes it work.' },
+  { label: 'Prompt',     d: 'The system prompt and chain behind the workflow.' },
   { label: 'Tools',      d: 'API access, function calls, MCP servers, integrations.' },
   { label: 'Knowledge',  d: 'Vector store, docs, reference material. Optional.' },
-  { label: 'Evals',      d: 'Tests the creator ran. So you trust the output.' },
+  { label: 'Evals',      d: 'Tests the creator ran so you can verify quality.' },
 ] as const;
 
 export function WhatYouEquip(): JSX.Element {
@@ -28,32 +60,28 @@ export function WhatYouEquip(): JSX.Element {
             className="font-display font-extrabold tracking-[-0.03em] leading-[1.05] mb-5"
             style={{ fontSize: 'clamp(1.875rem, 4vw, 3rem)' }}
           >
-            <span className="text-gradient-atelier">Skills</span> are workflows.{' '}
-            <span className="text-gray-500 dark:text-neutral-500">Personas are vibes.</span>
+            <span className="text-gradient-atelier">Skills</span> are workflows{' '}
+            <span className="text-gray-500 dark:text-neutral-500">that ship.</span>
           </h2>
           <p className="text-[16px] md:text-[17px] leading-[1.55] text-gray-600 dark:text-neutral-300">
-            Skills are packaged capabilities — prompt, tools, knowledge, evals — built and tested
-            by operators in production. Personas (personality presets) ship in the next cut.
+            Prompt, tools, knowledge, evals, all packaged by builders who run them in production.
+            Personas are coming next.
           </p>
         </div>
 
-        <Pack
-          title="Medical Pack"
-          countLabel={`${MEDICAL_SKILLS.length} · FREE AT LAUNCH`}
-          sourceLabel="Source · OpenClaw ↗"
-          sourceHref="https://github.com/FreedomIntelligence/OpenClaw-Medical-Skills"
-          description="Ten core clinical-research skills curated from the OpenClaw Medical Skills library — literature search, clinical documentation, guidelines lookup, drug research, and trial matching. All free at launch."
-          skills={MEDICAL_SKILLS}
-        />
-
-        <Pack
-          title="Anthropic Official"
-          countLabel={`${ANTHROPIC_SKILLS.length} · FREE`}
-          sourceLabel="Source · anthropics/skills ↗"
-          sourceHref="https://github.com/anthropics/skills/tree/main/skills"
-          description="The full library of skills published by Anthropic — document toolkits (PDF, DOCX, PPTX, XLSX), design utilities, the MCP builder, Claude API patterns, and the skill-creator itself. Drop any of these into your agent."
-          skills={ANTHROPIC_SKILLS}
-        />
+        {LANDING_PACKS.map((p) => (
+          <Pack
+            key={p.id}
+            packId={p.id}
+            title={p.title}
+            countLabel={`${p.skills.length} · FREE`}
+            sourceLabel={p.sourceLabel}
+            sourceHref={p.sourceHref}
+            description={p.description}
+            skills={p.skills.slice(0, ROW_LIMIT)}
+            totalCount={p.skills.length}
+          />
+        ))}
 
         {/* ANATOMY */}
         <div className="mb-20 md:mb-24 rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50/60 dark:bg-black-soft/60 backdrop-blur-md p-6 md:p-7">
@@ -84,20 +112,25 @@ export function WhatYouEquip(): JSX.Element {
 }
 
 function Pack({
+  packId,
   title,
   countLabel,
   sourceLabel,
   sourceHref,
   description,
   skills,
+  totalCount,
 }: {
+  packId: SkillPackId;
   title: string;
   countLabel: string;
   sourceLabel: string;
   sourceHref: string;
   description: string;
   skills: SkillExample[];
+  totalCount: number;
 }): JSX.Element {
+  const hasMore = totalCount > skills.length;
   return (
     <div className="mb-16 md:mb-20">
       <div className="flex items-baseline justify-between mb-3 flex-wrap gap-2">
@@ -126,6 +159,16 @@ function Pack({
           <SkillExampleCard key={skill.name} skill={skill} />
         ))}
       </div>
+      {hasMore && (
+        <div className="mt-6">
+          <Link
+            href={`/skills?pack=${packId}`}
+            className="inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.16em] text-atelier hover:text-atelier-bright transition-colors"
+          >
+            View all {totalCount} skills →
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

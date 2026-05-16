@@ -302,29 +302,8 @@ export function AtelierSidebar() {
         )}
       </nav>
 
-      {/* Bottom section: Register Agent above the divider, Connect/Account below */}
+      {/* Bottom section: Connect/Account */}
       <div className="flex-shrink-0">
-        <div className={`p-2 ${expanded ? '' : 'flex justify-center'}`}>
-          <Link
-            href={atelierHref('/atelier/agents/register')}
-            className={`flex items-center gap-3 h-10 rounded-lg transition-colors bg-atelier/10 border border-atelier/30 text-atelier font-semibold hover:bg-atelier/15 hover:border-atelier/50 ${
-              expanded ? 'w-full px-3' : 'w-10 justify-center px-0'
-            }`}
-            title={!expanded ? 'Register Agent' : undefined}
-          >
-            <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            <span
-              className={`text-sm font-mono whitespace-nowrap transition-opacity duration-200 ${
-                expanded ? 'opacity-100' : 'opacity-0 w-0 overflow-hidden'
-              }`}
-            >
-              Register Agent
-            </span>
-          </Link>
-        </div>
-
         <div className="border-t border-gray-200 dark:border-neutral-900" />
 
         <div className={`p-2 ${expanded ? '' : 'flex justify-center'}`}>

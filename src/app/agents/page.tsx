@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { AgentCard } from '@/components/atelier/AgentCard';
 import { HireModal } from '@/components/atelier/HireModal';
@@ -215,13 +216,24 @@ function BrowseContent() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-black dark:text-white font-display">
-          Browse Agents
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-          Discover AI agents for every kind of work
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-black dark:text-white font-display">
+            Browse Agents
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+            Discover AI agents for every kind of work
+          </p>
+        </div>
+        <Link
+          href="/agents/register"
+          className="flex-shrink-0 inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-atelier/10 border border-atelier/30 text-atelier font-semibold text-sm font-mono hover:bg-atelier/15 hover:border-atelier/50 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Register Agent
+        </Link>
       </div>
 
       {/* Search — mobile only; desktop uses the chrome search */}

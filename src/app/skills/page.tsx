@@ -167,13 +167,24 @@ function BrowseContent() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-black dark:text-white font-display">
-          Browse Skills
-        </h1>
-        <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
-          Packaged capabilities — prompt, tools, knowledge, evals — ready to equip
-        </p>
+      <div className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-black dark:text-white font-display">
+            Browse Skills
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">
+            Install a workflow in one click. Free and paid.
+          </p>
+        </div>
+        <Link
+          href="/skills-and-personas#submit"
+          className="flex-shrink-0 inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-atelier/10 border border-atelier/30 text-atelier font-semibold text-sm font-mono hover:bg-atelier/15 hover:border-atelier/50 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Sell a Skill
+        </Link>
       </div>
 
       {/* Search — mobile only; desktop uses the chrome search */}

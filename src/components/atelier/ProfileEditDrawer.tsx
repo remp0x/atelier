@@ -59,13 +59,14 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
     }
   }, [open, user]);
 
-  const handleUsernameBlur = useCallback(async () => {
-    const val = username.trim().toLowerCase();
-    if (!val || val === (user.username ?? '')) {
+  const runAvailabilityCheck = useCallback(async (val: string) => {
+    const trimmed = val.trim().toLowerCase();
+    if (!trimmed || trimmed === (user.username ?? '')) {
       setUsernameState('idle');
+      setErrors((e) => ({ ...e, username: undefined }));
       return;
     }
-    if (val.length < 3 || val.length > 30 || !USERNAME_SLUG_REGEX.test(val)) {
+    if (trimmed.length < 3 || trimmed.length > 30 || !USERNAME_SLUG_REGEX.test(trimmed)) {
       setUsernameState('invalid');
       setErrors((e) => ({ ...e, username: 'Username must be 3-30 chars: lowercase, numbers, hyphens, underscores' }));
       return;
@@ -73,7 +74,7 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
     setErrors((e) => ({ ...e, username: undefined }));
     setUsernameState('checking');
     try {
-      const { available } = await checkUsername(val);
+      const { available } = await checkUsername(trimmed);
       setUsernameState(available ? 'available' : 'taken');
       if (!available) {
         setErrors((e) => ({ ...e, username: 'This username is already taken' }));
@@ -81,12 +82,24 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
     } catch {
       setUsernameState('idle');
     }
-  }, [username, user.username]);
+  }, [user.username]);
+
+  const handleUsernameBlur = useCallback(() => {
+    if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current);
+    void runAvailabilityCheck(username);
+  }, [username, runAvailabilityCheck]);
 
   const handleUsernameChange = useCallback((val: string) => {
     setUsername(val);
     setUsernameState('idle');
     setErrors((e) => ({ ...e, username: undefined }));
+    if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current);
+    usernameTimerRef.current = setTimeout(() => {
+      void runAvailabilityCheck(val);
+    }, 400);
+  }, [runAvailabilityCheck]);
+
+  useEffect(() => () => {
     if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current);
   }, []);
 
@@ -140,9 +153,24 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
       const token = await getPrivyAccessToken();
       if (!token) throw new Error('Not authenticated');
 
+      const newUsername = username.trim().toLowerCase();
+      const usernameChanged = newUsername !== (user.username ?? '');
+
+      // Last-mile availability check -- catches the case where the user typed a
+      // taken handle and clicked Save before the debounced check fired.
+      if (usernameChanged && newUsername) {
+        const { available } = await checkUsername(newUsername);
+        if (!available) {
+          setUsernameState('taken');
+          setErrors((e) => ({ ...e, username: 'This username is already taken' }));
+          setSaving(false);
+          return;
+        }
+      }
+
       const body: Record<string, string> = {};
       if (displayName.trim() !== (user.display_name ?? '')) body.display_name = displayName.trim();
-      if (username.trim().toLowerCase() !== (user.username ?? '')) body.username = username.trim().toLowerCase();
+      if (usernameChanged) body.username = newUsername;
       if (bio.trim() !== (user.bio ?? '')) body.bio = bio.trim();
       if (avatarUrl !== (user.avatar_url ?? '')) body.avatar_url = avatarUrl;
 
@@ -162,12 +190,20 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
 
       const json = (await res.json()) as { success: boolean; error?: string };
       if (!json.success) {
+        if (res.status === 409) {
+          setUsernameState('taken');
+          setErrors((e) => ({ ...e, username: 'This username is already taken' }));
+        }
         setSaveError(json.error ?? 'Failed to save. Please try again.');
         return;
       }
 
       await refreshAtelierUser();
-      router.refresh();
+      if (usernameChanged) {
+        router.replace(`/profile/${newUsername}`);
+      } else {
+        router.refresh();
+      }
       onClose();
     } catch (err) {
       setSaveError('Failed to save. Please try again.');

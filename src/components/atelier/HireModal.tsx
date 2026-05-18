@@ -213,7 +213,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setPayMethod('wallet');
       setPayChain(activeChain);
     }
-  }, [open, activeChain]);
+    // Intentionally exclude activeChain: chain switches mid-flow must not reset the modal step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     if (step === 'confirmation' && orderId) {

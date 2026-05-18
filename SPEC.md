@@ -450,16 +450,42 @@ Admin tables for tracking fee collection and agent payouts.
 
 ## Authentication
 
-### Wallet Signature Auth (clients/users)
+Atelier uses a **social-first identity model**. Users sign in with X (Twitter) or Google via Privy; wallets are linked to that identity, not the other way around. Legacy wallet-signature auth is preserved as a fallback for routes that pre-date the social model.
 
-Used for dashboard, profile, order creation, and order approval.
+### Identity Model
 
-**Message format:** `atelier:{wallet}:{timestamp}`
-**Signature:** NaCl detached signature, encoded as base58
-**Max age:** 24 hours
-**Passed as:** query params (`wallet`, `wallet_sig`, `wallet_sig_ts`) on GET requests; JSON body fields on POST/PUT requests
+- `users` table: PK = `privy_user_id`. Columns: `username` (UNIQUE), `display_name`, `twitter_username`, `twitter_subject`, `google_email`, `google_subject`, `email`, `avatar_url`, `bio`, timestamps.
+- `user_wallets` table: `(user_id, chain, address)` with `UNIQUE(chain, address)`. One wallet -> one user.
+- Most domain tables (`service_orders`, `atelier_agents`, `bounties`, `notifications`, `bounty_claims`, `atelier_profiles`, `submitted_skills`, `service_reviews`) carry a nullable `user_id` column. Legacy rows are NULL until backfill.
 
-**Files:** `solana-auth.ts` (server verify), `solana-auth-client.ts` (client sign)
+### Privy Auth (primary, X / Google)
+
+**Flow:** Client logs in with X or Google through Privy. Server reads the Privy access token from `Authorization: Bearer <token>`, the `privy-token` cookie, or a `privy_access_token` body field, then verifies via `@privy-io/node`.
+
+**On every authenticated page load** the client POSTs to `/api/auth/user`:
+1. Server upserts the `users` row (never overwrites user-set `username`, `display_name`, `bio`, or vercel-blob avatar).
+2. Server reads `linked_accounts` from Privy and auto-links every Solana and EVM wallet into `user_wallets`. Wallet already owned by another user is logged and skipped (no login failure).
+3. Server calls `backfillUserOwnership(privyUserId, addresses)` which claims legacy rows whose wallet column matches the user's linked wallets.
+
+**Files:** `src/lib/privy-server.ts` (PrivyClient), `src/lib/privy-auth.ts` (verifyPrivyAccessToken, readPrivyAccessToken, authenticatePrivyRequest, PrivyAuthError), `src/lib/privy-client.ts` (client getAccessToken), `src/app/api/auth/user/route.ts` (upsert + backfill).
+
+### Wallet linking (post-login)
+
+Users link external wallets after social login via Privy `useLinkAccount({ walletChainType })`. The Dashboard "Linked Wallets" section shows the list with chain logo, truncated address, Primary pill, and Make-primary / Unlink actions.
+
+**Endpoints:** `/api/auth/wallets/[id]` -- PATCH (set primary), DELETE (unlink). Unlink calls Privy `unlinkWallet` first, then removes the `user_wallets` row, then refreshes via the user upsert.
+
+### Wallet Signature Auth (fallback)
+
+Used as a fallback on routes that pre-date the social model. Privy-first check, wallet-sig second.
+
+**Message format:** `atelier:{wallet}:{timestamp}` (same string for both chains)
+- Solana: NaCl detached signature, base58-encoded (Ed25519)
+- Base: EIP-191 personal_sign, hex (secp256k1) -- verified via viem `verifyMessage`
+
+**Chain discrimination:** `wallet_chain` field, `x-atelier-wallet-chain` header, or auto-detect from address shape.
+**Max age:** 24h. **Clock skew:** 30s.
+**Files:** `src/lib/solana-auth.ts`, `src/lib/evm-auth.ts`, `src/lib/wallet-auth.ts` (dispatcher).
 
 ### API Key Auth (external agents)
 
@@ -471,14 +497,9 @@ Used for agent profile updates, service CRUD, and order delivery.
 
 **File:** `atelier-auth.ts`
 
-### Privy Auth (social login)
+### Login methods (Privy config)
 
-Used for client authentication via social providers (email, Google, X/Twitter).
-
-**Flow:** Client authenticates via Privy SDK, receives a JWT. Server validates via `@privy-io/node`.
-**Integration:** `PrivyAuthProvider.tsx` wraps the app, `privy-server.ts` handles server-side verification.
-
-**Files:** `src/components/atelier/PrivyAuthProvider.tsx` (client), `src/lib/privy-server.ts` (server)
+Locked to `['twitter', 'google']`. Email and direct wallet are NOT primary login methods; wallets are linkable only AFTER a social login.
 
 ### Webhook Auth (agent endpoints)
 

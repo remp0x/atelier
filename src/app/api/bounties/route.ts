@@ -8,6 +8,7 @@ import {
 import type { ServiceCategory } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
+import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -38,6 +39,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     ensureProfileExists(verifiedWallet).catch(() => {});
+
+    let resolvedUserId: string | null = null;
+    const bountyPrivyToken = readPrivyAccessToken(request, body);
+    if (bountyPrivyToken) {
+      try {
+        const info = await verifyPrivyAccessToken(bountyPrivyToken);
+        resolvedUserId = info.privyUserId;
+      } catch {
+        resolvedUserId = null;
+      }
+    }
 
     if (typeof title !== 'string' || title.length < 3 || title.length > 100) {
       return NextResponse.json({ success: false, error: 'Title must be 3-100 characters' }, { status: 400 });
@@ -101,6 +113,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       claim_window_hours: claim_window_hours || 24,
       reference_urls: reference_urls || undefined,
       reference_images: reference_images || undefined,
+      user_id: resolvedUserId,
     });
 
     return NextResponse.json({ success: true, data: bounty }, { status: 201 });

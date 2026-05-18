@@ -671,6 +671,28 @@ export async function initAtelierDb(): Promise<void> {
 
   try { await atelierClient.execute("ALTER TABLE submitted_skills ADD COLUMN creator_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
 
+  // P3.A: user_id columns -- privy_user_id ownership for legacy wallet-keyed tables.
+  // Idempotent ALTERs wrapped in try/catch; indexes are IF NOT EXISTS.
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN user_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN user_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE bounties ADD COLUMN user_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE bounty_claims ADD COLUMN user_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_profiles ADD COLUMN user_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE notifications ADD COLUMN user_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE submitted_skills ADD COLUMN user_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE order_messages ADD COLUMN user_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE service_reviews ADD COLUMN user_id TEXT'); } catch (_e) { }
+
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_user ON service_orders(user_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_user ON atelier_agents(user_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_bounties_user ON bounties(user_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_bounty_claims_user ON bounty_claims(user_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_profiles_user ON atelier_profiles(user_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_user ON submitted_skills(user_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_order_messages_user ON order_messages(user_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_reviews_user ON service_reviews(user_id)');
+
   initialized = true;
 }
 
@@ -679,6 +701,7 @@ export interface SubmittedSkill {
   slug: string;
   creator_wallet: string;
   creator_chain: 'solana' | 'base';
+  user_id: string | null;
   name: string;
   description: string;
   category: string;
@@ -695,6 +718,7 @@ export async function insertSubmittedSkill(input: {
   slug: string;
   creator_wallet: string;
   creator_chain?: 'solana' | 'base';
+  user_id?: string | null;
   name: string;
   description: string;
   category: string;
@@ -705,13 +729,14 @@ export async function insertSubmittedSkill(input: {
 }): Promise<void> {
   await initAtelierDb();
   await atelierClient.execute({
-    sql: `INSERT INTO submitted_skills (id, slug, creator_wallet, creator_chain, name, description, category, file_url, file_size, pricing, price_usdc, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live')`,
+    sql: `INSERT INTO submitted_skills (id, slug, creator_wallet, creator_chain, user_id, name, description, category, file_url, file_size, pricing, price_usdc, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live')`,
     args: [
       input.id,
       input.slug,
       input.creator_wallet,
       input.creator_chain ?? 'solana',
+      input.user_id ?? null,
       input.name,
       input.description,
       input.category,
@@ -748,6 +773,19 @@ export async function listSubmittedSkills(opts?: {
                LIMIT ?`;
   args.push(limit);
   const result = await atelierClient.execute({ sql, args });
+  return result.rows as unknown as SubmittedSkill[];
+}
+
+export async function getSubmittedSkillsByUser(userId: string): Promise<SubmittedSkill[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT id, slug, creator_wallet, COALESCE(creator_chain, 'solana') as creator_chain, name, description, category, file_url, file_size, pricing, price_usdc, status, created_at
+          FROM submitted_skills
+          WHERE user_id = ?
+             OR creator_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+          ORDER BY created_at DESC`,
+    args: [userId, userId],
+  });
   return result.rows as unknown as SubmittedSkill[];
 }
 
@@ -1075,6 +1113,142 @@ export async function setPrimaryWallet(userId: string, walletId: string): Promis
     sql: 'UPDATE user_wallets SET is_primary = 1 WHERE id = ? AND user_id = ?',
     args: [walletId, userId],
   });
+}
+
+export interface BackfillCounts {
+  service_orders: number;
+  atelier_agents: number;
+  bounties: number;
+  bounty_claims: number;
+  atelier_profiles: number;
+  notifications: number;
+  submitted_skills: number;
+  service_reviews: number;
+}
+
+/**
+ * After a user social-logs-in and we know which wallet addresses are linked to them,
+ * claim ownership of legacy rows that were keyed by those wallet addresses.
+ *
+ * Idempotent. Only updates rows where user_id IS NULL.
+ *
+ * Returns counts per table for logging.
+ */
+export async function backfillUserOwnership(
+  userId: string,
+  addresses: string[],
+): Promise<BackfillCounts> {
+  const counts: BackfillCounts = {
+    service_orders: 0,
+    atelier_agents: 0,
+    bounties: 0,
+    bounty_claims: 0,
+    atelier_profiles: 0,
+    notifications: 0,
+    submitted_skills: 0,
+    service_reviews: 0,
+  };
+
+  if (addresses.length === 0) return counts;
+
+  await initAtelierDb();
+
+  const placeholders = addresses.map(() => '?').join(', ');
+
+  const runUpdate = async (sql: string, args: (string | null)[]): Promise<number> => {
+    const result = await atelierClient.execute({ sql, args });
+    return result.rowsAffected ?? 0;
+  };
+
+  try {
+    counts.service_orders = await runUpdate(
+      `UPDATE service_orders SET user_id = ? WHERE user_id IS NULL AND client_wallet IN (${placeholders})`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] service_orders failed:', e);
+  }
+
+  try {
+    counts.atelier_agents = await runUpdate(
+      `UPDATE atelier_agents SET user_id = ? WHERE user_id IS NULL AND owner_wallet IN (${placeholders})`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] atelier_agents failed:', e);
+  }
+
+  // Propagate to existing privy_user_id column on atelier_agents for back-compat.
+  try {
+    await runUpdate(
+      `UPDATE atelier_agents SET privy_user_id = ? WHERE privy_user_id IS NULL AND owner_wallet IN (${placeholders})`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] atelier_agents.privy_user_id failed:', e);
+  }
+
+  try {
+    counts.bounties = await runUpdate(
+      `UPDATE bounties SET user_id = ? WHERE user_id IS NULL AND poster_wallet IN (${placeholders})`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] bounties failed:', e);
+  }
+
+  // bounty_claims has no claimant_wallet on legacy rows; route through the agent's owner_wallet.
+  try {
+    counts.bounty_claims = await runUpdate(
+      `UPDATE bounty_claims SET user_id = ?
+       WHERE user_id IS NULL
+         AND agent_id IN (SELECT id FROM atelier_agents WHERE owner_wallet IN (${placeholders}))`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] bounty_claims failed:', e);
+  }
+
+  try {
+    counts.atelier_profiles = await runUpdate(
+      `UPDATE atelier_profiles SET user_id = ? WHERE user_id IS NULL AND wallet IN (${placeholders})`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] atelier_profiles failed:', e);
+  }
+
+  try {
+    counts.notifications = await runUpdate(
+      `UPDATE notifications SET user_id = ? WHERE user_id IS NULL AND wallet IN (${placeholders})`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] notifications failed:', e);
+  }
+
+  try {
+    counts.submitted_skills = await runUpdate(
+      `UPDATE submitted_skills SET user_id = ? WHERE user_id IS NULL AND creator_wallet IN (${placeholders})`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] submitted_skills failed:', e);
+  }
+
+  // service_reviews has no reviewer_wallet column; reviewer_agent_id -> atelier_agents.owner_wallet.
+  try {
+    counts.service_reviews = await runUpdate(
+      `UPDATE service_reviews SET user_id = ?
+       WHERE user_id IS NULL
+         AND reviewer_agent_id IN (SELECT id FROM atelier_agents WHERE owner_wallet IN (${placeholders}))`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] service_reviews failed:', e);
+  }
+
+  return counts;
 }
 
 export async function createAtelierSession(
@@ -1580,6 +1754,7 @@ export interface AtelierAgent {
   said_secret_key: string | null;
   said_tx_hash: string | null;
   privy_user_id: string | null;
+  user_id: string | null;
   webhook_secret: string | null;
   created_at: string;
 }
@@ -1692,6 +1867,7 @@ export interface ServiceOrder {
   requirement_answers: string | null;
   bounty_id: string | null;
   referral_partner: string | null;
+  user_id: string | null;
   completed_at: string | null;
   created_at: string;
 }
@@ -1699,6 +1875,7 @@ export interface ServiceOrder {
 export interface Bounty {
   id: string;
   poster_wallet: string;
+  user_id: string | null;
   title: string;
   brief: string;
   category: ServiceCategory;
@@ -1725,6 +1902,7 @@ export interface BountyClaim {
   bounty_id: string;
   agent_id: string;
   claimant_wallet: string | null;
+  user_id: string | null;
   message: string | null;
   status: BountyClaimStatus;
   created_at: string;
@@ -1759,11 +1937,13 @@ export interface ServiceReview {
   reviewer_name: string;
   rating: number;
   comment: string | null;
+  user_id: string | null;
   created_at: string;
 }
 
 export interface AtelierProfile {
   wallet: string;
+  user_id: string | null;
   display_name: string | null;
   bio: string | null;
   avatar_url: string | null;
@@ -1927,6 +2107,34 @@ export async function getAtelierAgentsByPrivyUser(privyUserId: string): Promise<
   const result = await atelierClient.execute({
     sql: 'SELECT * FROM atelier_agents WHERE privy_user_id = ? AND active = 1',
     args: [privyUserId],
+  });
+  const agents = result.rows as unknown as AtelierAgent[];
+
+  for (const agent of agents) {
+    if (!agent.api_key) {
+      const apiKey = `atelier_${randomBytes(24).toString('hex')}`;
+      await atelierClient.execute({
+        sql: 'UPDATE atelier_agents SET api_key = ? WHERE id = ? AND api_key IS NULL',
+        args: [apiKey, agent.id],
+      });
+      agent.api_key = apiKey;
+    }
+  }
+
+  return agents;
+}
+
+export async function getAtelierAgentsByUser(userId: string): Promise<AtelierAgent[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT * FROM atelier_agents
+          WHERE active = 1
+            AND (
+              user_id = ?
+              OR privy_user_id = ?
+              OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+            )`,
+    args: [userId, userId, userId],
   });
   const agents = result.rows as unknown as AtelierAgent[];
 
@@ -2706,6 +2914,7 @@ export async function createServiceOrder(data: {
   payment_chain?: 'solana' | 'base';
   payer_address?: string | null;
   payment_method?: string;
+  user_id?: string | null;
 }): Promise<ServiceOrder> {
   await initAtelierDb();
   const id = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -2713,8 +2922,8 @@ export async function createServiceOrder(data: {
   const platformFee = data.quoted_price_usd ? (parseFloat(data.quoted_price_usd) * 0.10).toFixed(2) : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner, client_type, payment_tx_signature, payment_chain, payer_address, payment_method)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner, client_type, payment_tx_signature, payment_chain, payer_address, payment_method, user_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id,
       data.service_id,
@@ -2735,6 +2944,7 @@ export async function createServiceOrder(data: {
       data.payment_chain || 'solana',
       data.payer_address || null,
       data.payment_method || null,
+      data.user_id ?? null,
     ],
   });
 
@@ -2920,6 +3130,26 @@ export async function getOrdersByWallet(wallet: string): Promise<ServiceOrder[]>
   return result.rows as unknown as ServiceOrder[];
 }
 
+export async function getOrdersByUser(userId: string): Promise<ServiceOrder[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT o.*, s.title as service_title,
+            COALESCE(s.max_revisions, 3) as max_revisions,
+            ca.name as client_name,
+            pa.name as provider_name,
+            pa.slug as provider_slug
+          FROM service_orders o
+          LEFT JOIN services s ON o.service_id = s.id
+          LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
+          LEFT JOIN atelier_agents pa ON o.provider_agent_id = pa.id
+          WHERE o.user_id = ?
+             OR o.client_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+          ORDER BY o.created_at DESC`,
+    args: [userId, userId],
+  });
+  return result.rows as unknown as ServiceOrder[];
+}
+
 // ─── Deliverables ───
 
 export async function createOrderDeliverable(orderId: string, prompt: string): Promise<OrderDeliverable> {
@@ -2989,13 +3219,14 @@ export async function createServiceReview(data: {
   reviewer_name: string;
   rating: number;
   comment?: string;
+  user_id?: string | null;
 }): Promise<ServiceReview> {
   await initAtelierDb();
   const id = `rev_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   await atelierClient.execute({
-    sql: `INSERT INTO service_reviews (id, order_id, service_id, reviewer_agent_id, reviewer_name, rating, comment)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.order_id, data.service_id || null, data.reviewer_agent_id, data.reviewer_name, data.rating, data.comment || null],
+    sql: `INSERT INTO service_reviews (id, order_id, service_id, reviewer_agent_id, reviewer_name, rating, comment, user_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.order_id, data.service_id || null, data.reviewer_agent_id, data.reviewer_name, data.rating, data.comment || null, data.user_id ?? null],
   });
   if (data.service_id) {
     await recalculateServiceRating(data.service_id);
@@ -3046,24 +3277,45 @@ export async function getAtelierProfile(wallet: string): Promise<AtelierProfile 
   return result.rows[0] ? (result.rows[0] as unknown as AtelierProfile) : null;
 }
 
+export async function getProfileByUser(userId: string): Promise<AtelierProfile | null> {
+  await initAtelierDb();
+  const direct = await atelierClient.execute({
+    sql: 'SELECT * FROM atelier_profiles WHERE user_id = ? LIMIT 1',
+    args: [userId],
+  });
+  if (direct.rows[0]) {
+    return direct.rows[0] as unknown as AtelierProfile;
+  }
+  const walletFallback = await atelierClient.execute({
+    sql: `SELECT p.* FROM atelier_profiles p
+          INNER JOIN user_wallets w ON w.address = p.wallet
+          WHERE w.user_id = ?
+          ORDER BY w.is_primary DESC, w.linked_at ASC
+          LIMIT 1`,
+    args: [userId],
+  });
+  return walletFallback.rows[0] ? (walletFallback.rows[0] as unknown as AtelierProfile) : null;
+}
+
 export async function upsertAtelierProfile(
   wallet: string,
-  data: { display_name?: string; bio?: string; avatar_url?: string; twitter_handle?: string }
+  data: { display_name?: string; bio?: string; avatar_url?: string; twitter_handle?: string; user_id?: string | null }
 ): Promise<AtelierProfile> {
   await initAtelierDb();
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_profiles (wallet, display_name, bio, avatar_url, twitter_handle)
-          VALUES (?, ?, ?, ?, ?)
+    sql: `INSERT INTO atelier_profiles (wallet, display_name, bio, avatar_url, twitter_handle, user_id)
+          VALUES (?, ?, ?, ?, ?, ?)
           ON CONFLICT(wallet) DO UPDATE SET
             display_name = COALESCE(?, display_name),
             bio = COALESCE(?, bio),
             avatar_url = COALESCE(?, avatar_url),
             twitter_handle = COALESCE(?, twitter_handle),
+            user_id = COALESCE(?, user_id),
             updated_at = CURRENT_TIMESTAMP`,
     args: [
       wallet,
-      data.display_name || null, data.bio || null, data.avatar_url || null, data.twitter_handle || null,
-      data.display_name ?? null, data.bio ?? null, data.avatar_url ?? null, data.twitter_handle ?? null,
+      data.display_name || null, data.bio || null, data.avatar_url || null, data.twitter_handle || null, data.user_id ?? null,
+      data.display_name ?? null, data.bio ?? null, data.avatar_url ?? null, data.twitter_handle ?? null, data.user_id ?? null,
     ],
   });
   const profile = await getAtelierProfile(wallet);
@@ -3468,6 +3720,7 @@ export interface OrderMessage {
   sender_type: 'client' | 'agent';
   sender_id: string;
   sender_name: string | null;
+  user_id: string | null;
   content: string;
   created_at: string;
 }
@@ -3779,6 +4032,7 @@ export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revis
 export interface Notification {
   id: string;
   wallet: string;
+  user_id: string | null;
   type: NotificationType;
   title: string;
   body: string | null;
@@ -3793,12 +4047,13 @@ export async function createNotification(data: {
   title: string;
   body?: string;
   order_id?: string;
+  user_id?: string | null;
 }): Promise<void> {
   await initAtelierDb();
   const id = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   await atelierClient.execute({
-    sql: `INSERT INTO notifications (id, wallet, type, title, body, order_id) VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [id, data.wallet, data.type, data.title, data.body || null, data.order_id || null],
+    sql: `INSERT INTO notifications (id, wallet, type, title, body, order_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, data.wallet, data.type, data.title, data.body || null, data.order_id || null, data.user_id ?? null],
   });
 }
 
@@ -3811,11 +4066,45 @@ export async function getNotificationsByWallet(wallet: string, limit = 30): Prom
   return result.rows as unknown as Notification[];
 }
 
+export async function getNotificationsByUser(
+  userId: string,
+  opts?: { limit?: number; unread_only?: boolean },
+): Promise<Notification[]> {
+  await initAtelierDb();
+  const limit = opts?.limit ?? 30;
+  const unreadClause = opts?.unread_only ? ' AND read = 0' : '';
+  const result = await atelierClient.execute({
+    sql: `SELECT * FROM notifications
+          WHERE (
+            user_id = ?
+            OR wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+          )${unreadClause}
+          ORDER BY created_at DESC
+          LIMIT ?`,
+    args: [userId, userId, limit],
+  });
+  return result.rows as unknown as Notification[];
+}
+
 export async function getUnreadNotificationCount(wallet: string): Promise<number> {
   await initAtelierDb();
   const result = await atelierClient.execute({
     sql: 'SELECT COUNT(*) as count FROM notifications WHERE wallet = ? AND read = 0',
     args: [wallet],
+  });
+  return Number(result.rows[0].count);
+}
+
+export async function getUnreadNotificationCountByUser(userId: string): Promise<number> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT COUNT(*) as count FROM notifications
+          WHERE read = 0
+            AND (
+              user_id = ?
+              OR wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+            )`,
+    args: [userId, userId],
   });
   return Number(result.rows[0].count);
 }
@@ -3832,6 +4121,32 @@ export async function markNotificationsRead(wallet: string, ids?: string[]): Pro
     await atelierClient.execute({
       sql: 'UPDATE notifications SET read = 1 WHERE wallet = ? AND read = 0',
       args: [wallet],
+    });
+  }
+}
+
+export async function markNotificationsReadByUser(userId: string, ids?: string[]): Promise<void> {
+  await initAtelierDb();
+  if (ids && ids.length > 0) {
+    const placeholders = ids.map(() => '?').join(',');
+    await atelierClient.execute({
+      sql: `UPDATE notifications SET read = 1
+            WHERE id IN (${placeholders})
+              AND (
+                user_id = ?
+                OR wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+              )`,
+      args: [...ids, userId, userId],
+    });
+  } else {
+    await atelierClient.execute({
+      sql: `UPDATE notifications SET read = 1
+            WHERE read = 0
+              AND (
+                user_id = ?
+                OR wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+              )`,
+      args: [userId, userId],
     });
   }
 }
@@ -3853,6 +4168,7 @@ export async function createBounty(data: {
   claim_window_hours?: number;
   reference_urls?: string[];
   reference_images?: string[];
+  user_id?: string | null;
 }): Promise<Bounty> {
   await initAtelierDb();
   const id = `bty_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -3860,14 +4176,15 @@ export async function createBounty(data: {
   const expiresAt = new Date(Date.now() + claimWindow * 60 * 60 * 1000).toISOString();
 
   await atelierClient.execute({
-    sql: `INSERT INTO bounties (id, poster_wallet, title, brief, category, budget_usd, deadline_hours, reference_urls, reference_images, status, expires_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
+    sql: `INSERT INTO bounties (id, poster_wallet, title, brief, category, budget_usd, deadline_hours, reference_urls, reference_images, status, expires_at, user_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
     args: [
       id, data.poster_wallet, data.title, data.brief, data.category, data.budget_usd,
       data.deadline_hours,
       data.reference_urls ? JSON.stringify(data.reference_urls) : null,
       data.reference_images ? JSON.stringify(data.reference_images) : null,
       expiresAt,
+      data.user_id ?? null,
     ],
   });
 
@@ -3972,19 +4289,37 @@ export async function getBountiesByWallet(wallet: string): Promise<BountyListIte
   return result.rows as unknown as BountyListItem[];
 }
 
+export async function getBountiesByUser(userId: string): Promise<BountyListItem[]> {
+  await initAtelierDb();
+  await expireStaleBounties();
+  const result = await atelierClient.execute({
+    sql: `SELECT b.*,
+            p.display_name as poster_display_name,
+            (SELECT COUNT(*) FROM bounty_claims bc WHERE bc.bounty_id = b.id AND bc.status != 'withdrawn') as claims_count
+          FROM bounties b
+          LEFT JOIN atelier_profiles p ON p.wallet = b.poster_wallet
+          WHERE b.user_id = ?
+             OR b.poster_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+          ORDER BY b.created_at DESC`,
+    args: [userId, userId],
+  });
+  return result.rows as unknown as BountyListItem[];
+}
+
 export async function createBountyClaim(data: {
   bounty_id: string;
   agent_id: string;
   claimant_wallet?: string;
   message?: string;
+  user_id?: string | null;
 }): Promise<BountyClaim> {
   await initAtelierDb();
   const id = `bcl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   await atelierClient.execute({
-    sql: `INSERT INTO bounty_claims (id, bounty_id, agent_id, claimant_wallet, message, status)
-          VALUES (?, ?, ?, ?, ?, 'pending')`,
-    args: [id, data.bounty_id, data.agent_id, data.claimant_wallet || null, data.message || null],
+    sql: `INSERT INTO bounty_claims (id, bounty_id, agent_id, claimant_wallet, message, status, user_id)
+          VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+    args: [id, data.bounty_id, data.agent_id, data.claimant_wallet || null, data.message || null, data.user_id ?? null],
   });
 
   const result = await atelierClient.execute({
@@ -4063,13 +4398,14 @@ export async function acceptBountyClaim(data: {
   const paymentMethod = data.payment_method || (paymentChain === 'base' ? 'usdc-base' : 'usdc');
 
   await atelierClient.execute({
-    sql: `INSERT INTO service_orders (id, service_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, payment_method, status, escrow_tx_hash, bounty_id, payment_chain, payer_address)
-          VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?, ?, ?)`,
+    sql: `INSERT INTO service_orders (id, service_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, payment_method, status, escrow_tx_hash, bounty_id, payment_chain, payer_address, user_id)
+          VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?, ?, ?, ?)`,
     args: [
       orderId, bounty.poster_wallet, claim.agent_id, bounty.brief,
       bounty.reference_urls, bounty.reference_images,
       bounty.budget_usd, platformFee, paymentMethod, data.escrow_tx_hash, bounty.id,
       paymentChain, data.payer_address || null,
+      bounty.user_id ?? null,
     ],
   });
 

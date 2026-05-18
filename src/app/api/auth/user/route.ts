@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   addUserWallet,
+  backfillUserOwnership,
   generateDefaultUsername,
   getUserByPrivyId,
   getUserByWalletAddress,
@@ -10,6 +11,7 @@ import {
   isUsernameAvailable,
   upsertUser,
   type AtelierUser,
+  type BackfillCounts,
   type UserWallet,
   type WalletChain,
 } from '@/lib/atelier-db';
@@ -67,11 +69,12 @@ async function buildUserPayload(
   user: AtelierUser,
   wallets: UserWallet[],
   isNew: boolean,
+  backfilled?: BackfillCounts,
 ): Promise<NextResponse> {
   return NextResponse.json(
     {
       success: true,
-      data: { user, wallets, is_new: isNew },
+      data: { user, wallets, is_new: isNew, backfilled: backfilled ?? null },
     },
     { headers: { 'Content-Type': 'application/json' } },
   );
@@ -124,7 +127,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     await autoLinkWallets(info.privyUserId, 'base', info.linkedEvmWallets);
 
     const wallets = await getUserWallets(info.privyUserId);
-    return buildUserPayload(user, wallets, isNew);
+
+    let backfilled: BackfillCounts | undefined;
+    try {
+      const addresses = wallets.map((w) => w.address).filter((a): a is string => Boolean(a));
+      backfilled = await backfillUserOwnership(info.privyUserId, addresses);
+    } catch (backfillErr) {
+      console.error('[auth/user] backfillUserOwnership failed (non-fatal):', backfillErr);
+    }
+
+    return buildUserPayload(user, wallets, isNew, backfilled);
   } catch (err) {
     console.error('[auth/user] POST upsert failed:', err);
     return NextResponse.json(

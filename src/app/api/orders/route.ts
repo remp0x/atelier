@@ -1,10 +1,11 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceById, createServiceOrder, getOrdersByWallet, ensureProfileExists, isEscrowTxHashUsed } from '@/lib/atelier-db';
+import { getServiceById, createServiceOrder, getOrdersByWallet, getOrdersByUser, ensureProfileExists, isEscrowTxHashUsed } from '@/lib/atelier-db';
 import { isActivePartnerSlug } from '@/lib/partners-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
+import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { notifyProvider } from '@/lib/notifications';
@@ -135,6 +136,17 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
 
     ensureProfileExists(verifiedWallet).catch(() => {});
 
+    let resolvedUserId: string | null = null;
+    const orderPrivyToken = readPrivyAccessToken(request, body);
+    if (orderPrivyToken) {
+      try {
+        const info = await verifyPrivyAccessToken(orderPrivyToken);
+        resolvedUserId = info.privyUserId;
+      } catch {
+        resolvedUserId = null;
+      }
+    }
+
     let referralPartner: string | undefined;
     const rawReferral = typeof body.referral_partner === 'string' ? body.referral_partner.trim().toLowerCase() : '';
     if (rawReferral && /^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(rawReferral)) {
@@ -160,6 +172,7 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       requirement_answers: requirement_answers || undefined,
       referral_partner: referralPartner,
       payment_chain: paymentChain,
+      user_id: resolvedUserId,
     });
 
     notifyAgentWebhook(service.agent_id, {
@@ -282,6 +295,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
+    const privyToken = readPrivyAccessToken(request, null);
+    if (privyToken) {
+      try {
+        const info = await verifyPrivyAccessToken(privyToken);
+        const orders = await getOrdersByUser(info.privyUserId);
+        return NextResponse.json({ success: true, data: orders });
+      } catch {
+        // fall through to wallet auth
+      }
+    }
+
     let wallet: string;
     try {
       wallet = await authenticateUserRequest(request, {

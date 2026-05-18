@@ -70,11 +70,18 @@ src/lib/providers/              -- AI generation provider implementations
 Always return: `{ success: boolean, data?: T, error?: string }`
 
 ### Auth
-- Client/user actions: wallet signature (`wallet`, `wallet_sig`, `wallet_sig_ts`, optional `wallet_chain`)
-  - `wallet_chain`: `'solana'` (default, Ed25519) or `'base'` (EIP-191 personal_sign). Auto-detected from address shape if omitted.
-- Agent actions: `Authorization: Bearer atelier_{key}`
+- **Primary identity: Privy access token** (X / Twitter or Google login). Verified via `privy-auth.ts` `verifyPrivyAccessToken(token)`. Token read from `Authorization: Bearer <token>` header, `privy-token` cookie, or body `privy_access_token`. Returns `PrivyUserInfo { privyUserId, twitterUsername, googleEmail, linkedSolanaWallets[], linkedEvmWallets[], ... }`.
+- **User identity = `privy_user_id`** (TEXT PK in `users` table). Wallets are linked via `user_wallets(user_id, chain, address)` with `UNIQUE(chain, address)`.
+- Legacy wallet signature auth (`wallet`, `wallet_sig`, `wallet_sig_ts`, optional `wallet_chain`) still works as fallback on routes that pre-date Privy. Routes check Privy token first, fall back to wallet sig.
+  - `wallet_chain`: `'solana'` (Ed25519) or `'base'` (EIP-191). Auto-detected from address shape.
+- Agent actions (machine): `Authorization: Bearer atelier_{key}`. Resolved via `atelier-auth.ts`.
 - x402 machine payments: `X-PAYMENT` header with Solana sig OR Base 0x tx hash. Optional `X-Payment-Network: solana-mainnet|base-mainnet` to disambiguate.
-- Verify via `wallet-auth.ts` (chain-agnostic dispatcher), `solana-auth.ts` + `evm-auth.ts` (per-chain primitives), `atelier-auth.ts` (API key), `x402.ts` (on-chain).
+- Verify via `privy-auth.ts` (social), `wallet-auth.ts` (chain-agnostic wallet dispatcher), `solana-auth.ts` + `evm-auth.ts` (per-chain wallet primitives), `atelier-auth.ts` (API key), `x402.ts` (on-chain).
+
+### User upsert flow
+- On every page load when Privy `ready && authenticated`, the client posts to `POST /api/auth/user` with the Privy access token.
+- Server upserts `users` row, auto-links every wallet from Privy `linked_accounts` into `user_wallets`, and runs `backfillUserOwnership(userId, addresses)` which claims legacy rows (`service_orders`, `atelier_agents`, `bounties`, `notifications`, etc.) whose wallet column matches.
+- Username is generated from twitter handle, falling back to `user_<short>`. Collision suffix `2`-`99`, then random.
 
 ### Structure
 ```typescript
@@ -123,6 +130,10 @@ Active: grok, runway, luma, higgsfield, minimax.
 | EVM bridge component | `src/components/atelier/EvmWalletBridge.tsx` |
 | Chain selector UI | `src/components/atelier/ChainSelector.tsx` |
 | Multi-chain wallet auth | `src/lib/wallet-auth.ts`, `evm-auth.ts` |
+| Privy server verifier | `src/lib/privy-auth.ts`, `privy-server.ts`, `privy-client.ts` |
+| User upsert endpoint | `src/app/api/auth/user/route.ts` |
+| Linked wallets endpoint | `src/app/api/auth/wallets/[id]/route.ts` |
+| Public profile by username | `src/app/profile/[username]/page.tsx`, `api/profile/[username]/route.ts` |
 | LLM full reference | `src/app/llms-full.txt/route.ts` |
 | Robots (AI crawlers) | `src/app/robots.ts` |
 | Sitemap | `src/app/sitemap.ts` |

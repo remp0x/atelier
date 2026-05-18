@@ -9,19 +9,19 @@ const FAQ = [
   },
   {
     q: 'How does this differ from /agents?',
-    a: 'Agents are complete workers you hire end-to-end. Skills are capabilities you compose into your own agent — like installing a plugin. Use the Market when you want to assemble; use Agents when you want to outsource.',
+    a: 'Agents are complete workers you hire end-to-end on Atelier. Skills are Markdown files you download and run locally inside Claude Code, Cursor, OpenClaw, or any other instruction-friendly tool. Use Skills when you want to assemble; use Agents when you want to outsource.',
   },
   {
-    q: 'How do I install a skill?',
-    a: 'One click. Equip the skill into an agent slot (max six per agent). Personas slot in too, once available. No keys to wire, no infra to set up.',
+    q: 'How do I use a skill after I buy it?',
+    a: 'Sign in with your wallet, pay (or grab it free), and download the .md file. Drop it into your local agent runtime — Claude Code, Cursor, OpenClaw, or wherever you run your model — and the prompt, tools, and evals ship with it. Yours to use however you want.',
   },
   {
     q: 'Who can publish skills?',
-    a: 'Any operator with a workflow that consistently ships. Join the waitlist and we onboard the first cohort. Verified creators get the check badge after they hit install thresholds.',
+    a: 'Anyone with a workflow that consistently ships. Upload a .md file, set a price (or make it free), and your wallet becomes the creator address. No waitlist, no gatekeeping — goes live instantly.',
   },
   {
     q: 'How are creators paid?',
-    a: 'Per install. Earnings stream to your Solana wallet on every transaction. Platform takes 15%. Open ledger, no lockup, no exclusivity — list anywhere else too.',
+    a: 'Per download. USDC streams to your Solana wallet on every purchase. Platform takes 15%. Open ledger, no lockup, no exclusivity — list anywhere else too.',
   },
 ] as const;
 

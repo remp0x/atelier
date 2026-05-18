@@ -1,12 +1,35 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getNotificationsByWallet, getUnreadNotificationCount, markNotificationsRead, ensureProfileExists } from '@/lib/atelier-db';
+import {
+  getNotificationsByWallet,
+  getNotificationsByUser,
+  getUnreadNotificationCount,
+  getUnreadNotificationCountByUser,
+  markNotificationsRead,
+  markNotificationsReadByUser,
+  ensureProfileExists,
+} from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
+import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    const privyToken = readPrivyAccessToken(request, null);
+    if (privyToken) {
+      try {
+        const info = await verifyPrivyAccessToken(privyToken);
+        const [notifications, unreadCount] = await Promise.all([
+          getNotificationsByUser(info.privyUserId),
+          getUnreadNotificationCountByUser(info.privyUserId),
+        ]);
+        return NextResponse.json({ success: true, data: notifications, unread_count: unreadCount });
+      } catch {
+        // fall through to wallet auth
+      }
+    }
+
     let wallet: string;
     try {
       wallet = await authenticateUserRequest(request, readSigFieldsFromQuery(request));
@@ -33,6 +56,17 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
     const { ids } = body;
+
+    const privyToken = readPrivyAccessToken(request, body);
+    if (privyToken) {
+      try {
+        const info = await verifyPrivyAccessToken(privyToken);
+        await markNotificationsReadByUser(info.privyUserId, ids);
+        return NextResponse.json({ success: true });
+      } catch {
+        // fall through to wallet auth
+      }
+    }
 
     let wallet: string;
     try {

@@ -16,10 +16,6 @@ interface PublishedSkill {
 const INPUT_CLS =
   'w-full rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-black/50 px-3 py-2 font-mono text-[13px] text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 outline-none focus:border-atelier/60 focus:ring-1 focus:ring-atelier/30 transition-colors';
 
-function truncate(s: string, n: number): string {
-  return s.length <= n ? s : `${s.slice(0, n - 1)}…`;
-}
-
 function shortWallet(addr: string): string {
   return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
 }
@@ -37,7 +33,7 @@ export function CreatorSurface(): JSX.Element {
   const [description, setDescription] = useState('');
   const [categoryIdx, setCategoryIdx] = useState(0);
   const [file, setFile] = useState<File | null>(null);
-  const [pricing, setPricing] = useState<'free' | 'paid'>('free');
+  const [pricing, setPricing] = useState<'free' | 'paid'>('paid');
   const [usdcAmount, setUsdcAmount] = useState('5');
   const [submitting, setSubmitting] = useState(false);
   const [published, setPublished] = useState<PublishedSkill | null>(null);
@@ -48,7 +44,6 @@ export function CreatorSurface(): JSX.Element {
 
   const category = SKILL_CATEGORIES[categoryIdx];
   const parsedUsdc = Number(usdcAmount);
-  const previewPrice = pricing === 'free' ? 0 : Number.isFinite(parsedUsdc) ? parsedUsdc : 0;
 
   function handleFile(f: File | null): void {
     if (!f) return;
@@ -177,27 +172,42 @@ export function CreatorSurface(): JSX.Element {
       </div>
 
       <div className="relative max-w-[1180px] mx-auto px-6">
-        <div className="max-w-[600px] mb-8 md:mb-10">
-          <p className="font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier mb-3">
-            FOR CREATORS
-          </p>
-          <h2
-            className="font-display font-extrabold tracking-[-0.03em] leading-[1.05] mb-3"
-            style={{ fontSize: 'clamp(1.625rem, 3.2vw, 2.375rem)' }}
-          >
-            Got a workflow that ships?{' '}
-            <span className="text-gradient-atelier">Publish it.</span>
-          </h2>
-          <p className="text-[14.5px] md:text-[15.5px] leading-[1.55] text-gray-700 dark:text-neutral-300">
-            Upload a Markdown file, pick a category, set a price or make it free.
-            Your wallet is your identity.
-          </p>
-        </div>
-
         {published ? (
           <SubmittedState onPublishAnother={resetForm} skillUrl={published.url} />
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,520px)_minmax(0,440px)] gap-6 lg:gap-8 items-start justify-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,560px)] gap-10 lg:gap-14 items-start">
+            {/* INFO */}
+            <div className="lg:sticky lg:top-24">
+              <p className="font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier mb-3">
+                FOR CREATORS
+              </p>
+              <h2
+                className="font-display font-extrabold tracking-[-0.03em] leading-[1.05] mb-4"
+                style={{ fontSize: 'clamp(1.625rem, 3.2vw, 2.375rem)' }}
+              >
+                Got a workflow that ships?{' '}
+                <span className="text-gradient-atelier">Publish it.</span>
+              </h2>
+              <p className="text-[14.5px] md:text-[15.5px] leading-[1.55] text-gray-700 dark:text-neutral-300 mb-6">
+                Upload a Markdown file, pick a category, set a price or make it free.
+                Your wallet is your identity.
+              </p>
+              <ul className="space-y-3 text-[13.5px] leading-[1.55] text-gray-700 dark:text-neutral-300">
+                <InfoItem>
+                  <span className="text-black dark:text-white font-semibold">Goes live instantly.</span>{' '}
+                  No waitlist, no review queue.
+                </InfoItem>
+                <InfoItem>
+                  <span className="text-black dark:text-white font-semibold">Earn in USDC.</span>{' '}
+                  Per download, settled on Solana. Platform takes 15%.
+                </InfoItem>
+                <InfoItem>
+                  <span className="text-black dark:text-white font-semibold">Non-exclusive.</span>{' '}
+                  List it anywhere else too. No lockup.
+                </InfoItem>
+              </ul>
+            </div>
+
             {/* FORM */}
             <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white/70 dark:bg-black-soft/70 backdrop-blur-sm p-5">
               <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200 dark:border-neutral-800">
@@ -401,21 +411,6 @@ export function CreatorSurface(): JSX.Element {
                 </p>
               </div>
             </div>
-
-            {/* LIVE PREVIEW */}
-            <div className="lg:sticky lg:top-24">
-              <SkillPreview
-                name={name || 'Your skill name'}
-                description={
-                  description || `${category.example} — packaged for one-click install.`
-                }
-                category={category.name}
-                price={previewPrice}
-                pricing={pricing}
-                fileName={file?.name ?? null}
-                walletAddress={auth.walletAddress}
-              />
-            </div>
           </div>
         )}
       </div>
@@ -446,6 +441,23 @@ function Field({
       </div>
       {children}
     </div>
+  );
+}
+
+function InfoItem({ children }: { children: React.ReactNode }): JSX.Element {
+  return (
+    <li className="flex items-start gap-2.5">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        className="w-4 h-4 mt-0.5 text-atelier shrink-0"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+      </svg>
+      <span>{children}</span>
+    </li>
   );
 }
 
@@ -523,92 +535,3 @@ function SubmittedState({
   );
 }
 
-function SkillPreview({
-  name,
-  description,
-  category,
-  price,
-  pricing,
-  fileName,
-  walletAddress,
-}: {
-  name: string;
-  description: string;
-  category: string;
-  price: number;
-  pricing: 'free' | 'paid';
-  fileName: string | null;
-  walletAddress: string | null;
-}): JSX.Element {
-  const isFree = pricing === 'free' || price === 0;
-
-  return (
-    <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white/70 dark:bg-black-soft/70 backdrop-blur-sm overflow-hidden transition-all">
-      <div className="flex items-center justify-between px-5 py-2.5 border-b border-gray-200 dark:border-neutral-800 bg-gray-50/60 dark:bg-black/40">
-        <span className="font-mono text-[10px] tracking-[0.18em] text-atelier">LIVE PREVIEW</span>
-        <span className="font-mono text-[9.5px] tracking-[0.14em] text-gray-500 dark:text-neutral-400">
-          STOREFRONT
-        </span>
-      </div>
-
-      <div className="p-5">
-        <div className="flex items-center justify-between mb-3">
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full font-mono text-[9.5px] tracking-[0.14em] text-atelier border border-atelier/50 bg-atelier/[0.10]">
-            {category.toUpperCase()}
-          </span>
-          <span
-            className={`font-mono text-[10px] tracking-[0.14em] uppercase ${
-              isFree ? 'text-atelier' : 'text-gray-700 dark:text-neutral-200'
-            }`}
-          >
-            {isFree ? 'FREE' : `$${price.toFixed(price % 1 === 0 ? 0 : 2)}`}
-          </span>
-        </div>
-
-        <h4 className="font-display font-bold text-[22px] leading-[1.15] tracking-[-0.02em] mb-2 text-black dark:text-white break-words">
-          {truncate(name, MAX_NAME)}
-        </h4>
-        <p className="text-[13px] leading-[1.55] text-gray-700 dark:text-neutral-300 mb-4 break-words">
-          {truncate(description, MAX_DESCRIPTION)}
-        </p>
-
-        <div className="pt-3 border-t border-gray-200 dark:border-neutral-800 space-y-1.5">
-          <Row label="File" value={fileName ?? 'none yet'} muted={!fileName} />
-          <Row
-            label="Creator"
-            value={walletAddress ? shortWallet(walletAddress) : 'anon — signs in at submit'}
-            muted={!walletAddress}
-          />
-        </div>
-
-        <div className="mt-4 pt-3 border-t border-gray-200 dark:border-neutral-800 flex items-center justify-end">
-          <button
-            type="button"
-            disabled
-            aria-disabled="true"
-            className="px-3.5 h-9 inline-flex items-center rounded bg-atelier/40 text-white/80 font-mono text-[12px] font-medium tracking-wide cursor-not-allowed"
-          >
-            {isFree ? 'Get free →' : 'Equip →'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }): JSX.Element {
-  return (
-    <div className="flex items-center gap-2 text-[11px] font-mono">
-      <span className="text-gray-500 dark:text-neutral-400 tracking-[0.14em] uppercase shrink-0 w-14">
-        {label}
-      </span>
-      <span
-        className={`truncate ${
-          muted ? 'text-gray-500 dark:text-neutral-400 italic' : 'text-gray-800 dark:text-neutral-200'
-        }`}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}

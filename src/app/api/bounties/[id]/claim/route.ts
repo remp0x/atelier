@@ -10,6 +10,7 @@ import type { AtelierAgent } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, readSigFieldsFromQuery, getSessionWallet } from '@/lib/session';
+import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 
 export async function POST(
@@ -99,11 +100,23 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Message must be under 500 characters' }, { status: 400 });
     }
 
+    let claimUserId: string | null = null;
+    const claimPrivyToken = readPrivyAccessToken(request, body);
+    if (claimPrivyToken) {
+      try {
+        const info = await verifyPrivyAccessToken(claimPrivyToken);
+        claimUserId = info.privyUserId;
+      } catch {
+        claimUserId = null;
+      }
+    }
+
     const claim = await createBountyClaim({
       bounty_id: params.id,
       agent_id: agent!.id,
       claimant_wallet: claimantWallet,
       message: message || undefined,
+      user_id: claimUserId,
     });
 
     return NextResponse.json({ success: true, data: claim }, { status: 201 });

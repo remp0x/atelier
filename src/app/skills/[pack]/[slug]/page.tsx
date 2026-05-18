@@ -7,7 +7,6 @@ import {
   SKILL_EXAMPLES,
   SKILL_PACKS,
   getDownloadUrl,
-  getSourceUrl,
   isExternalSkill,
   type SkillExample,
   type SkillPackId,
@@ -77,7 +76,6 @@ export default async function SkillDetailPage({ params }: PageProps) {
   const pack = SKILL_PACKS[skill.pack as SkillPackId];
   const external = isExternalSkill(skill);
   const isCommunity = skill.pack === 'community';
-  const sourceUrl = getSourceUrl(skill);
 
   return (
     <AtelierAppLayout>
@@ -274,16 +272,6 @@ export default async function SkillDetailPage({ params }: PageProps) {
               </p>
             </Panel>
 
-            {!external && (
-              <a
-                href={sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-center text-[11px] font-mono text-gray-500 dark:text-neutral-500 hover:text-atelier transition-colors py-2"
-              >
-                View source on GitHub ↗
-              </a>
-            )}
           </aside>
         </div>
       </div>

@@ -1,12 +1,12 @@
 'use client';
 
+import { useCallback } from 'react';
 import Link from 'next/link';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import {
   ANTHROPIC_SKILLS,
   MEDICAL_SKILLS,
   getDownloadUrl,
-  getPackLabel,
-  getSourceUrl,
   type SkillExample,
   type SkillPackId,
 } from './marketData';
@@ -17,8 +17,6 @@ type LandingPack = {
   id: SkillPackId;
   title: string;
   description: string;
-  sourceLabel: string;
-  sourceHref: string;
   skills: SkillExample[];
 };
 
@@ -27,16 +25,12 @@ const LANDING_PACKS: LandingPack[] = [
     id: 'anthropic',
     title: 'Anthropic Official',
     description: 'The full library of skills published by Anthropic — document toolkits (PDF, DOCX, PPTX, XLSX), design utilities, the MCP builder, Claude API patterns, and the skill-creator itself. Drop any of these into your agent.',
-    sourceLabel: 'Source · anthropics/skills ↗',
-    sourceHref: 'https://github.com/anthropics/skills/tree/main/skills',
     skills: ANTHROPIC_SKILLS,
   },
   {
     id: 'medical',
     title: 'Medical Pack',
     description: 'Ten core clinical-research skills curated from the OpenClaw Medical Skills library — literature search, clinical documentation, guidelines lookup, drug research, and trial matching. All free at launch.',
-    sourceLabel: 'Source · OpenClaw ↗',
-    sourceHref: 'https://github.com/FreedomIntelligence/OpenClaw-Medical-Skills',
     skills: MEDICAL_SKILLS,
   },
 ];
@@ -54,7 +48,7 @@ export function WhatYouEquip(): JSX.Element {
       <div className="relative max-w-[1280px] mx-auto px-7">
         <div className="max-w-[640px] mb-12 md:mb-16">
           <p className="font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier mb-5">
-            WHAT YOU CAN EQUIP
+            WHAT YOU CAN DOWNLOAD
           </p>
           <h2
             className="font-display font-extrabold tracking-[-0.03em] leading-[1.05] mb-5"
@@ -75,8 +69,6 @@ export function WhatYouEquip(): JSX.Element {
             packId={p.id}
             title={p.title}
             countLabel={`${p.skills.length} · FREE`}
-            sourceLabel={p.sourceLabel}
-            sourceHref={p.sourceHref}
             description={p.description}
             skills={p.skills.slice(0, ROW_LIMIT)}
             totalCount={p.skills.length}
@@ -115,8 +107,6 @@ function Pack({
   packId,
   title,
   countLabel,
-  sourceLabel,
-  sourceHref,
   description,
   skills,
   totalCount,
@@ -124,8 +114,6 @@ function Pack({
   packId: SkillPackId;
   title: string;
   countLabel: string;
-  sourceLabel: string;
-  sourceHref: string;
   description: string;
   skills: SkillExample[];
   totalCount: number;
@@ -142,14 +130,6 @@ function Pack({
             {countLabel}
           </span>
         </div>
-        <a
-          href={sourceHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-mono text-[10px] uppercase tracking-[0.14em] text-gray-500 dark:text-neutral-500 hover:text-atelier transition-colors"
-        >
-          {sourceLabel}
-        </a>
       </div>
       <p className="text-[15px] leading-[1.55] text-gray-600 dark:text-neutral-400 max-w-[640px] mb-8">
         {description}
@@ -174,8 +154,23 @@ function Pack({
 }
 
 function SkillExampleCard({ skill }: { skill: SkillExample }): JSX.Element {
+  const auth = useAtelierAuth();
   const isFree = skill.price === 0;
   const hasPrice = typeof skill.price === 'number';
+
+  const handleDownload = useCallback(() => {
+    if (!auth.walletReady) {
+      auth.login();
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = getDownloadUrl(skill);
+    a.download = `${skill.slug}.md`;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }, [auth, skill]);
 
   return (
     <div className="group relative rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50/60 dark:bg-black-soft/60 backdrop-blur-md p-5 transition-all hover:border-atelier/40 hover:shadow-[0_0_24px_-8px_rgba(250,76,20,0.3)] flex flex-col">
@@ -203,29 +198,30 @@ function SkillExampleCard({ skill }: { skill: SkillExample }): JSX.Element {
         <Row label="Tools" value={skill.tools.join(' · ')} />
         <Row label="KB" value={skill.kb} />
       </div>
-      <div className="mt-4 flex items-center gap-2">
-        <a
-          href={getDownloadUrl(skill)}
-          download={`${skill.slug}.md`}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded bg-atelier text-white font-mono text-[12px] font-medium tracking-wide transition-all hover:bg-atelier-bright hover:shadow-[0_0_16px_rgba(250,76,20,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black-soft"
-          aria-label={`Download ${skill.name} as Markdown`}
+      <div className="mt-4">
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded bg-atelier text-white font-mono text-[12px] font-medium tracking-wide transition-all hover:bg-atelier-bright hover:shadow-[0_0_16px_rgba(250,76,20,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black-soft"
+          aria-label={
+            auth.walletReady
+              ? `Download ${skill.name} as Markdown`
+              : `Sign in to download ${skill.name}`
+          }
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <path d="M7 10l5 5 5-5" />
-            <path d="M12 15V3" />
-          </svg>
-          Download .md
-        </a>
-        <a
-          href={getSourceUrl(skill)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center justify-center h-9 px-2.5 rounded border border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-300 font-mono text-[11px] hover:border-atelier/40 hover:text-atelier transition-colors"
-          aria-label={`View ${skill.name} source on ${getPackLabel(skill)}`}
-        >
-          Source ↗
-        </a>
+          {auth.walletReady ? (
+            <>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M12 15V3" />
+              </svg>
+              Download .md
+            </>
+          ) : (
+            'Sign in to download'
+          )}
+        </button>
       </div>
     </div>
   );

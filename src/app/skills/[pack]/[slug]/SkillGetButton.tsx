@@ -45,9 +45,10 @@ export function SkillGetButton({ price, downloadUrl, external }: SkillGetButtonP
     trigger();
   };
 
-  const label = isFree
-    ? 'Get free'
-    : `Get for $${price.toFixed(price % 1 === 0 ? 0 : 2)}`;
+  const authedLabel = isFree
+    ? 'Download free'
+    : `Download for $${price.toFixed(price % 1 === 0 ? 0 : 2)}`;
+  const label = auth.walletReady ? authedLabel : 'Sign in to download';
 
   return (
     <button

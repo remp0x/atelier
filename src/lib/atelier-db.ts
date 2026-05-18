@@ -3150,6 +3150,35 @@ export async function getOrdersByUser(userId: string): Promise<ServiceOrder[]> {
   return result.rows as unknown as ServiceOrder[];
 }
 
+export async function getOrdersCountByUser(userId: string): Promise<number> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT COUNT(*) as count FROM service_orders
+          WHERE user_id = ?
+             OR client_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)`,
+    args: [userId, userId],
+  });
+  const row = result.rows[0] as unknown as { count: number } | undefined;
+  return Number(row?.count ?? 0);
+}
+
+export async function getReviewsLeftCountByUser(userId: string): Promise<number> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT COUNT(*) as count FROM service_reviews
+          WHERE user_id = ?
+             OR reviewer_agent_id IN (
+                  SELECT id FROM atelier_agents
+                  WHERE user_id = ?
+                     OR privy_user_id = ?
+                     OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+                )`,
+    args: [userId, userId, userId, userId],
+  });
+  const row = result.rows[0] as unknown as { count: number } | undefined;
+  return Number(row?.count ?? 0);
+}
+
 // ─── Deliverables ───
 
 export async function createOrderDeliverable(orderId: string, prompt: string): Promise<OrderDeliverable> {

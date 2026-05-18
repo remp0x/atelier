@@ -3,10 +3,13 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ProfileOwnerPanel } from '@/components/atelier/ProfileOwnerPanel';
+import { LinkedWalletsList } from '@/components/atelier/LinkedWalletsList';
 import {
   getUserByUsername,
   getUserWallets,
   getAtelierAgentsByPrivyUser,
+  getOrdersCountByUser,
+  getReviewsLeftCountByUser,
   type AtelierAgent,
   type UserWallet,
   type AtelierUser,
@@ -35,25 +38,6 @@ function StatChip({ label, value }: { label: string; value: string | number }): 
     <div className="flex flex-col gap-0.5">
       <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-600">{label}</span>
       <span className="text-lg font-mono font-bold text-white">{value}</span>
-    </div>
-  );
-}
-
-function WalletRowServer({ wallet }: { wallet: UserWallet }): React.ReactElement {
-  const chainLogo = wallet.chain === 'solana' ? '/solana.svg' : '/base.svg';
-  const chainLabel = wallet.chain === 'solana' ? 'Solana' : 'Base';
-
-  return (
-    <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-black/40 border border-white/5">
-      <Image src={chainLogo} alt={chainLabel} width={20} height={20} className="flex-shrink-0" />
-      <code className="flex-1 text-xs font-mono text-neutral-300 truncate">
-        {truncateAddress(wallet.address)}
-      </code>
-      {wallet.is_primary === 1 && (
-        <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded bg-atelier/10 text-atelier border border-atelier/20 flex-shrink-0">
-          Primary
-        </span>
-      )}
     </div>
   );
 }
@@ -119,24 +103,21 @@ function ProfileHero({
   user,
   wallets,
   activeAgentCount,
+  ordersCount,
+  reviewsCount,
 }: {
   user: AtelierUser;
   wallets: UserWallet[];
   activeAgentCount: number;
+  ordersCount: number;
+  reviewsCount: number;
 }): React.ReactElement {
   const displayName = user.display_name || user.username || 'Anonymous';
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
   return (
     <div className="relative rounded-2xl overflow-hidden border border-white/5 bg-black/40">
-      <div
-        className="absolute top-0 left-0 right-0 h-20 pointer-events-none"
-        style={{
-          background:
-            'linear-gradient(90deg, rgba(201,58,10,0.25) 0%, rgba(250,76,20,0.22) 50%, rgba(255,177,153,0.15) 100%)',
-        }}
-      />
-      <div className="relative px-6 pt-10 pb-6">
+      <div className="relative px-6 pt-6 pb-6">
         <div className="flex items-end gap-4 mb-5">
           <div className="relative w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0 ring-2 ring-black/40 border border-white/10 bg-atelier/10">
             {user.avatar_url ? (
@@ -184,11 +165,13 @@ function ProfileHero({
           </p>
         )}
 
-        <div className="flex items-center gap-6 py-4 border-y border-white/5 mb-5">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 py-4 border-y border-white/5 mb-5">
           <StatChip label="Agents" value={activeAgentCount} />
-          <div className="w-px h-8 bg-white/5" />
-          <StatChip label="Wallets" value={wallets.length} />
-          <div className="w-px h-8 bg-white/5" />
+          <div className="w-px h-8 bg-white/5 hidden sm:block" />
+          <StatChip label="Orders" value={ordersCount} />
+          <div className="w-px h-8 bg-white/5 hidden sm:block" />
+          <StatChip label="Reviews" value={reviewsCount} />
+          <div className="w-px h-8 bg-white/5 hidden sm:block" />
           <div className="flex flex-col gap-0.5">
             <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-600">Member since</span>
             <span className="text-sm font-mono text-neutral-300">{formatMemberSince(user.created_at)}</span>
@@ -206,9 +189,11 @@ export default async function PublicProfilePage({ params }: ProfilePageProps): P
   const user = await getUserByUsername(username);
   if (!user) notFound();
 
-  const [wallets, agents] = await Promise.all([
+  const [wallets, agents, ordersCount, reviewsCount] = await Promise.all([
     getUserWallets(user.privy_user_id),
     getAtelierAgentsByPrivyUser(user.privy_user_id),
+    getOrdersCountByUser(user.privy_user_id),
+    getReviewsLeftCountByUser(user.privy_user_id),
   ]);
 
   const activeAgents = agents.filter((a) => a.active === 1);
@@ -216,20 +201,20 @@ export default async function PublicProfilePage({ params }: ProfilePageProps): P
   return (
     <AtelierAppLayout>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <ProfileHero user={user} wallets={wallets} activeAgentCount={activeAgents.length} />
+        <ProfileHero
+          user={user}
+          wallets={wallets}
+          activeAgentCount={activeAgents.length}
+          ordersCount={ordersCount}
+          reviewsCount={reviewsCount}
+        />
 
-        {wallets.length > 0 && (
-          <section>
-            <h2 className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-4">
-              Linked Wallets
-            </h2>
-            <div className="space-y-2">
-              {wallets.map((w) => (
-                <WalletRowServer key={w.id} wallet={w} />
-              ))}
-            </div>
-          </section>
-        )}
+        <section>
+          <h2 className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-4">
+            Linked Wallets
+          </h2>
+          <LinkedWalletsList wallets={wallets} ownerPrivyUserId={user.privy_user_id} />
+        </section>
 
         <section>
           <h2 className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-4">

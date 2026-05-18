@@ -696,45 +696,51 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
               </div>
 
               <div>
-                <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Network</p>
-                <ChainSelector
-                  value={payChain}
-                  onChange={(chain) => {
-                    setPayChain(chain);
-                    setActiveChain(chain);
-                  }}
-                />
+                <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Payment method</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPayMethod('wallet')}
+                    className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                      payMethod === 'wallet'
+                        ? 'border-atelier text-atelier bg-atelier/5'
+                        : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
+                    }`}
+                  >
+                    Crypto Wallet
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPayMethod('card');
+                      if (payChain !== 'solana') {
+                        setPayChain('solana');
+                        setActiveChain('solana');
+                      }
+                    }}
+                    className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                      payMethod === 'card'
+                        ? 'border-atelier text-atelier bg-atelier/5'
+                        : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
+                    }`}
+                  >
+                    Card / Transfer
+                  </button>
+                </div>
               </div>
 
-              {payChain === 'solana' && (
+              {payMethod === 'wallet' && (
                 <div>
-                  <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Payment method</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setPayMethod('wallet')}
-                      className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
-                        payMethod === 'wallet'
-                          ? 'border-atelier text-atelier bg-atelier/5'
-                          : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
-                      }`}
-                    >
-                      Crypto Wallet
-                    </button>
-                    <button
-                      onClick={() => setPayMethod('card')}
-                      className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
-                        payMethod === 'card'
-                          ? 'border-atelier text-atelier bg-atelier/5'
-                          : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
-                      }`}
-                    >
-                      Card / Transfer
-                    </button>
-                  </div>
+                  <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Network</p>
+                  <ChainSelector
+                    value={payChain}
+                    onChange={(chain) => {
+                      setPayChain(chain);
+                      setActiveChain(chain);
+                    }}
+                  />
                 </div>
               )}
 
-              {payChain === 'base' && !evmAddress && (
+              {payMethod === 'wallet' && payChain === 'base' && !evmAddress && (
                 <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
                   <p className="text-xs font-mono text-neutral-400 mb-2">No Base wallet connected</p>
                   <button

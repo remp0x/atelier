@@ -159,16 +159,25 @@ export async function authenticateUserRequestWithChain(
   sigFallback?: Record<string, unknown> | null,
   expectedWallet?: string | null,
 ): Promise<{ wallet: string; chain: WalletChain }> {
+  // A wallet signature is the strongest proof of control and works across multi-wallet users.
+  // Privy-authenticated users may carry an old wallet-session cookie tied to a different
+  // chain than the wallet they want to act with; we trust the sig when it's present.
+  const hasSig =
+    sigFallback &&
+    sigFallback.wallet &&
+    sigFallback.wallet_sig &&
+    sigFallback.wallet_sig_ts !== undefined;
+
+  if (hasSig) {
+    return verifySignatureFallback(request, sigFallback, expectedWallet ?? null);
+  }
+
   const sessionAuth = await getSessionAuth(request);
   if (sessionAuth) {
     if (expectedWallet && sessionAuth.wallet !== expectedWallet) {
       throw new WalletAuthError('Wallet mismatch');
     }
     return sessionAuth;
-  }
-
-  if (sigFallback && sigFallback.wallet) {
-    return verifySignatureFallback(request, sigFallback, expectedWallet ?? null);
   }
 
   throw new WalletAuthError('Authentication required');

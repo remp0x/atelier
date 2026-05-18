@@ -30,8 +30,23 @@ export async function sendBaseUsdcPayment(
   // Read + write through the SAME wallet provider transport (Rabby/MetaMask/etc).
   // Public RPCs like mainnet.base.org block browser-origin requests with CORS, so
   // doing reads via http(...) from the client fails. The wallet always has a
-  // working JSON-RPC connection to Base, so we piggyback on it.
+  // working JSON-RPC connection to whatever chain it's pointed at, so we piggyback
+  // on it -- BUT first we have to make sure the wallet is on Base. USDC's address
+  // 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 is only a contract on Base; on any
+  // other chain a balanceOf() read returns 0x (no contract) and viem throws.
   const client = walletClient.extend(publicActions);
+
+  const currentChainId = await client.getChainId();
+  if (currentChainId !== base.id) {
+    try {
+      await client.switchChain({ id: base.id });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Please switch your wallet to Base mainnet to pay in USDC on Base (${message})`,
+      );
+    }
+  }
 
   const [whole, frac = ''] = String(amountUsd).split('.');
   const padded = (frac + '000000').slice(0, USDC_BASE_DECIMALS);

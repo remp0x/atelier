@@ -17,7 +17,8 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
           loginMessage: 'Continue with Google to access Atelier.',
           walletChainType: 'ethereum-and-solana',
           walletList: [
-            'detected_wallets',
+            'detected_ethereum_wallets',
+            'detected_solana_wallets',
             'phantom',
             'solflare',
             'metamask',

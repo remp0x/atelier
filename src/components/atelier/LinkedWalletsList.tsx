@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useLinkAccount, usePrivy } from '@privy-io/react-auth';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { getPrivyAccessToken } from '@/lib/privy-client';
@@ -211,15 +212,22 @@ function PlaceholderRow({ chain, onClick }: PlaceholderRowProps): React.ReactEle
 
 export function LinkedWalletsList({ wallets, ownerPrivyUserId }: LinkedWalletsListProps): React.ReactElement | null {
   const { atelierUser, refreshAtelierUser } = useAtelierAuth();
+  const router = useRouter();
   const { linkWallet } = useLinkAccount({
-    onSuccess: () => { void refreshAtelierUser(); },
+    onSuccess: () => {
+      void (async () => {
+        await refreshAtelierUser();
+        router.refresh();
+      })();
+    },
   });
 
   const isOwner = atelierUser?.privy_user_id === ownerPrivyUserId;
 
   const onRefresh = useCallback(async () => {
     await refreshAtelierUser();
-  }, [refreshAtelierUser]);
+    router.refresh();
+  }, [refreshAtelierUser, router]);
 
   if (!isOwner && wallets.length === 0) return null;
 

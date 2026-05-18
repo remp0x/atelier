@@ -1036,6 +1036,15 @@ export async function getUserWallets(userId: string): Promise<UserWallet[]> {
   return result.rows as unknown as UserWallet[];
 }
 
+export async function getUserWalletById(walletId: string): Promise<UserWallet | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM user_wallets WHERE id = ? LIMIT 1',
+    args: [walletId],
+  });
+  return result.rows[0] ? (result.rows[0] as unknown as UserWallet) : null;
+}
+
 export async function getUserByWalletAddress(chain: WalletChain, address: string): Promise<AtelierUser | null> {
   await initAtelierDb();
   const result = await atelierClient.execute({

@@ -150,7 +150,7 @@ export default function BountyDetailPage() {
   }, [myAgents, selectedAgentId]);
 
   const handleClaim = useCallback(async () => {
-    if (!walletAddress) { login(); return; }
+    if (!authenticated) { login(); return; }
     if (!selectedAgentId) { setActionError('Select an agent'); return; }
 
     setActionLoading(true);
@@ -182,7 +182,7 @@ export default function BountyDetailPage() {
   }, [walletAddress, selectedAgentId, claimMessage, id, getAuth, login, fetchBounty]);
 
   const handleAccept = useCallback(async (claimId: string) => {
-    if (!walletAddress || !bounty) return;
+    if (!authenticated || !walletAddress || !bounty) return;
 
     const treasury = getTreasuryForChain(payChain);
     if (!treasury) { setActionError('Treasury wallet not configured'); return; }
@@ -237,7 +237,7 @@ export default function BountyDetailPage() {
   }, [walletAddress, bounty, payChain, evmAddress, connection, id, getAuth, getTransactionWallet, getEvmWalletClient, router]);
 
   const handleCancel = useCallback(async () => {
-    if (!walletAddress) return;
+    if (!authenticated) { login(); return; }
     setActionLoading(true);
     setActionError(null);
     try {
@@ -260,7 +260,7 @@ export default function BountyDetailPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [walletAddress, id, getAuth, fetchBounty]);
+  }, [authenticated, login, id, getAuth, fetchBounty]);
 
   if (loading) {
     return (
@@ -491,7 +491,18 @@ export default function BountyDetailPage() {
         )}
 
         {/* Agent owner view: claim form */}
-        {!isPoster && isOpen && walletAddress && (
+        {!isPoster && isOpen && !authenticated && (
+          <div className="mb-6 p-4 rounded-lg border border-atelier/40 bg-atelier/5">
+            <p className="text-xs font-mono text-atelier mb-2">Sign in to interact with this bounty</p>
+            <button
+              onClick={() => login()}
+              className="px-4 py-2 rounded border border-atelier text-atelier text-xs font-mono hover:bg-atelier hover:text-white transition-colors"
+            >
+              Sign in with X or Google
+            </button>
+          </div>
+        )}
+        {!isPoster && isOpen && authenticated && walletAddress && (
           <div className="mb-6">
             {!showClaimForm ? (
               <button
@@ -558,15 +569,12 @@ export default function BountyDetailPage() {
           </div>
         )}
 
-        {/* Not connected */}
-        {!walletAddress && isOpen && (
+        {/* Authenticated but no wallet yet (social-only session) */}
+        {!isPoster && isOpen && authenticated && !walletAddress && (
           <div className="mb-6">
-            <button
-              onClick={() => login()}
-              className="w-full py-3 rounded-xl text-sm font-semibold font-mono border border-gray-200 dark:border-neutral-800 text-gray-600 dark:text-neutral-300 hover:border-atelier hover:text-atelier transition-colors"
-            >
-              Connect Wallet to Claim
-            </button>
+            <p className="text-xs font-mono text-gray-500 dark:text-neutral-500">
+              Link a wallet in your dashboard to claim bounties.
+            </p>
           </div>
         )}
       </div>

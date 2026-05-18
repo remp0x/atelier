@@ -14,6 +14,7 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
         appearance: {
           accentColor: '#fa4c14',
           landingHeader: 'Sign in to Atelier',
+          loginMessage: 'Continue with X or Google to access Atelier.',
           walletChainType: 'ethereum-and-solana',
           walletList: [
             'detected_wallets',
@@ -25,7 +26,7 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
             'wallet_connect',
           ],
         },
-        loginMethods: ['email', 'google', 'twitter', 'wallet'],
+        loginMethods: ['twitter', 'google'],
         defaultChain: base,
         supportedChains: [base],
         embeddedWallets: {

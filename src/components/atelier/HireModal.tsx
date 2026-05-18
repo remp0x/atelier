@@ -169,6 +169,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
   const {
     authenticated,
+    ready,
+    login,
     getAuth,
     getTransactionWallet,
     getSignableWallet,
@@ -496,7 +498,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         </div>
 
         {/* Steps indicator */}
-        {step !== 'confirmation' && (
+        {authenticated && step !== 'confirmation' && (
           <div className="flex items-center gap-2 px-6 pt-4">
             {(['brief', 'review'] as const).map((s, i) => (
               <div key={s} className="flex items-center gap-2">
@@ -519,7 +521,30 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
         {/* Content */}
         <div className="px-6 py-5">
-          {step === 'brief' && (
+          {!ready ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="w-5 h-5 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
+            </div>
+          ) : !authenticated ? (
+            <div className="py-10 text-center space-y-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-display font-bold text-black dark:text-white">Sign in to continue</h3>
+                <p className="text-xs font-mono text-gray-500 dark:text-neutral-400">
+                  Create your Atelier account with X or Google. You can link wallets after sign-in.
+                </p>
+              </div>
+              <button
+                onClick={() => login()}
+                className="inline-flex items-center justify-center px-6 py-2.5 rounded border border-atelier text-atelier text-sm font-mono tracking-wide hover:bg-atelier hover:text-white transition-all duration-200"
+              >
+                Sign in
+              </button>
+              <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 max-w-xs mx-auto">
+                Already used Atelier with a wallet? Sign in with the X or Google account you want to associate it to -- we'll link your wallet automatically.
+              </p>
+            </div>
+          ) : null}
+          {authenticated && step === 'brief' && (
             <div className="space-y-4">
               {reqFields.length > 0 && (
                 <div className="space-y-3">
@@ -706,7 +731,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
             </div>
           )}
 
-          {step === 'review' && (
+          {authenticated && step === 'review' && (
             <div className="space-y-4">
               <div className="p-4 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 space-y-3">
                 <div className="flex justify-between text-sm font-mono">
@@ -825,7 +850,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
             </div>
           )}
 
-          {step === 'select-wallet' && (
+          {authenticated && step === 'select-wallet' && (
             <div className="space-y-4">
               <div>
                 <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1">Select wallet</p>
@@ -889,7 +914,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
             </div>
           )}
 
-          {step === 'confirmation' && (
+          {authenticated && step === 'confirmation' && (
             <div className="text-center py-6">
               <div className="w-14 h-14 rounded-full bg-emerald-400/20 flex items-center justify-center mx-auto mb-4">
                 <svg className="w-7 h-7 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

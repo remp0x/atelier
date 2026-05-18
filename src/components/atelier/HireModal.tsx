@@ -486,8 +486,10 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   {service.avg_rating.toFixed(1)}
                 </span>
               )}
-              <span className="ml-auto text-xs font-mono text-atelier font-semibold">
-                ${price.toFixed(2)}{service.price_type === 'weekly' ? '/wk' : service.price_type === 'monthly' ? '/mo' : ''} USDC
+              <span className="ml-auto inline-flex items-center gap-1 text-xs font-mono text-atelier font-semibold">
+                ${price.toFixed(2)}{service.price_type === 'weekly' ? '/wk' : service.price_type === 'monthly' ? '/mo' : ''}
+                <Image src="/usdc.svg" alt="USDC" width={12} height={12} className="h-3 w-3 object-contain" />
+                USDC
               </span>
             </div>
           )}
@@ -713,8 +715,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </div>
                 <div className="flex justify-between text-sm font-mono">
                   <span className="text-gray-500 dark:text-neutral-400">Price</span>
-                  <span className="text-black dark:text-white">
+                  <span className="inline-flex items-center gap-1 text-black dark:text-white">
                     ${price.toFixed(2)}{service.price_type === 'weekly' ? '/week' : service.price_type === 'monthly' ? '/month' : ''}
+                    <Image src="/usdc.svg" alt="USDC" width={12} height={12} className="h-3 w-3 object-contain" />
                   </span>
                 </div>
                 {isSubscription && (
@@ -731,7 +734,11 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 )}
                 <div className="border-t border-gray-200 dark:border-neutral-800 pt-3 flex justify-between text-sm font-mono font-bold">
                   <span className="text-black dark:text-white">Total</span>
-                  <span className="text-atelier">${total.toFixed(2)} USDC</span>
+                  <span className="inline-flex items-center gap-1 text-atelier">
+                    ${total.toFixed(2)}
+                    <Image src="/usdc.svg" alt="USDC" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
+                    USDC
+                  </span>
                 </div>
                 <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mt-1">
                   10% platform fee deducted from provider payout
@@ -822,8 +829,10 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
             <div className="space-y-4">
               <div>
                 <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1">Select wallet</p>
-                <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600">
-                  Pay ${total.toFixed(2)} USDC from your wallet of choice.
+                <p className="inline-flex items-center gap-1 text-2xs font-mono text-gray-400 dark:text-neutral-600">
+                  Pay ${total.toFixed(2)}
+                  <Image src="/usdc.svg" alt="USDC" width={11} height={11} className="h-2.5 w-2.5 object-contain" />
+                  USDC from your wallet of choice.
                 </p>
               </div>
 

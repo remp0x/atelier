@@ -611,6 +611,46 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_wallet ON submitted_skills(creator_wallet)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_created ON submitted_skills(created_at)');
 
+  try {
+    await atelierClient.execute(`
+      CREATE TABLE IF NOT EXISTS users (
+        privy_user_id TEXT PRIMARY KEY,
+        username TEXT UNIQUE,
+        display_name TEXT,
+        twitter_username TEXT,
+        twitter_subject TEXT,
+        google_email TEXT,
+        google_subject TEXT,
+        email TEXT,
+        avatar_url TEXT,
+        bio TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } catch (_e) { }
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(LOWER(username))');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_users_twitter ON users(LOWER(twitter_username))');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_users_twitter_subject ON users(twitter_subject)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_users_google_subject ON users(google_subject)');
+
+  try {
+    await atelierClient.execute(`
+      CREATE TABLE IF NOT EXISTS user_wallets (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        chain TEXT NOT NULL,
+        address TEXT NOT NULL,
+        is_primary INTEGER NOT NULL DEFAULT 0,
+        linked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(chain, address)
+      )
+    `);
+  } catch (_e) { }
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_user_wallets_user ON user_wallets(user_id)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_user_wallets_address ON user_wallets(LOWER(address))');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_user_wallets_chain_address ON user_wallets(chain, LOWER(address))');
+
   try { await atelierClient.execute("ALTER TABLE service_orders ADD COLUMN payment_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN payer_address TEXT'); } catch (_e) { }
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_chain ON service_orders(payment_chain)');
@@ -735,6 +775,296 @@ export async function setSubmittedSkillStatus(id: string, status: 'live' | 'remo
   await atelierClient.execute({
     sql: `UPDATE submitted_skills SET status = ? WHERE id = ?`,
     args: [status, id],
+  });
+}
+
+export interface AtelierUser {
+  privy_user_id: string;
+  username: string | null;
+  display_name: string | null;
+  twitter_username: string | null;
+  twitter_subject: string | null;
+  google_email: string | null;
+  google_subject: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type WalletChain = 'solana' | 'base';
+
+export interface UserWallet {
+  id: string;
+  user_id: string;
+  chain: WalletChain;
+  address: string;
+  is_primary: number;
+  linked_at: string;
+}
+
+const USERNAME_SLUG_REGEX = /^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$/;
+const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
+  'admin', 'atelier', 'api', 'app', 'www', 'support', 'help',
+  'login', 'signup', 'profile', 'orders', 'bounties', 'agents',
+  'skills', 'dashboard', 'settings',
+]);
+
+function isValidUsernameSlug(username: string): boolean {
+  const lower = username.toLowerCase();
+  if (lower.length < 3 || lower.length > 30) return false;
+  if (!USERNAME_SLUG_REGEX.test(lower)) return false;
+  if (RESERVED_USERNAMES.has(lower)) return false;
+  return true;
+}
+
+export async function upsertUser(input: {
+  privy_user_id: string;
+  username?: string | null;
+  display_name?: string | null;
+  twitter_username?: string | null;
+  twitter_subject?: string | null;
+  google_email?: string | null;
+  google_subject?: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
+}): Promise<AtelierUser> {
+  await initAtelierDb();
+
+  const fields: Array<keyof typeof input> = [
+    'username',
+    'display_name',
+    'twitter_username',
+    'twitter_subject',
+    'google_email',
+    'google_subject',
+    'email',
+    'avatar_url',
+    'bio',
+  ];
+
+  const insertCols: string[] = ['privy_user_id'];
+  const insertPlaceholders: string[] = ['?'];
+  const insertArgs: Array<string | null> = [input.privy_user_id];
+
+  const updateAssignments: string[] = [];
+
+  for (const f of fields) {
+    const v = input[f];
+    if (v !== undefined) {
+      insertCols.push(f);
+      insertPlaceholders.push('?');
+      const normalized = f === 'twitter_username' && typeof v === 'string' ? v.toLowerCase() : v;
+      insertArgs.push(normalized as string | null);
+      updateAssignments.push(`${f} = excluded.${f}`);
+    }
+  }
+
+  updateAssignments.push('updated_at = CURRENT_TIMESTAMP');
+
+  const sql = `INSERT INTO users (${insertCols.join(', ')})
+               VALUES (${insertPlaceholders.join(', ')})
+               ON CONFLICT(privy_user_id) DO UPDATE SET ${updateAssignments.join(', ')}`;
+
+  await atelierClient.execute({ sql, args: insertArgs });
+
+  const user = await getUserByPrivyId(input.privy_user_id);
+  if (!user) {
+    throw new Error(`upsertUser: failed to read back user ${input.privy_user_id}`);
+  }
+  return user;
+}
+
+export async function getUserByPrivyId(privyUserId: string): Promise<AtelierUser | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM users WHERE privy_user_id = ? LIMIT 1',
+    args: [privyUserId],
+  });
+  return result.rows[0] ? (result.rows[0] as unknown as AtelierUser) : null;
+}
+
+export async function getUserByUsername(username: string): Promise<AtelierUser | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1',
+    args: [username],
+  });
+  return result.rows[0] ? (result.rows[0] as unknown as AtelierUser) : null;
+}
+
+export async function getUserByTwitterUsername(twitterUsername: string): Promise<AtelierUser | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM users WHERE LOWER(twitter_username) = LOWER(?) LIMIT 1',
+    args: [twitterUsername],
+  });
+  return result.rows[0] ? (result.rows[0] as unknown as AtelierUser) : null;
+}
+
+export async function getUserByTwitterSubject(twitterSubject: string): Promise<AtelierUser | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM users WHERE twitter_subject = ? LIMIT 1',
+    args: [twitterSubject],
+  });
+  return result.rows[0] ? (result.rows[0] as unknown as AtelierUser) : null;
+}
+
+export async function getUserByGoogleSubject(googleSubject: string): Promise<AtelierUser | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM users WHERE google_subject = ? LIMIT 1',
+    args: [googleSubject],
+  });
+  return result.rows[0] ? (result.rows[0] as unknown as AtelierUser) : null;
+}
+
+export async function isUsernameAvailable(username: string): Promise<boolean> {
+  await initAtelierDb();
+  if (!isValidUsernameSlug(username)) return false;
+  const result = await atelierClient.execute({
+    sql: 'SELECT 1 FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1',
+    args: [username],
+  });
+  return result.rows.length === 0;
+}
+
+export async function setUsername(privyUserId: string, username: string): Promise<AtelierUser> {
+  await initAtelierDb();
+  const lower = username.toLowerCase();
+  if (!isValidUsernameSlug(lower)) {
+    throw new Error('Invalid username format');
+  }
+  const taken = await atelierClient.execute({
+    sql: 'SELECT privy_user_id FROM users WHERE LOWER(username) = ? AND privy_user_id != ? LIMIT 1',
+    args: [lower, privyUserId],
+  });
+  if (taken.rows.length > 0) {
+    throw new Error('Username not available');
+  }
+  await atelierClient.execute({
+    sql: 'UPDATE users SET username = ?, updated_at = CURRENT_TIMESTAMP WHERE privy_user_id = ?',
+    args: [lower, privyUserId],
+  });
+  const user = await getUserByPrivyId(privyUserId);
+  if (!user) {
+    throw new Error(`setUsername: user ${privyUserId} not found`);
+  }
+  return user;
+}
+
+export function generateDefaultUsername(twitterUsername: string | null, privyUserId: string): string {
+  if (twitterUsername) {
+    const lower = twitterUsername.toLowerCase();
+    if (isValidUsernameSlug(lower)) {
+      return lower;
+    }
+  }
+  const cleaned = privyUserId.replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase();
+  return `user_${cleaned}`;
+}
+
+export async function addUserWallet(input: {
+  user_id: string;
+  chain: WalletChain;
+  address: string;
+  is_primary?: boolean;
+}): Promise<UserWallet> {
+  await initAtelierDb();
+
+  const existing = await atelierClient.execute({
+    sql: 'SELECT user_id FROM user_wallets WHERE chain = ? AND LOWER(address) = LOWER(?) LIMIT 1',
+    args: [input.chain, input.address],
+  });
+  if (existing.rows.length > 0) {
+    const row = existing.rows[0] as unknown as { user_id: string };
+    if (row.user_id !== input.user_id) {
+      throw new Error('Wallet already linked to another account');
+    }
+  }
+
+  if (input.is_primary === true) {
+    await atelierClient.execute({
+      sql: 'UPDATE user_wallets SET is_primary = 0 WHERE user_id = ? AND chain = ?',
+      args: [input.user_id, input.chain],
+    });
+  }
+
+  const id = `uw_${Date.now()}_${randomBytes(3).toString('hex')}`;
+  const isPrimary = input.is_primary === true ? 1 : 0;
+
+  try {
+    await atelierClient.execute({
+      sql: 'INSERT INTO user_wallets (id, user_id, chain, address, is_primary) VALUES (?, ?, ?, ?, ?)',
+      args: [id, input.user_id, input.chain, input.address, isPrimary],
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (/UNIQUE/i.test(message)) {
+      throw new Error('Wallet already linked to another account');
+    }
+    throw e;
+  }
+
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM user_wallets WHERE id = ? LIMIT 1',
+    args: [id],
+  });
+  if (result.rows.length === 0) {
+    throw new Error(`addUserWallet: failed to read back wallet ${id}`);
+  }
+  return result.rows[0] as unknown as UserWallet;
+}
+
+export async function removeUserWallet(userId: string, walletId: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'DELETE FROM user_wallets WHERE id = ? AND user_id = ?',
+    args: [walletId, userId],
+  });
+}
+
+export async function getUserWallets(userId: string): Promise<UserWallet[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM user_wallets WHERE user_id = ? ORDER BY is_primary DESC, linked_at ASC',
+    args: [userId],
+  });
+  return result.rows as unknown as UserWallet[];
+}
+
+export async function getUserByWalletAddress(chain: WalletChain, address: string): Promise<AtelierUser | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT u.* FROM users u
+          INNER JOIN user_wallets w ON w.user_id = u.privy_user_id
+          WHERE w.chain = ? AND LOWER(w.address) = LOWER(?)
+          LIMIT 1`,
+    args: [chain, address],
+  });
+  return result.rows[0] ? (result.rows[0] as unknown as AtelierUser) : null;
+}
+
+export async function setPrimaryWallet(userId: string, walletId: string): Promise<void> {
+  await initAtelierDb();
+  const target = await atelierClient.execute({
+    sql: 'SELECT chain FROM user_wallets WHERE id = ? AND user_id = ? LIMIT 1',
+    args: [walletId, userId],
+  });
+  if (target.rows.length === 0) {
+    throw new Error('Wallet not found for user');
+  }
+  const { chain } = target.rows[0] as unknown as { chain: WalletChain };
+  await atelierClient.execute({
+    sql: 'UPDATE user_wallets SET is_primary = 0 WHERE user_id = ? AND chain = ?',
+    args: [userId, chain],
+  });
+  await atelierClient.execute({
+    sql: 'UPDATE user_wallets SET is_primary = 1 WHERE id = ? AND user_id = ?',
+    args: [walletId, userId],
   });
 }
 

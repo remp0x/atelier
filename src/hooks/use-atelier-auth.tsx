@@ -20,6 +20,8 @@ import { signWalletAuth, type WalletAuthPayload, type SignableWallet, type Walle
 import { signEvmWalletAuth } from '@/lib/evm-auth-client';
 import type { TransactionSignableWallet } from '@/lib/solana-pay';
 import type { EvmWalletState } from '@/components/atelier/EvmWalletBridge';
+import { getPrivyAccessToken } from '@/lib/privy-client';
+import type { AtelierUser, UserWallet } from '@/lib/atelier-db';
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 const SERVER_SESSION_TTL = 6 * 24 * 60 * 60 * 1000;
@@ -202,6 +204,9 @@ interface AtelierAuthContextValue {
   apiKeySession: ApiKeySession | null;
   loginWithApiKey: (apiKey: string) => Promise<void>;
   logoutApiKey: () => void;
+  atelierUser: AtelierUser | null;
+  linkedWallets: UserWallet[];
+  refreshAtelierUser: () => Promise<void>;
 }
 
 const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
@@ -213,9 +218,13 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const [apiKeySess, setApiKeySess] = useState<ApiKeySession | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [activeChain, setActiveChainState] = useState<WalletChain>('solana');
+  const [atelierUser, setAtelierUser] = useState<AtelierUser | null>(null);
+  const [linkedWallets, setLinkedWallets] = useState<UserWallet[]>([]);
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
+  const upsertedUserIdRef = useRef<string | null>(null);
+  const upsertInflightRef = useRef<Promise<void> | null>(null);
 
   const solanaAddress = solanaWallet?.address ?? null;
   const evmAddress = evmWallet?.address ?? null;
@@ -426,6 +435,56 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     setApiKeySess(null);
   }, []);
 
+  const upsertAtelierUser = useCallback(async (privyUserId: string): Promise<void> => {
+    const token = await getPrivyAccessToken();
+    if (!token) return;
+    const res = await fetch('/api/auth/user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) return;
+    const json = (await res.json()) as {
+      success: boolean;
+      data?: { user: AtelierUser; wallets: UserWallet[]; is_new: boolean };
+    };
+    if (!json.success || !json.data) return;
+    setAtelierUser(json.data.user);
+    setLinkedWallets(json.data.wallets);
+    upsertedUserIdRef.current = privyUserId;
+  }, []);
+
+  useEffect(() => {
+    if (!ready || !authenticated || !user?.id) {
+      if (!authenticated) {
+        upsertedUserIdRef.current = null;
+        setAtelierUser(null);
+        setLinkedWallets([]);
+      }
+      return;
+    }
+
+    if (upsertedUserIdRef.current === user.id) return;
+    if (upsertInflightRef.current) return;
+
+    const privyUserId = user.id;
+    const promise = upsertAtelierUser(privyUserId)
+      .catch((err) => {
+        console.error('[useAtelierAuth] upsertAtelierUser failed:', err);
+      })
+      .finally(() => {
+        upsertInflightRef.current = null;
+      });
+    upsertInflightRef.current = promise;
+  }, [ready, authenticated, user?.id, upsertAtelierUser]);
+
+  const refreshAtelierUser = useCallback(async (): Promise<void> => {
+    if (!authenticated || !user?.id) return;
+    await upsertAtelierUser(user.id);
+  }, [authenticated, user?.id, upsertAtelierUser]);
+
   const handleLogout = useCallback(async () => {
     if (walletChain && walletAddress) clearServerSessionMarker(walletChain, walletAddress);
     try {
@@ -436,6 +495,9 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     logoutApiKey();
     setSolanaWallet(null);
     setEvmWallet(null);
+    upsertedUserIdRef.current = null;
+    setAtelierUser(null);
+    setLinkedWallets([]);
     await logout();
   }, [clearAuth, logoutApiKey, logout, walletChain, walletAddress]);
 
@@ -464,6 +526,9 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       apiKeySession: apiKeySess,
       loginWithApiKey,
       logoutApiKey,
+      atelierUser,
+      linkedWallets,
+      refreshAtelierUser,
     }),
     [
       authenticated,
@@ -489,6 +554,9 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       apiKeySess,
       loginWithApiKey,
       logoutApiKey,
+      atelierUser,
+      linkedWallets,
+      refreshAtelierUser,
     ]
   );
 

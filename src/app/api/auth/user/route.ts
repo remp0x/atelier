@@ -2,19 +2,12 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  addUserWallet,
-  backfillUserOwnership,
   generateDefaultUsername,
   getUserByPrivyId,
-  getUserByWalletAddress,
-  getUserWallets,
   isUsernameAvailable,
   setUsername,
   upsertUser,
   type AtelierUser,
-  type BackfillCounts,
-  type UserWallet,
-  type WalletChain,
 } from '@/lib/atelier-db';
 import { authenticatePrivyRequest, PrivyAuthError, type PrivyUserInfo } from '@/lib/privy-auth';
 
@@ -44,42 +37,14 @@ function isUserUploadedAvatar(url: string | null): boolean {
   return typeof url === 'string' && url.includes('vercel-storage.com');
 }
 
-async function autoLinkWallets(
-  privyUserId: string,
-  chain: WalletChain,
-  addresses: string[],
-): Promise<void> {
-  for (const address of addresses) {
-    if (!address) continue;
-    try {
-      await addUserWallet({ user_id: privyUserId, chain, address });
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (!/already linked/i.test(message)) {
-        console.error(`[auth/user] addUserWallet failed for ${chain}:${address}`, e);
-        continue;
-      }
-
-      const owner = await getUserByWalletAddress(chain, address);
-      if (!owner) continue;
-      if (owner.privy_user_id === privyUserId) continue;
-      console.warn(
-        `[auth/user] wallet collision: ${chain}:${address} owned by ${owner.privy_user_id}, requested by ${privyUserId}`,
-      );
-    }
-  }
-}
-
 async function buildUserPayload(
   user: AtelierUser,
-  wallets: UserWallet[],
   isNew: boolean,
-  backfilled?: BackfillCounts,
 ): Promise<NextResponse> {
   return NextResponse.json(
     {
       success: true,
-      data: { user, wallets, is_new: isNew, backfilled: backfilled ?? null },
+      data: { user, wallets: [], is_new: isNew, backfilled: null },
     },
     { headers: { 'Content-Type': 'application/json' } },
   );
@@ -128,20 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       bio: existing?.bio ?? null,
     });
 
-    await autoLinkWallets(info.privyUserId, 'solana', info.linkedSolanaWallets);
-    await autoLinkWallets(info.privyUserId, 'base', info.linkedEvmWallets);
-
-    const wallets = await getUserWallets(info.privyUserId);
-
-    let backfilled: BackfillCounts | undefined;
-    try {
-      const addresses = wallets.map((w) => w.address).filter((a): a is string => Boolean(a));
-      backfilled = await backfillUserOwnership(info.privyUserId, addresses);
-    } catch (backfillErr) {
-      console.error('[auth/user] backfillUserOwnership failed (non-fatal):', backfillErr);
-    }
-
-    return buildUserPayload(user, wallets, isNew, backfilled);
+    return buildUserPayload(user, isNew);
   } catch (err) {
     console.error('[auth/user] POST upsert failed:', err);
     return NextResponse.json(
@@ -318,8 +270,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         { status: 404, headers: { 'Content-Type': 'application/json' } },
       );
     }
-    const wallets = await getUserWallets(info.privyUserId);
-    return buildUserPayload(user, wallets, false);
+    return buildUserPayload(user, false);
   } catch (err) {
     console.error('[auth/user] GET failed:', err);
     return NextResponse.json(

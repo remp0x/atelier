@@ -4,11 +4,10 @@ import { useState, useCallback } from 'react';
 import { usePrivy, useLinkAccount } from '@privy-io/react-auth';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { ProfileEditDrawer } from './ProfileEditDrawer';
-import type { AtelierUser, UserWallet } from '@/lib/atelier-db';
+import type { AtelierUser } from '@/lib/atelier-db';
 
 interface ProfileOwnerPanelProps {
   user: AtelierUser;
-  wallets: UserWallet[];
 }
 
 function XIcon({ className }: { className?: string }): React.ReactElement {
@@ -27,7 +26,7 @@ function PencilIcon({ className }: { className?: string }): React.ReactElement {
   );
 }
 
-export function ProfileOwnerPanel({ user, wallets }: ProfileOwnerPanelProps): React.ReactElement | null {
+export function ProfileOwnerPanel({ user }: ProfileOwnerPanelProps): React.ReactElement | null {
   const { atelierUser, refreshAtelierUser } = useAtelierAuth();
   const { user: privyUser, unlinkTwitter } = usePrivy();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -60,9 +59,6 @@ export function ProfileOwnerPanel({ user, wallets }: ProfileOwnerPanelProps): Re
 
   const btnBase =
     'inline-flex items-center gap-2 h-9 px-3 rounded-lg text-xs font-mono text-neutral-300 bg-white/5 hover:bg-atelier/10 hover:text-atelier border border-neutral-800 hover:border-atelier/30 transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-black';
-
-  // wallets prop kept in interface for future use (e.g. quick-action menus); unused now.
-  void wallets;
 
   return (
     <>

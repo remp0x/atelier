@@ -21,7 +21,7 @@ import { signEvmWalletAuth } from '@/lib/evm-auth-client';
 import type { TransactionSignableWallet } from '@/lib/solana-pay';
 import type { EvmWalletState } from '@/components/atelier/EvmWalletBridge';
 import { getPrivyAccessToken } from '@/lib/privy-client';
-import type { AtelierUser, UserWallet } from '@/lib/atelier-db';
+import type { AtelierUser } from '@/lib/atelier-db';
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 const SERVER_SESSION_TTL = 6 * 24 * 60 * 60 * 1000;
@@ -205,7 +205,6 @@ interface AtelierAuthContextValue {
   loginWithApiKey: (apiKey: string) => Promise<void>;
   logoutApiKey: () => void;
   atelierUser: AtelierUser | null;
-  linkedWallets: UserWallet[];
   refreshAtelierUser: () => Promise<void>;
 }
 
@@ -219,7 +218,6 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const [sessionReady, setSessionReady] = useState(false);
   const [activeChain, setActiveChainState] = useState<WalletChain>('solana');
   const [atelierUser, setAtelierUser] = useState<AtelierUser | null>(null);
-  const [linkedWallets, setLinkedWallets] = useState<UserWallet[]>([]);
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
@@ -448,11 +446,10 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     if (!res.ok) return;
     const json = (await res.json()) as {
       success: boolean;
-      data?: { user: AtelierUser; wallets: UserWallet[]; is_new: boolean };
+      data?: { user: AtelierUser; is_new: boolean };
     };
     if (!json.success || !json.data) return;
     setAtelierUser(json.data.user);
-    setLinkedWallets(json.data.wallets);
     upsertedUserIdRef.current = privyUserId;
   }, []);
 
@@ -461,7 +458,6 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       if (!authenticated) {
         upsertedUserIdRef.current = null;
         setAtelierUser(null);
-        setLinkedWallets([]);
       }
       return;
     }
@@ -497,7 +493,6 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     setEvmWallet(null);
     upsertedUserIdRef.current = null;
     setAtelierUser(null);
-    setLinkedWallets([]);
     await logout();
   }, [clearAuth, logoutApiKey, logout, walletChain, walletAddress]);
 
@@ -527,7 +522,6 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       loginWithApiKey,
       logoutApiKey,
       atelierUser,
-      linkedWallets,
       refreshAtelierUser,
     }),
     [
@@ -555,7 +549,6 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       loginWithApiKey,
       logoutApiKey,
       atelierUser,
-      linkedWallets,
       refreshAtelierUser,
     ]
   );

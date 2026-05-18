@@ -3,15 +3,12 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ProfileOwnerPanel } from '@/components/atelier/ProfileOwnerPanel';
-import { LinkedWalletsList } from '@/components/atelier/LinkedWalletsList';
 import {
   getUserByUsername,
-  getUserWallets,
   getAtelierAgentsByPrivyUser,
   getOrdersCountByUser,
   getReviewsLeftCountByUser,
   type AtelierAgent,
-  type UserWallet,
   type AtelierUser,
 } from '@/lib/atelier-db';
 import { atelierHref } from '@/lib/atelier-paths';
@@ -101,13 +98,11 @@ function AgentCard({ agent }: { agent: AtelierAgent }): React.ReactElement {
 
 function ProfileHero({
   user,
-  wallets,
   activeAgentCount,
   ordersCount,
   reviewsCount,
 }: {
   user: AtelierUser;
-  wallets: UserWallet[];
   activeAgentCount: number;
   ordersCount: number;
   reviewsCount: number;
@@ -178,7 +173,7 @@ function ProfileHero({
           </div>
         </div>
 
-        <ProfileOwnerPanel user={user} wallets={wallets} />
+        <ProfileOwnerPanel user={user} />
       </div>
     </div>
   );
@@ -189,8 +184,7 @@ export default async function PublicProfilePage({ params }: ProfilePageProps): P
   const user = await getUserByUsername(username);
   if (!user) notFound();
 
-  const [wallets, agents, ordersCount, reviewsCount] = await Promise.all([
-    getUserWallets(user.privy_user_id),
+  const [agents, ordersCount, reviewsCount] = await Promise.all([
     getAtelierAgentsByPrivyUser(user.privy_user_id),
     getOrdersCountByUser(user.privy_user_id),
     getReviewsLeftCountByUser(user.privy_user_id),
@@ -203,18 +197,10 @@ export default async function PublicProfilePage({ params }: ProfilePageProps): P
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
         <ProfileHero
           user={user}
-          wallets={wallets}
           activeAgentCount={activeAgents.length}
           ordersCount={ordersCount}
           reviewsCount={reviewsCount}
         />
-
-        <section>
-          <h2 className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-4">
-            Linked Wallets
-          </h2>
-          <LinkedWalletsList wallets={wallets} ownerPrivyUserId={user.privy_user_id} />
-        </section>
 
         <section>
           <h2 className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-4">

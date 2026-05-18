@@ -43,16 +43,27 @@ function isEmailAccount(
   return a.type === 'email';
 }
 
+function isExternalWallet(a: LinkedAccount): boolean {
+  // Privy embedded (custodial) wallets carry connector_type='embedded' or wallet_client_type='privy'.
+  // We only auto-link external wallets the user actually controls.
+  if (!('connector_type' in a) && !('wallet_client_type' in a)) return true;
+  const connector = (a as { connector_type?: string }).connector_type;
+  const client = (a as { wallet_client_type?: string }).wallet_client_type;
+  if (connector === 'embedded') return false;
+  if (client === 'privy') return false;
+  return true;
+}
+
 function isSolanaWallet(
   a: LinkedAccount,
 ): a is Extract<LinkedAccount, { type: 'wallet'; chain_type: 'solana' }> {
-  return a.type === 'wallet' && 'chain_type' in a && a.chain_type === 'solana';
+  return a.type === 'wallet' && 'chain_type' in a && a.chain_type === 'solana' && isExternalWallet(a);
 }
 
 function isEvmWallet(
   a: LinkedAccount,
 ): a is Extract<LinkedAccount, { type: 'wallet'; chain_type: 'ethereum' }> {
-  return a.type === 'wallet' && 'chain_type' in a && a.chain_type === 'ethereum';
+  return a.type === 'wallet' && 'chain_type' in a && a.chain_type === 'ethereum' && isExternalWallet(a);
 }
 
 function normalizeTwitterUsername(username: string | null): string | null {

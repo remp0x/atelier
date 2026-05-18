@@ -93,7 +93,7 @@ const myStuffNavItems: NavItem[] = [
     ),
   },
   {
-    href: '/atelier/profile',
+    href: '/profile',
     label: 'Profile',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -137,7 +137,7 @@ export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const pathname = usePathname();
-  const { authenticated, login } = useAtelierAuth();
+  const { authenticated, login, atelierUser } = useAtelierAuth();
 
   useEffect(() => {
     const saved = localStorage.getItem('atelier_sidebar_expanded');
@@ -297,7 +297,12 @@ export function AtelierSidebar() {
                 <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
               )}
             </div>
-            {myStuffNavItems.map((item) => renderNavLink(item))}
+            {myStuffNavItems.map((item) => {
+              if (item.href === '/profile' && atelierUser?.username) {
+                return renderNavLink({ ...item, href: `/profile/${atelierUser.username}` });
+              }
+              return renderNavLink(item);
+            })}
           </div>
         )}
       </nav>

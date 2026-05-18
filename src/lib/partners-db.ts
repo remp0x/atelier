@@ -5,6 +5,7 @@ export interface PartnerChannel {
   slug: string;
   name: string;
   wallet_address: string | null;
+  wallet_address_base: string | null;
   fee_split_bps: number;
   api_key_hash: string | null;
   active: number;
@@ -20,6 +21,7 @@ export interface PartnerPayout {
   tx_hash: string | null;
   status: 'pending' | 'paid' | 'failed';
   error: string | null;
+  chain: 'solana' | 'base';
   created_at: string;
   paid_at: string | null;
 }
@@ -84,15 +86,23 @@ export async function createPartnerChannel(data: {
   slug: string;
   name: string;
   wallet_address?: string;
+  wallet_address_base?: string;
   fee_split_bps?: number;
 }): Promise<{ partner: PartnerChannel; api_key: string }> {
   await initAtelierDb();
   const apiKey = generatePartnerApiKey();
   const apiKeyHash = hashPartnerApiKey(apiKey);
   await atelierClient.execute({
-    sql: `INSERT INTO partner_channels (slug, name, wallet_address, fee_split_bps, api_key_hash, active)
-          VALUES (?, ?, ?, ?, ?, 1)`,
-    args: [data.slug, data.name, data.wallet_address || null, data.fee_split_bps ?? 5000, apiKeyHash],
+    sql: `INSERT INTO partner_channels (slug, name, wallet_address, wallet_address_base, fee_split_bps, api_key_hash, active)
+          VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    args: [
+      data.slug,
+      data.name,
+      data.wallet_address || null,
+      data.wallet_address_base || null,
+      data.fee_split_bps ?? 5000,
+      apiKeyHash,
+    ],
   });
   const partner = await getPartnerChannel(data.slug);
   if (!partner) throw new Error('Failed to create partner channel');
@@ -104,6 +114,7 @@ export async function updatePartnerChannel(
   updates: {
     name?: string;
     wallet_address?: string | null;
+    wallet_address_base?: string | null;
     fee_split_bps?: number;
     active?: boolean;
   }
@@ -113,6 +124,7 @@ export async function updatePartnerChannel(
   const args: (string | number | null)[] = [];
   if (updates.name !== undefined) { setClauses.push('name = ?'); args.push(updates.name); }
   if (updates.wallet_address !== undefined) { setClauses.push('wallet_address = ?'); args.push(updates.wallet_address); }
+  if (updates.wallet_address_base !== undefined) { setClauses.push('wallet_address_base = ?'); args.push(updates.wallet_address_base); }
   if (updates.fee_split_bps !== undefined) { setClauses.push('fee_split_bps = ?'); args.push(updates.fee_split_bps); }
   if (updates.active !== undefined) { setClauses.push('active = ?'); args.push(updates.active ? 1 : 0); }
   if (setClauses.length === 0) return getPartnerChannel(slug);
@@ -202,13 +214,14 @@ export async function createPartnerPayout(data: {
   partner_slug: string;
   order_id: string;
   amount_usd: string;
+  chain?: 'solana' | 'base';
 }): Promise<PartnerPayout> {
   await initAtelierDb();
   const id = `ppo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   await atelierClient.execute({
-    sql: `INSERT INTO partner_payouts (id, partner_slug, order_id, amount_usd, status)
-          VALUES (?, ?, ?, ?, 'pending')`,
-    args: [id, data.partner_slug, data.order_id, data.amount_usd],
+    sql: `INSERT INTO partner_payouts (id, partner_slug, order_id, amount_usd, status, chain)
+          VALUES (?, ?, ?, ?, 'pending', ?)`,
+    args: [id, data.partner_slug, data.order_id, data.amount_usd, data.chain || 'solana'],
   });
   const row = await atelierClient.execute({
     sql: 'SELECT * FROM partner_payouts WHERE id = ?',

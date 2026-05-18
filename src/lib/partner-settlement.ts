@@ -1,4 +1,6 @@
 import { sendUsdcPayout } from './solana-payout';
+import { sendBaseUsdcPayout } from './base-payout';
+import type { PaymentChain } from './x402';
 import {
   createPartnerPayout,
   getPartnerChannel,
@@ -11,12 +13,14 @@ export interface PartnerSplitInput {
   orderId: string;
   partnerSlug: string;
   platformFeeUsd: number;
+  paymentChain?: PaymentChain;
 }
 
 export async function settlePartnerSplit({
   orderId,
   partnerSlug,
   platformFeeUsd,
+  paymentChain = 'solana',
 }: PartnerSplitInput): Promise<void> {
   if (platformFeeUsd <= 0) return;
 
@@ -28,8 +32,10 @@ export async function settlePartnerSplit({
     console.warn(`Partner ${partnerSlug} not active, skipping split for order ${orderId}`);
     return;
   }
-  if (!partner.wallet_address) {
-    console.warn(`Partner ${partnerSlug} missing wallet, skipping split for order ${orderId}`);
+
+  const destination = paymentChain === 'base' ? partner.wallet_address_base : partner.wallet_address;
+  if (!destination) {
+    console.warn(`Partner ${partnerSlug} missing ${paymentChain} wallet, skipping split for order ${orderId}`);
     return;
   }
 
@@ -41,10 +47,13 @@ export async function settlePartnerSplit({
     partner_slug: partnerSlug,
     order_id: orderId,
     amount_usd: amountUsd.toFixed(2),
+    chain: paymentChain,
   });
 
   try {
-    const txHash = await sendUsdcPayout(partner.wallet_address, amountUsd);
+    const txHash = paymentChain === 'base'
+      ? await sendBaseUsdcPayout(destination, amountUsd)
+      : await sendUsdcPayout(destination, amountUsd);
     await markPartnerPayoutPaid(payout.id, txHash);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -5,10 +5,13 @@ export interface SignableWallet {
   signMessage: ((message: Uint8Array) => Promise<Uint8Array>) | undefined;
 }
 
+export type WalletChain = 'solana' | 'base';
+
 export interface WalletAuthPayload {
   wallet: string;
   wallet_sig: string;
   wallet_sig_ts: number;
+  wallet_chain?: WalletChain;
 }
 
 export async function signWalletAuth(wallet: SignableWallet): Promise<WalletAuthPayload> {
@@ -27,5 +30,6 @@ export async function signWalletAuth(wallet: SignableWallet): Promise<WalletAuth
     wallet: walletAddress,
     wallet_sig: bs58.encode(signatureBytes),
     wallet_sig_ts: timestamp,
+    wallet_chain: 'solana',
   };
 }

@@ -14,22 +14,44 @@ import dynamic from 'next/dynamic';
 import { usePrivy } from '@privy-io/react-auth';
 import type { User } from '@privy-io/react-auth';
 import { PublicKey, Transaction } from '@solana/web3.js';
-import { signWalletAuth, type WalletAuthPayload, type SignableWallet } from '@/lib/solana-auth-client';
+import { createWalletClient, custom, type WalletClient } from 'viem';
+import { base } from 'viem/chains';
+import { signWalletAuth, type WalletAuthPayload, type SignableWallet, type WalletChain } from '@/lib/solana-auth-client';
+import { signEvmWalletAuth } from '@/lib/evm-auth-client';
 import type { TransactionSignableWallet } from '@/lib/solana-pay';
+import type { EvmWalletState } from '@/components/atelier/EvmWalletBridge';
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 const SERVER_SESSION_TTL = 6 * 24 * 60 * 60 * 1000;
 const STORAGE_KEY_PREFIX = 'atelier_auth_';
 const APIKEY_STORAGE_KEY = 'atelier_apikey_session';
 const SERVER_SESSION_KEY_PREFIX = 'atelier_server_session_';
+const ACTIVE_CHAIN_KEY = 'atelier_active_chain';
 
-function loadServerSessionMarker(wallet: string): boolean {
+function chainAuthKey(chain: WalletChain, wallet: string): string {
+  return `${STORAGE_KEY_PREFIX}${chain}_${wallet}`;
+}
+
+function chainServerKey(chain: WalletChain, wallet: string): string {
+  return `${SERVER_SESSION_KEY_PREFIX}${chain}_${wallet}`;
+}
+
+function loadServerSessionMarker(chain: WalletChain, wallet: string): boolean {
   try {
-    const raw = localStorage.getItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`);
+    const newKey = chainServerKey(chain, wallet);
+    let raw = localStorage.getItem(newKey);
+    if (!raw && chain === 'solana') {
+      const legacy = localStorage.getItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`);
+      if (legacy) {
+        raw = legacy;
+        localStorage.setItem(newKey, legacy);
+        localStorage.removeItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`);
+      }
+    }
     if (!raw) return false;
     const ts = Number(raw);
     if (!Number.isFinite(ts) || Date.now() - ts >= SERVER_SESSION_TTL) {
-      localStorage.removeItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`);
+      localStorage.removeItem(newKey);
       return false;
     }
     return true;
@@ -38,15 +60,15 @@ function loadServerSessionMarker(wallet: string): boolean {
   }
 }
 
-function saveServerSessionMarker(wallet: string): void {
+function saveServerSessionMarker(chain: WalletChain, wallet: string): void {
   try {
-    localStorage.setItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`, String(Date.now()));
+    localStorage.setItem(chainServerKey(chain, wallet), String(Date.now()));
   } catch {}
 }
 
-function clearServerSessionMarker(wallet: string): void {
+function clearServerSessionMarker(chain: WalletChain, wallet: string): void {
   try {
-    localStorage.removeItem(`${SERVER_SESSION_KEY_PREFIX}${wallet}`);
+    localStorage.removeItem(chainServerKey(chain, wallet));
   } catch {}
 }
 
@@ -85,13 +107,22 @@ function clearApiKeySession(): void {
   } catch {}
 }
 
-function loadCachedAuth(wallet: string): { payload: WalletAuthPayload; ts: number } | null {
+function loadCachedAuth(chain: WalletChain, wallet: string): { payload: WalletAuthPayload; ts: number } | null {
   try {
-    const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}${wallet}`);
+    const newKey = chainAuthKey(chain, wallet);
+    let raw = localStorage.getItem(newKey);
+    if (!raw && chain === 'solana') {
+      const legacy = localStorage.getItem(`${STORAGE_KEY_PREFIX}${wallet}`);
+      if (legacy) {
+        raw = legacy;
+        localStorage.setItem(newKey, legacy);
+        localStorage.removeItem(`${STORAGE_KEY_PREFIX}${wallet}`);
+      }
+    }
     if (!raw) return null;
     const { payload, ts } = JSON.parse(raw) as { payload: WalletAuthPayload; ts: number };
     if (payload.wallet !== wallet || Date.now() - ts >= SESSION_TTL) {
-      localStorage.removeItem(`${STORAGE_KEY_PREFIX}${wallet}`);
+      localStorage.removeItem(newKey);
       return null;
     }
     return { payload, ts };
@@ -100,23 +131,42 @@ function loadCachedAuth(wallet: string): { payload: WalletAuthPayload; ts: numbe
   }
 }
 
-function saveCachedAuth(payload: WalletAuthPayload, ts: number): void {
+function saveCachedAuth(chain: WalletChain, payload: WalletAuthPayload, ts: number): void {
   try {
     localStorage.setItem(
-      `${STORAGE_KEY_PREFIX}${payload.wallet}`,
+      chainAuthKey(chain, payload.wallet),
       JSON.stringify({ payload, ts }),
     );
   } catch {}
 }
 
-function clearCachedAuth(wallet: string): void {
+function clearCachedAuth(chain: WalletChain, wallet: string): void {
   try {
-    localStorage.removeItem(`${STORAGE_KEY_PREFIX}${wallet}`);
+    localStorage.removeItem(chainAuthKey(chain, wallet));
+  } catch {}
+}
+
+function loadActiveChain(): WalletChain {
+  try {
+    const raw = localStorage.getItem(ACTIVE_CHAIN_KEY);
+    if (raw === 'base' || raw === 'solana') return raw;
+  } catch {}
+  return 'solana';
+}
+
+function saveActiveChain(chain: WalletChain): void {
+  try {
+    localStorage.setItem(ACTIVE_CHAIN_KEY, chain);
   } catch {}
 }
 
 const SolanaWalletBridge = dynamic(
   () => import('@/components/atelier/SolanaWalletBridge').then(m => ({ default: m.SolanaWalletBridge })),
+  { ssr: false }
+);
+
+const EvmWalletBridge = dynamic(
+  () => import('@/components/atelier/EvmWalletBridge').then(m => ({ default: m.EvmWalletBridge })),
   { ssr: false }
 );
 
@@ -135,6 +185,11 @@ interface AtelierAuthContextValue {
   logout: () => Promise<void>;
   user: User | null;
   walletAddress: string | null;
+  solanaAddress: string | null;
+  evmAddress: `0x${string}` | null;
+  walletChain: WalletChain | null;
+  activeChain: WalletChain;
+  setActiveChain: (chain: WalletChain) => void;
   walletReady: boolean;
   sessionReady: boolean;
   ensureSession: () => Promise<boolean>;
@@ -142,6 +197,7 @@ interface AtelierAuthContextValue {
   clearAuth: () => void;
   getSignableWallet: () => SignableWallet | null;
   getTransactionWallet: () => TransactionSignableWallet | null;
+  getEvmWalletClient: () => Promise<{ client: WalletClient; account: `0x${string}` } | null>;
   authMode: AuthMode;
   apiKeySession: ApiKeySession | null;
   loginWithApiKey: (apiKey: string) => Promise<void>;
@@ -153,17 +209,36 @@ const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
 export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready, login, logout, user } = usePrivy();
   const [solanaWallet, setSolanaWallet] = useState<SolanaWalletState | null>(null);
+  const [evmWallet, setEvmWallet] = useState<EvmWalletState | null>(null);
   const [apiKeySess, setApiKeySess] = useState<ApiKeySession | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
+  const [activeChain, setActiveChainState] = useState<WalletChain>('solana');
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
 
-  const walletAddress = solanaWallet?.address ?? null;
+  const solanaAddress = solanaWallet?.address ?? null;
+  const evmAddress = evmWallet?.address ?? null;
+
+  const walletChain: WalletChain | null = useMemo(() => {
+    if (activeChain === 'base' && evmAddress) return 'base';
+    if (activeChain === 'solana' && solanaAddress) return 'solana';
+    if (solanaAddress) return 'solana';
+    if (evmAddress) return 'base';
+    return null;
+  }, [activeChain, solanaAddress, evmAddress]);
+
+  const walletAddress = walletChain === 'base' ? evmAddress : walletChain === 'solana' ? solanaAddress : null;
   const walletReady = authenticated && walletAddress !== null;
 
   useEffect(() => {
     setApiKeySess(loadApiKeySession());
+    setActiveChainState(loadActiveChain());
+  }, []);
+
+  const setActiveChain = useCallback((chain: WalletChain) => {
+    setActiveChainState(chain);
+    saveActiveChain(chain);
   }, []);
 
   const authMode: AuthMode = useMemo(() => {
@@ -173,26 +248,30 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     return null;
   }, [walletReady, apiKeySess, authenticated]);
 
-  const handleWalletChange = useCallback((wallet: SolanaWalletState | null) => {
+  const handleSolanaWalletChange = useCallback((wallet: SolanaWalletState | null) => {
     setSolanaWallet(wallet);
   }, []);
 
+  const handleEvmWalletChange = useCallback((wallet: EvmWalletState | null) => {
+    setEvmWallet(wallet);
+  }, []);
+
   const getSignableWallet = useCallback((): SignableWallet | null => {
-    if (!solanaWallet || !walletAddress) return null;
+    if (!solanaWallet || !solanaAddress) return null;
 
     return {
-      publicKey: { toBase58: () => walletAddress },
+      publicKey: { toBase58: () => solanaAddress },
       signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
         const result = await solanaWallet.signMessage({ message });
         return result.signature;
       },
     };
-  }, [solanaWallet, walletAddress]);
+  }, [solanaWallet, solanaAddress]);
 
   const getTransactionWallet = useCallback((): TransactionSignableWallet | null => {
-    if (!solanaWallet || !walletAddress) return null;
+    if (!solanaWallet || !solanaAddress) return null;
 
-    const pubkey = new PublicKey(walletAddress);
+    const pubkey = new PublicKey(solanaAddress);
     return {
       publicKey: pubkey,
       signTransaction: async (tx: Transaction): Promise<Transaction> => {
@@ -201,11 +280,32 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
         return Transaction.from(result.signedTransaction);
       },
     };
-  }, [solanaWallet, walletAddress]);
+  }, [solanaWallet, solanaAddress]);
+
+  const getEvmWalletClient = useCallback(async (): Promise<{ client: WalletClient; account: `0x${string}` } | null> => {
+    if (!evmWallet || !evmAddress) return null;
+    const provider = await evmWallet.getEthereumProvider();
+    const client = createWalletClient({
+      chain: base,
+      transport: custom(provider),
+      account: evmAddress,
+    });
+    return { client, account: evmAddress };
+  }, [evmWallet, evmAddress]);
 
   const getAuth = useCallback(async (opts?: { silent?: boolean }): Promise<WalletAuthPayload> => {
+    const chain = walletChain;
+    if (!chain || !walletAddress) {
+      throw new Error('No wallet available for signing');
+    }
+
     const cached = cacheRef.current;
-    if (cached && cached.payload.wallet === walletAddress && Date.now() - cached.ts < SESSION_TTL) {
+    if (
+      cached &&
+      cached.payload.wallet === walletAddress &&
+      cached.payload.wallet_chain === chain &&
+      Date.now() - cached.ts < SESSION_TTL
+    ) {
       return cached.payload;
     }
 
@@ -213,28 +313,34 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       return inflightRef.current;
     }
 
-    if (walletAddress) {
-      const stored = loadCachedAuth(walletAddress);
-      if (stored) {
-        cacheRef.current = stored;
-        return stored.payload;
-      }
+    const stored = loadCachedAuth(chain, walletAddress);
+    if (stored) {
+      cacheRef.current = stored;
+      return stored.payload;
     }
 
     if (opts?.silent) {
       throw new Error('Auth session expired');
     }
 
-    const wallet = getSignableWallet();
-    if (!wallet) {
-      throw new Error('No Solana wallet available for signing');
-    }
+    const sign = async (): Promise<WalletAuthPayload> => {
+      if (chain === 'solana') {
+        const wallet = getSignableWallet();
+        if (!wallet) throw new Error('No Solana wallet available for signing');
+        return signWalletAuth(wallet);
+      }
+      if (!evmWallet || !evmAddress) throw new Error('No EVM wallet available for signing');
+      return signEvmWalletAuth({
+        address: evmAddress,
+        signMessage: evmWallet.signMessage,
+      });
+    };
 
-    const promise = signWalletAuth(wallet)
+    const promise = sign()
       .then((payload) => {
         const ts = Date.now();
         cacheRef.current = { payload, ts };
-        saveCachedAuth(payload, ts);
+        saveCachedAuth(chain, payload, ts);
         inflightRef.current = null;
         return payload;
       })
@@ -245,29 +351,29 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
 
     inflightRef.current = promise;
     return promise;
-  }, [walletAddress, getSignableWallet]);
+  }, [walletChain, walletAddress, getSignableWallet, evmWallet, evmAddress]);
 
   useEffect(() => {
     inflightRef.current = null;
-    if (walletAddress) {
-      const stored = loadCachedAuth(walletAddress);
+    if (walletChain && walletAddress) {
+      const stored = loadCachedAuth(walletChain, walletAddress);
       cacheRef.current = stored;
     } else {
       cacheRef.current = null;
     }
-  }, [walletAddress]);
+  }, [walletChain, walletAddress]);
 
   useEffect(() => {
-    if (!walletReady || !walletAddress) {
+    if (!walletReady || !walletChain || !walletAddress) {
       setSessionReady(false);
       return;
     }
-    setSessionReady(loadServerSessionMarker(walletAddress));
-  }, [walletReady, walletAddress]);
+    setSessionReady(loadServerSessionMarker(walletChain, walletAddress));
+  }, [walletReady, walletChain, walletAddress]);
 
   const ensureSession = useCallback(async (): Promise<boolean> => {
-    if (!walletReady || !walletAddress) return false;
-    if (loadServerSessionMarker(walletAddress)) {
+    if (!walletReady || !walletChain || !walletAddress) return false;
+    if (loadServerSessionMarker(walletChain, walletAddress)) {
       setSessionReady(true);
       return true;
     }
@@ -282,7 +388,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) return false;
       const json = await res.json();
       if (json?.success) {
-        saveServerSessionMarker(walletAddress);
+        saveServerSessionMarker(walletChain, walletAddress);
         setSessionReady(true);
         return true;
       }
@@ -290,13 +396,13 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     } catch {
       return false;
     }
-  }, [walletReady, walletAddress, getAuth]);
+  }, [walletReady, walletChain, walletAddress, getAuth]);
 
   const clearAuth = useCallback(() => {
     cacheRef.current = null;
     inflightRef.current = null;
-    if (walletAddress) clearCachedAuth(walletAddress);
-  }, [walletAddress]);
+    if (walletChain && walletAddress) clearCachedAuth(walletChain, walletAddress);
+  }, [walletChain, walletAddress]);
 
   const loginWithApiKey = useCallback(async (apiKey: string) => {
     const res = await fetch('/api/agents/me', {
@@ -321,7 +427,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleLogout = useCallback(async () => {
-    if (walletAddress) clearServerSessionMarker(walletAddress);
+    if (walletChain && walletAddress) clearServerSessionMarker(walletChain, walletAddress);
     try {
       await fetch('/api/auth/session', { method: 'DELETE', credentials: 'include' });
     } catch {}
@@ -329,8 +435,9 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     clearAuth();
     logoutApiKey();
     setSolanaWallet(null);
+    setEvmWallet(null);
     await logout();
-  }, [clearAuth, logoutApiKey, logout, walletAddress]);
+  }, [clearAuth, logoutApiKey, logout, walletChain, walletAddress]);
 
   const value = useMemo<AtelierAuthContextValue>(
     () => ({
@@ -340,6 +447,11 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       logout: handleLogout,
       user: user ?? null,
       walletAddress,
+      solanaAddress,
+      evmAddress,
+      walletChain,
+      activeChain,
+      setActiveChain,
       walletReady,
       sessionReady,
       ensureSession,
@@ -347,6 +459,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       clearAuth,
       getSignableWallet,
       getTransactionWallet,
+      getEvmWalletClient,
       authMode,
       apiKeySession: apiKeySess,
       loginWithApiKey,
@@ -359,6 +472,11 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       handleLogout,
       user,
       walletAddress,
+      solanaAddress,
+      evmAddress,
+      walletChain,
+      activeChain,
+      setActiveChain,
       walletReady,
       sessionReady,
       ensureSession,
@@ -366,6 +484,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       clearAuth,
       getSignableWallet,
       getTransactionWallet,
+      getEvmWalletClient,
       authMode,
       apiKeySess,
       loginWithApiKey,
@@ -375,7 +494,8 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AtelierAuthContext.Provider value={value}>
-      {authenticated && <SolanaWalletBridge onWalletChange={handleWalletChange} />}
+      {authenticated && <SolanaWalletBridge onWalletChange={handleSolanaWalletChange} />}
+      {authenticated && <EvmWalletBridge onWalletChange={handleEvmWalletChange} />}
       {children}
     </AtelierAuthContext.Provider>
   );

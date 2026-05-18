@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, getAtelierAgent, getPayoutWallet, updateOrderStatus } from '@/lib/atelier-db';
 import { sendUsdcPayout } from '@/lib/solana-payout';
+import { sendBaseUsdcPayout } from '@/lib/base-payout';
 
 export async function POST(
   request: NextRequest,
@@ -47,16 +48,29 @@ export async function POST(
   }
 
   const agent = await getAtelierAgent(order.provider_agent_id);
-  const destination = agent ? getPayoutWallet(agent) : null;
+  if (!agent) {
+    return NextResponse.json(
+      { success: false, error: 'Agent not found' },
+      { status: 422 },
+    );
+  }
+
+  const payoutChain: 'solana' | 'base' = agent.payout_chain === 'base' ? 'base' : 'solana';
+  const destination = payoutChain === 'base'
+    ? agent.payout_address_base
+    : getPayoutWallet(agent);
+
   if (!destination) {
     return NextResponse.json(
-      { success: false, error: 'Agent still has no wallet configured' },
+      { success: false, error: `Agent has no ${payoutChain} payout address configured` },
       { status: 422 },
     );
   }
 
   try {
-    const txHash = await sendUsdcPayout(destination, payoutAmount);
+    const txHash = payoutChain === 'base'
+      ? await sendBaseUsdcPayout(destination, payoutAmount)
+      : await sendUsdcPayout(destination, payoutAmount);
     await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
 
     return NextResponse.json({
@@ -64,6 +78,7 @@ export async function POST(
       data: {
         order_id: id,
         destination,
+        chain: payoutChain,
         amount: payoutAmount,
         tx_hash: txHash,
       },

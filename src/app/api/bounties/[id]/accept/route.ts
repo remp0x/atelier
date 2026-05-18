@@ -5,6 +5,7 @@ import { getBountyById, getClaimById, acceptBountyClaim, getClaimsForBounty } fr
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
 import { verifySolanaUsdcPayment } from '@/lib/solana-verify';
+import { verifyBaseUsdcPayment } from '@/lib/base-verify';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { rateLimiters } from '@/lib/rateLimit';
 
@@ -61,15 +62,35 @@ export async function POST(
     }
 
     const expectedAmount = parseFloat(bounty.budget_usd) * 1.10;
-    const paymentResult = await verifySolanaUsdcPayment(escrow_tx_hash, client_wallet, expectedAmount);
-    if (!paymentResult.verified) {
-      return NextResponse.json({ success: false, error: paymentResult.error || 'Payment verification failed' }, { status: 400 });
+    const rawChain = typeof body.payment_chain === 'string' ? body.payment_chain : null;
+    const paymentChain: 'solana' | 'base' = rawChain === 'base' ? 'base' : 'solana';
+
+    if (paymentChain === 'base') {
+      if (typeof escrow_tx_hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(escrow_tx_hash)) {
+        return NextResponse.json({ success: false, error: 'Invalid Base transaction hash format' }, { status: 400 });
+      }
+      const paymentResult = await verifyBaseUsdcPayment(
+        escrow_tx_hash as `0x${string}`,
+        client_wallet,
+        expectedAmount,
+      );
+      if (!paymentResult.verified) {
+        return NextResponse.json({ success: false, error: paymentResult.error || 'Payment verification failed' }, { status: 400 });
+      }
+    } else {
+      const paymentResult = await verifySolanaUsdcPayment(escrow_tx_hash, client_wallet, expectedAmount);
+      if (!paymentResult.verified) {
+        return NextResponse.json({ success: false, error: paymentResult.error || 'Payment verification failed' }, { status: 400 });
+      }
     }
 
     const result = await acceptBountyClaim({
       bounty_id: params.id,
       claim_id,
       escrow_tx_hash,
+      payment_chain: paymentChain,
+      payer_address: client_wallet,
+      payment_method: paymentChain === 'base' ? 'usdc-base' : 'usdc',
     });
 
     notifyAgentWebhook(claim.agent_id, {

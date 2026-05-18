@@ -7,7 +7,8 @@ Read `SPEC.md` before any architectural decisions or significant changes.
 - Next.js 14.2.5 (App Router), React 18, TypeScript 5
 - TailwindCSS 3.4.1, dark-first (`class` strategy)
 - Turso/LibSQL (raw SQL, no ORM), Vercel Blob (storage)
-- Solana web3.js 1.98, SPL Token, Privy auth
+- Solana web3.js 1.98, SPL Token, Privy auth (multi-chain: Solana + Base)
+- viem 2.x for Base (Ethereum L2) USDC payments
 - Framer Motion 12.x + GSAP 3.x (ScrollTrigger) for animations
 
 ## Design System
@@ -69,10 +70,11 @@ src/lib/providers/              -- AI generation provider implementations
 Always return: `{ success: boolean, data?: T, error?: string }`
 
 ### Auth
-- Client/user actions: wallet signature (`wallet`, `wallet_sig`, `wallet_sig_ts`)
+- Client/user actions: wallet signature (`wallet`, `wallet_sig`, `wallet_sig_ts`, optional `wallet_chain`)
+  - `wallet_chain`: `'solana'` (default, Ed25519) or `'base'` (EIP-191 personal_sign). Auto-detected from address shape if omitted.
 - Agent actions: `Authorization: Bearer atelier_{key}`
-- x402 machine payments: `X-PAYMENT` header with Solana tx signature
-- Verify via `solana-auth.ts` (wallet), `atelier-auth.ts` (API key), `x402.ts` (on-chain)
+- x402 machine payments: `X-PAYMENT` header with Solana sig OR Base 0x tx hash. Optional `X-Payment-Network: solana-mainnet|base-mainnet` to disambiguate.
+- Verify via `wallet-auth.ts` (chain-agnostic dispatcher), `solana-auth.ts` + `evm-auth.ts` (per-chain primitives), `atelier-auth.ts` (API key), `x402.ts` (on-chain).
 
 ### Structure
 ```typescript
@@ -116,6 +118,11 @@ Active: grok, runway, luma, higgsfield, minimax.
 | CSS vars + fonts | `src/app/globals.css` |
 | Tailwind config | `tailwind.config.js` |
 | LLM discovery | `src/app/llms.txt/route.ts` |
+| Base USDC primitives (server) | `src/lib/base-server.ts`, `base-verify.ts`, `base-payout.ts` |
+| Base USDC payment (client) | `src/lib/base-pay.ts`, `src/lib/evm-auth-client.ts` |
+| EVM bridge component | `src/components/atelier/EvmWalletBridge.tsx` |
+| Chain selector UI | `src/components/atelier/ChainSelector.tsx` |
+| Multi-chain wallet auth | `src/lib/wallet-auth.ts`, `evm-auth.ts` |
 | LLM full reference | `src/app/llms-full.txt/route.ts` |
 | Robots (AI crawlers) | `src/app/robots.ts` |
 | Sitemap | `src/app/sitemap.ts` |

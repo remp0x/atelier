@@ -9,7 +9,9 @@ import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, getSessionWallet } from '@/lib/session';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { verifySolanaUsdcPayment, verifySolanaUsdcReceived } from '@/lib/solana-verify';
+import { verifyBaseUsdcPayment, verifyBaseUsdcReceived, extractBasePayerAddress } from '@/lib/base-verify';
 import { sendUsdcPayout } from '@/lib/solana-payout';
+import { sendBaseUsdcPayout } from '@/lib/base-payout';
 import { settlePartnerSplit } from '@/lib/partner-settlement';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { notifyBuyer, notifyProvider } from '@/lib/notifications';
@@ -168,16 +170,25 @@ export async function PATCH(
       }
 
       let refundFailed = false;
-      if (order.status === 'paid' && order.escrow_tx_hash && order.client_wallet && !order.payout_tx_hash) {
+      if (order.status === 'paid' && order.escrow_tx_hash && !order.payout_tx_hash) {
         const refundAmount = parseFloat(order.quoted_price_usd || '0');
-        if (refundAmount > 0) {
+        const refundChain = order.payment_chain || 'solana';
+        const refundDestination = refundChain === 'base'
+          ? order.payer_address
+          : order.client_wallet;
+        if (refundAmount > 0 && refundDestination) {
           try {
-            const txHash = await sendUsdcPayout(order.client_wallet, refundAmount);
+            const txHash = refundChain === 'base'
+              ? await sendBaseUsdcPayout(refundDestination, refundAmount)
+              : await sendUsdcPayout(refundDestination, refundAmount);
             await updateOrderStatus(id, { status: 'cancelled', payout_tx_hash: txHash });
           } catch (refundErr) {
             refundFailed = true;
             console.error(`Refund failed for order ${id}:`, refundErr);
           }
+        } else if (refundAmount > 0 && !refundDestination) {
+          refundFailed = true;
+          console.error(`Refund skipped for order ${id}: no ${refundChain} destination address`);
         }
       }
 
@@ -249,14 +260,29 @@ export async function PATCH(
       if (payoutAmount > 0) {
         try {
           const agent = await getAtelierAgent(order.provider_agent_id);
-          const destination = agent ? getPayoutWallet(agent) : null;
-          if (destination) {
-            const txHash = await sendUsdcPayout(destination, payoutAmount);
-            await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
-            agentPaid = true;
-          } else {
+          if (!agent) {
             payoutFailed = true;
-            console.error(`Payout skipped for order ${id}: no destination wallet`);
+            console.error(`Payout skipped for order ${id}: agent ${order.provider_agent_id} not found`);
+          } else if (agent.payout_chain === 'base') {
+            const destination = agent.payout_address_base;
+            if (destination) {
+              const txHash = await sendBaseUsdcPayout(destination, payoutAmount);
+              await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
+              agentPaid = true;
+            } else {
+              payoutFailed = true;
+              console.error(`Payout skipped for order ${id}: agent has no Base payout address configured`);
+            }
+          } else {
+            const destination = getPayoutWallet(agent);
+            if (destination) {
+              const txHash = await sendUsdcPayout(destination, payoutAmount);
+              await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
+              agentPaid = true;
+            } else {
+              payoutFailed = true;
+              console.error(`Payout skipped for order ${id}: no destination wallet`);
+            }
           }
         } catch (payoutErr) {
           payoutFailed = true;
@@ -269,6 +295,7 @@ export async function PATCH(
           orderId: id,
           partnerSlug: order.referral_partner,
           platformFeeUsd: platformFee,
+          paymentChain: order.payment_chain || 'solana',
         }).catch(err => {
           console.error(`Partner settlement failed for order ${id}:`, err);
         });
@@ -288,7 +315,7 @@ export async function PATCH(
     }
 
     if (action === 'pay') {
-      const { payment_method, escrow_tx_hash } = body;
+      const { payment_method, escrow_tx_hash, payment_chain: bodyChain } = body;
       if (!escrow_tx_hash) {
         return NextResponse.json(
           { success: false, error: 'escrow_tx_hash required for pay action' },
@@ -305,20 +332,54 @@ export async function PATCH(
       }
 
       const expectedAmount = parseFloat(order.quoted_price_usd || '0');
-      const verification = payment_method === 'card'
-        ? await verifySolanaUsdcReceived(escrow_tx_hash, expectedAmount)
-        : await verifySolanaUsdcPayment(escrow_tx_hash, wallet, expectedAmount);
-      if (!verification.verified) {
-        return NextResponse.json(
-          { success: false, error: verification.error || 'Payment verification failed' },
-          { status: 400 },
-        );
+      const paymentChain: 'solana' | 'base' =
+        bodyChain === 'base' ? 'base' :
+        bodyChain === 'solana' ? 'solana' :
+        order.payment_chain || 'solana';
+
+      let payerAddressOnChain: string | null = null;
+
+      if (paymentChain === 'base') {
+        if (typeof escrow_tx_hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(escrow_tx_hash)) {
+          return NextResponse.json(
+            { success: false, error: 'Invalid Base transaction hash format' },
+            { status: 400 },
+          );
+        }
+        const txHash = escrow_tx_hash as `0x${string}`;
+        const verification = payment_method === 'card'
+          ? await verifyBaseUsdcReceived(txHash, expectedAmount)
+          : await verifyBaseUsdcPayment(txHash, wallet, expectedAmount);
+        if (!verification.verified) {
+          return NextResponse.json(
+            { success: false, error: verification.error || 'Payment verification failed' },
+            { status: 400 },
+          );
+        }
+        payerAddressOnChain = payment_method === 'card'
+          ? await extractBasePayerAddress(txHash)
+          : wallet;
+      } else {
+        const verification = payment_method === 'card'
+          ? await verifySolanaUsdcReceived(escrow_tx_hash, expectedAmount)
+          : await verifySolanaUsdcPayment(escrow_tx_hash, wallet, expectedAmount);
+        if (!verification.verified) {
+          return NextResponse.json(
+            { success: false, error: verification.error || 'Payment verification failed' },
+            { status: 400 },
+          );
+        }
+        payerAddressOnChain = payment_method === 'card' ? null : wallet;
       }
+
+      const resolvedPaymentMethod = payment_method || (paymentChain === 'base' ? 'usdc-base' : 'usdc-sol');
 
       await updateOrderStatus(id, {
         status: 'paid',
-        payment_method: payment_method || 'usdc-sol',
+        payment_method: resolvedPaymentMethod,
         escrow_tx_hash,
+        payment_chain: paymentChain,
+        payer_address: payerAddressOnChain,
       });
 
       const service = order.service_id ? await getServiceById(order.service_id) : null;

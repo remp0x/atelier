@@ -6,10 +6,12 @@ import { atelierHref } from '@/lib/atelier-paths';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { sendUsdcPayment } from '@/lib/solana-pay';
+import { sendBaseUsdcPayment } from '@/lib/base-pay';
 import { useFundWallet } from '@privy-io/react-auth/solana';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { clientUpload } from '@/lib/client-upload';
 import { readReferralCookie } from './ReferralCapture';
+import { ChainSelector } from './ChainSelector';
 import type { Service, RequirementField } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'confirmation';
@@ -147,10 +149,27 @@ const DEFAULT_HINTS = {
 };
 
 type PayMethod = 'wallet' | 'card';
+type PayChain = 'solana' | 'base';
+
+function getTreasuryForChain(chain: PayChain): string | null {
+  if (chain === 'base') return process.env.NEXT_PUBLIC_ATELIER_TREASURY_BASE ?? null;
+  return process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET ?? null;
+}
 
 export function HireModal({ service, open, onClose }: HireModalProps) {
   const router = useRouter();
-  const { walletAddress, authenticated, getAuth, login, getTransactionWallet } = useAtelierAuth();
+  const {
+    walletAddress,
+    authenticated,
+    getAuth,
+    login,
+    getTransactionWallet,
+    getEvmWalletClient,
+    solanaAddress,
+    evmAddress,
+    activeChain,
+    setActiveChain,
+  } = useAtelierAuth();
   const { connection } = useConnection();
   const fundResolveRef = useRef<(() => void) | null>(null) as MutableRefObject<(() => void) | null>;
   const { fundWallet } = useFundWallet({
@@ -171,6 +190,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [payMethod, setPayMethod] = useState<PayMethod>('wallet');
+  const [payChain, setPayChain] = useState<PayChain>(activeChain);
   const [reqAnswers, setReqAnswers] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -191,8 +211,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setLoading(false);
       setOrderId(null);
       setPayMethod('wallet');
+      setPayChain(activeChain);
     }
-  }, [open]);
+  }, [open, activeChain]);
 
   useEffect(() => {
     if (step === 'confirmation' && orderId) {
@@ -259,14 +280,16 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
+  const activeAddress = payChain === 'base' ? evmAddress : solanaAddress;
+
   const handlePay = useCallback(async () => {
-    if (!walletAddress) {
+    if (!activeAddress) {
       login();
       return;
     }
 
-    const treasuryWallet = process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET;
-    if (!treasuryWallet) {
+    const treasury = getTreasuryForChain(payChain);
+    if (!treasury) {
       setError('Treasury wallet not configured');
       return;
     }
@@ -275,13 +298,13 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     setError(null);
 
     try {
-      if (payMethod === 'card') {
+      if (payChain === 'solana' && payMethod === 'card') {
         setLoadingMsg('Opening payment...');
         try {
           await new Promise<void>((resolve) => {
             fundResolveRef.current = resolve;
             fundWallet({
-              address: walletAddress,
+              address: activeAddress,
               options: {
                 chain: 'solana:mainnet',
                 amount: total.toFixed(2),
@@ -310,7 +333,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           reference_urls: validUrls.length > 0 ? validUrls : undefined,
           reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
           requirement_answers: Object.keys(reqAnswers).length > 0 ? reqAnswers : undefined,
-          client_wallet: walletAddress!,
+          client_wallet: activeAddress,
+          payment_chain: payChain,
           ...(referralPartner ? { referral_partner: referralPartner } : {}),
         }),
       });
@@ -320,12 +344,20 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       const newOrderId = createJson.data.id;
 
       setLoadingMsg('Sending payment...');
-      const txSig = await sendUsdcPayment(
-        connection,
-        getTransactionWallet()!,
-        new PublicKey(treasuryWallet),
-        total,
-      );
+      let txSig: string;
+
+      if (payChain === 'base') {
+        const ew = await getEvmWalletClient();
+        if (!ew) throw new Error('Connect a Base wallet first');
+        txSig = await sendBaseUsdcPayment(ew.client, ew.account, treasury as `0x${string}`, total);
+      } else {
+        txSig = await sendUsdcPayment(
+          connection,
+          getTransactionWallet()!,
+          new PublicKey(treasury),
+          total,
+        );
+      }
 
       setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
       const patchRes = await fetch(`/api/orders/${newOrderId}`, {
@@ -334,7 +366,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         body: JSON.stringify({
           ...auth,
           action: 'pay',
-          payment_method: 'usdc-sol',
+          payment_method: payChain === 'base' ? 'usdc-base' : 'usdc-sol',
+          payment_chain: payChain,
           escrow_tx_hash: txSig,
         }),
       });
@@ -348,7 +381,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, isWorkspace, payMethod, fundWallet]);
+  }, [activeAddress, payChain, connection, service, brief, validUrls, referenceImages, total, login, getAuth, getTransactionWallet, getEvmWalletClient, isWorkspace, payMethod, fundWallet]);
 
   if (!open) return null;
 
@@ -663,30 +696,56 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
               </div>
 
               <div>
-                <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Payment method</p>
-                <div className="flex gap-2">
+                <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Network</p>
+                <ChainSelector
+                  value={payChain}
+                  onChange={(chain) => {
+                    setPayChain(chain);
+                    setActiveChain(chain);
+                  }}
+                />
+              </div>
+
+              {payChain === 'solana' && (
+                <div>
+                  <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Payment method</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPayMethod('wallet')}
+                      className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                        payMethod === 'wallet'
+                          ? 'border-atelier text-atelier bg-atelier/5'
+                          : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
+                      }`}
+                    >
+                      Crypto Wallet
+                    </button>
+                    <button
+                      onClick={() => setPayMethod('card')}
+                      className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                        payMethod === 'card'
+                          ? 'border-atelier text-atelier bg-atelier/5'
+                          : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
+                      }`}
+                    >
+                      Card / Transfer
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {payChain === 'base' && !evmAddress && (
+                <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800">
+                  <p className="text-xs font-mono text-neutral-400 mb-2">No Base wallet connected</p>
                   <button
-                    onClick={() => setPayMethod('wallet')}
-                    className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
-                      payMethod === 'wallet'
-                        ? 'border-atelier text-atelier bg-atelier/5'
-                        : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
-                    }`}
+                    type="button"
+                    onClick={() => login()}
+                    className="w-full py-2 rounded border border-atelier text-atelier text-xs font-mono tracking-wide hover:bg-atelier/10 transition-colors"
                   >
-                    Crypto Wallet
-                  </button>
-                  <button
-                    onClick={() => setPayMethod('card')}
-                    className={`flex-1 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
-                      payMethod === 'card'
-                        ? 'border-atelier text-atelier bg-atelier/5'
-                        : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
-                    }`}
-                  >
-                    Card / Transfer
+                    Connect Base Wallet
                   </button>
                 </div>
-              </div>
+              )}
 
               {error && (
                 <p className="text-sm text-red-400 font-mono">{error}</p>
@@ -701,7 +760,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </button>
                 <button
                   onClick={handlePay}
-                  disabled={loading}
+                  disabled={loading || (payChain === 'base' && !evmAddress)}
                   className="flex-1 py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
                 >
                   {loading ? (
@@ -711,6 +770,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                     </>
                   ) : !authenticated ? (
                     'Connect Wallet'
+                  ) : payChain === 'solana' && !solanaAddress ? (
+                    'Connect Solana Wallet'
                   ) : (
                     `Pay $${total.toFixed(2)}`
                   )}

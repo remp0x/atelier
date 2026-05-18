@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { requireWalletAuth, WalletAuthError } from '@/lib/solana-auth';
+import { authenticateWalletRequest, WalletAuthError } from '@/lib/wallet-auth';
 import {
   buildClearedSessionCookie,
   buildSessionCookie,
@@ -12,7 +12,7 @@ import { ensureProfileExists } from '@/lib/atelier-db';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown> | null;
     const { wallet, wallet_sig, wallet_sig_ts } = body ?? {};
 
     if (!wallet || !wallet_sig || typeof wallet_sig_ts !== 'number') {
@@ -22,20 +22,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    let verifiedWallet: string;
+    let verified: { address: string; chain: 'solana' | 'base' };
     try {
-      verifiedWallet = requireWalletAuth({ wallet, wallet_sig, wallet_sig_ts });
+      verified = await authenticateWalletRequest(request, body);
     } catch (err) {
       const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
       return NextResponse.json({ success: false, error: msg }, { status: 401 });
     }
 
-    const { id, expiresAt } = await createSessionForWallet(verifiedWallet);
-    ensureProfileExists(verifiedWallet).catch(() => {});
+    const { id, expiresAt, chain } = await createSessionForWallet(verified.address, verified.chain);
+    ensureProfileExists(verified.address).catch(() => {});
 
     const response = NextResponse.json({
       success: true,
-      data: { wallet: verifiedWallet, expires_at: expiresAt.toISOString() },
+      data: {
+        wallet: verified.address,
+        chain,
+        expires_at: expiresAt.toISOString(),
+      },
     });
     response.headers.set('Set-Cookie', buildSessionCookie(id, expiresAt));
     return response;

@@ -611,6 +611,26 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_wallet ON submitted_skills(creator_wallet)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_created ON submitted_skills(created_at)');
 
+  try { await atelierClient.execute("ALTER TABLE service_orders ADD COLUMN payment_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN payer_address TEXT'); } catch (_e) { }
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_chain ON service_orders(payment_chain)');
+
+  try { await atelierClient.execute("ALTER TABLE bounties ADD COLUMN payment_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE bounties ADD COLUMN payer_address TEXT'); } catch (_e) { }
+
+  try { await atelierClient.execute("ALTER TABLE atelier_agents ADD COLUMN payout_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_address_base TEXT'); } catch (_e) { }
+
+  try { await atelierClient.execute("ALTER TABLE creator_fee_payouts ADD COLUMN chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
+
+  try { await atelierClient.execute("ALTER TABLE partner_payouts ADD COLUMN chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
+
+  try { await atelierClient.execute('ALTER TABLE partner_channels ADD COLUMN wallet_address_base TEXT'); } catch (_e) { }
+
+  try { await atelierClient.execute("ALTER TABLE atelier_sessions ADD COLUMN wallet_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
+
+  try { await atelierClient.execute("ALTER TABLE submitted_skills ADD COLUMN creator_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
+
   initialized = true;
 }
 
@@ -618,6 +638,7 @@ export interface SubmittedSkill {
   id: string;
   slug: string;
   creator_wallet: string;
+  creator_chain: 'solana' | 'base';
   name: string;
   description: string;
   category: string;
@@ -633,6 +654,7 @@ export async function insertSubmittedSkill(input: {
   id: string;
   slug: string;
   creator_wallet: string;
+  creator_chain?: 'solana' | 'base';
   name: string;
   description: string;
   category: string;
@@ -643,12 +665,13 @@ export async function insertSubmittedSkill(input: {
 }): Promise<void> {
   await initAtelierDb();
   await atelierClient.execute({
-    sql: `INSERT INTO submitted_skills (id, slug, creator_wallet, name, description, category, file_url, file_size, pricing, price_usdc, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live')`,
+    sql: `INSERT INTO submitted_skills (id, slug, creator_wallet, creator_chain, name, description, category, file_url, file_size, pricing, price_usdc, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'live')`,
     args: [
       input.id,
       input.slug,
       input.creator_wallet,
+      input.creator_chain ?? 'solana',
       input.name,
       input.description,
       input.category,
@@ -678,7 +701,7 @@ export async function listSubmittedSkills(opts?: {
     args.push(opts.category);
   }
   const limit = Math.min(Math.max(opts?.limit ?? 500, 1), 1000);
-  const sql = `SELECT id, slug, creator_wallet, name, description, category, file_url, file_size, pricing, price_usdc, status, created_at
+  const sql = `SELECT id, slug, creator_wallet, COALESCE(creator_chain, 'solana') as creator_chain, name, description, category, file_url, file_size, pricing, price_usdc, status, created_at
                FROM submitted_skills
                ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
                ORDER BY created_at DESC
@@ -691,7 +714,7 @@ export async function listSubmittedSkills(opts?: {
 export async function getSubmittedSkillBySlug(slug: string): Promise<SubmittedSkill | null> {
   await initAtelierDb();
   const result = await atelierClient.execute({
-    sql: `SELECT id, slug, creator_wallet, name, description, category, file_url, file_size, pricing, price_usdc, status, created_at
+    sql: `SELECT id, slug, creator_wallet, COALESCE(creator_chain, 'solana') as creator_chain, name, description, category, file_url, file_size, pricing, price_usdc, status, created_at
           FROM submitted_skills WHERE slug = ? LIMIT 1`,
     args: [slug],
   });
@@ -715,23 +738,28 @@ export async function setSubmittedSkillStatus(id: string, status: 'live' | 'remo
   });
 }
 
-export async function createAtelierSession(id: string, wallet: string, expiresAt: Date): Promise<void> {
+export async function createAtelierSession(
+  id: string,
+  wallet: string,
+  expiresAt: Date,
+  walletChain: 'solana' | 'base' = 'solana',
+): Promise<void> {
   await initAtelierDb();
   await atelierClient.execute({
-    sql: 'INSERT INTO atelier_sessions (id, wallet, expires_at) VALUES (?, ?, ?)',
-    args: [id, wallet, expiresAt.toISOString()],
+    sql: 'INSERT INTO atelier_sessions (id, wallet, expires_at, wallet_chain) VALUES (?, ?, ?, ?)',
+    args: [id, wallet, expiresAt.toISOString(), walletChain],
   });
 }
 
-export async function getAtelierSession(id: string): Promise<{ wallet: string; expires_at: string } | null> {
+export async function getAtelierSession(id: string): Promise<{ wallet: string; expires_at: string; wallet_chain: 'solana' | 'base' } | null> {
   await initAtelierDb();
   const result = await atelierClient.execute({
-    sql: 'SELECT wallet, expires_at FROM atelier_sessions WHERE id = ? AND expires_at > CURRENT_TIMESTAMP',
+    sql: "SELECT wallet, expires_at, COALESCE(wallet_chain, 'solana') as wallet_chain FROM atelier_sessions WHERE id = ? AND expires_at > CURRENT_TIMESTAMP",
     args: [id],
   });
   if (result.rows.length === 0) return null;
-  const row = result.rows[0] as unknown as { wallet: string; expires_at: string };
-  return { wallet: row.wallet, expires_at: row.expires_at };
+  const row = result.rows[0] as unknown as { wallet: string; expires_at: string; wallet_chain: 'solana' | 'base' };
+  return { wallet: row.wallet, expires_at: row.expires_at, wallet_chain: row.wallet_chain };
 }
 
 export async function touchAtelierSession(id: string, newExpiresAt: Date): Promise<void> {
@@ -1192,6 +1220,8 @@ export interface AtelierAgent {
   bankr_wallet: string | null;
   owner_wallet: string | null;
   payout_wallet: string | null;
+  payout_chain: 'solana' | 'base';
+  payout_address_base: string | null;
   partner_badge: string | null;
   token_mint: string | null;
   token_name: string | null;
@@ -1223,6 +1253,9 @@ export class DuplicateAgentError extends Error {
 }
 
 export function getPayoutWallet(agent: AtelierAgent): string | null {
+  if (agent.payout_chain === 'base') {
+    return agent.payout_address_base || null;
+  }
   return agent.payout_wallet || agent.owner_wallet;
 }
 
@@ -1302,6 +1335,8 @@ export interface ServiceOrder {
   quoted_price_usd: string | null;
   platform_fee_usd: string | null;
   payment_method: string | null;
+  payment_chain: 'solana' | 'base';
+  payer_address: string | null;
   status: OrderStatus;
   escrow_tx_hash: string | null;
   payout_tx_hash: string | null;
@@ -1336,6 +1371,8 @@ export interface Bounty {
   accepted_claim_id: string | null;
   order_id: string | null;
   expires_at: string;
+  payment_chain: 'solana' | 'base';
+  payer_address: string | null;
   created_at: string;
 }
 
@@ -1696,13 +1733,13 @@ export async function registerAtelierAgent(data: {
 
 export async function updateAtelierAgent(
   id: string,
-  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'ai_models' | 'payout_wallet' | 'owner_wallet' | 'twitter_username' | 'privy_user_id' | 'webhook_secret'>>
+  updates: Partial<Pick<AtelierAgent, 'name' | 'description' | 'avatar_url' | 'endpoint_url' | 'capabilities' | 'ai_models' | 'payout_wallet' | 'payout_chain' | 'payout_address_base' | 'owner_wallet' | 'twitter_username' | 'privy_user_id' | 'webhook_secret'>>
 ): Promise<AtelierAgent | null> {
   await initAtelierDb();
   const setClauses: string[] = [];
   const args: (string | null)[] = [];
 
-  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'ai_models', 'payout_wallet', 'owner_wallet', 'twitter_username', 'privy_user_id', 'webhook_secret'];
+  const fields: (keyof typeof updates)[] = ['name', 'description', 'avatar_url', 'endpoint_url', 'capabilities', 'ai_models', 'payout_wallet', 'payout_chain', 'payout_address_base', 'owner_wallet', 'twitter_username', 'privy_user_id', 'webhook_secret'];
   for (const field of fields) {
     if (updates[field] !== undefined) {
       setClauses.push(`${field} = ?`);
@@ -2327,6 +2364,9 @@ export async function createServiceOrder(data: {
   client_type?: 'wallet' | 'agent_x402';
   payment_tx_signature?: string;
   status_override?: OrderStatus;
+  payment_chain?: 'solana' | 'base';
+  payer_address?: string | null;
+  payment_method?: string;
 }): Promise<ServiceOrder> {
   await initAtelierDb();
   const id = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -2334,9 +2374,29 @@ export async function createServiceOrder(data: {
   const platformFee = data.quoted_price_usd ? (parseFloat(data.quoted_price_usd) * 0.10).toFixed(2) : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner, client_type, payment_tx_signature)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.service_id, data.client_agent_id || null, data.client_wallet || null, data.provider_agent_id, data.brief, data.reference_urls ? JSON.stringify(data.reference_urls) : null, data.reference_images ? JSON.stringify(data.reference_images) : null, data.quoted_price_usd || null, platformFee, status, data.quota_total || 0, data.requirement_answers ? JSON.stringify(data.requirement_answers) : null, data.referral_partner || null, data.client_type || 'wallet', data.payment_tx_signature || null],
+    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner, client_type, payment_tx_signature, payment_chain, payer_address, payment_method)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      data.service_id,
+      data.client_agent_id || null,
+      data.client_wallet || null,
+      data.provider_agent_id,
+      data.brief,
+      data.reference_urls ? JSON.stringify(data.reference_urls) : null,
+      data.reference_images ? JSON.stringify(data.reference_images) : null,
+      data.quoted_price_usd || null,
+      platformFee,
+      status,
+      data.quota_total || 0,
+      data.requirement_answers ? JSON.stringify(data.requirement_answers) : null,
+      data.referral_partner || null,
+      data.client_type || 'wallet',
+      data.payment_tx_signature || null,
+      data.payment_chain || 'solana',
+      data.payer_address || null,
+      data.payment_method || null,
+    ],
   });
 
   return getServiceOrderById(id) as Promise<ServiceOrder>;
@@ -2416,6 +2476,8 @@ export async function updateOrderStatus(
     deliverable_url?: string;
     deliverable_media_type?: string;
     workspace_expires_at?: string;
+    payment_chain?: 'solana' | 'base';
+    payer_address?: string | null;
   }
 ): Promise<ServiceOrder | null> {
   await initAtelierDb();
@@ -2431,6 +2493,8 @@ export async function updateOrderStatus(
   if (updates.deliverable_url !== undefined) { setClauses.push('deliverable_url = ?'); args.push(updates.deliverable_url); }
   if (updates.deliverable_media_type !== undefined) { setClauses.push('deliverable_media_type = ?'); args.push(updates.deliverable_media_type); }
   if (updates.workspace_expires_at !== undefined) { setClauses.push('workspace_expires_at = ?'); args.push(updates.workspace_expires_at); }
+  if (updates.payment_chain !== undefined) { setClauses.push('payment_chain = ?'); args.push(updates.payment_chain); }
+  if (updates.payer_address !== undefined) { setClauses.push('payer_address = ?'); args.push(updates.payer_address); }
 
   if (updates.status === 'delivered') {
     setClauses.push("delivered_at = CURRENT_TIMESTAMP");
@@ -3642,6 +3706,9 @@ export async function acceptBountyClaim(data: {
   bounty_id: string;
   claim_id: string;
   escrow_tx_hash: string;
+  payment_chain?: 'solana' | 'base';
+  payer_address?: string | null;
+  payment_method?: string;
 }): Promise<{ bounty: Bounty; order: ServiceOrder; claim: BountyClaim }> {
   await initAtelierDb();
 
@@ -3653,14 +3720,17 @@ export async function acceptBountyClaim(data: {
 
   const platformFee = (parseFloat(bounty.budget_usd) * 0.10).toFixed(2);
   const orderId = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const paymentChain = data.payment_chain || 'solana';
+  const paymentMethod = data.payment_method || (paymentChain === 'base' ? 'usdc-base' : 'usdc');
 
   await atelierClient.execute({
-    sql: `INSERT INTO service_orders (id, service_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, payment_method, status, escrow_tx_hash, bounty_id)
-          VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'usdc', 'paid', ?, ?)`,
+    sql: `INSERT INTO service_orders (id, service_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, payment_method, status, escrow_tx_hash, bounty_id, payment_chain, payer_address)
+          VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?, ?, ?)`,
     args: [
       orderId, bounty.poster_wallet, claim.agent_id, bounty.brief,
       bounty.reference_urls, bounty.reference_images,
-      bounty.budget_usd, platformFee, data.escrow_tx_hash, bounty.id,
+      bounty.budget_usd, platformFee, paymentMethod, data.escrow_tx_hash, bounty.id,
+      paymentChain, data.payer_address || null,
     ],
   });
 

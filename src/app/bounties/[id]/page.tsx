@@ -7,8 +7,10 @@ import Image from 'next/image';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { sendUsdcPayment } from '@/lib/solana-pay';
+import { sendBaseUsdcPayment } from '@/lib/base-pay';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
+import { ChainSelector } from '@/components/atelier/ChainSelector';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { Bounty, BountyClaimWithAgent, AtelierAgent, ServiceCategory } from '@/lib/atelier-db';
 
@@ -45,11 +47,29 @@ function timeRemaining(expiresAt: string): string {
   return `${mins}m left`;
 }
 
+type PayChain = 'solana' | 'base';
+
+function getTreasuryForChain(chain: PayChain): string | null {
+  if (chain === 'base') return process.env.NEXT_PUBLIC_ATELIER_TREASURY_BASE ?? null;
+  return process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET ?? null;
+}
+
 export default function BountyDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const { connection } = useConnection();
-  const { walletAddress, authenticated, getAuth, login, getTransactionWallet } = useAtelierAuth();
+  const {
+    walletAddress,
+    authenticated,
+    getAuth,
+    login,
+    getTransactionWallet,
+    getEvmWalletClient,
+    solanaAddress,
+    evmAddress,
+    activeChain,
+    setActiveChain,
+  } = useAtelierAuth();
 
   const [bounty, setBounty] = useState<Bounty & { claims_count: number } | null>(null);
   const [claims, setClaims] = useState<BountyClaimWithAgent[]>([]);
@@ -60,6 +80,7 @@ export default function BountyDetailPage() {
   const [claimMessage, setClaimMessage] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [showClaimForm, setShowClaimForm] = useState(false);
+  const [payChain, setPayChain] = useState<PayChain>(activeChain);
   const isPoster = bounty && walletAddress && bounty.poster_wallet === walletAddress;
   const isOpen = bounty?.status === 'open' && new Date(bounty.expires_at) > new Date();
 
@@ -163,8 +184,13 @@ export default function BountyDetailPage() {
   const handleAccept = useCallback(async (claimId: string) => {
     if (!walletAddress || !bounty) return;
 
-    const treasuryWallet = process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET;
-    if (!treasuryWallet) { setActionError('Treasury wallet not configured'); return; }
+    const treasury = getTreasuryForChain(payChain);
+    if (!treasury) { setActionError('Treasury wallet not configured'); return; }
+
+    if (payChain === 'base' && !evmAddress) {
+      setActionError('Connect a Base wallet first');
+      return;
+    }
 
     setActionLoading(true);
     setActionError(null);
@@ -172,12 +198,20 @@ export default function BountyDetailPage() {
       const auth = await getAuth();
       const totalAmount = parseFloat(bounty.budget_usd) * 1.10;
 
-      const txSig = await sendUsdcPayment(
-        connection,
-        getTransactionWallet()!,
-        new PublicKey(treasuryWallet),
-        totalAmount,
-      );
+      let txSig: string;
+
+      if (payChain === 'base') {
+        const ew = await getEvmWalletClient();
+        if (!ew) throw new Error('Connect a Base wallet first');
+        txSig = await sendBaseUsdcPayment(ew.client, ew.account, treasury as `0x${string}`, totalAmount);
+      } else {
+        txSig = await sendUsdcPayment(
+          connection,
+          getTransactionWallet()!,
+          new PublicKey(treasury),
+          totalAmount,
+        );
+      }
 
       const res = await fetch(`/api/bounties/${id}/accept`, {
         method: 'POST',
@@ -188,6 +222,7 @@ export default function BountyDetailPage() {
           wallet_sig: auth.wallet_sig,
           wallet_sig_ts: auth.wallet_sig_ts,
           escrow_tx_hash: txSig,
+          payment_chain: payChain,
         }),
       });
       const json = await res.json();
@@ -199,7 +234,7 @@ export default function BountyDetailPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [walletAddress, bounty, connection, id, getAuth, getTransactionWallet, router]);
+  }, [walletAddress, bounty, payChain, evmAddress, connection, id, getAuth, getTransactionWallet, getEvmWalletClient, router]);
 
   const handleCancel = useCallback(async () => {
     if (!walletAddress) return;
@@ -355,6 +390,32 @@ export default function BountyDetailPage() {
         {isPoster && isOpen && (
           <div className="mb-6">
             <h2 className="text-lg font-bold text-black dark:text-white font-display mb-4">Claims</h2>
+
+            {claims.filter(c => c.status === 'pending').length > 0 && (
+              <div className="mb-4 p-4 border border-gray-200 dark:border-neutral-800 rounded-xl bg-white dark:bg-black/50">
+                <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Payment network</p>
+                <ChainSelector
+                  value={payChain}
+                  onChange={(chain) => {
+                    setPayChain(chain);
+                    setActiveChain(chain);
+                  }}
+                />
+                {payChain === 'base' && !evmAddress && (
+                  <div className="mt-3">
+                    <p className="text-xs font-mono text-neutral-400 mb-2">No Base wallet connected</p>
+                    <button
+                      type="button"
+                      onClick={() => login()}
+                      className="w-full py-2 rounded border border-atelier text-atelier text-xs font-mono tracking-wide hover:bg-atelier/10 transition-colors"
+                    >
+                      Connect Base Wallet
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {claims.length > 0 ? (
               <div className="space-y-3">
                 {claims.filter(c => c.status === 'pending').map(claim => (
@@ -391,7 +452,7 @@ export default function BountyDetailPage() {
                       </div>
                       <button
                         onClick={() => handleAccept(claim.id)}
-                        disabled={actionLoading}
+                        disabled={actionLoading || (payChain === 'base' && !evmAddress)}
                         className="px-4 py-2 rounded-lg text-xs font-mono font-semibold bg-atelier text-white hover:bg-atelier/90 disabled:opacity-50 transition-colors"
                       >
                         {actionLoading ? 'Processing...' : `Accept & Pay $${(parseFloat(bounty.budget_usd) * 1.10).toFixed(2)}`}

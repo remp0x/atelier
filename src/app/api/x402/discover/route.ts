@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceById } from '@/lib/atelier-db';
-import { buildPaymentRequirements, buildPaymentRequiredResponse } from '@/lib/x402';
+import { buildPaymentRequirements, buildPaymentRequiredResponse, type PaymentChain } from '@/lib/x402';
 import { rateLimiters } from '@/lib/rateLimit';
 
 export async function GET(request: NextRequest): Promise<NextResponse | Response> {
@@ -33,10 +33,21 @@ export async function GET(request: NextRequest): Promise<NextResponse | Response
       );
     }
 
+    const chainParam = request.nextUrl.searchParams.get('chain');
+    let chain: PaymentChain = 'solana';
+    if (chainParam === 'base') chain = 'base';
+    else if (chainParam && chainParam !== 'solana') {
+      return NextResponse.json(
+        { success: false, error: `Unsupported chain: ${chainParam}` },
+        { status: 400 },
+      );
+    }
+
     const requirements = buildPaymentRequirements({
       priceUsd: service.price_usd,
       serviceTitle: service.title,
       serviceId: service.id,
+      chain,
     });
 
     return buildPaymentRequiredResponse(requirements);

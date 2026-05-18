@@ -113,6 +113,7 @@ function DashboardContent() {
   const [showQuote, setShowQuote] = useState<string | null>(null);
   const [editingPayout, setEditingPayout] = useState(false);
   const [payoutDraft, setPayoutDraft] = useState('');
+  const [payoutChainDraft, setPayoutChainDraft] = useState<'solana' | 'base'>('solana');
   const [payoutSaving, setPayoutSaving] = useState(false);
   const [payoutError, setPayoutError] = useState<string | null>(null);
 
@@ -191,24 +192,33 @@ function DashboardContent() {
     }
   };
 
-  const savePayoutWallet = async (agentId: string, agentApiKey: string | null, value: string | null) => {
+  const savePayoutWallet = async (agentId: string, agentApiKey: string | null, chain: 'solana' | 'base', address: string | null) => {
     setPayoutSaving(true);
     setPayoutError(null);
     try {
+      const body: Record<string, unknown> = { payout_chain: chain };
+      if (chain === 'solana') {
+        body.payout_wallet = address || null;
+        body.payout_address_base = null;
+      } else {
+        body.payout_address_base = address || null;
+        body.payout_wallet = null;
+      }
+
       let res: Response;
       const effectiveKey = agentApiKey || apiKeySession?.apiKey;
       if (effectiveKey) {
         res = await fetch('/api/agents/me', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${effectiveKey}` },
-          body: JSON.stringify({ payout_wallet: value }),
+          body: JSON.stringify(body),
         });
       } else {
         const auth = await getAuth();
         res = await fetch(`/api/agents/${agentId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...auth, payout_wallet: value }),
+          body: JSON.stringify({ ...auth, ...body }),
         });
       }
       const json = await res.json();
@@ -430,22 +440,103 @@ function DashboardContent() {
                       <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500 uppercase tracking-wider">Payout Wallet</span>
                       {!editingPayout && (
                         <div className="flex items-center gap-1.5">
-                          <button onClick={() => { setPayoutDraft(agent.payout_wallet || ''); setEditingPayout(true); setPayoutError(null); }} className="text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors text-[10px] font-mono cursor-pointer">Edit</button>
-                          {agent.payout_wallet && <button onClick={() => savePayoutWallet(agent.id, agent.api_key ?? null, null)} className="text-gray-400 dark:text-neutral-500 hover:text-red-500 dark:hover:text-red-400 transition-colors text-[10px] font-mono cursor-pointer">Clear</button>}
+                          <button
+                            onClick={() => {
+                              const chain = agent.payout_chain ?? 'solana';
+                              setPayoutChainDraft(chain);
+                              setPayoutDraft(chain === 'base' ? (agent.payout_address_base || '') : (agent.payout_wallet || ''));
+                              setEditingPayout(true);
+                              setPayoutError(null);
+                            }}
+                            className="text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors text-[10px] font-mono cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          {(agent.payout_chain === 'base' ? agent.payout_address_base : agent.payout_wallet) && (
+                            <button
+                              onClick={() => savePayoutWallet(agent.id, agent.api_key ?? null, agent.payout_chain ?? 'solana', null)}
+                              className="text-gray-400 dark:text-neutral-500 hover:text-red-500 dark:hover:text-red-400 transition-colors text-[10px] font-mono cursor-pointer"
+                            >
+                              Clear
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
                     {!editingPayout ? (
-                      <div>
-                        <code className="text-xs font-mono text-gray-600 dark:text-neutral-300">{agent.payout_wallet ? truncateWallet(agent.payout_wallet) : agent.owner_wallet ? truncateWallet(agent.owner_wallet) : '\u2014'}</code>
-                        {!agent.payout_wallet && agent.owner_wallet && <span className="text-[10px] font-mono text-gray-300 dark:text-neutral-600 ml-2">(owner)</span>}
+                      <div className="flex items-center gap-2">
+                        {(() => {
+                          const chain = agent.payout_chain ?? 'solana';
+                          const displayAddress = chain === 'base'
+                            ? agent.payout_address_base
+                            : (agent.payout_wallet || agent.owner_wallet);
+                          const isFallback = chain === 'solana' && !agent.payout_wallet && !!agent.owner_wallet;
+                          return (
+                            <>
+                              <code className="text-xs font-mono text-gray-600 dark:text-neutral-300">
+                                {displayAddress ? truncateWallet(displayAddress) : '\u2014'}
+                              </code>
+                              {isFallback && (
+                                <span className="text-[10px] font-mono text-gray-300 dark:text-neutral-600">(owner)</span>
+                              )}
+                              <span className="text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5 border border-atelier/40 text-atelier">
+                                {chain === 'base' ? 'BASE' : 'SOLANA'}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <input value={payoutDraft} onChange={e => setPayoutDraft(e.target.value)} placeholder="Solana wallet address" className="w-full px-2.5 py-1.5 rounded bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 text-xs font-mono text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier" />
+                        <div className="flex rounded overflow-hidden border border-gray-200 dark:border-neutral-700 w-fit">
+                          {(['solana', 'base'] as const).map(chain => (
+                            <button
+                              key={chain}
+                              onClick={() => { setPayoutChainDraft(chain); setPayoutDraft(''); setPayoutError(null); }}
+                              className={`px-3 py-1 text-[10px] font-mono uppercase tracking-wide transition-colors cursor-pointer ${payoutChainDraft === chain ? 'bg-atelier text-white' : 'bg-transparent text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300'}`}
+                            >
+                              {chain}
+                            </button>
+                          ))}
+                        </div>
+                        <input
+                          value={payoutDraft}
+                          onChange={e => setPayoutDraft(e.target.value)}
+                          placeholder={payoutChainDraft === 'base' ? '0x address (Base mainnet)' : 'Base58 wallet address (e.g. 7xKX...AsU)'}
+                          className="w-full px-2.5 py-1.5 rounded bg-gray-50 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 text-xs font-mono text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+                        />
+                        <p className="text-[10px] font-mono text-gray-400 dark:text-neutral-500">
+                          {payoutChainDraft === 'base' ? "You'll be paid in USDC on Base mainnet." : "You'll be paid in USDC on Solana."}
+                        </p>
                         <div className="flex gap-2">
-                          <button onClick={() => savePayoutWallet(agent.id, agent.api_key ?? null, payoutDraft || null)} disabled={payoutSaving} className="text-[10px] font-mono font-semibold text-atelier disabled:opacity-40 cursor-pointer">{payoutSaving ? '...' : 'Save'}</button>
-                          <button onClick={() => { setEditingPayout(false); setPayoutError(null); }} className="text-[10px] font-mono text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 cursor-pointer">Cancel</button>
+                          <button
+                            onClick={() => {
+                              const solanaRe = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+                              const baseRe = /^0x[a-fA-F0-9]{40}$/;
+                              const addr = payoutDraft.trim();
+                              if (addr) {
+                                if (payoutChainDraft === 'solana' && !solanaRe.test(addr)) {
+                                  setPayoutError('Enter a valid base58 Solana address');
+                                  return;
+                                }
+                                if (payoutChainDraft === 'base' && !baseRe.test(addr)) {
+                                  setPayoutError('Enter a valid 0x EVM address');
+                                  return;
+                                }
+                              }
+                              savePayoutWallet(agent.id, agent.api_key ?? null, payoutChainDraft, addr || null);
+                            }}
+                            disabled={payoutSaving}
+                            className="text-[10px] font-mono font-semibold text-atelier disabled:opacity-40 cursor-pointer"
+                          >
+                            {payoutSaving ? '...' : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => { setEditingPayout(false); setPayoutError(null); }}
+                            className="text-[10px] font-mono text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
                         </div>
                         {payoutError && <p className="text-[10px] font-mono text-red-500 dark:text-red-400">{payoutError}</p>}
                       </div>

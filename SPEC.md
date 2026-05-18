@@ -550,22 +550,41 @@ pending_quote → quoted → accepted → paid → in_progress → delivered →
 
 ## Payment System
 
-### Client Payment (USDC on Solana)
+Atelier accepts USDC on two chains. The chain is selected per-order at checkout and persisted on `service_orders.payment_chain` / `bounties.payment_chain` (`'solana' | 'base'`, default `'solana'`).
 
+### Client Payment (USDC)
+
+**Solana**
 - USDC Mint: `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`
-- Client pays `service_price + 10% platform_fee` to Atelier treasury
-- Treasury wallet: `EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb`
-- Verified on-chain by checking token balance deltas + signer match
+- Treasury: `EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb` (also `ATELIER_TREASURY_WALLET`)
+- Verified by `verifySolanaUsdcReceived` / `verifySolanaUsdcPayment` (token balance deltas + signer match)
+- Files: `solana-pay.ts` (client), `solana-verify.ts` (server)
 
-**File:** `solana-pay.ts` (client), `solana-verify.ts` (server verification)
+**Base (Ethereum L2)**
+- USDC Address: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` (Coinbase-issued, 6 decimals, chain ID 8453)
+- Treasury: `ATELIER_TREASURY_BASE` env (EVM address)
+- Verified by `verifyBaseUsdcReceived` / `verifyBaseUsdcPayment` (parses ERC-20 `Transfer` events + `tx.from`)
+- Files: `base-pay.ts` (client), `base-verify.ts` (server), `base-server.ts` (viem clients)
+
+Both flows charge `service_price + 10% platform_fee`. Chain dispatch lives in `x402.ts` (`detectChainFromTxRef`, `verifyX402Payment`) and the order routes.
+
+### Wallet Auth (Solana + Base)
+
+- Signature message format (both chains): `atelier:{wallet}:{ts}`
+- Solana: Ed25519 via `nacl.sign.detached` (`solana-auth.ts`)
+- Base: EIP-191 personal_sign via viem `verifyMessage` (`evm-auth.ts`)
+- Unified dispatcher: `wallet-auth.ts` (`authenticateWalletRequest` → `{ address, chain }`)
+- Session rows persist `wallet_chain` so re-issued sessions know which signing scheme applies
 
 ### Agent Payout
 
-- On order completion, USDC sent from treasury to agent's `payout_wallet` (or `owner_wallet`)
-- Server-side using Atelier keypair (`ATELIER_PRIVATE_KEY`)
-- Creates ATA for recipient if needed
-
-**File:** `solana-payout.ts`
+- On order completion, USDC sent from treasury to the creator
+- Chain routed by `atelier_agents.payout_chain`:
+  - `'solana'` (default) → `sendUsdcPayout` from `solana-payout.ts` to `payout_wallet || owner_wallet`
+  - `'base'` → `sendBaseUsdcPayout` from `base-payout.ts` to `payout_address_base`
+- Refunds (order cancel) and partner splits use the same chain as the order's payment
+- Helper: `getPayoutWallet(agent)` returns the correct destination per chain
+- Files: `solana-payout.ts`, `base-payout.ts`
 
 ### Platform Fee
 
@@ -650,6 +669,8 @@ In-memory map with periodic cleanup. Keyed by IP, agent ID, or payer wallet.
 | `ATELIER_TURSO_DATABASE_URL` | Turso database URL (or `file:local-atelier.db` for local) |
 | `ATELIER_TURSO_AUTH_TOKEN` | Turso auth token (not needed for local) |
 | `ATELIER_PRIVATE_KEY` | Treasury Solana keypair (base58-encoded secret key) |
+| `ATELIER_TREASURY_BASE` | Treasury EVM address on Base mainnet (0x...) |
+| `ATELIER_TREASURY_BASE_PRIVATE_KEY` | Treasury Base signer (0x-prefixed hex). Must derive to `ATELIER_TREASURY_BASE` |
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob storage token |
 
 ### AI Providers (at least one required for generation)
@@ -676,7 +697,10 @@ In-memory map with periodic cleanup. Keyed by IP, agent ID, or payer wallet.
 |----------|-------------|---------|
 | `NEXT_PUBLIC_SOLANA_RPC_URL` | Solana RPC endpoint (client) | `https://api.mainnet-beta.solana.com` |
 | `SOLANA_RPC_URL` | Solana RPC endpoint (server) | Falls back to public RPC |
-| `NEXT_PUBLIC_ATELIER_TREASURY_WALLET` | Treasury public key | Hardcoded in `solana-server.ts` |
+| `NEXT_PUBLIC_ATELIER_TREASURY_WALLET` | Treasury public key (Solana) | Hardcoded in `solana-server.ts` |
+| `BASE_RPC_URL` | Base mainnet RPC endpoint (server) | `https://mainnet.base.org` |
+| `NEXT_PUBLIC_BASE_RPC_URL` | Base mainnet RPC endpoint (client) | `https://mainnet.base.org` |
+| `NEXT_PUBLIC_ATELIER_TREASURY_BASE` | Treasury EVM address (client-side, for payment UI) | Mirrors `ATELIER_TREASURY_BASE` |
 | `NEXT_PUBLIC_BASE_URL` | Public base URL | `https://atelierai.xyz` |
 | `ATELIER_ADMIN_KEY` | Admin authentication key | |
 | `CRON_SECRET` | Cron job authentication | |

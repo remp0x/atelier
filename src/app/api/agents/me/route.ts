@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
+import { isAddress, getAddress } from 'viem';
 import { updateAtelierAgent, type ServiceCategory } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { validateExternalUrl } from '@/lib/url-validation';
@@ -35,6 +36,8 @@ export async function GET(request: NextRequest) {
         avg_rating: agent.avg_rating,
         owner_wallet: agent.owner_wallet,
         payout_wallet: agent.payout_wallet,
+        payout_chain: agent.payout_chain,
+        payout_address_base: agent.payout_address_base,
         privy_user_id: agent.privy_user_id,
         webhook_secret: agent.webhook_secret,
         created_at: agent.created_at,
@@ -53,7 +56,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const agent = await resolveExternalAgentByApiKey(request);
     const body = await request.json();
-    const { name, description, avatar_url, endpoint_url, capabilities, payout_wallet } = body;
+    const { name, description, avatar_url, endpoint_url, capabilities, payout_wallet, payout_chain, payout_address_base } = body;
 
     if (name !== undefined) {
       if (typeof name !== 'string' || name.length < 2 || name.length > 50) {
@@ -117,6 +120,33 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    if (payout_chain !== undefined) {
+      if (payout_chain !== 'solana' && payout_chain !== 'base') {
+        return NextResponse.json(
+          { success: false, error: "payout_chain must be 'solana' or 'base'" },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (payout_address_base !== undefined && payout_address_base !== null) {
+      if (typeof payout_address_base !== 'string' || !isAddress(payout_address_base)) {
+        return NextResponse.json(
+          { success: false, error: 'payout_address_base must be a valid EVM address' },
+          { status: 400 },
+        );
+      }
+    }
+
+    const effectiveChain = payout_chain ?? agent.payout_chain;
+    const effectiveBaseAddress = payout_address_base !== undefined ? payout_address_base : agent.payout_address_base;
+    if (effectiveChain === 'base' && !effectiveBaseAddress) {
+      return NextResponse.json(
+        { success: false, error: 'Base payout selected but payout_address_base is missing' },
+        { status: 400 },
+      );
+    }
+
     const { owner_wallet } = body;
     if (owner_wallet !== undefined && owner_wallet !== null) {
       if (typeof owner_wallet !== 'string' || !BASE58_REGEX.test(owner_wallet)) {
@@ -145,6 +175,8 @@ export async function PATCH(request: NextRequest) {
     if (capabilities !== undefined) updates.capabilities = JSON.stringify(capabilities);
     if (ai_models !== undefined) updates.ai_models = ai_models.length > 0 ? JSON.stringify(ai_models) : null;
     if (payout_wallet !== undefined) updates.payout_wallet = payout_wallet;
+    if (payout_chain !== undefined) updates.payout_chain = payout_chain;
+    if (payout_address_base !== undefined) updates.payout_address_base = payout_address_base ? getAddress(payout_address_base) : null;
     if (owner_wallet !== undefined) updates.owner_wallet = owner_wallet;
     if (privy_user_id !== undefined) updates.privy_user_id = privy_user_id;
 
@@ -177,6 +209,8 @@ export async function PATCH(request: NextRequest) {
         avg_rating: updated.avg_rating,
         owner_wallet: updated.owner_wallet,
         payout_wallet: updated.payout_wallet,
+        payout_chain: updated.payout_chain,
+        payout_address_base: updated.payout_address_base,
         privy_user_id: updated.privy_user_id,
         webhook_secret: updated.webhook_secret,
         created_at: updated.created_at,

@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isAddress, getAddress } from 'viem';
 import {
   getAtelierAgent,
   resolveAgent,
@@ -224,7 +225,7 @@ export async function PATCH(
       }
     }
 
-    const { name, description, avatar_url, endpoint_url, capabilities, payout_wallet, ai_models } = body;
+    const { name, description, avatar_url, endpoint_url, capabilities, payout_wallet, payout_chain, payout_address_base, ai_models } = body;
 
     if (name !== undefined) {
       if (typeof name !== 'string' || name.length < 2 || name.length > 50) {
@@ -274,6 +275,33 @@ export async function PATCH(
       }
     }
 
+    if (payout_chain !== undefined) {
+      if (payout_chain !== 'solana' && payout_chain !== 'base') {
+        return NextResponse.json(
+          { success: false, error: "payout_chain must be 'solana' or 'base'" },
+          { status: 400 },
+        );
+      }
+    }
+
+    if (payout_address_base !== undefined && payout_address_base !== null) {
+      if (typeof payout_address_base !== 'string' || !isAddress(payout_address_base)) {
+        return NextResponse.json(
+          { success: false, error: 'payout_address_base must be a valid EVM address' },
+          { status: 400 },
+        );
+      }
+    }
+
+    const effectiveChain = payout_chain ?? agent.payout_chain;
+    const effectiveBaseAddress = payout_address_base !== undefined ? payout_address_base : agent.payout_address_base;
+    if (effectiveChain === 'base' && !effectiveBaseAddress) {
+      return NextResponse.json(
+        { success: false, error: 'Base payout selected but payout_address_base is missing' },
+        { status: 400 },
+      );
+    }
+
     if (ai_models !== undefined) {
       if (!Array.isArray(ai_models)) {
         return NextResponse.json({ success: false, error: 'ai_models must be an array of strings' }, { status: 400 });
@@ -295,6 +323,8 @@ export async function PATCH(
     if (capabilities !== undefined) updates.capabilities = JSON.stringify(capabilities);
     if (ai_models !== undefined) updates.ai_models = ai_models.length > 0 ? JSON.stringify(ai_models) : null;
     if (payout_wallet !== undefined) updates.payout_wallet = payout_wallet;
+    if (payout_chain !== undefined) updates.payout_chain = payout_chain;
+    if (payout_address_base !== undefined) updates.payout_address_base = payout_address_base ? getAddress(payout_address_base) : null;
 
     const updated = await updateAtelierAgent(id, updates);
     if (!updated) {

@@ -14,6 +14,9 @@ import {
   buildPaymentRequiredResponse,
   verifyX402Payment,
   computeTotalWithFee,
+  networkToChain,
+  detectChainFromTxRef,
+  type PaymentChain,
 } from '@/lib/x402';
 
 export async function POST(request: NextRequest): Promise<NextResponse | Response> {
@@ -96,9 +99,10 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
     }
 
     const txSignature = parseX402Header(request.headers.get('X-PAYMENT'));
+    const headerChain = networkToChain(request.headers.get('X-Payment-Network'));
 
     if (txSignature) {
-      return handleX402Order(body, service, txSignature);
+      return handleX402Order(body, service, txSignature, headerChain);
     }
 
     if (!client_wallet) {
@@ -108,10 +112,15 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
           { status: 400 },
         );
       }
+      const queryChain = request.nextUrl.searchParams.get('chain');
+      let chain: PaymentChain = headerChain ?? 'solana';
+      if (queryChain === 'base') chain = 'base';
+      else if (queryChain === 'solana') chain = 'solana';
       const requirements = buildPaymentRequirements({
         priceUsd: service.price_usd,
         serviceTitle: service.title,
         serviceId: service.id,
+        chain,
       });
       return buildPaymentRequiredResponse(requirements);
     }
@@ -136,6 +145,9 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
 
     const quotedPrice = ['fixed', 'weekly', 'monthly'].includes(service.price_type) ? service.price_usd : undefined;
 
+    const bodyChain = typeof body.payment_chain === 'string' ? body.payment_chain : null;
+    const paymentChain: PaymentChain = bodyChain === 'base' ? 'base' : 'solana';
+
     const order = await createServiceOrder({
       service_id,
       client_wallet,
@@ -147,6 +159,7 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       quota_total: service.quota_limit || 0,
       requirement_answers: requirement_answers || undefined,
       referral_partner: referralPartner,
+      payment_chain: paymentChain,
     });
 
     notifyAgentWebhook(service.agent_id, {
@@ -175,6 +188,7 @@ async function handleX402Order(
   body: Record<string, unknown>,
   service: { id: string; agent_id: string; title: string; price_usd: string; price_type: string; quota_limit: number | null },
   txSignature: string,
+  chainHint: PaymentChain | null,
 ): Promise<NextResponse> {
   const { brief, reference_urls, reference_images, requirement_answers } = body as {
     brief: string;
@@ -200,13 +214,17 @@ async function handleX402Order(
 
   const { totalUsd, feeUsd } = computeTotalWithFee(service.price_usd);
 
-  const verification = await verifyX402Payment(txSignature, totalUsd);
+  const resolvedChain: PaymentChain | null = chainHint ?? detectChainFromTxRef(txSignature);
+  const verification = await verifyX402Payment(txSignature, totalUsd, resolvedChain);
   if (!verification.verified) {
     return NextResponse.json(
       { success: false, error: `Payment verification failed: ${verification.error}` },
       { status: 402 },
     );
   }
+
+  const paymentChain: PaymentChain = verification.chain ?? 'solana';
+  const paymentMethod = paymentChain === 'base' ? 'usdc-base' : 'usdc-sol';
 
   const order = await createServiceOrder({
     service_id: service.id,
@@ -221,6 +239,9 @@ async function handleX402Order(
     client_type: 'agent_x402',
     payment_tx_signature: txSignature,
     status_override: 'paid',
+    payment_chain: paymentChain,
+    payer_address: verification.payerWallet,
+    payment_method: paymentMethod,
   });
 
   notifyAgentWebhook(service.agent_id, {

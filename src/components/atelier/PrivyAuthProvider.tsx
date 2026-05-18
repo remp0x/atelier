@@ -4,6 +4,7 @@ import { type ReactNode } from 'react';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 import { createSolanaRpc, createSolanaRpcSubscriptions } from '@solana/kit';
+import { base } from 'viem/chains';
 
 export function PrivyAuthProvider({ children }: { children: ReactNode }) {
   return (
@@ -13,11 +14,22 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
         appearance: {
           accentColor: '#fa4c14',
           landingHeader: 'Sign in to Atelier',
-          walletChainType: 'solana-only',
-          walletList: ['detected_wallets', 'phantom', 'solflare'],
+          walletChainType: 'ethereum-and-solana',
+          walletList: [
+            'detected_wallets',
+            'phantom',
+            'solflare',
+            'metamask',
+            'coinbase_wallet',
+            'rainbow',
+            'wallet_connect',
+          ],
         },
         loginMethods: ['email', 'google', 'twitter', 'wallet'],
+        defaultChain: base,
+        supportedChains: [base],
         embeddedWallets: {
+          ethereum: { createOnLogin: 'off' },
           solana: { createOnLogin: 'off' },
         },
         externalWallets: {

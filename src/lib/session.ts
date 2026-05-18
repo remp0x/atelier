@@ -8,6 +8,11 @@ import {
   deleteExpiredAtelierSessions,
 } from './atelier-db';
 import { requireWalletAuth, WalletAuthError } from './solana-auth';
+import { authenticateEvmRequest, EvmAuthError } from './evm-auth';
+import { detectWalletChain, type WalletChain, WalletAuthError as ChainWalletAuthError } from './wallet-auth';
+
+export { ChainWalletAuthError };
+export type { WalletChain };
 
 export const SESSION_COOKIE = 'atelier_session';
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -17,15 +22,20 @@ function generateSessionId(): string {
   return randomBytes(32).toString('base64url');
 }
 
-export async function createSessionForWallet(wallet: string): Promise<{ id: string; expiresAt: Date }> {
+export async function createSessionForWallet(
+  wallet: string,
+  walletChain: WalletChain = 'solana',
+): Promise<{ id: string; expiresAt: Date; chain: WalletChain }> {
   const id = generateSessionId();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-  await createAtelierSession(id, wallet, expiresAt);
+  await createAtelierSession(id, wallet, expiresAt, walletChain);
   deleteExpiredAtelierSessions().catch(() => {});
-  return { id, expiresAt };
+  return { id, expiresAt, chain: walletChain };
 }
 
-export async function getSessionWallet(request: NextRequest | Request): Promise<string | null> {
+export async function getSessionAuth(
+  request: NextRequest | Request,
+): Promise<{ wallet: string; chain: WalletChain } | null> {
   const sessionId = readSessionCookie(request);
   if (!sessionId) return null;
 
@@ -38,7 +48,13 @@ export async function getSessionWallet(request: NextRequest | Request): Promise<
     touchAtelierSession(sessionId, newExpiresAt).catch(() => {});
   }
 
-  return session.wallet;
+  const chain: WalletChain = session.wallet_chain === 'base' ? 'base' : 'solana';
+  return { wallet: session.wallet, chain };
+}
+
+export async function getSessionWallet(request: NextRequest | Request): Promise<string | null> {
+  const auth = await getSessionAuth(request);
+  return auth?.wallet ?? null;
 }
 
 export async function destroySession(request: NextRequest | Request): Promise<void> {
@@ -75,28 +91,84 @@ export function buildSessionCookie(sessionId: string, expiresAt: Date): string {
   return attrs.join('; ');
 }
 
-export async function authenticateUserRequest(
+function readChainHint(
   request: NextRequest | Request,
-  sigFallback?: Record<string, unknown> | null,
-  expectedWallet?: string | null,
-): Promise<string> {
-  const sessionWallet = await getSessionWallet(request);
-  if (sessionWallet) {
-    if (expectedWallet && sessionWallet !== expectedWallet) {
-      throw new WalletAuthError('Wallet mismatch');
-    }
-    return sessionWallet;
+  body: Record<string, unknown> | null | undefined,
+): WalletChain | null {
+  const fromBody = body?.wallet_chain;
+  if (typeof fromBody === 'string') {
+    const normalized = fromBody.toLowerCase();
+    if (normalized === 'solana' || normalized === 'base') return normalized;
   }
+  const fromHeader = request.headers.get('x-atelier-wallet-chain');
+  if (fromHeader) {
+    const normalized = fromHeader.toLowerCase();
+    if (normalized === 'solana' || normalized === 'base') return normalized;
+  }
+  return null;
+}
 
-  if (sigFallback && sigFallback.wallet && sigFallback.wallet_sig && sigFallback.wallet_sig_ts !== undefined) {
-    return requireWalletAuth(
+async function verifySignatureFallback(
+  request: NextRequest | Request,
+  sigFallback: Record<string, unknown>,
+  expectedWallet: string | null,
+): Promise<{ wallet: string; chain: WalletChain }> {
+  const walletField = typeof sigFallback.wallet === 'string' ? sigFallback.wallet : undefined;
+  const hinted = readChainHint(request, sigFallback);
+  const inferred = walletField ? detectWalletChain(walletField) : null;
+  const chain: WalletChain = hinted ?? inferred ?? 'solana';
+
+  try {
+    if (chain === 'base') {
+      const address = await authenticateEvmRequest(request, sigFallback, expectedWallet ?? undefined);
+      return { wallet: address, chain };
+    }
+
+    if (!walletField || !sigFallback.wallet_sig || sigFallback.wallet_sig_ts === undefined) {
+      throw new WalletAuthError('wallet, wallet_sig, and wallet_sig_ts are required');
+    }
+
+    const verified = requireWalletAuth(
       {
-        wallet: String(sigFallback.wallet),
+        wallet: walletField,
         wallet_sig: String(sigFallback.wallet_sig),
         wallet_sig_ts: Number(sigFallback.wallet_sig_ts),
       },
       expectedWallet ?? undefined,
     );
+    return { wallet: verified, chain: 'solana' };
+  } catch (err) {
+    if (err instanceof EvmAuthError) {
+      throw new ChainWalletAuthError(err.message, { cause: err, chain });
+    }
+    throw err;
+  }
+}
+
+export async function authenticateUserRequest(
+  request: NextRequest | Request,
+  sigFallback?: Record<string, unknown> | null,
+  expectedWallet?: string | null,
+): Promise<string> {
+  const result = await authenticateUserRequestWithChain(request, sigFallback ?? null, expectedWallet ?? null);
+  return result.wallet;
+}
+
+export async function authenticateUserRequestWithChain(
+  request: NextRequest | Request,
+  sigFallback?: Record<string, unknown> | null,
+  expectedWallet?: string | null,
+): Promise<{ wallet: string; chain: WalletChain }> {
+  const sessionAuth = await getSessionAuth(request);
+  if (sessionAuth) {
+    if (expectedWallet && sessionAuth.wallet !== expectedWallet) {
+      throw new WalletAuthError('Wallet mismatch');
+    }
+    return sessionAuth;
+  }
+
+  if (sigFallback && sigFallback.wallet) {
+    return verifySignatureFallback(request, sigFallback, expectedWallet ?? null);
   }
 
   throw new WalletAuthError('Authentication required');
@@ -107,8 +179,11 @@ export function readSigFieldsFromQuery(request: NextRequest | Request): Record<s
   const wallet = url.searchParams.get('wallet');
   const wallet_sig = url.searchParams.get('wallet_sig');
   const wallet_sig_ts = url.searchParams.get('wallet_sig_ts');
+  const wallet_chain = url.searchParams.get('wallet_chain');
   if (!wallet && !wallet_sig && !wallet_sig_ts) return null;
-  return { wallet, wallet_sig, wallet_sig_ts };
+  const fields: Record<string, unknown> = { wallet, wallet_sig, wallet_sig_ts };
+  if (wallet_chain) fields.wallet_chain = wallet_chain;
+  return fields;
 }
 
 export function buildClearedSessionCookie(): string {

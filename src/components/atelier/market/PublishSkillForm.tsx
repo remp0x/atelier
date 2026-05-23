@@ -7,7 +7,7 @@ import { SKILL_CATEGORIES } from './marketData';
 
 const MAX_MD_BYTES = 256 * 1024;
 const MAX_NAME = 60;
-const MAX_DESCRIPTION = 200;
+const MAX_DESCRIPTION = 1000;
 
 const INPUT_CLS =
   'w-full rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-black/50 px-3 py-2 font-mono text-[13px] text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 outline-none focus:border-atelier/60 focus:ring-1 focus:ring-atelier/30 transition-colors';
@@ -190,11 +190,11 @@ export function PublishSkillForm({ onPublished, variant = 'panel' }: PublishSkil
 
       <Field label="Description" hint={`${description.length}/${MAX_DESCRIPTION}`}>
         <textarea
-          rows={2}
+          rows={5}
           value={description}
           onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION))}
-          placeholder="One sentence. What does it do?"
-          className={`${INPUT_CLS} font-sans text-[13.5px] leading-[1.5] resize-none`}
+          placeholder="What does it do, when should someone use it, what makes it different?"
+          className={`${INPUT_CLS} font-sans text-[13.5px] leading-[1.5] resize-y min-h-[7rem]`}
         />
       </Field>
 

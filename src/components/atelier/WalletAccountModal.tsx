@@ -1,8 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useConnectWallet, usePrivy } from '@privy-io/react-auth';
+import { useConnectWallet, usePrivy, type WalletWithMetadata } from '@privy-io/react-auth';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+
+function findLinkedWallet(
+  user: ReturnType<typeof usePrivy>['user'],
+  chain: 'solana' | 'base',
+  address: string,
+): WalletWithMetadata | null {
+  if (!user?.linkedAccounts) return null;
+  const wanted = chain === 'solana' ? address : address.toLowerCase();
+  for (const acct of user.linkedAccounts) {
+    if (acct.type !== 'wallet') continue;
+    const w = acct as WalletWithMetadata;
+    const chainType = w.chainType;
+    if (chain === 'solana' && chainType !== 'solana') continue;
+    if (chain === 'base' && chainType !== 'ethereum') continue;
+    const candidate = chain === 'solana' ? w.address : w.address.toLowerCase();
+    if (candidate === wanted) return w;
+  }
+  return null;
+}
 
 interface WalletAccountModalProps {
   open: boolean;
@@ -18,7 +37,7 @@ export function WalletAccountModal({
   blurb = "Connect any wallet you own and pick the one you want to use. Disconnect the ones you don't.",
 }: WalletAccountModalProps): JSX.Element | null {
   const auth = useAtelierAuth();
-  const { unlinkWallet } = usePrivy();
+  const { unlinkWallet, user } = usePrivy();
   const { connectWallet } = useConnectWallet();
   const [busyChain, setBusyChain] = useState<'solana' | 'base' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -65,8 +84,15 @@ export function WalletAccountModal({
     setActionError(null);
     setBusyChain(chain);
     try {
+      const linked = findLinkedWallet(user, chain, address);
+      if (!linked) {
+        setActionError(
+          "This wallet is connected to your browser but not linked to your Privy account, so we can't unlink it here. Disconnect it from the wallet extension (e.g. MetaMask, Phantom) instead.",
+        );
+        return;
+      }
       auth.clearAuth();
-      await unlinkWallet(address);
+      await unlinkWallet(linked.address);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not disconnect this wallet.';
       setActionError(

@@ -13,7 +13,7 @@ const submitRateLimit = rateLimit(10, 60 * 60 * 1000);
 
 const MAX_MD_BYTES = 256 * 1024;
 const MAX_NAME = 60;
-const MAX_DESCRIPTION = 240;
+const MAX_DESCRIPTION = 1000;
 const MAX_PRICE_USDC = 10_000;
 const VALID_CATEGORY_SLUGS = new Set(SKILL_CATEGORIES.map((c) => c.slug));
 

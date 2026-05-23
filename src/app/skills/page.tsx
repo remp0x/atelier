@@ -16,8 +16,12 @@ import {
 } from '@/components/atelier/market/marketData';
 import { PublishSkillModal } from '@/components/atelier/market/PublishSkillModal';
 
+const COMMUNITY_CATEGORY_SLUG = 'community';
+const COMMUNITY_CATEGORY_NAME = 'Community';
+
 const CATEGORY_ICON: Record<string, string> = {
   all: 'M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z',
+  community: 'M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z',
   medical: 'M11.412 15.655L9.75 21.75l3.745-4.012M9.257 13.5H3.75l2.659-2.849m2.048-2.194L14.25 2.25 12 10.5h8.25l-4.707 5.043M8.457 8.457L3 3m5.457 5.457l7.086 7.086m0 0L21 21',
   research: 'M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5',
   writing: 'M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10',
@@ -109,7 +113,9 @@ function BrowseContent() {
   const filteredSkills = useMemo(() => {
     const term = search.trim().toLowerCase();
     const matches = allSkills.filter((skill) => {
-      if (category !== 'all') {
+      if (category === COMMUNITY_CATEGORY_SLUG) {
+        if (skill.pack !== 'community') return false;
+      } else if (category !== 'all') {
         const slug = SKILL_CATEGORIES.find(c => c.slug === category);
         if (!slug) return false;
         if (skill.category.toLowerCase() !== slug.name.toLowerCase()) return false;
@@ -143,18 +149,35 @@ function BrowseContent() {
   const visibleSkills = filteredSkills.slice(0, visibleCount);
   const hasMore = visibleCount < filteredSkills.length;
 
-  const categoryChips = useMemo(() => ['all', ...SKILL_CATEGORIES.map(c => c.slug)], []);
-  const categoryLabel = (slug: string) =>
-    slug === 'all' ? 'All' : (SKILL_CATEGORIES.find(c => c.slug === slug)?.name ?? slug);
+  const categoryChips = useMemo(
+    () => ['all', COMMUNITY_CATEGORY_SLUG, ...SKILL_CATEGORIES.map((c) => c.slug)],
+    [],
+  );
+  const categoryLabel = (slug: string) => {
+    if (slug === 'all') return 'All';
+    if (slug === COMMUNITY_CATEGORY_SLUG) return COMMUNITY_CATEGORY_NAME;
+    return SKILL_CATEGORIES.find((c) => c.slug === slug)?.name ?? slug;
+  };
 
   const noFilters =
     category === 'all' && !search && pricing === 'all' && pack === 'all';
 
   const popularSkills = useMemo(() => {
     const byName = new Map(allSkills.map((s) => [s.name, s]));
-    return POPULAR_SKILL_NAMES
+    const curated = POPULAR_SKILL_NAMES
       .map((n) => byName.get(n))
       .filter((s): s is SkillExample => Boolean(s));
+    // Lead the popular row with community skills until there's a real metric.
+    const community = allSkills.filter((s) => s.pack === 'community');
+    const seen = new Set<string>();
+    const merged: SkillExample[] = [];
+    for (const s of [...community, ...curated]) {
+      const key = `${s.pack}:${s.slug}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(s);
+    }
+    return merged;
   }, [allSkills]);
 
   const featuredRows = useMemo(() => {

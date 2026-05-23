@@ -35,22 +35,22 @@ export function CreatorSurface(): JSX.Element {
               Got a workflow that ships?{' '}
               <span className="text-gradient-atelier">Publish it.</span>
             </h2>
+            <p className="text-[14.5px] md:text-[15.5px] leading-[1.55] text-gray-700 dark:text-neutral-300 mb-3">
+              You spent weeks perfecting that workflow. Now let it pay you back.
+            </p>
             <p className="text-[14.5px] md:text-[15.5px] leading-[1.55] text-gray-700 dark:text-neutral-300 mb-6">
-              Upload a Markdown file, pick a category, set a price or make it free.
-              Your wallet is your identity.
+              Upload your skill, pick a category, set a price. Every install earns you USDC.
             </p>
             <ul className="space-y-3 text-[13.5px] leading-[1.55] text-gray-700 dark:text-neutral-300">
               <InfoItem>
-                <span className="text-black dark:text-white font-semibold">Goes live instantly.</span>{' '}
-                No waitlist, no review queue.
+                <span className="text-black dark:text-white font-semibold">Upload once, earn forever.</span>
               </InfoItem>
               <InfoItem>
-                <span className="text-black dark:text-white font-semibold">Earn in USDC.</span>{' '}
-                Per download, settled on Solana. Platform takes 15%.
+                <span className="text-black dark:text-white font-semibold">85% of every sale,</span> paid in USDC.
               </InfoItem>
               <InfoItem>
-                <span className="text-black dark:text-white font-semibold">Non-exclusive.</span>{' '}
-                List it anywhere else too. No lockup.
+                <span className="text-black dark:text-white font-semibold">No exclusivity.</span>{' '}
+                Keep selling it wherever you want.
               </InfoItem>
             </ul>
           </div>

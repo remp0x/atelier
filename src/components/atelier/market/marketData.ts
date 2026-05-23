@@ -21,6 +21,7 @@ export const SKILL_CATEGORIES: SkillCategory[] = [
   { slug: 'sales',         name: 'Sales',         example: 'outbound outreach',      keywords: ['sales', 'outreach', 'outbound', 'lead'] },
   { slug: 'support',       name: 'Support',       example: 'ticket triage',          keywords: ['support', 'customer', 'ticket', 'help'] },
   { slug: 'lifestyle',     name: 'Lifestyle',     example: 'wellness + creative',    keywords: ['lifestyle', 'wellness', 'music', 'philosophy', 'art'] },
+  { slug: 'other',         name: 'Other',         example: 'doesn\'t fit a category', keywords: ['other', 'misc', 'general'] },
 ];
 
 export type Persona = {
@@ -32,7 +33,7 @@ export type Persona = {
 
 export const PERSONAS: Persona[] = [];
 
-export type SkillPackId = 'medical' | 'anthropic' | 'skillsmp' | 'community';
+export type SkillPackId = 'medical' | 'anthropic' | 'skillsmp' | 'claudeskills' | 'community';
 
 export type SkillPack = {
   id: SkillPackId;
@@ -60,6 +61,13 @@ export const SKILL_PACKS: Record<SkillPackId, SkillPack> = {
     label: 'skillsmp',
     repoUrl: 'https://skillsmp.com',
     rawUrl: 'https://skillsmp.com/skills',
+    external: true,
+  },
+  claudeskills: {
+    id: 'claudeskills',
+    label: 'claudeskills.info',
+    repoUrl: 'https://claudeskills.info',
+    rawUrl: 'https://claudeskills.info/skill',
     external: true,
   },
   community: {
@@ -668,7 +676,81 @@ export const SKILLSMP_SKILLS: SkillExample[] = [
   ssmp('Image Generation', 'Generate and visualize images including characters and scenes.', 'Design', ['image-gen'], 'image-generation'),
 ];
 
-export const SKILL_EXAMPLES: SkillExample[] = [...MEDICAL_SKILLS, ...ANTHROPIC_SKILLS, ...SKILLSMP_SKILLS];
+function csi(name: string, tagline: string, category: string, slug: string): SkillExample {
+  return {
+    name,
+    tagline,
+    category,
+    tools: ['Markdown'],
+    kb: 'claudeskills.info',
+    price: 0,
+    pack: 'claudeskills',
+    slug,
+  };
+}
+
+export const CLAUDESKILLS_SKILLS: SkillExample[] = [
+  csi('ABM Outbound', 'Multi-channel ABM automation that turns LinkedIn URLs into coordinated outbound campaigns.', 'Sales', 'abm-outbound'),
+  csi('Ad Copywriter', 'Ad copywriter for feed ads, search ads, social ads, A/B testing, ROI calculator, and platform-specific copy.', 'Growth', 'ad-copywriter'),
+  csi('Agentic Actions Auditor', 'Audits GitHub Actions workflows for security vulnerabilities in AI agent integrations like Claude Code, Gemini CLI, and Codex.', 'Testing', 'agentic-actions-auditor'),
+  csi('AI Image Generation & Editor', 'Generate images from text with multi-provider routing — Nanobanana 2, Seedream 5.0, GPT Image, and local ComfyUI workflows.', 'Design', 'ai-image-generation--editor--nanobanana-gpt-image-comfyui'),
+  csi('Algorithmic Art (CSI)', 'Generative art in p5.js with seeded randomness and interactive parameter exploration.', 'Design', 'algorithmic-art'),
+  csi('Anthropic Official Skills', '16 official skills from Anthropic — frontend design, PDF, DOCX, XLSX, MCP builder, and more.', 'Coding', 'anthropic-official'),
+  csi('Article Illustrator', 'Add high-quality illustrations to articles or blog posts.', 'Design', 'article-illustrator'),
+  csi('Artifacts Builder', 'Build complex claude.ai HTML artifacts using React, Tailwind CSS, and shadcn/ui components.', 'Coding', 'artifacts-builder'),
+  csi('GitHub Copilot Skills', '324 official GitHub Copilot plugin skills across Azure, .NET, Docker, and more.', 'Coding', 'awesome-copilot-skills'),
+  csi('Azure RM Playwright (.NET)', 'Azure Resource Manager SDK for Microsoft Playwright Testing in .NET.', 'DevOps', 'azure-resource-manager-playwright-dotnet'),
+  csi('Better Genshin Impact', 'BetterGI — C# automation toolkit for Genshin Impact (pickups, fishing, mining, daily routines).', 'Lifestyle', 'better-genshin-impact'),
+  csi('BotEmail.ai', 'Get an email address without a human. Use for testing signup flows, verification codes, and email automation.', 'Writing', 'botemailai---free-bot-email'),
+  csi('Brand Guidelines (CSI)', "Apply Anthropic's official brand colors and typography to artifacts.", 'Design', 'brand-guidelines'),
+  csi('Canvas Design (CSI)', 'Create visual art in .png and .pdf using composition and design philosophy.', 'Design', 'canvas-design'),
+  csi('CodeQL', "Scan a codebase for security vulnerabilities using CodeQL's interprocedural data flow and taint tracking.", 'Testing', 'codeql'),
+  csi('Constant Time Analysis', 'Detect timing side-channel vulnerabilities in cryptographic code.', 'Testing', 'constant-time-analysis'),
+  csi('Content Research Writer', 'Write high-quality content by conducting research, adding citations, and providing review feedback.', 'Writing', 'content-research-writer'),
+  csi('Context Engineering', 'Core context engineering techniques for AI agents.', 'Coding', 'context-engineering'),
+  csi('Context Engineering Guide', 'Tutorial on attention mechanics, progressive disclosure, context budget management, and quality vs quantity.', 'Coding', 'context-engineering-neolab'),
+  csi('Crypto Wallet', 'Discover supported cryptocurrencies, generate deposit addresses, and withdraw crypto to external wallets.', 'Blockchain', 'crypto-wallet'),
+  csi('Debug Buttercup', 'Debug the Buttercup CRS (Cyber Reasoning System) running on Kubernetes.', 'Testing', 'debug-buttercup'),
+  csi('Differential Review', 'Security-focused differential review of code changes (PRs, commits, diffs).', 'Coding', 'differential-review'),
+  csi('ERC-8004 Agent Discovery', 'Search 43k+ AI agents registered via ERC-8004. Find agents by skill, chain, or reputation.', 'Blockchain', 'erc-8004-agent-discovery'),
+  csi('Everything Claude Code', 'Claude Code optimization system with 86+ skills, rules, hooks, and agent configurations.', 'Coding', 'everything-claude-code'),
+  csi('Excel / XLSX (CSI)', 'Create, inspect, and edit Excel workbooks with reliable formulas, dates, types, formatting, and recalculation.', 'Data', 'excel--xlsx'),
+  csi('FFmpeg Video Editor', 'Generate FFmpeg commands from natural-language editing requests — cut, trim, convert, compress, extract audio.', 'Design', 'ffmpeg-video-editor'),
+  csi('Figma', 'Figma design analysis and asset export — extract design data, export assets, audit components.', 'Design', 'figma'),
+  csi('GSD Claw', 'Spec-driven development with built-in verification for substantial projects.', 'DevOps', 'gsd-claw'),
+  csi('Intelligence Ingestion', 'Analyze and evaluate URLs, articles, tweets, and external sources for strategic value.', 'Research', 'intelligence-ingestion'),
+  csi('Internal Comms (CSI)', 'Write internal communications like status reports, newsletters, and FAQs.', 'Writing', 'internal-comms'),
+  csi('Intune Graph API', 'Comprehensive skill to manage Microsoft Intune via the Graph API.', 'DevOps', 'intune-graph-api--complete-management'),
+  csi('LangSmith Fetch', 'Debug LangChain and LangGraph agents by fetching execution traces from LangSmith Studio.', 'Data', 'langsmith-fetch'),
+  csi('MBTI Persona Stylizer', 'Dynamic communication style and perspective configurator based on the 16 MBTI personality types.', 'Lifestyle', 'mbti-16-personality-stylized-persona-skill'),
+  csi('MCP Builder (CSI)', 'Guide for creating high-quality MCP servers to integrate external APIs and services.', 'Coding', 'mcp-builder'),
+  csi('Microsoft Skills', '333 skills across Azure, .NET, and AI Foundry — the largest enterprise skills collection.', 'Coding', 'microsoft-skills'),
+  csi('Multi-Agent Patterns', 'Reference for multi-agent architecture patterns — Supervisor/Orchestrator, Peer-to-Peer/Swarm, Hierarchical.', 'Coding', 'multi-agent-patterns'),
+  csi('OpenAI Official Skills', '37 official skills from OpenAI for Codex CLI and multi-agent development.', 'Coding', 'openai-official'),
+  csi('PDF Processor (CSI)', 'PDF manipulation toolkit — extract text and tables, create new PDFs, merge and split documents.', 'Ops', 'pdf-skill'),
+  csi('Persona Channel Builder', 'Design and launch an autonomous AI-managed Telegram channel from a persona interview.', 'Growth', 'persona-channel-builder'),
+  csi('Playwright Browser Automation', 'General-purpose browser automation with Playwright — pages, forms, responsive design, UX validation.', 'Testing', 'playwright-skill'),
+  csi('Prompt Engineering', 'Well-known prompt engineering techniques and patterns, including Anthropic best practices and agent principles.', 'Coding', 'prompt-engineering'),
+  csi('Semgrep', 'Run Semgrep static analysis on a codebase using parallel subagents.', 'Testing', 'semgrep'),
+  csi('Semgrep Rule Creator', 'Create custom Semgrep rules for security vulnerabilities, bug patterns, and code patterns.', 'Testing', 'semgrep-rule-creator'),
+  csi('Semgrep Rule Variant Creator', 'Create language variants of existing Semgrep rules. Use when porting a rule to new target languages.', 'Testing', 'semgrep-rule-variant-creator'),
+  csi('Sharp Edges', 'Identifies error-prone APIs, dangerous configurations, and footgun designs that enable security mistakes.', 'Testing', 'sharp-edges'),
+  csi('Skill Seekers', 'Automatically convert any documentation website into a Claude AI skill in minutes.', 'Ops', 'skill-seekers'),
+  csi('Spec-to-Code Compliance', 'Verify code implements exactly what documentation specifies — built for blockchain audits.', 'Testing', 'spec-to-code-compliance'),
+  csi('Superpowers', 'Comprehensive workflow system for Claude with 20 proven development techniques.', 'Coding', 'superpowers'),
+  csi('Test Generator', 'Automated test generator — unit, integration, e2e, mocks, fixtures, coverage, edge cases.', 'Testing', 'test-generator'),
+  csi('Variant Analysis', 'Find similar vulnerabilities and bugs across codebases using pattern-based analysis.', 'Testing', 'variant-analysis'),
+  csi('Vercel React Best Practices', 'React and Next.js performance optimization guidelines from Vercel Engineering.', 'Coding', 'vercel-react-best-practices'),
+  csi('Vercel Skills', '8 official Vercel skills for Next.js, React, and edge deployment.', 'Coding', 'vercel-skills'),
+  csi('WordPress Skills', '26 official WordPress and Automattic skills for blocks, themes, and plugin development.', 'Coding', 'wordpress-skills'),
+];
+
+export const SKILL_EXAMPLES: SkillExample[] = [
+  ...MEDICAL_SKILLS,
+  ...ANTHROPIC_SKILLS,
+  ...SKILLSMP_SKILLS,
+  ...CLAUDESKILLS_SKILLS,
+];
 
 export const POPULAR_SKILL_NAMES: readonly string[] = [
   'Coding Agent',

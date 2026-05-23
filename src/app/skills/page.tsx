@@ -167,8 +167,9 @@ function BrowseContent() {
     const curated = POPULAR_SKILL_NAMES
       .map((n) => byName.get(n))
       .filter((s): s is SkillExample => Boolean(s));
-    // Lead the popular row with community skills until there's a real metric.
     const community = allSkills.filter((s) => s.pack === 'community');
+
+    // Dedupe (community + curated) preserving insertion order.
     const seen = new Set<string>();
     const merged: SkillExample[] = [];
     for (const s of [...community, ...curated]) {
@@ -177,7 +178,18 @@ function BrowseContent() {
       seen.add(key);
       merged.push(s);
     }
-    return merged;
+
+    // Sort by:
+    //  1. community before non-community (community always first)
+    //  2. within each group, paid before free
+    //  3. stable on original order otherwise (Array.prototype.sort is stable)
+    const isCommunity = (s: SkillExample) => s.pack === 'community';
+    const isPaid = (s: SkillExample) => (s.price ?? 0) > 0;
+    return merged.sort((a, b) => {
+      if (isCommunity(a) !== isCommunity(b)) return isCommunity(a) ? -1 : 1;
+      if (isPaid(a) !== isPaid(b)) return isPaid(a) ? -1 : 1;
+      return 0;
+    });
   }, [allSkills]);
 
   const featuredRows = useMemo(() => {

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 
 const POPOVER_WIDTH = 260;
 const POPOVER_MARGIN = 8;
@@ -319,11 +320,13 @@ function AccountDropdown({
   walletAddress,
   onClose,
   onLogout,
+  onManageWallets,
 }: {
   anchor: HTMLElement;
   walletAddress: string | null;
   onClose: () => void;
   onLogout: () => Promise<void>;
+  onManageWallets: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
   const [position, setPosition] = useState<PopoverPosition | null>(null);
@@ -369,6 +372,16 @@ function AccountDropdown({
       className="fixed z-[100] rounded-xl bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 shadow-2xl overflow-hidden animate-slide-up"
       style={positionStyle(position)}
     >
+      <button
+        onClick={() => { onClose(); onManageWallets(); }}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-mono text-gray-700 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-900 transition-colors cursor-pointer"
+        role="menuitem"
+      >
+        <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
+        </svg>
+        Manage Wallets
+      </button>
       {walletAddress && (
         <button
           onClick={() => { navigator.clipboard.writeText(walletAddress); onClose(); }}
@@ -404,6 +417,7 @@ export function SignInButton({ expanded = true, compact = false, secondary = fal
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [view, setView] = useState<PopoverView>('menu');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
 
   const closePopover = useCallback(() => {
     setPopoverOpen(false);
@@ -539,8 +553,10 @@ export function SignInButton({ expanded = true, compact = false, secondary = fal
             walletAddress={auth.walletAddress}
             onClose={() => setDropdownOpen(false)}
             onLogout={handleLogout}
+            onManageWallets={() => setWalletModalOpen(true)}
           />
         )}
+        <WalletAccountModal open={walletModalOpen} onClose={() => setWalletModalOpen(false)} />
       </>
     );
   }
@@ -566,8 +582,10 @@ export function SignInButton({ expanded = true, compact = false, secondary = fal
           walletAddress={auth.walletAddress}
           onClose={() => setDropdownOpen(false)}
           onLogout={handleLogout}
+          onManageWallets={() => setWalletModalOpen(true)}
         />
       )}
+      <WalletAccountModal open={walletModalOpen} onClose={() => setWalletModalOpen(false)} />
     </>
   );
 }

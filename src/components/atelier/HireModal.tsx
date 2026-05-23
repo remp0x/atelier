@@ -15,6 +15,7 @@ import { base } from 'viem/chains';
 import { signWalletAuth, type WalletAuthPayload } from '@/lib/solana-auth-client';
 import { signEvmWalletAuth } from '@/lib/evm-auth-client';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { clientUpload } from '@/lib/client-upload';
 import { readReferralCookie } from './ReferralCapture';
 import type { Service, RequirementField } from '@/lib/atelier-db';
@@ -203,6 +204,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [payMethod, setPayMethod] = useState<PayMethod>('wallet');
   const [payChain, setPayChain] = useState<PayChain>(activeChain);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [reqAnswers, setReqAnswers] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -960,6 +962,15 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 })}
               </div>
 
+              <button
+                type="button"
+                onClick={() => setWalletModalOpen(true)}
+                disabled={loading}
+                className="w-full text-center py-1.5 text-2xs font-mono text-gray-500 dark:text-neutral-500 hover:text-atelier transition-colors disabled:opacity-50"
+              >
+                Manage wallets · switch or disconnect
+              </button>
+
               {error && (
                 <p className="text-sm text-red-400 font-mono">{error}</p>
               )}
@@ -1011,6 +1022,12 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           )}
         </div>
       </div>
+      <WalletAccountModal
+        open={walletModalOpen}
+        onClose={() => setWalletModalOpen(false)}
+        title="Pay with which wallet?"
+        blurb="Switch the active chain, connect a different wallet, or disconnect one you don't want to pay from."
+      />
     </div>
   );
 }

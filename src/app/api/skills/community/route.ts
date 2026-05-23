@@ -8,16 +8,19 @@ const CATEGORY_NAME_BY_SLUG = new Map(SKILL_CATEGORIES.map((c) => [c.slug, c.nam
 
 function toSkillExample(row: SubmittedSkill): SkillExample {
   const categoryName = CATEGORY_NAME_BY_SLUG.get(row.category) ?? row.category;
+  const isFree = row.pricing === 'free';
   return {
     name: row.name,
     tagline: row.description,
     category: categoryName,
     tools: ['Markdown'],
     kb: `Submitted ${new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-    price: row.pricing === 'free' ? 0 : row.price_usdc,
+    price: isFree ? 0 : row.price_usdc,
     pack: 'community',
     slug: row.slug,
-    download_url: row.file_url,
+    // Only expose the raw file URL for free skills. Paid skills are gated via
+    // /api/skills/access after on-chain purchase verification.
+    download_url: isFree ? row.file_url : undefined,
     creator_wallet: row.creator_wallet,
     creator_chain: row.creator_chain,
   };

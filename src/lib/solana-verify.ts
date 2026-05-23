@@ -120,6 +120,61 @@ export async function verifySolanaUsdcPayment(
   return { verified: true };
 }
 
+/**
+ * Verify a Solana USDC payment whose recipient is an arbitrary wallet
+ * (e.g. a skill creator), not the Atelier treasury.
+ */
+export async function verifySolanaUsdcSentToWallet(
+  txSignature: string,
+  expectedSender: string,
+  expectedRecipient: string,
+  expectedAmountUsd: number,
+): Promise<VerifyResult> {
+  const connection = getServerConnection();
+  const tx = await fetchTransactionWithRetry(connection, txSignature);
+
+  if (!tx) return { verified: false, error: 'Transaction not found after polling' };
+  if (tx.meta?.err) return { verified: false, error: 'Transaction failed on-chain' };
+
+  const recipientPubkey = new PublicKey(expectedRecipient);
+  const recipientAta = await getAssociatedTokenAddress(USDC_MINT, recipientPubkey);
+  const recipientAtaStr = recipientAta.toBase58();
+
+  const usdcMintStr = USDC_MINT.toBase58();
+  const accountKeys = buildAccountKeys(tx);
+
+  const preAmount = findTokenBalance(
+    tx.meta?.preTokenBalances ?? [],
+    recipientAtaStr,
+    usdcMintStr,
+    accountKeys,
+  );
+  const postAmount = findTokenBalance(
+    tx.meta?.postTokenBalances ?? [],
+    recipientAtaStr,
+    usdcMintStr,
+    accountKeys,
+  );
+
+  const delta = postAmount - preAmount;
+  const expectedRaw = Math.round(expectedAmountUsd * 10 ** USDC_DECIMALS);
+
+  if (delta < expectedRaw) {
+    return {
+      verified: false,
+      error: `Insufficient payment: expected $${expectedAmountUsd}, received $${(delta / 10 ** USDC_DECIMALS).toFixed(2)}`,
+    };
+  }
+
+  const senderPubkey = new PublicKey(expectedSender);
+  const signers = getSigners(tx);
+  if (!signers.some((s) => s.equals(senderPubkey))) {
+    return { verified: false, error: 'Transaction not signed by expected sender' };
+  }
+
+  return { verified: true };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function buildAccountKeys(tx: any): string[] {
   const keys: string[] = [];

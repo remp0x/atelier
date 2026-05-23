@@ -1,38 +1,24 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useConnection } from '@solana/wallet-adapter-react';
+import { PublicKey } from '@solana/web3.js';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { ChainLogo, chainLabel } from '@/components/atelier/ChainBadge';
+import { sendUsdcPayment } from '@/lib/solana-pay';
+import { sendBaseUsdcPayment } from '@/lib/base-pay';
 
 interface SkillGetButtonProps {
   pack: string;
   slug: string;
   price: number;
-  downloadUrl: string;
+  /** May be omitted for paid community skills until the buyer's purchase unlocks it. */
+  downloadUrl?: string | null;
   external?: boolean;
   creatorChain: 'solana' | 'base';
-}
-
-const PURCHASE_KEY_PREFIX = 'atelier_skill_purchase_';
-
-function purchaseKey(pack: string, slug: string, wallet: string): string {
-  return `${PURCHASE_KEY_PREFIX}${pack}:${slug}:${wallet.toLowerCase()}`;
-}
-
-function hasPurchased(pack: string, slug: string, wallet: string | null): boolean {
-  if (!wallet) return false;
-  try {
-    return localStorage.getItem(purchaseKey(pack, slug, wallet)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function markPurchased(pack: string, slug: string, wallet: string): void {
-  try {
-    localStorage.setItem(purchaseKey(pack, slug, wallet), '1');
-  } catch {}
+  /** Required for paid skills so we can route payment correctly. */
+  creatorWallet?: string;
 }
 
 export function SkillGetButton({
@@ -42,53 +28,122 @@ export function SkillGetButton({
   downloadUrl,
   external,
   creatorChain,
+  creatorWallet,
 }: SkillGetButtonProps) {
   const auth = useAtelierAuth();
+  const { connection } = useConnection();
   const isFree = price <= 0;
+  const isCommunityPaid = pack === 'community' && !isFree;
   const priceLabel = `$${price.toFixed(price % 1 === 0 ? 0 : 2)}`;
 
   const [pendingDownload, setPendingDownload] = useState(false);
   const [purchased, setPurchased] = useState(false);
+  // Only flash "Checking access…" when we're actually about to hit the access
+  // endpoint — i.e. paid skill AND wallet is connected. Anonymous viewers go
+  // straight to SIGN IN TO BUY.
+  const [accessChecked, setAccessChecked] = useState(!isCommunityPaid || !auth.walletReady);
+  const [resolvedDownloadUrl, setResolvedDownloadUrl] = useState<string | null>(downloadUrl ?? null);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
+  // Refresh purchase status from the server whenever the active wallet changes.
   useEffect(() => {
-    if (isFree) return;
-    setPurchased(hasPurchased(pack, slug, auth.walletAddress));
-  }, [isFree, pack, slug, auth.walletAddress]);
-
-  const trigger = useCallback(() => {
-    if (external) {
-      window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+    if (!isCommunityPaid) return;
+    if (!auth.walletReady) {
+      setPurchased(false);
+      setResolvedDownloadUrl(null);
+      setAccessChecked(true);
       return;
     }
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }, [downloadUrl, external]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const payload = await auth.getAuth({ silent: true }).catch(() => null);
+        if (!payload) {
+          // No silent session — can't check purchases without forcing a signature
+          setPurchased(false);
+          setResolvedDownloadUrl(null);
+          setAccessChecked(true);
+          return;
+        }
+        const qs = new URLSearchParams({
+          pack,
+          slug,
+          wallet: payload.wallet,
+          wallet_sig: payload.wallet_sig,
+          wallet_sig_ts: String(payload.wallet_sig_ts),
+        });
+        const res = await fetch(`/api/skills/access?${qs.toString()}`);
+        if (cancelled) return;
+        const json = await res.json();
+        if (json?.success && json.data?.purchased) {
+          setPurchased(true);
+          setResolvedDownloadUrl(json.data.download_url ?? null);
+        } else {
+          setPurchased(false);
+          setResolvedDownloadUrl(null);
+        }
+      } catch {
+        if (!cancelled) {
+          setPurchased(false);
+          setResolvedDownloadUrl(null);
+        }
+      } finally {
+        if (!cancelled) setAccessChecked(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth, isCommunityPaid, pack, slug]);
+
+  const triggerDownload = useCallback(
+    (url: string) => {
+      if (external) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = url;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    },
+    [external],
+  );
 
   useEffect(() => {
     if (!pendingDownload) return;
     if (!auth.walletReady) return;
-    if (!isFree && !hasPurchased(pack, slug, auth.walletAddress)) return;
+    const url = resolvedDownloadUrl ?? downloadUrl ?? null;
+    if (!isFree && !purchased) return;
+    if (!url) return;
     setPendingDownload(false);
-    trigger();
-  }, [pendingDownload, auth.walletReady, auth.walletAddress, isFree, pack, slug, trigger]);
+    triggerDownload(url);
+  }, [pendingDownload, auth.walletReady, isFree, purchased, resolvedDownloadUrl, downloadUrl, triggerDownload]);
 
   const handleDownloadClick = () => {
+    setError(null);
     if (!auth.walletReady) {
       setPendingDownload(true);
       auth.login();
       return;
     }
-    trigger();
+    const url = resolvedDownloadUrl ?? downloadUrl ?? null;
+    if (!url) {
+      setError('Download link not available. Refresh and try again.');
+      return;
+    }
+    triggerDownload(url);
   };
 
   const wrongChain = auth.walletReady && auth.walletChain !== creatorChain;
 
-  const handleBuyClick = () => {
+  const handleBuyClick = async () => {
+    setError(null);
     if (!auth.walletReady) {
       auth.login();
       return;
@@ -97,12 +152,80 @@ export function SkillGetButton({
       setWalletModalOpen(true);
       return;
     }
-    alert(
-      `Paid-skill checkout is launching soon. You'll pay ${priceLabel} USDC on ${chainLabel(creatorChain)} and the skill will download automatically. For now, reach out on Telegram (t.me/atelierai) if you need access.`,
-    );
+    if (!creatorWallet) {
+      setError('Creator wallet missing for this skill — cannot route payment.');
+      return;
+    }
+    if (busy) return;
+
+    setBusy(true);
+    try {
+      setStatusMsg('Signing wallet…');
+      const authPayload = await auth.getAuth();
+      let txHash: string;
+
+      if (creatorChain === 'solana') {
+        setStatusMsg(`Sending ${priceLabel} USDC on Solana…`);
+        const txWallet = auth.getTransactionWallet();
+        if (!txWallet) throw new Error('Solana transaction wallet not ready.');
+        txHash = await sendUsdcPayment(
+          connection,
+          txWallet,
+          new PublicKey(creatorWallet),
+          price,
+        );
+      } else {
+        const evmClient = await auth.getEvmWalletClient();
+        if (!evmClient) throw new Error('Base wallet not available.');
+        setStatusMsg(`Sending ${priceLabel} USDC on Base…`);
+        txHash = await sendBaseUsdcPayment(
+          evmClient.client,
+          evmClient.account,
+          creatorWallet as `0x${string}`,
+          price,
+        );
+      }
+
+      setStatusMsg('Verifying payment…');
+      await recordPurchase({
+        pack,
+        slug,
+        chain: creatorChain,
+        tx_hash: txHash,
+        wallet: authPayload.wallet,
+        wallet_sig: authPayload.wallet_sig,
+        wallet_sig_ts: authPayload.wallet_sig_ts,
+      });
+
+      // Flip UI to download state; fetch the now-unlocked URL via access API.
+      const payload = await auth.getAuth({ silent: true }).catch(() => null);
+      if (payload) {
+        const qs = new URLSearchParams({
+          pack,
+          slug,
+          wallet: payload.wallet,
+          wallet_sig: payload.wallet_sig,
+          wallet_sig_ts: String(payload.wallet_sig_ts),
+        });
+        const res = await fetch(`/api/skills/access?${qs.toString()}`);
+        const json = await res.json();
+        if (json?.success && json.data?.download_url) {
+          setResolvedDownloadUrl(json.data.download_url);
+        }
+      }
+      setPurchased(true);
+      setStatusMsg('Purchased. Click DOWNLOAD to grab the file.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Payment failed.');
+      setStatusMsg(null);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  // Free → DOWNLOAD FOR FREE
+  // ── Render ──────────────────────────────────────────────────────────────
+
+  // Free skills always show DOWNLOAD FOR FREE
   if (isFree) {
     return (
       <PrimaryButton
@@ -119,30 +242,47 @@ export function SkillGetButton({
     );
   }
 
-  // Paid + already purchased → DOWNLOAD
+  // Paid: hide everything until access check is done so we don't flash BUY/DOWNLOAD
+  if (isCommunityPaid && !accessChecked) {
+    return <PrimaryButton disabled label="Checking access…" onClick={() => {}} />;
+  }
+
+  // Paid + purchased → DOWNLOAD
   if (purchased) {
     return (
-      <PrimaryButton
-        disabled={pendingDownload}
-        onClick={handleDownloadClick}
-        label={pendingDownload ? 'Waiting for sign-in…' : 'DOWNLOAD →'}
-      />
+      <>
+        <PrimaryButton
+          disabled={pendingDownload}
+          onClick={handleDownloadClick}
+          label={pendingDownload ? 'Waiting for sign-in…' : 'DOWNLOAD →'}
+        />
+        {error && <ErrorLine>{error}</ErrorLine>}
+      </>
     );
   }
 
-  // Paid + not yet purchased → BUY FOR $X
+  // Paid + not purchased → BUY FOR $X
   return (
     <>
       <PrimaryButton
-        onClick={handleBuyClick}
+        disabled={busy}
+        onClick={() => void handleBuyClick()}
         label={
-          !auth.walletReady
-            ? `SIGN IN TO BUY · ${priceLabel} →`
-            : wrongChain
-              ? `SWITCH TO ${chainLabel(creatorChain).toUpperCase()} TO BUY →`
-              : `BUY FOR ${priceLabel} →`
+          busy
+            ? (statusMsg ?? 'Working…')
+            : !auth.walletReady
+              ? `SIGN IN TO BUY · ${priceLabel} →`
+              : wrongChain
+                ? `SWITCH TO ${chainLabel(creatorChain).toUpperCase()} TO BUY →`
+                : `BUY FOR ${priceLabel} →`
         }
       />
+      {error && <ErrorLine>{error}</ErrorLine>}
+      {!error && busy && statusMsg && (
+        <p className="mt-2 text-[11px] font-mono text-gray-500 dark:text-neutral-400 leading-[1.5]">
+          {statusMsg}
+        </p>
+      )}
       <div className="mt-2.5 px-3 py-2 rounded-md border border-gray-200 dark:border-neutral-800 bg-gray-50/60 dark:bg-black/40 flex items-start gap-2">
         <ChainLogo chain={creatorChain} size={14} />
         <p className="text-[11px] font-mono leading-[1.5] text-gray-600 dark:text-neutral-400">
@@ -174,6 +314,28 @@ export function SkillGetButton({
   );
 }
 
+interface RecordPurchaseInput {
+  pack: string;
+  slug: string;
+  chain: 'solana' | 'base';
+  tx_hash: string;
+  wallet: string;
+  wallet_sig: string;
+  wallet_sig_ts: number;
+}
+
+async function recordPurchase(input: RecordPurchaseInput): Promise<void> {
+  const res = await fetch('/api/skills/purchase', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const json = await res.json();
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.error || 'Payment recorded on-chain but verification failed.');
+  }
+}
+
 function PrimaryButton({
   label,
   onClick,
@@ -199,6 +361,13 @@ function PrimaryButton({
   );
 }
 
-export function _markSkillPurchased(pack: string, slug: string, wallet: string): void {
-  markPurchased(pack, slug, wallet);
+function ErrorLine({ children }: { children: React.ReactNode }): JSX.Element {
+  return (
+    <p
+      role="alert"
+      className="mt-2 px-3 py-2 rounded-md border border-red-500/50 bg-red-500/[0.08] font-mono text-[11px] leading-[1.5] text-red-600 dark:text-red-300"
+    >
+      {children}
+    </p>
+  );
 }

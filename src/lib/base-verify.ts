@@ -155,6 +155,42 @@ export async function verifyBaseUsdcPayment(
   return { verified: true };
 }
 
+/**
+ * Verify a Base USDC payment whose recipient is an arbitrary wallet
+ * (e.g. a skill creator), not the Atelier treasury.
+ */
+export async function verifyBaseUsdcSentToWallet(
+  txHash: `0x${string}`,
+  expectedSender: string,
+  expectedRecipient: string,
+  expectedAmountUsd: number,
+): Promise<BaseVerifyResult> {
+  const client = getBasePublicClient();
+  const receipt = await fetchReceiptWithRetry(client, txHash);
+
+  if (!receipt) return { verified: false, error: 'Transaction not found after polling' };
+  if (receipt.status !== 'success') return { verified: false, error: 'Transaction failed on-chain' };
+
+  const received = sumUsdcTransfersTo(receipt.logs, expectedRecipient);
+  const expectedRaw = BigInt(Math.round(expectedAmountUsd * 10 ** USDC_BASE_DECIMALS));
+
+  if (received < expectedRaw) {
+    const receivedUsd = Number(received) / 10 ** USDC_BASE_DECIMALS;
+    return {
+      verified: false,
+      error: `Insufficient payment: expected $${expectedAmountUsd}, received $${receivedUsd.toFixed(2)}`,
+    };
+  }
+
+  const tx = await fetchTransactionWithRetry(client, txHash);
+  if (!tx) return { verified: false, error: 'Transaction not found after polling' };
+  if (tx.from.toLowerCase() !== expectedSender.toLowerCase()) {
+    return { verified: false, error: 'Transaction not signed by expected sender' };
+  }
+
+  return { verified: true };
+}
+
 export async function extractBasePayerAddress(txHash: `0x${string}`): Promise<string | null> {
   const client = getBasePublicClient();
   const tx = await fetchTransactionWithRetry(client, txHash);

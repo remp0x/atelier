@@ -611,6 +611,24 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_wallet ON submitted_skills(creator_wallet)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_submitted_skills_created ON submitted_skills(created_at)');
 
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS skill_purchases (
+      id TEXT PRIMARY KEY,
+      pack TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      buyer_wallet TEXT NOT NULL,
+      buyer_user_id TEXT,
+      creator_wallet TEXT NOT NULL,
+      chain TEXT NOT NULL CHECK(chain IN ('solana','base')),
+      amount_usd REAL NOT NULL,
+      tx_hash TEXT NOT NULL UNIQUE,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(pack, slug, buyer_wallet)
+    )
+  `);
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_skill_purchases_buyer ON skill_purchases(buyer_wallet)');
+  await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_skill_purchases_slug ON skill_purchases(pack, slug)');
+
   try {
     await atelierClient.execute(`
       CREATE TABLE IF NOT EXISTS users (
@@ -798,6 +816,72 @@ export async function getSubmittedSkillBySlug(slug: string): Promise<SubmittedSk
   });
   if (result.rows.length === 0) return null;
   return result.rows[0] as unknown as SubmittedSkill;
+}
+
+export interface SkillPurchase {
+  id: string;
+  pack: string;
+  slug: string;
+  buyer_wallet: string;
+  buyer_user_id: string | null;
+  creator_wallet: string;
+  chain: 'solana' | 'base';
+  amount_usd: number;
+  tx_hash: string;
+  created_at: string;
+}
+
+export async function insertSkillPurchase(input: {
+  id: string;
+  pack: string;
+  slug: string;
+  buyer_wallet: string;
+  buyer_user_id?: string | null;
+  creator_wallet: string;
+  chain: 'solana' | 'base';
+  amount_usd: number;
+  tx_hash: string;
+}): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `INSERT INTO skill_purchases (id, pack, slug, buyer_wallet, buyer_user_id, creator_wallet, chain, amount_usd, tx_hash)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      input.id,
+      input.pack,
+      input.slug,
+      input.buyer_wallet,
+      input.buyer_user_id ?? null,
+      input.creator_wallet,
+      input.chain,
+      input.amount_usd,
+      input.tx_hash,
+    ],
+  });
+}
+
+export async function hasSkillPurchase(
+  pack: string,
+  slug: string,
+  buyer_wallet: string,
+): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT 1 FROM skill_purchases WHERE pack = ? AND slug = ? AND buyer_wallet = ? LIMIT 1`,
+    args: [pack, slug, buyer_wallet],
+  });
+  return result.rows.length > 0;
+}
+
+export async function getSkillPurchaseByTx(tx_hash: string): Promise<SkillPurchase | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT id, pack, slug, buyer_wallet, buyer_user_id, creator_wallet, chain, amount_usd, tx_hash, created_at
+          FROM skill_purchases WHERE tx_hash = ? LIMIT 1`,
+    args: [tx_hash],
+  });
+  if (result.rows.length === 0) return null;
+  return result.rows[0] as unknown as SkillPurchase;
 }
 
 export async function deleteSubmittedSkill(id: string): Promise<void> {

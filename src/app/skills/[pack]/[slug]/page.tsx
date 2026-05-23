@@ -24,16 +24,19 @@ async function findSkill(pack: string, slug: string): Promise<SkillExample | und
   if (pack === 'community') {
     const row = await getSubmittedSkillBySlug(slug);
     if (!row || row.status !== 'live') return undefined;
+    const isFree = row.pricing === 'free';
     return {
       name: row.name,
       tagline: row.description,
       category: CATEGORY_NAME_BY_SLUG.get(row.category) ?? row.category,
       tools: ['Markdown'],
       kb: `Submitted ${new Date(row.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
-      price: row.pricing === 'free' ? 0 : row.price_usdc,
+      price: isFree ? 0 : row.price_usdc,
       pack: 'community',
       slug: row.slug,
-      download_url: row.file_url,
+      // Paid skills hide the raw file URL until the buyer pays + verifies via
+      // /api/skills/access. Putting it in SSR would leak it via initial HTML.
+      download_url: isFree ? row.file_url : undefined,
       creator_wallet: row.creator_wallet,
       creator_chain: row.creator_chain,
     };
@@ -147,9 +150,10 @@ export default async function SkillDetailPage({ params }: PageProps) {
                 pack={skill.pack}
                 slug={skill.slug}
                 price={price}
-                downloadUrl={getDownloadUrl(skill)}
+                downloadUrl={skill.download_url ? getDownloadUrl(skill) : null}
                 external={isExternalSkill(skill)}
                 creatorChain={skill.creator_chain ?? 'solana'}
+                creatorWallet={skill.creator_wallet}
               />
             </Panel>
 

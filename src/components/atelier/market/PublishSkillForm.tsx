@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { SKILL_CATEGORIES } from './marketData';
 
@@ -170,14 +170,11 @@ export function PublishSkillForm({ onPublished, variant = 'panel' }: PublishSkil
 
   return (
     <div className={containerCls}>
-      <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200 dark:border-neutral-800">
-        <div className="font-mono text-[10px] tracking-[0.18em] text-atelier">
+      <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200 dark:border-neutral-800 gap-3">
+        <div className="font-mono text-[10px] tracking-[0.18em] text-atelier shrink-0">
           PUBLISH A SKILL
         </div>
-        <IdentityChip
-          walletAddress={auth.walletAddress}
-          onDisconnect={auth.logout}
-        />
+        <CreatorChip />
       </div>
 
       <Field label="Skill name" hint={`${name.length}/${MAX_NAME}`}>
@@ -395,27 +392,207 @@ function Field({
   );
 }
 
-function IdentityChip({
-  walletAddress,
-  onDisconnect,
-}: {
-  walletAddress: string | null;
-  onDisconnect: () => void;
-}): JSX.Element {
+function CreatorChip(): JSX.Element {
+  const auth = useAtelierAuth();
+  const [open, setOpen] = useState(false);
+
+  const chainLabel = auth.walletChain === 'base' ? 'BASE' : 'SOL';
+  const display = auth.walletAddress ? shortWallet(auth.walletAddress) : 'no wallet';
+
   return (
-    <div className="flex items-center gap-2">
-      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-mono text-[10px] tracking-[0.12em] text-atelier border border-atelier/50 bg-atelier/[0.10]">
-        <span className="w-1.5 h-1.5 rounded-full bg-atelier" />
-        {walletAddress ? shortWallet(walletAddress) : 'CONNECTED'}
-      </span>
+    <>
       <button
         type="button"
-        onClick={onDisconnect}
-        className="font-mono text-[10px] text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors"
+        onClick={() => setOpen(true)}
+        className="group inline-flex items-center gap-2 max-w-full px-2.5 h-7 rounded-full border border-atelier/50 bg-atelier/[0.08] hover:bg-atelier/[0.14] hover:border-atelier/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60"
+        aria-label="Change wallet or chain"
       >
-        disconnect
+        <span className="font-mono text-[9.5px] tracking-[0.14em] text-atelier shrink-0">
+          {chainLabel}
+        </span>
+        <span className="w-px h-3 bg-atelier/40 shrink-0" />
+        <span className="font-mono text-[10.5px] text-atelier truncate">{display}</span>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          className="w-3 h-3 text-atelier/70 shrink-0"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
+      <CreatorAccountModal open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+function CreatorAccountModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}): JSX.Element | null {
+  const auth = useAtelierAuth();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const handleSelect = (chain: 'solana' | 'base'): void => {
+    auth.setActiveChain(chain);
+  };
+
+  const handleSignOut = async (): Promise<void> => {
+    onClose();
+    await auth.logout();
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="creator-account-title"
+      className="fixed inset-0 z-[60] flex items-center justify-center"
+    >
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm cursor-default"
+      />
+      <div className="relative w-full max-w-[400px] mx-4 rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black-soft shadow-2xl animate-slide-up">
+        <div className="flex items-start justify-between gap-4 px-5 pt-5 pb-3 border-b border-gray-200 dark:border-neutral-800">
+          <div>
+            <p
+              id="creator-account-title"
+              className="font-mono text-[10px] tracking-[0.18em] text-atelier mb-1"
+            >
+              CREATOR WALLET
+            </p>
+            <h3 className="font-display font-bold text-base tracking-[-0.02em] text-black dark:text-white">
+              Choose chain & wallet
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex-shrink-0 w-7 h-7 rounded-md inline-flex items-center justify-center text-gray-500 dark:text-neutral-400 hover:text-atelier hover:bg-gray-100 dark:hover:bg-neutral-900 transition-colors"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="text-[12.5px] leading-[1.5] text-gray-600 dark:text-neutral-400">
+            Payouts and creator credit go to the wallet you pick here. Pick the chain you want to be paid on.
+          </p>
+
+          <div className="space-y-2">
+            <ChainOption
+              chain="solana"
+              label="Solana"
+              address={auth.solanaAddress}
+              active={auth.walletChain === 'solana'}
+              onSelect={() => handleSelect('solana')}
+            />
+            <ChainOption
+              chain="base"
+              label="Base"
+              address={auth.evmAddress}
+              active={auth.walletChain === 'base'}
+              onSelect={() => handleSelect('base')}
+            />
+          </div>
+
+          {!auth.solanaAddress && !auth.evmAddress && (
+            <p className="text-[11.5px] font-mono leading-[1.5] text-amber-600 dark:text-amber-400">
+              No wallet detected yet. If you logged in with email or social, Privy is still
+              provisioning your embedded wallet — give it a few seconds.
+            </p>
+          )}
+
+          <div className="pt-3 border-t border-gray-200 dark:border-neutral-800">
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              className="w-full inline-flex items-center justify-center gap-1.5 h-9 rounded border border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-400 font-mono text-[11.5px] hover:border-red-500/50 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+            >
+              Sign out of Atelier
+            </button>
+            <p className="mt-2 text-[10.5px] font-mono text-gray-500 dark:text-neutral-500 text-center leading-[1.5]">
+              Signs you out of Privy. External wallets stay connected to your browser.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function ChainOption({
+  chain,
+  label,
+  address,
+  active,
+  onSelect,
+}: {
+  chain: 'solana' | 'base';
+  label: string;
+  address: string | null;
+  active: boolean;
+  onSelect: () => void;
+}): JSX.Element {
+  const hasWallet = !!address;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={!hasWallet}
+      className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-lg border text-left transition-colors ${
+        active
+          ? 'border-atelier/70 bg-atelier/[0.10]'
+          : hasWallet
+            ? 'border-gray-200 dark:border-neutral-700 hover:border-atelier/40 hover:bg-atelier/[0.04]'
+            : 'border-gray-200 dark:border-neutral-800 opacity-50 cursor-not-allowed'
+      }`}
+    >
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span
+          className={`inline-flex items-center justify-center w-7 h-7 rounded-full font-mono text-[10px] tracking-wide shrink-0 ${
+            chain === 'solana'
+              ? 'bg-[#9945FF]/15 text-[#c084fc] border border-[#9945FF]/40'
+              : 'bg-[#0052FF]/15 text-[#5b8dff] border border-[#0052FF]/40'
+          }`}
+        >
+          {chain === 'solana' ? 'SOL' : 'BASE'}
+        </span>
+        <div className="min-w-0">
+          <div className="font-display font-semibold text-[13px] text-black dark:text-white leading-tight">
+            {label}
+          </div>
+          <div className="font-mono text-[10.5px] text-gray-500 dark:text-neutral-400 truncate">
+            {address ?? 'no wallet linked'}
+          </div>
+        </div>
+      </div>
+      {active && (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="w-4 h-4 text-atelier shrink-0">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        </svg>
+      )}
+    </button>
   );
 }
 

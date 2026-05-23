@@ -35,6 +35,7 @@ async function findSkill(pack: string, slug: string): Promise<SkillExample | und
       slug: row.slug,
       download_url: row.file_url,
       creator_wallet: row.creator_wallet,
+      creator_chain: row.creator_chain,
     };
   }
   return SKILL_EXAMPLES.find((s) => s.pack === pack && s.slug === slug);
@@ -99,15 +100,10 @@ export default async function SkillDetailPage({ params }: PageProps) {
               SKILL
             </span>
           </div>
-          <p className="text-base md:text-lg text-gray-600 dark:text-neutral-300 max-w-3xl leading-relaxed">
-            {skill.tagline}
-          </p>
 
           <div className="flex items-center flex-wrap gap-2 mt-5">
             <Pill>{skill.category}</Pill>
-            {(!external || isCommunity) && <Pill>{pack.label}</Pill>}
-            <Pill>{skill.tools.length} tool{skill.tools.length !== 1 ? 's' : ''}</Pill>
-            <Pill highlight>{isFree ? 'Free' : `$${price.toFixed(price % 1 === 0 ? 0 : 2)}`}</Pill>
+            <Pill>{isCommunity ? 'Community' : 'Atelier'}</Pill>
           </div>
         </div>
 
@@ -116,50 +112,9 @@ export default async function SkillDetailPage({ params }: PageProps) {
           <div className="space-y-6 min-w-0">
             <Panel>
               <PanelTitle>About</PanelTitle>
-              <p className="text-sm md:text-[15px] leading-[1.65] text-gray-700 dark:text-neutral-300">
+              <p className="text-sm md:text-[15px] leading-[1.65] text-gray-700 dark:text-neutral-300 whitespace-pre-wrap">
                 {skill.tagline}
               </p>
-              <p className="mt-3 text-sm md:text-[15px] leading-[1.65] text-gray-700 dark:text-neutral-300">
-                Packaged as a Markdown skill — drop it into your agent runtime and the prompt,
-                tool definitions, and evaluation hooks ship with it.
-                {!external && (
-                  <>
-                    {' '}Authored and maintained by{' '}
-                    <a
-                      href={pack.repoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-atelier hover:text-atelier-bright"
-                    >
-                      {pack.label}
-                    </a>
-                    {' '}on GitHub.
-                  </>
-                )}
-                {isCommunity && skill.creator_wallet && (
-                  <>
-                    {' '}Submitted by community wallet{' '}
-                    <span className="font-mono text-atelier">
-                      {`${skill.creator_wallet.slice(0, 4)}…${skill.creator_wallet.slice(-4)}`}
-                    </span>
-                    .
-                  </>
-                )}
-              </p>
-            </Panel>
-
-            <Panel>
-              <PanelTitle>Core capabilities</PanelTitle>
-              <ul className="space-y-2.5">
-                {skill.tools.map((tool) => (
-                  <li key={tool} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-neutral-300">
-                    <svg className="w-4 h-4 mt-0.5 text-atelier flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                    <span>{tool}</span>
-                  </li>
-                ))}
-              </ul>
             </Panel>
 
             <Panel>
@@ -194,10 +149,8 @@ export default async function SkillDetailPage({ params }: PageProps) {
                 price={price}
                 downloadUrl={getDownloadUrl(skill)}
                 external={isExternalSkill(skill)}
+                creatorChain={skill.creator_chain ?? 'solana'}
               />
-              <p className="mt-3 text-[11px] font-mono text-gray-500 dark:text-neutral-500 leading-[1.55]">
-                Sign in with your wallet to download. Settled in USDC on Solana.
-              </p>
             </Panel>
 
             {!external && (

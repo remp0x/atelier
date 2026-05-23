@@ -90,6 +90,7 @@ export type SkillExample = {
   slug: string;
   download_url?: string;
   creator_wallet?: string;
+  creator_chain?: 'solana' | 'base';
 };
 
 export function getSourceUrl(skill: SkillExample): string {

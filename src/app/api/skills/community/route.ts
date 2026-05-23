@@ -19,6 +19,7 @@ function toSkillExample(row: SubmittedSkill): SkillExample {
     slug: row.slug,
     download_url: row.file_url,
     creator_wallet: row.creator_wallet,
+    creator_chain: row.creator_chain,
   };
 }
 

@@ -3,6 +3,7 @@
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
+import { ChainLogo, chainLabel } from '@/components/atelier/ChainBadge';
 import { SKILL_CATEGORIES } from './marketData';
 
 const MAX_MD_BYTES = 256 * 1024;
@@ -106,6 +107,7 @@ export function PublishSkillForm({ onPublished, variant = 'panel' }: PublishSkil
       fd.append('wallet', sig.wallet);
       fd.append('wallet_sig', sig.wallet_sig);
       fd.append('wallet_sig_ts', String(sig.wallet_sig_ts));
+      fd.append('creator_chain', sig.wallet_chain ?? auth.walletChain ?? 'solana');
 
       const res = await fetch('/api/skills/submit', { method: 'POST', body: fd });
       const json = await res.json();
@@ -347,6 +349,18 @@ export function PublishSkillForm({ onPublished, variant = 'panel' }: PublishSkil
       )}
 
       <div className="mt-4 pt-4 border-t border-gray-200 dark:border-neutral-800">
+        {pricing === 'paid' && (
+          <div className="mb-3 px-3 py-2.5 rounded-md border border-atelier/30 bg-atelier/[0.06] flex items-start gap-2.5">
+            <ChainLogo chain={auth.walletChain ?? 'solana'} size={14} />
+            <div className="text-[11.5px] leading-[1.5] text-gray-700 dark:text-neutral-300">
+              You&apos;ll be paid in USDC on{' '}
+              <span className="font-semibold text-black dark:text-white">
+                {chainLabel(auth.walletChain ?? 'solana')}
+              </span>
+              . Buyers will be required to pay on the same chain. To change, switch wallet at the top of this form.
+            </div>
+          </div>
+        )}
         <button
           type="button"
           onClick={handleSubmit}
@@ -397,7 +411,7 @@ function CreatorChip(): JSX.Element {
   const auth = useAtelierAuth();
   const [open, setOpen] = useState(false);
 
-  const chainLabel = auth.walletChain === 'base' ? 'BASE' : 'SOL';
+  const chain = auth.walletChain ?? 'solana';
   const display = auth.walletAddress ? shortWallet(auth.walletAddress) : 'no wallet';
 
   return (
@@ -408,10 +422,7 @@ function CreatorChip(): JSX.Element {
         className="group inline-flex items-center gap-2 max-w-full px-2.5 h-7 rounded-full border border-atelier/50 bg-atelier/[0.08] hover:bg-atelier/[0.14] hover:border-atelier/70 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60"
         aria-label="Change wallet or chain"
       >
-        <span className="font-mono text-[9.5px] tracking-[0.14em] text-atelier shrink-0">
-          {chainLabel}
-        </span>
-        <span className="w-px h-3 bg-atelier/40 shrink-0" />
+        <ChainLogo chain={chain} size={12} />
         <span className="font-mono text-[10.5px] text-atelier truncate">{display}</span>
         <svg
           viewBox="0 0 24 24"

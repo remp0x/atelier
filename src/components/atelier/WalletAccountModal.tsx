@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useConnectWallet, usePrivy, type WalletWithMetadata } from '@privy-io/react-auth';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { ChainLogo, chainLabel } from '@/components/atelier/ChainBadge';
 
 function findLinkedWallet(
   user: ReturnType<typeof usePrivy>['user'],
@@ -154,7 +155,6 @@ export function WalletAccountModal({
           <div className="space-y-3">
             <ChainRow
               chain="solana"
-              label="Solana"
               address={auth.solanaAddress}
               active={auth.walletChain === 'solana'}
               busy={busyChain === 'solana'}
@@ -164,7 +164,6 @@ export function WalletAccountModal({
             />
             <ChainRow
               chain="base"
-              label="Base"
               address={auth.evmAddress}
               active={auth.walletChain === 'base'}
               busy={busyChain === 'base'}
@@ -206,7 +205,6 @@ export function WalletAccountModal({
 
 function ChainRow({
   chain,
-  label,
   address,
   active,
   busy,
@@ -215,7 +213,6 @@ function ChainRow({
   onDisconnect,
 }: {
   chain: 'solana' | 'base';
-  label: string;
   address: string | null;
   active: boolean;
   busy: boolean;
@@ -224,6 +221,7 @@ function ChainRow({
   onDisconnect: (address: string) => void;
 }): JSX.Element {
   const hasWallet = !!address;
+  const label = chainLabel(chain);
   return (
     <div
       className={`rounded-lg border transition-colors ${
@@ -242,14 +240,8 @@ function ChainRow({
         aria-label={hasWallet ? `Use ${label}` : `${label} not connected`}
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <span
-            className={`inline-flex items-center justify-center w-7 h-7 rounded-full font-mono text-[10px] tracking-wide shrink-0 ${
-              chain === 'solana'
-                ? 'bg-[#9945FF]/15 text-[#c084fc] border border-[#9945FF]/40'
-                : 'bg-[#0052FF]/15 text-[#5b8dff] border border-[#0052FF]/40'
-            }`}
-          >
-            {chain === 'solana' ? 'SOL' : 'BASE'}
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shrink-0">
+            <ChainLogo chain={chain} size={16} />
           </span>
           <div className="min-w-0">
             <div className="font-display font-semibold text-[13px] text-black dark:text-white leading-tight">

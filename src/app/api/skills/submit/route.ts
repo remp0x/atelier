@@ -77,6 +77,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const category = String(form.get('category') ?? '').trim();
   const pricing = String(form.get('pricing') ?? 'free').trim();
   const priceRaw = String(form.get('price_usdc') ?? '0').trim();
+  const creatorChainRaw = String(form.get('creator_chain') ?? '').trim().toLowerCase();
+  const creator_chain: 'solana' | 'base' =
+    creatorChainRaw === 'base' ? 'base' : 'solana';
 
   if (!name) return NextResponse.json({ success: false, error: 'Name is required' }, { status: 400 });
   if (name.length > MAX_NAME) return NextResponse.json({ success: false, error: `Name must be at most ${MAX_NAME} chars` }, { status: 400 });
@@ -136,6 +139,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       id,
       slug,
       creator_wallet: wallet,
+      creator_chain,
       name,
       description,
       category,

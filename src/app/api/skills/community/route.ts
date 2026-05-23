@@ -23,6 +23,7 @@ function toSkillExample(row: SubmittedSkill): SkillExample {
     download_url: isFree ? row.file_url : undefined,
     creator_wallet: row.creator_wallet,
     creator_chain: row.creator_chain,
+    created_at: row.created_at,
   };
 }
 

@@ -91,6 +91,8 @@ export type SkillExample = {
   download_url?: string;
   creator_wallet?: string;
   creator_chain?: 'solana' | 'base';
+  /** ISO 8601 timestamp. Present for community skills; undefined for curated. */
+  created_at?: string;
 };
 
 export function getSourceUrl(skill: SkillExample): string {

@@ -35,6 +35,7 @@ const CATEGORY_ICON: Record<string, string> = {
 };
 
 const SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest' },
   { value: 'name', label: 'A → Z' },
   { value: 'pack', label: 'By Pack' },
   { value: 'cheapest', label: 'Cheapest' },
@@ -138,6 +139,15 @@ function BrowseContent() {
       sorted.sort((a, b) => (a.pack === b.pack ? a.name.localeCompare(b.name) : a.pack.localeCompare(b.pack)));
     } else if (sort === 'cheapest') {
       sorted.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+    } else if (sort === 'newest') {
+      // Skills with a created_at (community submissions) sort newest-first.
+      // Curated skills have no timestamp and fall to the bottom, alphabetical.
+      sorted.sort((a, b) => {
+        const ta = a.created_at ? Date.parse(a.created_at) : 0;
+        const tb = b.created_at ? Date.parse(b.created_at) : 0;
+        if (ta !== tb) return tb - ta;
+        return a.name.localeCompare(b.name);
+      });
     }
     return sorted;
   }, [category, search, pricing, pack, sort, allSkills]);

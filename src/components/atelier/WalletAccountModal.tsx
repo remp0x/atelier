@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useConnectWallet, usePrivy, type WalletWithMetadata } from '@privy-io/react-auth';
+import { useConnectWallet, usePrivy, useUser, type WalletWithMetadata } from '@privy-io/react-auth';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { ChainLogo, chainLabel } from '@/components/atelier/ChainBadge';
 
@@ -39,6 +39,7 @@ export function WalletAccountModal({
 }: WalletAccountModalProps): JSX.Element | null {
   const auth = useAtelierAuth();
   const { unlinkWallet, user } = usePrivy();
+  const { refreshUser } = useUser();
   const { connectWallet } = useConnectWallet();
   const [busyChain, setBusyChain] = useState<'solana' | 'base' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -85,10 +86,15 @@ export function WalletAccountModal({
     setActionError(null);
     setBusyChain(chain);
     try {
-      const linked = findLinkedWallet(user, chain, address);
+      let freshUser = user;
+      try {
+        freshUser = await refreshUser();
+      } catch {}
+
+      const linked = findLinkedWallet(freshUser, chain, address);
       if (!linked) {
         setActionError(
-          "This wallet is connected to your browser but not linked to your Privy account, so we can't unlink it here. Disconnect it from the wallet extension (e.g. MetaMask, Phantom) instead.",
+          "This wallet isn't linked to your Privy account (it may have been unlinked already). Disconnect it from the wallet extension (e.g. Phantom, MetaMask) if you don't want it connected to this site.",
         );
         return;
       }
@@ -96,11 +102,17 @@ export function WalletAccountModal({
       await unlinkWallet(linked.address);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not disconnect this wallet.';
-      setActionError(
-        /last/i.test(msg)
-          ? "Privy won't let you unlink your last linked account. Link another login method first, or sign out."
-          : msg,
-      );
+      if (/last/i.test(msg)) {
+        setActionError(
+          "Privy won't let you unlink your last linked account. Link another login method first, or sign out.",
+        );
+      } else if (/not found|400/i.test(msg)) {
+        setActionError(
+          "Privy says this wallet isn't linked to your account. Sign out and back in to refresh your wallet list.",
+        );
+      } else {
+        setActionError(msg);
+      }
     } finally {
       setBusyChain(null);
     }
@@ -270,7 +282,7 @@ function ChainRow({
               : 'border-atelier/40 text-atelier hover:bg-atelier hover:text-white hover:border-atelier'
           }`}
         >
-          {hasWallet ? 'Switch wallet' : 'Connect wallet'} →
+          {hasWallet ? 'Connect another' : 'Connect wallet'} →
         </button>
         {hasWallet && (
           <button
@@ -287,6 +299,11 @@ function ChainRow({
           </button>
         )}
       </div>
+      {hasWallet && (
+        <p className="px-3.5 pb-3 -mt-1 font-mono text-[10px] leading-[1.5] text-gray-500 dark:text-neutral-500">
+          To swap to a different account inside the same extension, open it and switch the active account there, or click Disconnect first.
+        </p>
+      )}
     </div>
   );
 }

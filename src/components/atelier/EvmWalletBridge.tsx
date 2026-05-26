@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { useWallets, type EIP1193Provider } from '@privy-io/react-auth';
+import {
+  usePrivy,
+  useWallets,
+  type EIP1193Provider,
+  type WalletWithMetadata,
+} from '@privy-io/react-auth';
 
 export interface EvmWalletState {
   address: `0x${string}`;
@@ -14,11 +19,23 @@ interface EvmWalletBridgeProps {
 }
 
 export function EvmWalletBridge({ onWalletChange }: EvmWalletBridgeProps) {
+  const { user, authenticated, ready: privyReady } = usePrivy();
   const { wallets, ready } = useWallets();
 
   const evmWallet = useMemo(() => {
-    if (!ready) return null;
-    const w = wallets.find((wallet) => wallet.type === 'ethereum') ?? null;
+    if (!ready || !privyReady || !authenticated || !user?.linkedAccounts) return null;
+
+    const linked = new Set<string>();
+    for (const acct of user.linkedAccounts) {
+      if (acct.type !== 'wallet') continue;
+      const lw = acct as WalletWithMetadata;
+      if (lw.chainType !== 'ethereum') continue;
+      linked.add(lw.address.toLowerCase());
+    }
+
+    const w = wallets.find(
+      (wallet) => wallet.type === 'ethereum' && linked.has(wallet.address.toLowerCase()),
+    ) ?? null;
     if (!w) return null;
 
     const address = w.address as `0x${string}`;
@@ -37,7 +54,7 @@ export function EvmWalletBridge({ onWalletChange }: EvmWalletBridgeProps) {
     };
 
     return state;
-  }, [wallets, ready]);
+  }, [wallets, ready, privyReady, authenticated, user?.linkedAccounts]);
 
   useEffect(() => {
     onWalletChange(evmWallet);

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
+import { usePrivy, type WalletWithMetadata } from '@privy-io/react-auth';
 import { useWallets } from '@privy-io/react-auth/solana';
 
 interface SolanaWalletBridgeProps {
@@ -12,8 +13,20 @@ interface SolanaWalletBridgeProps {
 }
 
 export function SolanaWalletBridge({ onWalletChange }: SolanaWalletBridgeProps) {
+  const { user, authenticated, ready } = usePrivy();
   const { wallets } = useWallets();
-  const wallet = wallets[0] ?? null;
+
+  const wallet = useMemo(() => {
+    if (!ready || !authenticated || !user?.linkedAccounts) return null;
+    const linked = new Set<string>();
+    for (const acct of user.linkedAccounts) {
+      if (acct.type !== 'wallet') continue;
+      const w = acct as WalletWithMetadata;
+      if (w.chainType !== 'solana') continue;
+      linked.add(w.address);
+    }
+    return wallets.find((w) => linked.has(w.address)) ?? null;
+  }, [wallets, user?.linkedAccounts, authenticated, ready]);
 
   useEffect(() => {
     onWalletChange(wallet);

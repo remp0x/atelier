@@ -489,11 +489,11 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     setSessionReady(false);
     clearAuth();
     logoutApiKey();
-    setSolanaWallet(null);
-    setEvmWallet(null);
     upsertedUserIdRef.current = null;
     setAtelierUser(null);
     await logout();
+    setSolanaWallet(null);
+    setEvmWallet(null);
   }, [clearAuth, logoutApiKey, logout, walletChain, walletAddress]);
 
   const value = useMemo<AtelierAuthContextValue>(
@@ -555,8 +555,9 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AtelierAuthContext.Provider value={value}>
-      {authenticated && <SolanaWalletBridge onWalletChange={handleSolanaWalletChange} />}
-      {authenticated && <EvmWalletBridge onWalletChange={handleEvmWalletChange} />}
+      <SolanaWalletBridge onWalletChange={handleSolanaWalletChange} />
+      <EvmWalletBridge onWalletChange={handleEvmWalletChange} />
+
       {children}
     </AtelierAuthContext.Provider>
   );

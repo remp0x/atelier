@@ -166,7 +166,10 @@ export function PublishSkillForm({ onPublished, variant = 'panel' }: PublishSkil
   if (!auth.walletReady) {
     return (
       <div className={containerCls}>
-        <SignInGate onSignIn={auth.login} />
+        <SignInGate
+          onSignIn={auth.login}
+          mode={auth.authenticated ? 'connect-wallet' : 'sign-in'}
+        />
       </div>
     );
   }
@@ -444,25 +447,35 @@ function CreatorChip(): JSX.Element {
   );
 }
 
-function SignInGate({ onSignIn }: { onSignIn: () => void }): JSX.Element {
+function SignInGate({
+  onSignIn,
+  mode = 'sign-in',
+}: {
+  onSignIn: () => void;
+  mode?: 'sign-in' | 'connect-wallet';
+}): JSX.Element {
+  const isConnectWallet = mode === 'connect-wallet';
   return (
     <div className="py-2">
       <div className="font-mono text-[10px] tracking-[0.18em] text-atelier mb-4">
-        SIGN IN REQUIRED
+        {isConnectWallet ? 'WALLET REQUIRED' : 'SIGN IN REQUIRED'}
       </div>
       <h3 className="font-display font-bold text-lg md:text-xl tracking-[-0.02em] mb-2 text-black dark:text-white">
-        Connect your wallet to publish.
+        {isConnectWallet
+          ? 'Connect a wallet to receive payouts.'
+          : 'Connect your wallet to publish.'}
       </h3>
       <p className="text-[13.5px] leading-[1.55] text-gray-600 dark:text-neutral-400 mb-5">
-        Your wallet is your creator identity. USDC payouts go straight there — no
-        accounts, no email, no review queue.
+        {isConnectWallet
+          ? 'Pick the Solana or Base wallet where you want USDC payouts to land. You can change it later.'
+          : 'Your wallet is your creator identity. USDC payouts go straight there — no accounts, no email, no review queue.'}
       </p>
       <button
         type="button"
         onClick={onSignIn}
         className="w-full inline-flex items-center justify-center gap-2 px-5 h-11 rounded font-mono text-[13px] font-medium tracking-wide bg-atelier text-white hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black-soft"
       >
-        Sign in to continue →
+        {isConnectWallet ? 'Connect wallet →' : 'Sign in to continue →'}
       </button>
       <p className="mt-2.5 font-mono text-[10.5px] leading-[1.5] text-gray-500 dark:text-neutral-400 text-center">
         Solana or Base. Privy social login also works.

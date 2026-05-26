@@ -42,7 +42,6 @@ export function WalletAccountModal({
     if (selectedName !== pendingSolanaConnect) return;
     if (solana.connected || solana.connecting) {
       setPendingSolanaConnect(null);
-      setBusyChain((b) => (b === 'solana' ? null : b));
       return;
     }
     setPendingSolanaConnect(null);
@@ -51,6 +50,13 @@ export function WalletAccountModal({
       setBusyChain((b) => (b === 'solana' ? null : b));
     });
   }, [pendingSolanaConnect, solana]);
+
+  useEffect(() => {
+    if (busyChain !== 'solana') return;
+    if (solana.connected || (!solana.connecting && !pendingSolanaConnect)) {
+      setBusyChain(null);
+    }
+  }, [busyChain, solana.connected, solana.connecting, pendingSolanaConnect]);
 
   const installedSolanaWallets = useMemo(
     () => solana.wallets.filter((w) => w.readyState === WalletReadyState.Installed),

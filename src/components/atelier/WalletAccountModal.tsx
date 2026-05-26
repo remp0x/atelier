@@ -34,6 +34,23 @@ export function WalletAccountModal({
   const [busyChain, setBusyChain] = useState<'solana' | 'base' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [solanaPickerOpen, setSolanaPickerOpen] = useState(false);
+  const [pendingSolanaConnect, setPendingSolanaConnect] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingSolanaConnect) return;
+    const selectedName = solana.wallet?.adapter.name;
+    if (selectedName !== pendingSolanaConnect) return;
+    if (solana.connected || solana.connecting) {
+      setPendingSolanaConnect(null);
+      setBusyChain((b) => (b === 'solana' ? null : b));
+      return;
+    }
+    setPendingSolanaConnect(null);
+    solana.connect().catch((err: unknown) => {
+      setActionError(err instanceof Error ? err.message : 'Could not connect Solana wallet.');
+      setBusyChain((b) => (b === 'solana' ? null : b));
+    });
+  }, [pendingSolanaConnect, solana]);
 
   const installedSolanaWallets = useMemo(
     () => solana.wallets.filter((w) => w.readyState === WalletReadyState.Installed),
@@ -68,29 +85,40 @@ export function WalletAccountModal({
     auth.setActiveChain(chain);
   };
 
-  const handleSolanaConnect = async (wallet: Wallet): Promise<void> => {
+  const handleSolanaConnect = (wallet: Wallet): void => {
     setActionError(null);
     setBusyChain('solana');
     setSolanaPickerOpen(false);
     auth.setActiveChain('solana');
-    try {
-      solana.select(wallet.adapter.name);
-      await wallet.adapter.connect();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Could not connect Solana wallet.');
-    } finally {
-      setBusyChain(null);
+
+    const targetName = wallet.adapter.name;
+    const alreadySelected = solana.wallet?.adapter.name === targetName;
+
+    if (alreadySelected && !solana.connected && !solana.connecting) {
+      solana.connect().catch((err: unknown) => {
+        setActionError(err instanceof Error ? err.message : 'Could not connect Solana wallet.');
+        setBusyChain(null);
+      });
+      return;
     }
+
+    if (alreadySelected && solana.connected) {
+      setBusyChain(null);
+      return;
+    }
+
+    solana.select(targetName);
+    setPendingSolanaConnect(targetName);
   };
 
-  const handleSolanaConnectClick = async (): Promise<void> => {
+  const handleSolanaConnectClick = (): void => {
     setActionError(null);
     if (pickableSolanaWallets.length === 0) {
       setActionError('No Solana wallet detected. Install Phantom or Solflare and reload.');
       return;
     }
     if (pickableSolanaWallets.length === 1) {
-      await handleSolanaConnect(pickableSolanaWallets[0]);
+      handleSolanaConnect(pickableSolanaWallets[0]);
       return;
     }
     setSolanaPickerOpen((v) => !v);
@@ -202,11 +230,11 @@ export function WalletAccountModal({
               active={auth.walletChain === 'solana'}
               busy={busyChain === 'solana'}
               onSelect={() => handleSelect('solana')}
-              onConnect={() => void handleSolanaConnectClick()}
+              onConnect={() => handleSolanaConnectClick()}
               onDisconnect={() => void handleSolanaDisconnect()}
               pickerOpen={solanaPickerOpen}
               pickerWallets={pickableSolanaWallets}
-              onPickWallet={(w) => void handleSolanaConnect(w)}
+              onPickWallet={(w) => handleSolanaConnect(w)}
             />
             <ChainRow
               chain="base"

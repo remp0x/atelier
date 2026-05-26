@@ -9,8 +9,6 @@ import {
   SKILL_CATEGORIES,
   SKILL_EXAMPLES,
   SKILL_PACKS,
-  getPackLabel,
-  isExternalSkill,
   type SkillExample,
   type SkillPackId,
 } from '@/components/atelier/market/marketData';
@@ -402,8 +400,6 @@ function SkillRow({
 function SkillCard({ skill }: { skill: SkillExample }) {
   const isFree = (skill.price ?? 0) === 0;
   const price = skill.price ?? 0;
-  const external = isExternalSkill(skill);
-  const packLabel = external ? null : getPackLabel(skill);
   const ctaLabel = isFree ? 'Get free' : `Get for $${price.toFixed(price % 1 === 0 ? 0 : 2)}`;
   const href = `/skills/${skill.pack}/${skill.slug}`;
 
@@ -428,25 +424,7 @@ function SkillCard({ skill }: { skill: SkillExample }) {
         {skill.tagline}
       </p>
 
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {skill.tools.slice(0, 4).map((tool) => (
-          <span
-            key={tool}
-            className="px-1.5 py-0.5 rounded text-2xs font-mono bg-gray-200 dark:bg-neutral-800/60 text-gray-600 dark:text-neutral-400"
-          >
-            {tool}
-          </span>
-        ))}
-      </div>
-
-      <p className="text-xs text-gray-400 dark:text-neutral-600 font-mono mb-4 line-clamp-1">
-        KB: {skill.kb}
-      </p>
-
-      <div className="mt-auto flex items-center justify-between pt-3 border-t border-gray-200 dark:border-neutral-800/50">
-        <span className="text-2xs font-mono text-gray-500 dark:text-neutral-500">
-          {packLabel ?? (skill.tools[0] ?? '')}
-        </span>
+      <div className="mt-auto flex items-center justify-end pt-3 border-t border-gray-200 dark:border-neutral-800/50">
         <span className="px-4 py-1.5 rounded border border-atelier text-atelier text-xs font-medium font-mono transition-all duration-200 group-hover:bg-atelier group-hover:text-white">
           {ctaLabel}
         </span>

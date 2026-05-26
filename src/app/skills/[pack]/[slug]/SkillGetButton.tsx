@@ -141,11 +141,20 @@ export function SkillGetButton({
   };
 
   const wrongChain = auth.walletReady && auth.walletChain !== creatorChain;
+  const isOwnSkill =
+    auth.walletReady &&
+    !!creatorWallet &&
+    !!auth.walletAddress &&
+    creatorWallet.toLowerCase() === auth.walletAddress.toLowerCase();
 
   const handleBuyClick = async () => {
     setError(null);
     if (!auth.walletReady) {
       auth.login();
+      return;
+    }
+    if (isOwnSkill) {
+      setError("You can't buy your own skill.");
       return;
     }
     if (wrongChain) {
@@ -265,16 +274,18 @@ export function SkillGetButton({
   return (
     <>
       <PrimaryButton
-        disabled={busy}
+        disabled={busy || isOwnSkill}
         onClick={() => void handleBuyClick()}
         label={
           busy
             ? (statusMsg ?? 'Working…')
             : !auth.walletReady
               ? `SIGN IN TO BUY · ${priceLabel} →`
-              : wrongChain
-                ? `SWITCH TO ${chainLabel(creatorChain).toUpperCase()} TO BUY →`
-                : `BUY FOR ${priceLabel} →`
+              : isOwnSkill
+                ? "YOU'RE THE CREATOR"
+                : wrongChain
+                  ? `SWITCH TO ${chainLabel(creatorChain).toUpperCase()} TO BUY →`
+                  : `BUY FOR ${priceLabel} →`
         }
       />
       {error && <ErrorLine>{error}</ErrorLine>}

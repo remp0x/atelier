@@ -86,6 +86,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
+  if (skill.creator_wallet.toLowerCase() === buyerWallet.toLowerCase()) {
+    return NextResponse.json(
+      { success: false, error: "You can't buy your own skill." },
+      { status: 400 },
+    );
+  }
+
   // Reject double-spend / replay of an existing purchase tx
   const existingByTx = await getSkillPurchaseByTx(txHash);
   if (existingByTx) {

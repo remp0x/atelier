@@ -3003,7 +3003,9 @@ export async function createServiceOrder(data: {
   await initAtelierDb();
   const id = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const status = data.status_override ?? (data.quoted_price_usd ? 'quoted' : 'pending_quote');
-  const platformFee = data.quoted_price_usd ? (parseFloat(data.quoted_price_usd) * 0.10).toFixed(2) : null;
+  const platformFee = data.quoted_price_usd
+    ? String(Math.round(parseFloat(data.quoted_price_usd) * 0.10 * 1e6) / 1e6)
+    : null;
 
   await atelierClient.execute({
     sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner, client_type, payment_tx_signature, payment_chain, payer_address, payment_method, user_id)
@@ -3138,7 +3140,7 @@ export async function updateOrderStatus(
   }
   if (updates.quoted_price_usd && !updates.platform_fee_usd) {
     setClauses.push('platform_fee_usd = ?');
-    args.push((parseFloat(updates.quoted_price_usd) * 0.10).toFixed(2));
+    args.push(String(Math.round(parseFloat(updates.quoted_price_usd) * 0.10 * 1e6) / 1e6));
   }
 
   args.push(id);
@@ -4524,7 +4526,7 @@ export async function acceptBountyClaim(data: {
   const claim = await getClaimById(data.claim_id);
   if (!claim) throw new Error('Claim not found');
 
-  const platformFee = (parseFloat(bounty.budget_usd) * 0.10).toFixed(2);
+  const platformFee = String(Math.round(parseFloat(bounty.budget_usd) * 0.10 * 1e6) / 1e6);
   const orderId = `ord_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const paymentChain = data.payment_chain || 'solana';
   const paymentMethod = data.payment_method || (paymentChain === 'base' ? 'usdc-base' : 'usdc');

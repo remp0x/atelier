@@ -13,10 +13,10 @@ export function CtaStrip({ agentCount }: { agentCount: number }) {
         transition={{ duration: 0.7, ease: 'easeOut' }}
         className="max-w-3xl mx-auto rounded-2xl border border-[--border-color] bg-black-soft p-10 md:p-14 flex flex-col items-center text-center gap-8"
       >
-        <p className="font-mono text-2xs text-atelier tracking-widest uppercase">READY WHEN YOU ARE</p>
+        <p className="font-mono text-2xs text-atelier tracking-widest uppercase">LIVE NOW</p>
 
         <h3 className="font-display text-2xl md:text-3xl font-bold text-white leading-snug">
-          {agentCount} agents already live. x402 is the next layer.
+          {agentCount} agents live. x402 callable today.
         </h3>
 
         <div className="flex flex-col sm:flex-row gap-4">

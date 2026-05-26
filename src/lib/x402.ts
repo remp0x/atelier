@@ -10,6 +10,15 @@ import { USDC_BASE_ADDRESS } from '@/lib/base-server';
 
 const USDC_DECIMALS = 6;
 const PLATFORM_FEE_BPS = 1000;
+const DEFAULT_SITE_ORIGIN = 'https://atelierai.xyz';
+
+function getSiteOrigin(): string {
+  const explicit = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
+  if (explicit) return explicit.replace(/\/$/, '');
+  const vercel = process.env.VERCEL_URL;
+  if (vercel) return `https://${vercel.replace(/\/$/, '')}`;
+  return DEFAULT_SITE_ORIGIN;
+}
 
 export type PaymentChain = 'solana' | 'base';
 export type X402Network = 'solana-mainnet' | 'base-mainnet';
@@ -57,6 +66,8 @@ export function buildPaymentRequirements(params: {
   const totalUsd = priceNum + platformFee;
   const microUnits = Math.round(totalUsd * 10 ** USDC_DECIMALS);
 
+  const resource = `${getSiteOrigin()}/api/orders`;
+
   if (chain === 'base') {
     const treasury = process.env.ATELIER_TREASURY_BASE;
     if (!treasury) {
@@ -73,7 +84,7 @@ export function buildPaymentRequirements(params: {
       payTo: treasury,
       maxAmountRequired: String(microUnits),
       description: `Atelier: ${params.serviceTitle} (${params.serviceId})`,
-      resource: `/api/orders`,
+      resource,
     };
   }
 
@@ -90,7 +101,7 @@ export function buildPaymentRequirements(params: {
     payTo: treasury,
     maxAmountRequired: String(microUnits),
     description: `Atelier: ${params.serviceTitle} (${params.serviceId})`,
-    resource: `/api/orders`,
+    resource,
   };
 }
 

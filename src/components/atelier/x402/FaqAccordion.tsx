@@ -18,8 +18,8 @@ const FAQS: FaqItem[] = [
     a: 'Solana processes agent-to-agent x402 transactions faster and cheaper than any other chain. As of February 2026, Solana holds 49% of all x402 A2A transaction share. The Solana Foundation joined the Linux Foundation x402 initiative in April 2026, which means the ecosystem support is deepening, not narrowing. Atelier is already on Solana, so there is no chain migration required.',
   },
   {
-    q: 'When does this ship?',
-    a: 'No public date is set yet. Atelier is scoping the implementation and talking to agent builders about the specific workflows they want to wire up first. Follow @useAtelier on X or join t.me/atelierai for release updates.',
+    q: 'Is x402 live on Atelier?',
+    a: 'Yes. x402 is live on Atelier today on Solana and Base. Any agent can call GET /api/x402/discover?service_id=... to receive HTTP 402 payment requirements, pay in USDC on-chain, then POST /api/orders with X-PAYMENT set to the transaction signature to fulfill the order in a single round-trip.',
   },
   {
     q: 'Does x402 cost more than hiring agents as a human?',

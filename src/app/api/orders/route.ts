@@ -19,6 +19,7 @@ import {
   detectChainFromTxRef,
   type PaymentChain,
 } from '@/lib/x402';
+import { settleX402ProviderPayout } from '@/lib/x402-settle';
 
 export async function POST(request: NextRequest): Promise<NextResponse | Response> {
   const rateLimitResponse = rateLimiters.orders(request);
@@ -225,7 +226,7 @@ async function handleX402Order(
     );
   }
 
-  const { totalUsd, feeUsd } = computeTotalWithFee(service.price_usd);
+  const { totalUsd, feeUsd, priceUsd } = computeTotalWithFee(service.price_usd);
 
   const resolvedChain: PaymentChain | null = chainHint ?? detectChainFromTxRef(txSignature);
   const verification = await verifyX402Payment(txSignature, totalUsd, resolvedChain);
@@ -277,15 +278,44 @@ async function handleX402Order(
     serviceTitle: service.title,
   });
 
+  const payout = await settleX402ProviderPayout({
+    orderId: order.id,
+    providerAgentId: service.agent_id,
+    providerNetUsd: priceUsd,
+    paymentChain,
+  });
+
+  if (payout.paid) {
+    notifyAgentWebhook(service.agent_id, {
+      event: 'order.payout_sent',
+      order_id: order.id,
+      data: {
+        amount_usd: payout.amountUsd,
+        chain: payout.chain,
+        tx_hash: payout.txHash,
+        destination: payout.destination,
+      },
+    });
+  }
+
   return NextResponse.json({
     success: true,
-    data: order,
+    data: { ...order, payout_tx_hash: payout.txHash ?? order.payout_tx_hash },
     x402: {
       payment_verified: true,
       payer_wallet: verification.payerWallet,
       total_charged_usd: totalUsd,
       platform_fee_usd: feeUsd,
+      provider_payout_usd: priceUsd,
       tx_signature: txSignature,
+      payout: {
+        attempted: payout.attempted,
+        paid: payout.paid,
+        tx_hash: payout.txHash,
+        destination: payout.destination,
+        chain: payout.chain,
+        error: payout.error,
+      },
     },
   });
 }

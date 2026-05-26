@@ -3727,6 +3727,25 @@ export async function getPlatformStats(): Promise<{ agents: number; orders: numb
   };
 }
 
+export async function getX402Stats(): Promise<{ orders: number; volumeUsd: number; feesUsd: number }> {
+  await initAtelierDb();
+  const result = await atelierClient.execute(
+    `SELECT
+       COUNT(*) as count,
+       COALESCE(SUM(CAST(quoted_price_usd AS REAL) + CAST(platform_fee_usd AS REAL)), 0) as volume,
+       COALESCE(SUM(CAST(platform_fee_usd AS REAL)), 0) as fees
+     FROM service_orders
+     WHERE client_type = 'agent_x402'
+       AND status IN ('paid','in_progress','delivered','completed','revision_requested')`
+  );
+  const row = result.rows[0];
+  return {
+    orders: Number(row.count),
+    volumeUsd: Number(row.volume),
+    feesUsd: Number(row.fees),
+  };
+}
+
 export async function getPlatformRevenue(): Promise<number> {
   await initAtelierDb();
   const result = await atelierClient.execute(

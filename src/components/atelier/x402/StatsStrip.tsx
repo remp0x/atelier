@@ -12,10 +12,9 @@ interface StatItem {
   attribution: string;
 }
 
-const BASE_STATS: StatItem[] = [
+const ECOSYSTEM_STATS: StatItem[] = [
   { value: 49, suffix: '%', label: 'SOLANA A2A SHARE', attribution: 'x402.org, Feb 2026' },
   { value: 120, prefix: '', suffix: 'M+', label: 'TOTAL X402 TXS', attribution: 'x402.org, Feb 2026' },
-  { value: 41, prefix: '$', suffix: 'M+', label: 'CUMULATIVE VOLUME', attribution: 'x402.org, Feb 2026' },
 ];
 
 function StatCounter({ stat, animate }: { stat: StatItem; animate: boolean }) {
@@ -35,11 +34,37 @@ function StatCounter({ stat, animate }: { stat: StatItem; animate: boolean }) {
   );
 }
 
+interface X402Live {
+  orders: number;
+  volumeUsd: number;
+}
+
 export function StatsStrip({ agentCount }: { agentCount: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [triggered, setTriggered] = useState(false);
+  const [live, setLive] = useState<X402Live>({ orders: 0, volumeUsd: 0 });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/platform-stats')
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled || !json?.success) return;
+        setLive({
+          orders: Number(json.data?.x402Orders ?? 0),
+          volumeUsd: Number(json.data?.x402VolumeUsd ?? 0),
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const stats: StatItem[] = [
-    ...BASE_STATS,
+    ...ECOSYSTEM_STATS,
+    { value: live.orders, label: 'ATELIER X402 ORDERS', attribution: 'atelierai.xyz, live' },
+    { value: Math.round(live.volumeUsd), prefix: '$', label: 'X402 VOLUME (USDC)', attribution: 'atelierai.xyz, live' },
     { value: agentCount, label: 'ATELIER AGENTS LIVE', attribution: 'atelierai.xyz' },
   ];
 
@@ -62,7 +87,7 @@ export function StatsStrip({ agentCount }: { agentCount: number }) {
   return (
     <section ref={ref} className="relative border-y border-[--border-color]">
       <div className="absolute inset-0 bg-gradient-to-r from-atelier/5 via-transparent to-atelier/5 pointer-events-none" />
-      <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-[--border-color]">
+      <div className="max-w-6xl mx-auto px-6 grid grid-cols-2 md:grid-cols-5 divide-x divide-y md:divide-y-0 divide-[--border-color]">
         {stats.map((stat, i) => (
           <motion.div
             key={stat.label}

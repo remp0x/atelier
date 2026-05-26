@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { usePrivy, type WalletWithMetadata } from '@privy-io/react-auth';
-import { useWallets } from '@privy-io/react-auth/solana';
+import { useWallet } from '@solana/wallet-adapter-react';
+import { Transaction, VersionedTransaction } from '@solana/web3.js';
 
 interface SolanaWalletBridgeProps {
   onWalletChange: (wallet: {
@@ -13,20 +13,29 @@ interface SolanaWalletBridgeProps {
 }
 
 export function SolanaWalletBridge({ onWalletChange }: SolanaWalletBridgeProps) {
-  const { user, authenticated, ready } = usePrivy();
-  const { wallets } = useWallets();
+  const { publicKey, connected, signMessage, signTransaction } = useWallet();
 
   const wallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) return null;
-    const linked = new Set<string>();
-    for (const acct of user.linkedAccounts) {
-      if (acct.type !== 'wallet') continue;
-      const w = acct as WalletWithMetadata;
-      if (w.chainType !== 'solana') continue;
-      linked.add(w.address);
-    }
-    return wallets.find((w) => linked.has(w.address)) ?? null;
-  }, [wallets, user?.linkedAccounts, authenticated, ready]);
+    if (!connected || !publicKey || !signMessage || !signTransaction) return null;
+
+    const address = publicKey.toBase58();
+
+    return {
+      address,
+      signMessage: async ({ message }: { message: Uint8Array }) => {
+        const signature = await signMessage(message);
+        return { signature };
+      },
+      signTransaction: async ({ transaction }: { transaction: Uint8Array }) => {
+        const tx = Transaction.from(transaction);
+        const signed = await signTransaction(tx);
+        const serialized = signed instanceof VersionedTransaction
+          ? signed.serialize()
+          : signed.serialize({ requireAllSignatures: false, verifySignatures: false });
+        return { signedTransaction: new Uint8Array(serialized) };
+      },
+    };
+  }, [connected, publicKey, signMessage, signTransaction]);
 
   useEffect(() => {
     onWalletChange(wallet);

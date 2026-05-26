@@ -1,28 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useConnectWallet, usePrivy, useUser, type WalletWithMetadata } from '@privy-io/react-auth';
+import { useEffect, useMemo, useState } from 'react';
+import { useWallet, type Wallet } from '@solana/wallet-adapter-react';
+import { WalletReadyState } from '@solana/wallet-adapter-base';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { ChainLogo, chainLabel } from '@/components/atelier/ChainBadge';
-
-function findLinkedWallet(
-  user: ReturnType<typeof usePrivy>['user'],
-  chain: 'solana' | 'base',
-  address: string,
-): WalletWithMetadata | null {
-  if (!user?.linkedAccounts) return null;
-  const wanted = chain === 'solana' ? address : address.toLowerCase();
-  for (const acct of user.linkedAccounts) {
-    if (acct.type !== 'wallet') continue;
-    const w = acct as WalletWithMetadata;
-    const chainType = w.chainType;
-    if (chain === 'solana' && chainType !== 'solana') continue;
-    if (chain === 'base' && chainType !== 'ethereum') continue;
-    const candidate = chain === 'solana' ? w.address : w.address.toLowerCase();
-    if (candidate === wanted) return w;
-  }
-  return null;
-}
 
 interface WalletAccountModalProps {
   open: boolean;
@@ -31,18 +13,40 @@ interface WalletAccountModalProps {
   blurb?: string;
 }
 
+function getEthereumProvider(): {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+} | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as {
+    ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
+  };
+  return w.ethereum ?? null;
+}
+
 export function WalletAccountModal({
   open,
   onClose,
   title = 'Connect & pick wallet',
-  blurb = "Connect any wallet you own and pick the one you want to use. Disconnect the ones you don't.",
+  blurb = "Connect any wallet you own and pick the one you want to use. Wallets stay independent — switching here doesn't move data between accounts.",
 }: WalletAccountModalProps): JSX.Element | null {
   const auth = useAtelierAuth();
-  const { unlinkWallet, user } = usePrivy();
-  const { refreshUser } = useUser();
-  const { connectWallet } = useConnectWallet();
+  const solana = useWallet();
   const [busyChain, setBusyChain] = useState<'solana' | 'base' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [solanaPickerOpen, setSolanaPickerOpen] = useState(false);
+
+  const installedSolanaWallets = useMemo(
+    () => solana.wallets.filter((w) => w.readyState === WalletReadyState.Installed),
+    [solana.wallets],
+  );
+  const loadableSolanaWallets = useMemo(
+    () => solana.wallets.filter((w) => w.readyState === WalletReadyState.Loadable),
+    [solana.wallets],
+  );
+  const pickableSolanaWallets = useMemo(
+    () => [...installedSolanaWallets, ...loadableSolanaWallets],
+    [installedSolanaWallets, loadableSolanaWallets],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -64,55 +68,82 @@ export function WalletAccountModal({
     auth.setActiveChain(chain);
   };
 
-  const handleConnect = (chain: 'solana' | 'base'): void => {
+  const handleSolanaConnect = async (wallet: Wallet): Promise<void> => {
     setActionError(null);
-    setBusyChain(chain);
-    auth.setActiveChain(chain);
+    setBusyChain('solana');
+    setSolanaPickerOpen(false);
+    auth.setActiveChain('solana');
     try {
-      connectWallet({
-        walletChainType: chain === 'solana' ? 'solana-only' : 'ethereum-only',
-      });
+      solana.select(wallet.adapter.name);
+      await wallet.adapter.connect();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Could not open wallet picker.');
+      setActionError(err instanceof Error ? err.message : 'Could not connect Solana wallet.');
     } finally {
       setBusyChain(null);
     }
   };
 
-  const handleDisconnect = async (
-    chain: 'solana' | 'base',
-    address: string,
-  ): Promise<void> => {
+  const handleSolanaConnectClick = async (): Promise<void> => {
     setActionError(null);
-    setBusyChain(chain);
-    try {
-      let freshUser = user;
-      try {
-        freshUser = await refreshUser();
-      } catch {}
+    if (pickableSolanaWallets.length === 0) {
+      setActionError('No Solana wallet detected. Install Phantom or Solflare and reload.');
+      return;
+    }
+    if (pickableSolanaWallets.length === 1) {
+      await handleSolanaConnect(pickableSolanaWallets[0]);
+      return;
+    }
+    setSolanaPickerOpen((v) => !v);
+  };
 
-      const linked = findLinkedWallet(freshUser, chain, address);
-      if (!linked) {
-        setActionError(
-          "This wallet isn't linked to your Privy account (it may have been unlinked already). Disconnect it from the wallet extension (e.g. Phantom, MetaMask) if you don't want it connected to this site.",
-        );
-        return;
-      }
-      auth.clearAuth();
-      await unlinkWallet(linked.address);
+  const handleSolanaDisconnect = async (): Promise<void> => {
+    setActionError(null);
+    setBusyChain('solana');
+    try {
+      await solana.disconnect();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not disconnect this wallet.';
-      if (/last/i.test(msg)) {
-        setActionError(
-          "Privy won't let you unlink your last linked account. Link another login method first, or sign out.",
-        );
-      } else if (/not found|400/i.test(msg)) {
-        setActionError(
-          "Privy says this wallet isn't linked to your account. Sign out and back in to refresh your wallet list.",
-        );
-      } else {
-        setActionError(msg);
+      setActionError(err instanceof Error ? err.message : 'Could not disconnect Solana wallet.');
+    } finally {
+      setBusyChain(null);
+    }
+  };
+
+  const handleEvmConnect = async (): Promise<void> => {
+    setActionError(null);
+    setBusyChain('base');
+    auth.setActiveChain('base');
+    const provider = getEthereumProvider();
+    if (!provider) {
+      setActionError('No EVM wallet detected. Install MetaMask, Rabby, or Coinbase Wallet.');
+      setBusyChain(null);
+      return;
+    }
+    try {
+      auth.allowEvm();
+      await provider.request({ method: 'eth_requestAccounts' });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not connect EVM wallet.');
+    } finally {
+      setBusyChain(null);
+    }
+  };
+
+  const handleEvmDisconnect = async (): Promise<void> => {
+    setActionError(null);
+    setBusyChain('base');
+    const provider = getEthereumProvider();
+    try {
+      if (provider) {
+        try {
+          await provider.request({
+            method: 'wallet_revokePermissions',
+            params: [{ eth_accounts: {} }],
+          });
+        } catch {
+          // Wallet doesn't support EIP-2255; fall through to local-only disconnect.
+        }
       }
+      auth.disconnectEvm();
     } finally {
       setBusyChain(null);
     }
@@ -171,8 +202,11 @@ export function WalletAccountModal({
               active={auth.walletChain === 'solana'}
               busy={busyChain === 'solana'}
               onSelect={() => handleSelect('solana')}
-              onConnect={() => handleConnect('solana')}
-              onDisconnect={(addr) => void handleDisconnect('solana', addr)}
+              onConnect={() => void handleSolanaConnectClick()}
+              onDisconnect={() => void handleSolanaDisconnect()}
+              pickerOpen={solanaPickerOpen}
+              pickerWallets={pickableSolanaWallets}
+              onPickWallet={(w) => void handleSolanaConnect(w)}
             />
             <ChainRow
               chain="base"
@@ -180,8 +214,8 @@ export function WalletAccountModal({
               active={auth.walletChain === 'base'}
               busy={busyChain === 'base'}
               onSelect={() => handleSelect('base')}
-              onConnect={() => handleConnect('base')}
-              onDisconnect={(addr) => void handleDisconnect('base', addr)}
+              onConnect={() => void handleEvmConnect()}
+              onDisconnect={() => void handleEvmDisconnect()}
             />
           </div>
 
@@ -196,7 +230,7 @@ export function WalletAccountModal({
 
           {!auth.solanaAddress && !auth.evmAddress && (
             <p className="text-[11.5px] font-mono leading-[1.5] text-amber-600 dark:text-amber-400">
-              No wallet detected yet. Connect one above, or wait a few seconds if you logged in with email and Privy is still provisioning an embedded wallet.
+              No wallet connected. Click Connect on the chain you want to use.
             </p>
           )}
 
@@ -223,6 +257,9 @@ function ChainRow({
   onSelect,
   onConnect,
   onDisconnect,
+  pickerOpen,
+  pickerWallets,
+  onPickWallet,
 }: {
   chain: 'solana' | 'base';
   address: string | null;
@@ -230,7 +267,10 @@ function ChainRow({
   busy: boolean;
   onSelect: () => void;
   onConnect: () => void;
-  onDisconnect: (address: string) => void;
+  onDisconnect: () => void;
+  pickerOpen?: boolean;
+  pickerWallets?: Wallet[];
+  onPickWallet?: (wallet: Wallet) => void;
 }): JSX.Element {
   const hasWallet = !!address;
   const label = chainLabel(chain);
@@ -287,7 +327,7 @@ function ChainRow({
         {hasWallet && (
           <button
             type="button"
-            onClick={() => onDisconnect(address)}
+            onClick={onDisconnect}
             disabled={busy}
             className={`inline-flex items-center h-7 px-2.5 rounded font-mono text-[10.5px] tracking-wide border transition-colors ${
               busy
@@ -299,9 +339,28 @@ function ChainRow({
           </button>
         )}
       </div>
+
+      {pickerOpen && pickerWallets && pickerWallets.length > 0 && (
+        <div className="px-3.5 pb-3 space-y-1">
+          {pickerWallets.map((w) => (
+            <button
+              key={w.adapter.name}
+              type="button"
+              onClick={() => onPickWallet?.(w)}
+              className="w-full flex items-center gap-2 px-2.5 py-2 rounded border border-gray-200 dark:border-neutral-800 hover:border-atelier/50 hover:bg-atelier/[0.05] transition-colors text-left"
+            >
+              {w.adapter.icon && (
+                <img src={w.adapter.icon} alt="" width={16} height={16} className="flex-shrink-0 rounded" />
+              )}
+              <span className="font-mono text-[11px] text-black dark:text-white">{w.adapter.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {hasWallet && (
         <p className="px-3.5 pb-3 -mt-1 font-mono text-[10px] leading-[1.5] text-gray-500 dark:text-neutral-500">
-          To swap to a different account inside the same extension, open it and switch the active account there, or click Disconnect first.
+          To use a different account inside the same extension, switch the active account there, or click Disconnect first.
         </p>
       )}
     </div>

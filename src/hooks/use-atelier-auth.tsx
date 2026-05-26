@@ -29,6 +29,7 @@ const STORAGE_KEY_PREFIX = 'atelier_auth_';
 const APIKEY_STORAGE_KEY = 'atelier_apikey_session';
 const SERVER_SESSION_KEY_PREFIX = 'atelier_server_session_';
 const ACTIVE_CHAIN_KEY = 'atelier_active_chain';
+const EVM_HIDDEN_KEY = 'atelier_evm_hidden';
 
 function chainAuthKey(chain: WalletChain, wallet: string): string {
   return `${STORAGE_KEY_PREFIX}${chain}_${wallet}`;
@@ -162,6 +163,22 @@ function saveActiveChain(chain: WalletChain): void {
   } catch {}
 }
 
+function loadEvmHidden(): string | null {
+  try {
+    const raw = localStorage.getItem(EVM_HIDDEN_KEY);
+    return raw && raw.startsWith('0x') ? raw.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveEvmHidden(address: string | null): void {
+  try {
+    if (address) localStorage.setItem(EVM_HIDDEN_KEY, address.toLowerCase());
+    else localStorage.removeItem(EVM_HIDDEN_KEY);
+  } catch {}
+}
+
 const SolanaWalletBridge = dynamic(
   () => import('@/components/atelier/SolanaWalletBridge').then(m => ({ default: m.SolanaWalletBridge })),
   { ssr: false }
@@ -200,6 +217,8 @@ interface AtelierAuthContextValue {
   getSignableWallet: () => SignableWallet | null;
   getTransactionWallet: () => TransactionSignableWallet | null;
   getEvmWalletClient: () => Promise<{ client: WalletClient; account: `0x${string}` } | null>;
+  disconnectEvm: () => void;
+  allowEvm: () => void;
   authMode: AuthMode;
   apiKeySession: ApiKeySession | null;
   loginWithApiKey: (apiKey: string) => Promise<void>;
@@ -213,7 +232,8 @@ const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
 export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready, login, logout, user } = usePrivy();
   const [solanaWallet, setSolanaWallet] = useState<SolanaWalletState | null>(null);
-  const [evmWallet, setEvmWallet] = useState<EvmWalletState | null>(null);
+  const [rawEvmWallet, setRawEvmWallet] = useState<EvmWalletState | null>(null);
+  const [evmHiddenAddress, setEvmHiddenAddress] = useState<string | null>(null);
   const [apiKeySess, setApiKeySess] = useState<ApiKeySession | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [activeChain, setActiveChainState] = useState<WalletChain>('solana');
@@ -225,6 +245,11 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const upsertInflightRef = useRef<Promise<void> | null>(null);
 
   const solanaAddress = solanaWallet?.address ?? null;
+  const evmWallet = useMemo<EvmWalletState | null>(() => {
+    if (!rawEvmWallet) return null;
+    if (evmHiddenAddress && rawEvmWallet.address.toLowerCase() === evmHiddenAddress) return null;
+    return rawEvmWallet;
+  }, [rawEvmWallet, evmHiddenAddress]);
   const evmAddress = evmWallet?.address ?? null;
 
   const walletChain: WalletChain | null = useMemo(() => {
@@ -241,7 +266,16 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setApiKeySess(loadApiKeySession());
     setActiveChainState(loadActiveChain());
+    setEvmHiddenAddress(loadEvmHidden());
   }, []);
+
+  useEffect(() => {
+    if (!evmHiddenAddress) return;
+    if (rawEvmWallet && rawEvmWallet.address.toLowerCase() !== evmHiddenAddress) {
+      setEvmHiddenAddress(null);
+      saveEvmHidden(null);
+    }
+  }, [rawEvmWallet, evmHiddenAddress]);
 
   const setActiveChain = useCallback((chain: WalletChain) => {
     setActiveChainState(chain);
@@ -260,7 +294,20 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleEvmWalletChange = useCallback((wallet: EvmWalletState | null) => {
-    setEvmWallet(wallet);
+    setRawEvmWallet(wallet);
+  }, []);
+
+  const disconnectEvm = useCallback(() => {
+    const addr = rawEvmWallet?.address;
+    if (addr) {
+      setEvmHiddenAddress(addr.toLowerCase());
+      saveEvmHidden(addr);
+    }
+  }, [rawEvmWallet]);
+
+  const allowEvm = useCallback(() => {
+    setEvmHiddenAddress(null);
+    saveEvmHidden(null);
   }, []);
 
   const getSignableWallet = useCallback((): SignableWallet | null => {
@@ -493,7 +540,9 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     setAtelierUser(null);
     await logout();
     setSolanaWallet(null);
-    setEvmWallet(null);
+    setRawEvmWallet(null);
+    setEvmHiddenAddress(null);
+    saveEvmHidden(null);
   }, [clearAuth, logoutApiKey, logout, walletChain, walletAddress]);
 
   const value = useMemo<AtelierAuthContextValue>(
@@ -517,6 +566,8 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       getSignableWallet,
       getTransactionWallet,
       getEvmWalletClient,
+      disconnectEvm,
+      allowEvm,
       authMode,
       apiKeySession: apiKeySess,
       loginWithApiKey,
@@ -544,6 +595,8 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       getSignableWallet,
       getTransactionWallet,
       getEvmWalletClient,
+      disconnectEvm,
+      allowEvm,
       authMode,
       apiKeySess,
       loginWithApiKey,

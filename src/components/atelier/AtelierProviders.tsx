@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode, Suspense, useMemo } from 'react';
-import { ConnectionProvider } from '@solana/wallet-adapter-react';
+import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { clusterApiUrl } from '@solana/web3.js';
 import { ThemeProvider } from '../ThemeProvider';
 import { PrivyAuthProvider } from './PrivyAuthProvider';
@@ -16,16 +16,18 @@ export function AtelierProviders({ children }: { children: ReactNode }) {
 
   return (
     <ConnectionProvider endpoint={endpoint} config={{ commitment: 'confirmed' }}>
-      <PrivyAuthProvider>
-        <ThemeProvider>
-          <AtelierAuthProvider>
-            <Suspense fallback={null}>
-              <ReferralCapture />
-            </Suspense>
-            {children}
-          </AtelierAuthProvider>
-        </ThemeProvider>
-      </PrivyAuthProvider>
+      <WalletProvider wallets={[]} autoConnect>
+        <PrivyAuthProvider>
+          <ThemeProvider>
+            <AtelierAuthProvider>
+              <Suspense fallback={null}>
+                <ReferralCapture />
+              </Suspense>
+              {children}
+            </AtelierAuthProvider>
+          </ThemeProvider>
+        </PrivyAuthProvider>
+      </WalletProvider>
     </ConnectionProvider>
   );
 }

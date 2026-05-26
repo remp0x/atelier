@@ -9,11 +9,7 @@ import { PublicKey } from '@solana/web3.js';
 import { sendUsdcPayment } from '@/lib/solana-pay';
 import { sendBaseUsdcPayment } from '@/lib/base-pay';
 import { useFundWallet } from '@privy-io/react-auth/solana';
-import { useConnectWallet, type BaseConnectedWalletType } from '@privy-io/react-auth';
-import { createWalletClient, custom } from 'viem';
-import { base } from 'viem/chains';
-import { signWalletAuth, type WalletAuthPayload } from '@/lib/solana-auth-client';
-import { signEvmWalletAuth } from '@/lib/evm-auth-client';
+import { signWalletAuth } from '@/lib/solana-auth-client';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { clientUpload } from '@/lib/client-upload';
@@ -296,41 +292,27 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
-  const buildAuthFromConnectedWallet = useCallback(
-    async (wallet: BaseConnectedWalletType): Promise<WalletAuthPayload> => {
-      if (wallet.type === 'ethereum') {
-        return signEvmWalletAuth({
-          address: wallet.address as `0x${string}`,
-          signMessage: (msg: string) => wallet.sign(msg) as Promise<`0x${string}`>,
-        });
-      }
-      const provider = wallet.provider;
-      return signWalletAuth({
-        publicKey: { toBase58: () => wallet.address },
-        signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
-          const result = await provider.signMessage({ message });
-          return result.signature;
-        },
-      });
-    },
-    [],
-  );
-
-  const executePaymentWithWallet = useCallback(async (chain: PayChain, wallet: BaseConnectedWalletType) => {
+  const executePaymentForChain = useCallback(async (chain: PayChain) => {
     const treasury = getTreasuryForChain(chain);
     if (!treasury) {
       setError(`Treasury not configured for ${chain === 'base' ? 'Base' : 'Solana'}`);
       setLoading(false);
       return;
     }
-    const payerAddress = wallet.address;
+
+    const payerAddress = chain === 'base' ? evmAddress : solanaAddress;
+    if (!payerAddress) {
+      setError(`Connect a ${chain === 'base' ? 'Base' : 'Solana'} wallet to continue.`);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
       setLoadingMsg('Signing wallet...');
-      const auth = await buildAuthFromConnectedWallet(wallet);
+      const authPayload = await getAuth();
 
       setLoadingMsg('Creating order...');
       const referralPartner = readReferralCookie();
@@ -338,7 +320,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...auth,
+          ...authPayload,
           service_id: service.id,
           brief,
           reference_urls: validUrls.length > 0 ? validUrls : undefined,
@@ -357,23 +339,14 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setLoadingMsg('Sending payment...');
       let txSig: string;
 
-      if (chain === 'base' && wallet.type === 'ethereum') {
-        const provider = await wallet.getEthereumProvider();
-        const client = createWalletClient({
-          chain: base,
-          transport: custom(provider),
-          account: wallet.address as `0x${string}`,
-        });
-        txSig = await sendBaseUsdcPayment(client, wallet.address as `0x${string}`, treasury as `0x${string}`, total);
-      } else if (chain === 'solana' && wallet.type === 'solana') {
-        // The existing solana-pay helper expects a wallet shape with publicKey + signTransaction.
-        // We rely on the connected Solana bridge in the auth hook (Privy keeps the connected wallet
-        // available via useWallets, which our SolanaWalletBridge surfaces as getTransactionWallet).
+      if (chain === 'base') {
+        const evm = await getEvmWalletClient();
+        if (!evm) throw new Error('Base wallet not ready for signing');
+        txSig = await sendBaseUsdcPayment(evm.client, evm.account, treasury as `0x${string}`, total);
+      } else {
         const sw = getTransactionWallet();
         if (!sw) throw new Error('Solana wallet not ready for signing');
         txSig = await sendUsdcPayment(connection, sw, new PublicKey(treasury), total);
-      } else {
-        throw new Error('Chain and wallet type mismatch');
       }
 
       setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
@@ -381,7 +354,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...auth,
+          ...authPayload,
           action: 'pay',
           payment_method: chain === 'base' ? 'usdc-base' : 'usdc-sol',
           payment_chain: chain,
@@ -398,7 +371,21 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [connection, service, brief, validUrls, referenceImages, reqAnswers, total, buildAuthFromConnectedWallet, getTransactionWallet, isWorkspace]);
+  }, [
+    solanaAddress,
+    evmAddress,
+    connection,
+    service,
+    brief,
+    validUrls,
+    referenceImages,
+    reqAnswers,
+    total,
+    getAuth,
+    getTransactionWallet,
+    getEvmWalletClient,
+    isWorkspace,
+  ]);
 
   const executeCardPayment = useCallback(async () => {
     const treasury = getTreasuryForChain('solana');
@@ -483,32 +470,17 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     }
   }, [solanaAddress, total, fundWallet, getSignableWallet, getTransactionWallet, connection, service, brief, validUrls, referenceImages, reqAnswers, isWorkspace]);
 
-  const pendingChainRef = useRef<PayChain | null>(null);
-
-  const { connectWallet } = useConnectWallet({
-    onSuccess: ({ wallet }) => {
-      const pending = pendingChainRef.current;
-      pendingChainRef.current = null;
-      if (!pending) return;
-      // Guard: ensure the wallet type matches the chain requested. Privy's
-      // walletChainType filter should enforce this, but check defensively.
-      if (pending === 'base' && wallet.type !== 'ethereum') return;
-      if (pending === 'solana' && wallet.type !== 'solana') return;
-      void executePaymentWithWallet(pending, wallet);
-    },
-  });
-
   const handleSelectChain = useCallback((chain: PayChain) => {
     setPayChain(chain);
     setActiveChain(chain);
-    pendingChainRef.current = chain;
-    setLoading(true);
-    setLoadingMsg('Opening wallet picker...');
     setError(null);
-    connectWallet({
-      walletChainType: chain === 'solana' ? 'solana-only' : 'ethereum-only',
-    });
-  }, [setActiveChain, connectWallet]);
+    const addr = chain === 'base' ? evmAddress : solanaAddress;
+    if (!addr) {
+      setWalletModalOpen(true);
+      return;
+    }
+    void executePaymentForChain(chain);
+  }, [setActiveChain, evmAddress, solanaAddress, executePaymentForChain]);
 
   const handleReviewPay = useCallback(() => {
     if (payMethod === 'card') {
@@ -984,7 +956,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
               <button
                 onClick={() => {
-                  pendingChainRef.current = null;
                   setLoading(false);
                   setStep('review');
                 }}

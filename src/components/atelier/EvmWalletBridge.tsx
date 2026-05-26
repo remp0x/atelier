@@ -1,64 +1,82 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
-import {
-  usePrivy,
-  useWallets,
-  type EIP1193Provider,
-  type WalletWithMetadata,
-} from '@privy-io/react-auth';
+import { useCallback, useEffect, useState } from 'react';
+
+export interface InjectedEthereumProvider {
+  request: (args: { method: string; params?: unknown }) => Promise<unknown>;
+  on?: (event: string, handler: (...args: unknown[]) => void) => void;
+  removeListener?: (event: string, handler: (...args: unknown[]) => void) => void;
+}
 
 export interface EvmWalletState {
   address: `0x${string}`;
   signMessage: (message: string) => Promise<`0x${string}`>;
-  getEthereumProvider: () => Promise<EIP1193Provider>;
+  getEthereumProvider: () => Promise<InjectedEthereumProvider>;
 }
 
 interface EvmWalletBridgeProps {
   onWalletChange: (wallet: EvmWalletState | null) => void;
 }
 
+type EthereumWindow = Window & { ethereum?: InjectedEthereumProvider };
+
+function getInjectedProvider(): InjectedEthereumProvider | null {
+  if (typeof window === 'undefined') return null;
+  return (window as EthereumWindow).ethereum ?? null;
+}
+
+function buildState(provider: InjectedEthereumProvider, address: `0x${string}`): EvmWalletState {
+  return {
+    address,
+    signMessage: async (message: string) => {
+      const sig = await provider.request({
+        method: 'personal_sign',
+        params: [message, address],
+      });
+      return sig as `0x${string}`;
+    },
+    getEthereumProvider: async () => provider,
+  };
+}
+
 export function EvmWalletBridge({ onWalletChange }: EvmWalletBridgeProps) {
-  const { user, authenticated, ready: privyReady } = usePrivy();
-  const { wallets, ready } = useWallets();
+  const [state, setState] = useState<EvmWalletState | null>(null);
 
-  const evmWallet = useMemo(() => {
-    if (!ready || !privyReady || !authenticated || !user?.linkedAccounts) return null;
-
-    const linked = new Set<string>();
-    for (const acct of user.linkedAccounts) {
-      if (acct.type !== 'wallet') continue;
-      const lw = acct as WalletWithMetadata;
-      if (lw.chainType !== 'ethereum') continue;
-      linked.add(lw.address.toLowerCase());
+  const syncAccounts = useCallback(async (provider: InjectedEthereumProvider) => {
+    try {
+      const accounts = (await provider.request({ method: 'eth_accounts' })) as `0x${string}`[];
+      const addr = accounts[0];
+      setState(addr ? buildState(provider, addr) : null);
+    } catch {
+      setState(null);
     }
-
-    const w = wallets.find(
-      (wallet) => wallet.type === 'ethereum' && linked.has(wallet.address.toLowerCase()),
-    ) ?? null;
-    if (!w) return null;
-
-    const address = w.address as `0x${string}`;
-
-    const state: EvmWalletState = {
-      address,
-      signMessage: async (message: string) => {
-        const provider = await w.getEthereumProvider();
-        const sig = await provider.request({
-          method: 'personal_sign',
-          params: [message, address],
-        });
-        return sig as `0x${string}`;
-      },
-      getEthereumProvider: () => w.getEthereumProvider(),
-    };
-
-    return state;
-  }, [wallets, ready, privyReady, authenticated, user?.linkedAccounts]);
+  }, []);
 
   useEffect(() => {
-    onWalletChange(evmWallet);
-  }, [evmWallet, onWalletChange]);
+    const provider = getInjectedProvider();
+    if (!provider) {
+      setState(null);
+      return;
+    }
+
+    void syncAccounts(provider);
+
+    const handleAccountsChanged = (accounts: unknown) => {
+      const list = Array.isArray(accounts) ? (accounts as `0x${string}`[]) : [];
+      const addr = list[0];
+      setState(addr ? buildState(provider, addr) : null);
+    };
+
+    provider.on?.('accountsChanged', handleAccountsChanged);
+
+    return () => {
+      provider.removeListener?.('accountsChanged', handleAccountsChanged);
+    };
+  }, [syncAccounts]);
+
+  useEffect(() => {
+    onWalletChange(state);
+  }, [state, onWalletChange]);
 
   return null;
 }

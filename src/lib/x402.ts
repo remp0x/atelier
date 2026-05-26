@@ -207,9 +207,10 @@ async function extractSolanaPayerWallet(txSignature: string): Promise<string | n
 export function computeTotalWithFee(priceUsd: string): { totalUsd: number; feeUsd: number; priceUsd: number } {
   const price = parseFloat(priceUsd);
   const fee = price * (PLATFORM_FEE_BPS / 10000);
+  const total = price + fee;
   return {
     priceUsd: price,
-    feeUsd: parseFloat(fee.toFixed(2)),
-    totalUsd: parseFloat((price + fee).toFixed(2)),
+    feeUsd: Math.round(fee * 10 ** USDC_DECIMALS) / 10 ** USDC_DECIMALS,
+    totalUsd: Math.round(total * 10 ** USDC_DECIMALS) / 10 ** USDC_DECIMALS,
   };
 }

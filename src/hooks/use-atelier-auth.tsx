@@ -189,6 +189,11 @@ const EvmWalletBridge = dynamic(
   { ssr: false }
 );
 
+const WalletAccountModal = dynamic(
+  () => import('@/components/atelier/WalletAccountModal').then(m => ({ default: m.WalletAccountModal })),
+  { ssr: false }
+);
+
 interface SolanaWalletState {
   address: string;
   signMessage: (input: { message: Uint8Array }) => Promise<{ signature: Uint8Array }>;
@@ -219,6 +224,7 @@ interface AtelierAuthContextValue {
   getEvmWalletClient: () => Promise<{ client: WalletClient; account: `0x${string}` } | null>;
   disconnectEvm: () => void;
   allowEvm: () => void;
+  openWalletModal: () => void;
   authMode: AuthMode;
   apiKeySession: ApiKeySession | null;
   loginWithApiKey: (apiKey: string) => Promise<void>;
@@ -238,6 +244,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const [sessionReady, setSessionReady] = useState(false);
   const [activeChain, setActiveChainState] = useState<WalletChain>('solana');
   const [atelierUser, setAtelierUser] = useState<AtelierUser | null>(null);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
 
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
@@ -545,11 +552,24 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     saveEvmHidden(null);
   }, [clearAuth, logoutApiKey, logout, walletChain, walletAddress]);
 
+  const openWalletModal = useCallback(() => {
+    setWalletModalOpen(true);
+  }, []);
+
+  const smartLogin = useCallback(() => {
+    if (authenticated && !walletAddress) {
+      setWalletModalOpen(true);
+      return;
+    }
+    if (authenticated) return;
+    login();
+  }, [authenticated, walletAddress, login]);
+
   const value = useMemo<AtelierAuthContextValue>(
     () => ({
       authenticated: authenticated || apiKeySess !== null,
       ready,
-      login,
+      login: smartLogin,
       logout: handleLogout,
       user: user ?? null,
       walletAddress,
@@ -568,6 +588,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       getEvmWalletClient,
       disconnectEvm,
       allowEvm,
+      openWalletModal,
       authMode,
       apiKeySession: apiKeySess,
       loginWithApiKey,
@@ -578,7 +599,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     [
       authenticated,
       ready,
-      login,
+      smartLogin,
       handleLogout,
       user,
       walletAddress,
@@ -597,6 +618,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       getEvmWalletClient,
       disconnectEvm,
       allowEvm,
+      openWalletModal,
       authMode,
       apiKeySess,
       loginWithApiKey,
@@ -612,6 +634,10 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       <EvmWalletBridge onWalletChange={handleEvmWalletChange} />
 
       {children}
+      <WalletAccountModal
+        open={walletModalOpen}
+        onClose={() => setWalletModalOpen(false)}
+      />
     </AtelierAuthContext.Provider>
   );
 }

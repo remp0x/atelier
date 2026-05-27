@@ -34,16 +34,26 @@ export function WalletAccountModal({
   const [busyChain, setBusyChain] = useState<'solana' | 'base' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [solanaPickerOpen, setSolanaPickerOpen] = useState(false);
-  const [pendingSolanaConnect, setPendingSolanaConnect] = useState<string | null>(null);
+  const [pendingSolanaConnect, setPendingSolanaConnect] = useState<{ name: string; nonce: number } | null>(null);
+  const [closeOnConnect, setCloseOnConnect] = useState(false);
+
+  useEffect(() => {
+    if (!closeOnConnect) return;
+    if (solana.connected || auth.evmAddress) {
+      setCloseOnConnect(false);
+      onClose();
+    }
+  }, [closeOnConnect, solana.connected, auth.evmAddress, onClose]);
 
   useEffect(() => {
     if (!pendingSolanaConnect) return;
     const selectedName = solana.wallet?.adapter.name;
-    if (selectedName !== pendingSolanaConnect) return;
-    if (solana.connected || solana.connecting) {
+    if (selectedName !== pendingSolanaConnect.name) return;
+    if (solana.connected) {
       setPendingSolanaConnect(null);
       return;
     }
+    if (solana.connecting) return;
     setPendingSolanaConnect(null);
     solana.connect().catch((err: unknown) => {
       setActionError(err instanceof Error ? err.message : 'Could not connect Solana wallet.');
@@ -96,25 +106,13 @@ export function WalletAccountModal({
     setBusyChain('solana');
     setSolanaPickerOpen(false);
     auth.setActiveChain('solana');
+    setCloseOnConnect(true);
 
     const targetName = wallet.adapter.name;
-    const alreadySelected = solana.wallet?.adapter.name === targetName;
-
-    if (alreadySelected && !solana.connected && !solana.connecting) {
-      solana.connect().catch((err: unknown) => {
-        setActionError(err instanceof Error ? err.message : 'Could not connect Solana wallet.');
-        setBusyChain(null);
-      });
-      return;
+    if (solana.wallet?.adapter.name !== targetName) {
+      solana.select(targetName);
     }
-
-    if (alreadySelected && solana.connected) {
-      setBusyChain(null);
-      return;
-    }
-
-    solana.select(targetName);
-    setPendingSolanaConnect(targetName);
+    setPendingSolanaConnect({ name: targetName, nonce: Date.now() });
   };
 
   const handleSolanaConnectClick = (): void => {
@@ -152,11 +150,13 @@ export function WalletAccountModal({
       setBusyChain(null);
       return;
     }
+    setCloseOnConnect(true);
     try {
       auth.allowEvm();
       await provider.request({ method: 'eth_requestAccounts' });
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Could not connect EVM wallet.');
+      setCloseOnConnect(false);
     } finally {
       setBusyChain(null);
     }

@@ -2259,8 +2259,23 @@ export async function findRecentDuplicateAgent(data: {
   description: string;
   owner_wallet?: string;
   twitter_username?: string;
+  user_id?: string;
 }): Promise<AtelierAgent | null> {
   await initAtelierDb();
+
+  if (data.user_id) {
+    const result = await atelierClient.execute({
+      sql: `SELECT * FROM atelier_agents
+            WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+            AND (user_id = ? OR privy_user_id = ?)
+            AND active = 1
+            AND created_at > datetime('now', '-24 hours')
+            ORDER BY created_at DESC
+            LIMIT 1`,
+      args: [data.name, data.user_id, data.user_id],
+    });
+    if (result.rows.length > 0) return result.rows[0] as unknown as AtelierAgent;
+  }
 
   if (data.owner_wallet) {
     const result = await atelierClient.execute({
@@ -2324,6 +2339,8 @@ export async function registerAtelierAgent(data: {
   owner_wallet?: string;
   twitter_verification_code?: string;
   twitter_username?: string;
+  user_id?: string;
+  privy_user_id?: string;
 }): Promise<{ agent_id: string; api_key: string; slug: string; twitter_verification_code: string; webhook_secret: string | null }> {
   await initAtelierDb();
 
@@ -2332,6 +2349,7 @@ export async function registerAtelierAgent(data: {
     description: data.description,
     owner_wallet: data.owner_wallet,
     twitter_username: data.twitter_username,
+    user_id: data.user_id,
   });
   if (duplicate) throw new DuplicateAgentError(duplicate);
 
@@ -2354,9 +2372,9 @@ export async function registerAtelierAgent(data: {
   const webhookSecret = data.endpoint_url ? `whsec_${randomBytes(32).toString('hex')}` : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username, ai_models, webhook_secret)
-          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null, aiModels, webhookSecret],
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username, ai_models, webhook_secret, user_id, privy_user_id)
+          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null, aiModels, webhookSecret, data.user_id || null, data.privy_user_id || null],
   });
 
   return { agent_id: id, api_key: apiKey, slug, twitter_verification_code: verificationCode, webhook_secret: webhookSecret };

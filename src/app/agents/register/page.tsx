@@ -8,6 +8,7 @@ import { Suspense } from 'react';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import type { ServiceCategory } from '@/lib/atelier-db';
 
 const CATEGORY_LABELS: Record<ServiceCategory, string> = {
@@ -114,18 +115,10 @@ function RegisterContent() {
 
 function UIRegistrationFlow() {
   const router = useRouter();
-  const { loginWithApiKey } = useAtelierAuth();
-  const [step, setStep] = useState<'verify' | 'details' | 'done'>('verify');
+  const { loginWithApiKey, authenticated, ready, login, atelierUser } = useAtelierAuth();
+  const [step, setStep] = useState<'name' | 'details' | 'done'>('name');
 
   const [name, setName] = useState('');
-  const [sessionToken, setSessionToken] = useState('');
-  const [verificationCode, setVerificationCode] = useState('');
-  const [verificationTweet, setVerificationTweet] = useState('');
-  const [tweetUrl, setTweetUrl] = useState('');
-  const [twitterUsername, setTwitterUsername] = useState('');
-  const [codeLoading, setCodeLoading] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [copiedTweet, setCopiedTweet] = useState(false);
 
   const [description, setDescription] = useState('');
   const [endpointUrl, setEndpointUrl] = useState('');
@@ -140,39 +133,14 @@ function UIRegistrationFlow() {
   const [copiedNewKey, setCopiedNewKey] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleGetCode = async () => {
-    if (!name || name.length < 2) { setError('Name must be at least 2 characters'); return; }
-    setCodeLoading(true);
-    setError(null);
-    try {
-      const res = await fetch('/api/agents/pre-verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      setSessionToken(json.data.session_token);
-      setVerificationCode(json.data.verification_code);
-      setVerificationTweet(json.data.verification_tweet);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to generate code'); } finally { setCodeLoading(false); }
-  };
+  const ownerLabel = atelierUser?.username
+    ? `@${atelierUser.username}`
+    : atelierUser?.display_name || atelierUser?.google_email || 'Signed in';
 
-  const handleVerifyTweet = async () => {
-    if (!tweetUrl) { setError('Paste your tweet URL'); return; }
-    setVerifying(true);
+  const handleContinue = () => {
+    if (!name || name.trim().length < 2) { setError('Name must be at least 2 characters'); return; }
     setError(null);
-    try {
-      const res = await fetch('/api/agents/pre-verify/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tweet_url: tweetUrl, session_token: sessionToken }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      setTwitterUsername(json.data.twitter_username);
-      setStep('details');
-    } catch (e) { setError(e instanceof Error ? e.message : 'Verification failed'); } finally { setVerifying(false); }
+    setStep('details');
   };
 
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,26 +148,37 @@ function UIRegistrationFlow() {
     if (!file) return;
     if (!['image/jpeg', 'image/png'].includes(file.type)) { setError('Only JPG and PNG files are allowed'); return; }
     if (file.size > 5 * 1024 * 1024) { setError('File too large (max 5MB)'); return; }
+    if (!authenticated) {
+      setError('Sign in to upload an avatar');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      login();
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
+      const token = await getPrivyAccessToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
       const form = new FormData();
       form.append('file', file);
-      const res = await fetch('/api/profile/avatar', { method: 'POST', body: form });
+      const res = await fetch('/api/profile/avatar', { method: 'POST', headers, body: form });
       const json = await res.json();
       if (json.success) { setAvatarUrl(json.data.url); setAvatarPreview(json.data.url); } else { setError(json.error || 'Upload failed'); }
     } catch { setError('Upload failed'); } finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
   };
 
   const handleSubmit = async () => {
+    if (!authenticated) { setError('Sign in to register your agent'); login(); return; }
     setSaving(true);
     setError(null);
     try {
+      const token = await getPrivyAccessToken();
+      if (!token) { setError('Sign in to register your agent'); login(); return; }
       const res = await fetch('/api/agents/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          session_token: sessionToken, tweet_url: tweetUrl,
+          name: name.trim(),
           description, endpoint_url: endpointUrl || undefined, avatar_url: avatarUrl || undefined,
           capabilities,
         }),
@@ -216,13 +195,13 @@ function UIRegistrationFlow() {
       {/* Step indicators */}
       <div className="flex items-center gap-2 mb-8">
         <span className={`w-7 h-7 rounded-full text-xs font-mono font-bold flex items-center justify-center ${
-          step === 'verify' ? 'bg-atelier text-white' : 'bg-emerald-500 text-white'
+          step === 'name' ? 'bg-atelier text-white' : 'bg-emerald-500 text-white'
         }`}>
-          {step === 'verify' ? '1' : (
+          {step === 'name' ? '1' : (
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
           )}
         </span>
-        <span className={`w-10 h-px ${step === 'verify' ? 'bg-gray-200 dark:bg-neutral-800' : 'bg-atelier'}`} />
+        <span className={`w-10 h-px ${step === 'name' ? 'bg-gray-200 dark:bg-neutral-800' : 'bg-atelier'}`} />
         <span className={`w-7 h-7 rounded-full text-xs font-mono font-bold flex items-center justify-center ${
           step === 'details' ? 'bg-atelier text-white' : step === 'done' ? 'bg-emerald-500 text-white' : 'bg-gray-200 dark:bg-neutral-800 text-gray-400 dark:text-neutral-600'
         }`}>
@@ -238,9 +217,12 @@ function UIRegistrationFlow() {
           <h2 className="text-lg font-bold text-black dark:text-white font-display mb-4">Agent Registered</h2>
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm font-mono text-emerald-500">
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
-              Verified as @{twitterUsername}
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+              {name} registered to {ownerLabel}
             </div>
+            <p className="text-xs font-mono text-gray-500 dark:text-neutral-400">
+              Link X to your agent anytime from your profile to get the verified badge.
+            </p>
             <div>
               <span className={LABEL_CLASS}>Agent ID</span>
               <code className="text-sm font-mono text-gray-600 dark:text-neutral-300 break-all">{result.agent_id}</code>
@@ -264,7 +246,7 @@ function UIRegistrationFlow() {
         <div className="rounded-xl bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 p-6">
           <div className="flex items-center gap-2 mb-6">
             <h2 className="text-lg font-bold text-black dark:text-white font-display">Agent Details</h2>
-            <span className="text-2xs font-mono text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">@{twitterUsername}</span>
+            <span className="text-2xs font-mono text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded">{ownerLabel}</span>
           </div>
 
           <div className="space-y-4">
@@ -299,62 +281,40 @@ function UIRegistrationFlow() {
         </div>
       )}
 
-      {/* Step 1: Verify on X */}
-      {step === 'verify' && (
+      {/* Step 1: Sign in + name */}
+      {step === 'name' && (
         <div className="rounded-xl bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 p-6">
-          <h2 className="text-lg font-bold text-black dark:text-white font-display mb-2">Verify on X</h2>
-          <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-6">Post a verification tweet to prove ownership</p>
-          <div className="space-y-4">
-            <div>
-              <label className={LABEL_CLASS}>Agent Name *</label>
-              <input value={name} onChange={e => setName(e.target.value)} maxLength={50} placeholder="My Agent" className={INPUT_CLASS} disabled={!!verificationCode} />
+          <h2 className="text-lg font-bold text-black dark:text-white font-display mb-2">Sign in to continue</h2>
+          <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-6">Sign in with Google to own your agent. Linking X is optional -- add it later from your profile.</p>
+
+          {!ready ? (
+            <div className="flex items-center justify-center py-6">
+              <div className="w-5 h-5 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
             </div>
-
-            {!verificationCode ? (
-              <>
-                {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
-                <div className="pt-2">
-                  <button onClick={handleGetCode} disabled={codeLoading || !name || name.length < 2} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{codeLoading ? 'Generating...' : 'Get Verification Code'}</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="p-4 bg-white dark:bg-black border border-gray-200 dark:border-neutral-800 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-2xs font-mono text-neutral-500 uppercase tracking-wider">Post this tweet on X</span>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(verificationTweet); setCopiedTweet(true); setTimeout(() => setCopiedTweet(false), 2000); }}
-                      className="text-xs font-mono text-atelier hover:text-atelier-bright transition-colors cursor-pointer"
-                    >
-                      {copiedTweet ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                  <p className="text-sm font-mono text-gray-600 dark:text-neutral-300 whitespace-pre-line mb-3">{verificationTweet}</p>
-                  <a
-                    href={`https://x.com/intent/tweet?text=${encodeURIComponent(verificationTweet)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-black dark:bg-white text-white dark:text-black text-xs font-mono font-semibold hover:opacity-80 transition-opacity"
-                  >
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                    </svg>
-                    Post on X
-                  </a>
-                </div>
-
-                <div>
-                  <label className={LABEL_CLASS}>Tweet URL</label>
-                  <input value={tweetUrl} onChange={e => setTweetUrl(e.target.value)} placeholder="https://x.com/you/status/..." className={INPUT_CLASS} />
-                </div>
-
-                {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
-                <div className="pt-2">
-                  <button onClick={handleVerifyTweet} disabled={verifying || !tweetUrl} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{verifying ? 'Verifying...' : 'Verify Tweet'}</button>
-                </div>
-              </>
-            )}
-          </div>
+          ) : !authenticated ? (
+            <div className="space-y-4">
+              <button onClick={() => login()} className="w-full flex items-center justify-center gap-2 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier cursor-pointer">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" /></svg>
+                Sign in with Google
+              </button>
+              {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-xs font-mono text-emerald-500">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                Signed in as {ownerLabel}
+              </div>
+              <div>
+                <label className={LABEL_CLASS}>Agent Name *</label>
+                <input value={name} onChange={e => setName(e.target.value)} maxLength={50} placeholder="My Agent" className={INPUT_CLASS} />
+              </div>
+              {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
+              <div className="pt-2">
+                <button onClick={handleContinue} disabled={!name || name.trim().length < 2} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">Continue</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>

@@ -6,6 +6,7 @@ import { rateLimiters } from '@/lib/rateLimit';
 import { getPendingVerification, clearPendingVerification, type PendingPayload } from '@/lib/pending-verifications';
 import { validateExternalUrl } from '@/lib/url-validation';
 import { createSAIDAgent } from '@/lib/said';
+import { readPrivyAccessToken, verifyPrivyAccessToken, PrivyAuthError } from '@/lib/privy-auth';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
 
@@ -43,12 +44,101 @@ async function fetchTweetOembed(tweetUrl: string): Promise<{ text: string; usern
   return { text, username: authorMatch[2] };
 }
 
+function kickoffSAID(agentId: string): void {
+  createSAIDAgent(agentId, `${BASE_URL}/api/said/card/${agentId}`)
+    .then(async (said) => {
+      await setSAIDIdentity(agentId, {
+        wallet: said.walletAddress,
+        pda: said.agentPDA,
+        secretKey: said.secretKey,
+        txHash: said.txSignature,
+      });
+    })
+    .catch((err) => console.error(`SAID registration failed for ${agentId}:`, err));
+}
+
+async function registerViaPrivy(body: Record<string, unknown>, token: string) {
+  let privyUserId: string;
+  try {
+    const privyUser = await verifyPrivyAccessToken(token);
+    privyUserId = privyUser.privyUserId;
+  } catch (e) {
+    const status = e instanceof PrivyAuthError ? e.statusCode : 401;
+    const message = e instanceof Error ? e.message : 'Authentication required';
+    return NextResponse.json({ success: false, error: message }, { status });
+  }
+
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (name.length < 2 || name.length > 50) {
+    return NextResponse.json({ success: false, error: 'name is required (2-50 characters)' }, { status: 400 });
+  }
+
+  const description = typeof body.description === 'string' ? body.description : '';
+  if (description.length < 10 || description.length > 500) {
+    return NextResponse.json({ success: false, error: 'description is required (10-500 characters)' }, { status: 400 });
+  }
+
+  const endpoint_url = typeof body.endpoint_url === 'string' ? body.endpoint_url : undefined;
+  if (endpoint_url) {
+    const check = validateExternalUrl(endpoint_url);
+    if (!check.valid) {
+      return NextResponse.json({ success: false, error: `Invalid endpoint_url: ${check.error}` }, { status: 400 });
+    }
+  }
+
+  const owner_wallet = typeof body.owner_wallet === 'string' ? body.owner_wallet : undefined;
+  if (owner_wallet && !BASE58_REGEX.test(owner_wallet)) {
+    return NextResponse.json({ success: false, error: 'owner_wallet must be a valid base58 Solana address' }, { status: 400 });
+  }
+
+  const capabilities = Array.isArray(body.capabilities) ? (body.capabilities as string[]) : [];
+  const invalid = capabilities.filter((c) => !VALID_CAPABILITIES.includes(c as ServiceCategory));
+  if (invalid.length > 0) {
+    return NextResponse.json({ success: false, error: `Invalid capabilities: ${invalid.join(', ')}` }, { status: 400 });
+  }
+
+  const avatar_url = typeof body.avatar_url === 'string' ? body.avatar_url : undefined;
+  const ai_models = Array.isArray(body.ai_models) ? (body.ai_models as string[]) : undefined;
+
+  const result = await registerAtelierAgent({
+    name,
+    description,
+    avatar_url,
+    endpoint_url,
+    capabilities,
+    ai_models,
+    owner_wallet,
+    user_id: privyUserId,
+    privy_user_id: privyUserId,
+  });
+
+  kickoffSAID(result.agent_id);
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      agent_id: result.agent_id,
+      slug: result.slug,
+      api_key: result.api_key,
+      webhook_secret: result.webhook_secret,
+      twitter_username: null,
+      protocol_spec: PROTOCOL_SPEC,
+    },
+  }, { status: 201 });
+}
+
 export async function POST(request: NextRequest) {
   const rateLimitResponse = rateLimiters.registration(request);
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
     const body = await request.json();
+
+    const privyToken = readPrivyAccessToken(request, body);
+    if (privyToken) {
+      return await registerViaPrivy(body, privyToken);
+    }
+
     const { session_token, tweet_url } = body;
 
     if (!session_token || typeof session_token !== 'string') {
@@ -156,16 +246,7 @@ export async function POST(request: NextRequest) {
 
     await clearPendingVerification(session_token);
 
-    createSAIDAgent(result.agent_id, `${BASE_URL}/api/said/card/${result.agent_id}`)
-      .then(async (said) => {
-        await setSAIDIdentity(result.agent_id, {
-          wallet: said.walletAddress,
-          pda: said.agentPDA,
-          secretKey: said.secretKey,
-          txHash: said.txSignature,
-        });
-      })
-      .catch((err) => console.error(`SAID registration failed for ${result.agent_id}:`, err));
+    kickoffSAID(result.agent_id);
 
     return NextResponse.json({
       success: true,

@@ -5,20 +5,34 @@ import sharp from 'sharp';
 import { put } from '@vercel/blob';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
+import { authenticatePrivyRequest, PrivyAuthError } from '@/lib/privy-auth';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const AVATAR_SIZE = 256;
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  let walletPrefix = 'anon';
+async function resolveIdentityPrefix(req: NextRequest): Promise<string | null> {
   try {
     const wallet = await authenticateUserRequest(req, readSigFieldsFromQuery(req));
-    walletPrefix = wallet.slice(0, 8);
+    return wallet.slice(0, 8);
   } catch (err) {
-    if (err instanceof WalletAuthError) {
-      return NextResponse.json({ success: false, error: err.message }, { status: 401 });
-    }
+    if (!(err instanceof WalletAuthError)) throw err;
+  }
+
+  try {
+    const privyUser = await authenticatePrivyRequest(req);
+    const sanitized = privyUser.privyUserId.replace(/[^a-zA-Z0-9]/g, '');
+    return sanitized.slice(-8) || 'privy';
+  } catch (err) {
+    if (err instanceof PrivyAuthError) return null;
+    throw err;
+  }
+}
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const walletPrefix = await resolveIdentityPrefix(req);
+  if (!walletPrefix) {
+    return NextResponse.json({ success: false, error: 'Authentication required' }, { status: 401 });
   }
 
   try {

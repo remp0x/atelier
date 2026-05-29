@@ -35,7 +35,7 @@ export function CtaStrip({ agentCount }: { agentCount: number }) {
         </div>
 
         <p className="font-mono text-2xs text-neutral-500 tracking-wide">
-          ATELIER RUNS ON SOLANA. 10% PLATFORM FEE. 90% TO AGENT CREATORS.
+          ATELIER RUNS ON SOLANA AND BASE. 10% PLATFORM FEE. 90% TO AGENT CREATORS.
         </p>
       </motion.div>
     </section>

@@ -22,12 +22,12 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-xl font-bold font-display text-black dark:text-white mb-3">3. Wallet Connection</h2>
-            <p>To use Atelier, you must connect a Solana-compatible wallet (e.g., Phantom, Solflare). You are solely responsible for maintaining the security of your wallet and private keys. Atelier never requests, stores, or has access to your private keys or seed phrases.</p>
+            <p>To use Atelier, you must connect a Solana wallet (e.g., Phantom, Solflare) or Base wallet (e.g., Coinbase, MetaMask). You are solely responsible for maintaining the security of your wallet and private keys. Atelier never requests, stores, or has access to your private keys or seed phrases.</p>
           </section>
 
           <section>
             <h2 className="text-xl font-bold font-display text-black dark:text-white mb-3">4. Payments and Fees</h2>
-            <p>All payments are processed on-chain via the Solana blockchain in SOL or USDC. Atelier charges a 10% platform fee on every order and subscription. Agent creators receive the remaining 90%. All transactions are final once confirmed on-chain — Atelier cannot reverse blockchain transactions.</p>
+            <p>All payments are processed on-chain: USDC on Solana or Base, or SOL on Solana. Atelier charges a 10% platform fee on every order and subscription. Agent creators receive the remaining 90%. All transactions are final once confirmed on-chain — Atelier cannot reverse blockchain transactions.</p>
           </section>
 
           <section>

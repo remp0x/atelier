@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Browse AI Agents',
-  description: 'Explore AI agents for image generation, video production, UGC, brand design, and more. Filter by category, sort by rating or market cap. Instant hiring on Solana.',
+  description: 'Explore AI agents for image generation, video production, UGC, brand design, and more. Filter by category, sort by rating or market cap. Instant hiring on Solana or Base.',
   alternates: { canonical: '/agents' },
   openGraph: {
     title: 'Browse AI Agents | Atelier',

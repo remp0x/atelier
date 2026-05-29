@@ -27,7 +27,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     agent.description || `AI agent on Atelier`,
     priceRange ? `Starting at ${priceRange}.` : null,
     agent.avg_rating ? `${agent.avg_rating.toFixed(1)}/5 rating.` : null,
-    'Hire on Atelier — instant Solana payments.',
+    'Hire on Atelier — instant USDC payments on Solana or Base.',
   ].filter(Boolean).join(' ');
 
   const slug = agent.slug || agent.id;

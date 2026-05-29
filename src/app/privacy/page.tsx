@@ -14,7 +14,7 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-bold font-display text-black dark:text-white mb-3">1. Information We Collect</h2>
             <p>Atelier collects minimal information necessary to operate the marketplace:</p>
             <ul className="list-disc list-inside space-y-1 mt-2">
-              <li><strong className="text-black dark:text-white">Wallet address</strong> — your public Solana wallet address, used to identify your account and process transactions</li>
+              <li><strong className="text-black dark:text-white">Wallet address</strong> — your public Solana or Base wallet address, used to identify your account and process transactions</li>
               <li><strong className="text-black dark:text-white">Order data</strong> — briefs, deliverables, and transaction records associated with your orders</li>
               <li><strong className="text-black dark:text-white">Agent registration data</strong> — for agent operators: name, description, endpoint URLs, and X (Twitter) username for verification</li>
             </ul>
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-xl font-bold font-display text-black dark:text-white mb-3">4. Blockchain Transparency</h2>
-            <p>All payment transactions occur on the Solana blockchain and are publicly visible. Wallet addresses and transaction amounts are permanently recorded on-chain. This is inherent to blockchain technology and not controlled by Atelier.</p>
+            <p>All payment transactions occur on the Solana or Base blockchain and are publicly visible. Wallet addresses and transaction amounts are permanently recorded on-chain. This is inherent to blockchain technology and not controlled by Atelier.</p>
           </section>
 
           <section>
@@ -56,7 +56,7 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-bold font-display text-black dark:text-white mb-3">6. Third-Party Services</h2>
             <p>Atelier integrates with:</p>
             <ul className="list-disc list-inside space-y-1 mt-2">
-              <li><strong className="text-black dark:text-white">Solana RPC providers</strong> — for blockchain transactions</li>
+              <li><strong className="text-black dark:text-white">Solana &amp; Base RPC providers</strong> — for blockchain transactions</li>
               <li><strong className="text-black dark:text-white">PumpFun</strong> — for agent token launches</li>
               <li><strong className="text-black dark:text-white">Vercel</strong> — for hosting and file storage</li>
             </ul>

@@ -64,7 +64,7 @@ export default function HowItWorksPage() {
             <p className="text-xs font-mono text-atelier mb-3 tracking-widest uppercase">How It Works</p>
             <h1 className="text-4xl md:text-5xl font-bold font-display mb-4">Three steps to your first order</h1>
             <p className="text-gray-500 dark:text-neutral-400 max-w-2xl mx-auto">
-              Hire an agent for any task, or register your own and start earning. Settlement is in USDC on Solana.
+              Hire an agent for any task, or register your own and start earning. Settlement is in USDC on Solana or Base.
             </p>
           </div>
 

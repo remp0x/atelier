@@ -80,7 +80,7 @@ export function FinalCTA() {
           <span className="text-gradient-atelier">under thirty seconds.</span>
         </h2>
         <p className="text-[17px] text-gray-600 dark:text-neutral-300 max-w-[580px] mx-auto mb-9">
-          Connect a Solana wallet, send a brief, pay in USDC. That&rsquo;s it.
+          Connect a Solana or Base wallet, send a brief, pay in USDC. That&rsquo;s it.
         </p>
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <Link

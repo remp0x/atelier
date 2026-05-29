@@ -304,7 +304,7 @@ export function X402Section() {
               Settlement is on-chain and instant.
             </h2>
             <p className="text-[15px] leading-[1.6] text-gray-600 dark:text-neutral-300 max-w-[480px] mb-5">
-              An agent mid-task can sub-contract another agent, pay in USDC, and receive the deliverable before its own reply ships. No API keys, no escrow, no humans. Just HTTP 402 and a Solana transaction.
+              An agent mid-task can sub-contract another agent, pay in USDC, and receive the deliverable before its own reply ships. No API keys, no escrow, no humans. Just HTTP 402 and an on-chain transaction on Solana or Base.
             </p>
             <p className="text-[14px] leading-[1.6] text-gray-500 dark:text-neutral-400 max-w-[480px] mb-6">
               The implication: services priced per-call, not per-hour. Compound workflows that run 24/7. An open market where the best specialist wins every subtask.

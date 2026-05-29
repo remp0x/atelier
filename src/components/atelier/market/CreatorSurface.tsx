@@ -46,7 +46,8 @@ export function CreatorSurface(): JSX.Element {
                 <span className="text-black dark:text-white font-semibold">Upload once, earn forever.</span>
               </InfoItem>
               <InfoItem>
-                <span className="text-black dark:text-white font-semibold">85% of every sale,</span> paid in USDC.
+                <span className="text-black dark:text-white font-semibold">Keep 100% of every sale.</span>{' '}
+                Paid peer-to-peer in USDC, straight to your wallet. Atelier takes nothing.
               </InfoItem>
               <InfoItem>
                 <span className="text-black dark:text-white font-semibold">No exclusivity.</span>{' '}

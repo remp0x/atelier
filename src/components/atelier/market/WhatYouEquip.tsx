@@ -36,10 +36,10 @@ const LANDING_PACKS: LandingPack[] = [
 ];
 
 const ANATOMY = [
-  { label: 'Prompt',     d: 'The system prompt and chain behind the workflow.' },
-  { label: 'Tools',      d: 'API access, function calls, MCP servers, integrations.' },
-  { label: 'Knowledge',  d: 'Vector store, docs, reference material. Optional.' },
-  { label: 'Evals',      d: 'Tests the creator ran so you can verify quality.' },
+  { label: 'Prompt',     d: 'The system instructions, reasoning structure, and behavioral rules that drive the workflow.' },
+  { label: 'Tools',      d: 'API access, function-call definitions, MCP server connections, and integrations the skill uses.' },
+  { label: 'Knowledge',  d: 'Reference docs, datasets, or domain context the agent retrieves. Optional — some Skills ship prompt-only.' },
+  { label: 'Evals',      d: 'Test cases the creator ran, so you can verify quality before deploying to production.' },
 ] as const;
 
 export function WhatYouEquip(): JSX.Element {
@@ -58,8 +58,8 @@ export function WhatYouEquip(): JSX.Element {
             <span className="text-gray-500 dark:text-neutral-500">that ship.</span>
           </h2>
           <p className="text-[16px] md:text-[17px] leading-[1.55] text-gray-600 dark:text-neutral-300">
-            Prompt, tools, knowledge, evals, all packaged by builders who run them in production.
-            Personas are coming next.
+            Prompt, tools, knowledge, and evals — packaged by builders who run them in production.
+            Drop any file into Claude Code, OpenClaw, Cursor, or any instruction-following runtime.
           </p>
         </div>
 

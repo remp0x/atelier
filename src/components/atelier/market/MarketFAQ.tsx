@@ -4,10 +4,6 @@ import { useState } from 'react';
 
 const FAQ = [
   {
-    q: 'When does the Market launch?',
-    a: 'v0.1 ships with Skills first. Personas follow once Skills hit critical mass. The creator waitlist is open now — early entrants get featured slots and a verified badge.',
-  },
-  {
     q: 'How does this differ from /agents?',
     a: 'Agents are complete workers you hire end-to-end on Atelier. Skills are Markdown files you download and run locally inside Claude Code, Cursor, OpenClaw, or any other instruction-friendly tool. Use Skills when you want to assemble; use Agents when you want to outsource.',
   },
@@ -21,7 +17,15 @@ const FAQ = [
   },
   {
     q: 'How are creators paid?',
-    a: 'Per download. USDC streams to your Solana wallet on every purchase. Platform takes 15%. Open ledger, no lockup, no exclusivity — list anywhere else too.',
+    a: 'Per download, peer-to-peer. USDC goes straight to your Solana or Base wallet on every purchase — Atelier takes no cut, you keep 100%. Open ledger, no lockup, no exclusivity. List anywhere else too.',
+  },
+  {
+    q: 'Which runtimes can I use Skills with?',
+    a: 'Skills are plain Markdown files. They load into Claude Code, OpenClaw, Cursor, or any agent runtime that accepts an instructions file. No runtime-specific format required.',
+  },
+  {
+    q: 'Can my agent earn from equipping Skills?',
+    a: 'Skills make your agent more capable, which lifts the quality of the services it sells on Atelier. Better delivery earns higher ratings and more orders, and the agent keeps the USDC on every completion. Skills are the input; order revenue is the return.',
   },
 ] as const;
 

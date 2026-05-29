@@ -1,11 +1,16 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
 import { SKILL_EXAMPLES, getDownloadUrl, type SkillExample } from './marketData';
+
+interface PlatformStatsResponse {
+  success: boolean;
+  data?: { atelierAgents: number };
+}
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -25,10 +30,33 @@ function matchesSkill(skill: SkillExample, q: string): boolean {
   return haystack.includes(needle);
 }
 
+interface CommunitySkillsResponse {
+  success: boolean;
+  data?: SkillExample[];
+}
+
 export function MarketHero(): JSX.Element {
   const sectionRef = useRef<HTMLElement>(null);
   const auroraRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
+  const [communityCount, setCommunityCount] = useState(0);
+  const [agentCount, setAgentCount] = useState(0);
+
+  useEffect(() => {
+    fetch('/api/skills/community')
+      .then((r) => r.json())
+      .then((res: CommunitySkillsResponse) => {
+        if (res.success && res.data) setCommunityCount(res.data.length);
+      })
+      .catch(() => {});
+
+    fetch('/api/platform-stats')
+      .then((r) => r.json())
+      .then((res: PlatformStatsResponse) => {
+        if (res.success && res.data) setAgentCount(res.data.atelierAgents);
+      })
+      .catch(() => {});
+  }, []);
 
   const matchedSkills = useMemo(
     () => SKILL_EXAMPLES.filter((s) => matchesSkill(s, query)),
@@ -66,8 +94,10 @@ export function MarketHero(): JSX.Element {
     { scope: sectionRef },
   );
 
-  const line1 = 'Build a smarter agent'.split(' ');
-  const line2 = 'in one click.'.split(' ');
+  const skillCatalogCount = SKILL_EXAMPLES.length + communityCount;
+
+  const line1 = 'Give your agent'.split(' ');
+  const line2 = 'a new capability.'.split(' ');
 
   return (
     <section ref={sectionRef} className="relative overflow-hidden pt-32 md:pt-40 pb-16 md:pb-20">
@@ -127,8 +157,9 @@ export function MarketHero(): JSX.Element {
               data-mhero-reveal="sub"
               className="text-[18px] leading-[1.55] text-gray-600 dark:text-neutral-300 max-w-[560px] mb-8"
             >
-              Browse skills that make your agent better at real work. Free or paid, built by
-              people who actually use them.
+              Skills are Markdown files that encode workflows, tool access, and domain knowledge
+              directly into your agent. Browse Anthropic official packs and community-built
+              specializations — drop any one into your runtime.
             </p>
 
             <div data-mhero-reveal="ctas" className="flex gap-3 flex-wrap">
@@ -150,7 +181,11 @@ export function MarketHero(): JSX.Element {
               data-mhero-reveal="stats"
               className="mt-10 flex flex-wrap items-center gap-6 sm:gap-10"
             >
-              <Stat value={String(SKILL_EXAMPLES.length)} label="Skills" />
+              <Stat value={String(skillCatalogCount)} label="SKILLS IN CATALOG" />
+              <div className="w-px h-8 bg-gray-200 dark:bg-neutral-800 hidden sm:block" />
+              {agentCount > 0 && (
+                <Stat value={String(agentCount)} label="AGENTS ON ATELIER" />
+              )}
             </div>
           </div>
 
@@ -172,7 +207,7 @@ function Stat({ value, label, accent }: { value: string; label: string; accent?:
   return (
     <div>
       <div
-        className={`font-display font-bold text-2xl md:text-[28px] tracking-[-0.02em] ${
+        className={`font-mono font-bold text-2xl md:text-[28px] tracking-[-0.02em] ${
           accent ? 'text-atelier' : 'text-black dark:text-white'
         }`}
       >

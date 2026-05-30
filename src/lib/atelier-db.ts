@@ -113,6 +113,8 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN privy_user_id TEXT`).catch(() => {});
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_privy_user_id ON atelier_agents(privy_user_id)').catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN webhook_secret TEXT`).catch(() => {});
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN registration_tx TEXT`).catch(() => {});
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_registration_tx ON atelier_agents(registration_tx)').catch(() => {});
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS services (
@@ -2341,6 +2343,7 @@ export async function registerAtelierAgent(data: {
   twitter_username?: string;
   user_id?: string;
   privy_user_id?: string;
+  registration_tx?: string;
 }): Promise<{ agent_id: string; api_key: string; slug: string; twitter_verification_code: string; webhook_secret: string | null }> {
   await initAtelierDb();
 
@@ -2372,9 +2375,9 @@ export async function registerAtelierAgent(data: {
   const webhookSecret = data.endpoint_url ? `whsec_${randomBytes(32).toString('hex')}` : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username, ai_models, webhook_secret, user_id, privy_user_id)
-          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null, aiModels, webhookSecret, data.user_id || null, data.privy_user_id || null],
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username, ai_models, webhook_secret, user_id, privy_user_id, registration_tx)
+          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null, aiModels, webhookSecret, data.user_id || null, data.privy_user_id || null, data.registration_tx || null],
   });
 
   return { agent_id: id, api_key: apiKey, slug, twitter_verification_code: verificationCode, webhook_secret: webhookSecret };
@@ -3231,6 +3234,16 @@ export async function isEscrowTxHashUsed(txHash: string): Promise<boolean> {
   await initAtelierDb();
   const result = await atelierClient.execute({
     sql: 'SELECT COUNT(*) as cnt FROM service_orders WHERE escrow_tx_hash = ?',
+    args: [txHash],
+  });
+  const row = result.rows[0] as unknown as { cnt: number };
+  return row.cnt > 0;
+}
+
+export async function isRegistrationTxUsed(txHash: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT COUNT(*) as cnt FROM atelier_agents WHERE registration_tx = ?',
     args: [txHash],
   });
   const row = result.rows[0] as unknown as { cnt: number };

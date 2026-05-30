@@ -1,12 +1,22 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, type ServiceCategory } from '@/lib/atelier-db';
+import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrationTxUsed, type ServiceCategory } from '@/lib/atelier-db';
 import { rateLimiters } from '@/lib/rateLimit';
 import { getPendingVerification, clearPendingVerification, type PendingPayload } from '@/lib/pending-verifications';
 import { validateExternalUrl } from '@/lib/url-validation';
 import { createSAIDAgent } from '@/lib/said';
 import { readPrivyAccessToken, verifyPrivyAccessToken, PrivyAuthError } from '@/lib/privy-auth';
+import { authenticateUserRequest } from '@/lib/session';
+import { WalletAuthError } from '@/lib/solana-auth';
+import {
+  parseX402Header,
+  networkToChain,
+  verifyX402Payment,
+  buildFlatPaymentRequirements,
+  buildPaymentRequiredResponse,
+  type PaymentChain,
+} from '@/lib/x402';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
 
@@ -15,6 +25,7 @@ const AUTHOR_URL_REGEX = /^https?:\/\/(x\.com|twitter\.com)\/([a-zA-Z0-9_]{1,15}
 
 const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+const REGISTRATION_FEE_USD = Number(process.env.ATELIER_REGISTRATION_FEE_USD || '1');
 
 const PROTOCOL_SPEC = {
   required_endpoints: [
@@ -57,7 +68,66 @@ function kickoffSAID(agentId: string): void {
     .catch((err) => console.error(`SAID registration failed for ${agentId}:`, err));
 }
 
-async function registerViaPrivy(body: Record<string, unknown>, token: string) {
+type CommonFields = {
+  name: string;
+  description: string;
+  avatar_url?: string;
+  endpoint_url?: string;
+  capabilities: ServiceCategory[];
+  ai_models?: string[];
+};
+
+function parseCommonFields(body: Record<string, unknown>): { error: NextResponse } | { fields: CommonFields } {
+  const name = typeof body.name === 'string' ? body.name.trim() : '';
+  if (name.length < 2 || name.length > 50) {
+    return { error: NextResponse.json({ success: false, error: 'name is required (2-50 characters)' }, { status: 400 }) };
+  }
+
+  const description = typeof body.description === 'string' ? body.description : '';
+  if (description.length < 10 || description.length > 500) {
+    return { error: NextResponse.json({ success: false, error: 'description is required (10-500 characters)' }, { status: 400 }) };
+  }
+
+  const endpoint_url = typeof body.endpoint_url === 'string' ? body.endpoint_url : undefined;
+  if (endpoint_url) {
+    const check = validateExternalUrl(endpoint_url);
+    if (!check.valid) {
+      return { error: NextResponse.json({ success: false, error: `Invalid endpoint_url: ${check.error}` }, { status: 400 }) };
+    }
+  }
+
+  const capabilities = Array.isArray(body.capabilities) ? (body.capabilities as string[]) : [];
+  const invalid = capabilities.filter((c) => !VALID_CAPABILITIES.includes(c as ServiceCategory));
+  if (invalid.length > 0) {
+    return { error: NextResponse.json({ success: false, error: `Invalid capabilities: ${invalid.join(', ')}` }, { status: 400 }) };
+  }
+
+  const avatar_url = typeof body.avatar_url === 'string' ? body.avatar_url : undefined;
+  const ai_models = Array.isArray(body.ai_models) ? (body.ai_models as string[]) : undefined;
+
+  return { fields: { name, description, avatar_url, endpoint_url, capabilities: capabilities as ServiceCategory[], ai_models } };
+}
+
+function registrationResponse(
+  result: { agent_id: string; slug: string; api_key: string; webhook_secret: string | null },
+  opts: { twitter_username: string | null; marketable: boolean; note?: string },
+): NextResponse {
+  return NextResponse.json({
+    success: true,
+    data: {
+      agent_id: result.agent_id,
+      slug: result.slug,
+      api_key: result.api_key,
+      webhook_secret: result.webhook_secret,
+      twitter_username: opts.twitter_username,
+      marketable: opts.marketable,
+      ...(opts.note ? { note: opts.note } : {}),
+      protocol_spec: PROTOCOL_SPEC,
+    },
+  }, { status: 201 });
+}
+
+async function registerViaPrivy(body: Record<string, unknown>, token: string): Promise<NextResponse> {
   let privyUserId: string;
   try {
     const privyUser = await verifyPrivyAccessToken(token);
@@ -68,17 +138,154 @@ async function registerViaPrivy(body: Record<string, unknown>, token: string) {
     return NextResponse.json({ success: false, error: message }, { status });
   }
 
-  const name = typeof body.name === 'string' ? body.name.trim() : '';
-  if (name.length < 2 || name.length > 50) {
-    return NextResponse.json({ success: false, error: 'name is required (2-50 characters)' }, { status: 400 });
+  const parsed = parseCommonFields(body);
+  if ('error' in parsed) return parsed.error;
+
+  const result = await registerAtelierAgent({
+    ...parsed.fields,
+    user_id: privyUserId,
+    privy_user_id: privyUserId,
+  });
+
+  kickoffSAID(result.agent_id);
+  return registrationResponse(result, { twitter_username: null, marketable: true });
+}
+
+async function registerViaWallet(request: NextRequest, body: Record<string, unknown>): Promise<NextResponse> {
+  const owner_wallet = typeof body.owner_wallet === 'string' ? body.owner_wallet : '';
+  if (!BASE58_REGEX.test(owner_wallet)) {
+    return NextResponse.json({ success: false, error: 'owner_wallet must be a valid base58 Solana address' }, { status: 400 });
   }
 
-  const description = typeof body.description === 'string' ? body.description : '';
-  if (description.length < 10 || description.length > 500) {
-    return NextResponse.json({ success: false, error: 'description is required (10-500 characters)' }, { status: 400 });
+  let verifiedWallet: string;
+  try {
+    verifiedWallet = await authenticateUserRequest(request, body, owner_wallet);
+  } catch (e) {
+    const message = e instanceof WalletAuthError ? e.message : 'Wallet authentication failed';
+    return NextResponse.json({ success: false, error: message }, { status: 401 });
   }
 
-  const endpoint_url = typeof body.endpoint_url === 'string' ? body.endpoint_url : undefined;
+  const parsed = parseCommonFields(body);
+  if ('error' in parsed) return parsed.error;
+
+  const result = await registerAtelierAgent({ ...parsed.fields, owner_wallet: verifiedWallet });
+  kickoffSAID(result.agent_id);
+  return registrationResponse(result, { twitter_username: null, marketable: true });
+}
+
+function registration402Challenge(chain: PaymentChain): Response {
+  const requirements = buildFlatPaymentRequirements({
+    amountUsd: REGISTRATION_FEE_USD,
+    description: 'Atelier agent registration',
+    resource: `${BASE_URL}/api/agents/register`,
+    chain,
+  });
+  return buildPaymentRequiredResponse(requirements);
+}
+
+async function registerViaX402(body: Record<string, unknown>, txRef: string, chainHint: PaymentChain | null): Promise<NextResponse> {
+  if (await isRegistrationTxUsed(txRef)) {
+    return NextResponse.json({ success: false, error: 'This payment was already used to register an agent' }, { status: 409 });
+  }
+
+  const verification = await verifyX402Payment(txRef, REGISTRATION_FEE_USD, chainHint);
+  if (!verification.verified || !verification.payerWallet) {
+    return NextResponse.json({ success: false, error: `Payment verification failed: ${verification.error ?? 'unknown error'}` }, { status: 402 });
+  }
+
+  const parsed = parseCommonFields(body);
+  if ('error' in parsed) return parsed.error;
+
+  const result = await registerAtelierAgent({
+    ...parsed.fields,
+    owner_wallet: verification.payerWallet,
+    registration_tx: txRef,
+  });
+  kickoffSAID(result.agent_id);
+  return registrationResponse(result, { twitter_username: null, marketable: true });
+}
+
+async function registerBare(body: Record<string, unknown>): Promise<NextResponse> {
+  const parsed = parseCommonFields(body);
+  if ('error' in parsed) return parsed.error;
+
+  const result = await registerAtelierAgent({ ...parsed.fields });
+  kickoffSAID(result.agent_id);
+  return registrationResponse(result, {
+    twitter_username: null,
+    marketable: false,
+    note: 'Agent registered but hidden from the marketplace. Attach an owner (pay via x402, sign with a wallet, or link X) to become discoverable and hireable.',
+  });
+}
+
+async function registerViaTweet(body: Record<string, unknown>): Promise<NextResponse> {
+  const session_token = body.session_token;
+  const tweet_url = body.tweet_url;
+
+  if (typeof session_token !== 'string' || !session_token) {
+    return NextResponse.json(
+      { success: false, error: 'session_token is required. Call POST /api/agents/pre-verify first.' },
+      { status: 400 },
+    );
+  }
+
+  if (typeof tweet_url !== 'string' || !tweet_url) {
+    return NextResponse.json({ success: false, error: 'tweet_url is required' }, { status: 400 });
+  }
+
+  if (!TWEET_URL_REGEX.test(tweet_url.trim())) {
+    return NextResponse.json(
+      { success: false, error: 'Invalid tweet URL. Expected: https://x.com/{username}/status/{id}' },
+      { status: 400 },
+    );
+  }
+
+  const pending = await getPendingVerification(session_token);
+  if (!pending) {
+    return NextResponse.json(
+      { success: false, error: 'Verification session expired or not found. Call POST /api/agents/pre-verify to start over.' },
+      { status: 400 },
+    );
+  }
+
+  let tweetText: string;
+  let twitterUsername: string;
+  try {
+    const oembed = await fetchTweetOembed(tweet_url.trim());
+    tweetText = oembed.text;
+    twitterUsername = oembed.username;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Failed to fetch tweet';
+    return NextResponse.json({ success: false, error: msg }, { status: 422 });
+  }
+
+  if (!tweetText.includes(pending.code)) {
+    return NextResponse.json(
+      { success: false, error: `Tweet does not contain verification code "${pending.code}"` },
+      { status: 400 },
+    );
+  }
+
+  if (!tweetText.toLowerCase().includes('@useatelier')) {
+    return NextResponse.json({ success: false, error: 'Tweet must mention @useAtelier' }, { status: 400 });
+  }
+
+  const stored: Partial<PendingPayload> = pending.payload || {};
+  const name = pending.name;
+  const description = (body.description as string) || stored.description;
+  const avatar_url = (body.avatar_url as string) ?? stored.avatar_url;
+  const endpoint_url = (body.endpoint_url as string) ?? stored.endpoint_url;
+  const capabilities = (body.capabilities as string[]) ?? stored.capabilities ?? [];
+  const ai_models = (body.ai_models as string[]) ?? stored.ai_models;
+  const owner_wallet = (body.owner_wallet as string) ?? stored.owner_wallet;
+
+  if (!description || typeof description !== 'string' || description.length < 10 || description.length > 500) {
+    return NextResponse.json(
+      { success: false, error: 'description is required (10-500 characters). Pass it here or in pre-verify.' },
+      { status: 400 },
+    );
+  }
+
   if (endpoint_url) {
     const check = validateExternalUrl(endpoint_url);
     if (!check.valid) {
@@ -86,45 +293,32 @@ async function registerViaPrivy(body: Record<string, unknown>, token: string) {
     }
   }
 
-  const owner_wallet = typeof body.owner_wallet === 'string' ? body.owner_wallet : undefined;
   if (owner_wallet && !BASE58_REGEX.test(owner_wallet)) {
     return NextResponse.json({ success: false, error: 'owner_wallet must be a valid base58 Solana address' }, { status: 400 });
   }
 
-  const capabilities = Array.isArray(body.capabilities) ? (body.capabilities as string[]) : [];
-  const invalid = capabilities.filter((c) => !VALID_CAPABILITIES.includes(c as ServiceCategory));
-  if (invalid.length > 0) {
-    return NextResponse.json({ success: false, error: `Invalid capabilities: ${invalid.join(', ')}` }, { status: 400 });
+  if (Array.isArray(capabilities)) {
+    const invalid = capabilities.filter((c: string) => !VALID_CAPABILITIES.includes(c as ServiceCategory));
+    if (invalid.length > 0) {
+      return NextResponse.json({ success: false, error: `Invalid capabilities: ${invalid.join(', ')}` }, { status: 400 });
+    }
   }
-
-  const avatar_url = typeof body.avatar_url === 'string' ? body.avatar_url : undefined;
-  const ai_models = Array.isArray(body.ai_models) ? (body.ai_models as string[]) : undefined;
 
   const result = await registerAtelierAgent({
     name,
     description,
     avatar_url,
     endpoint_url,
-    capabilities,
+    capabilities: capabilities || [],
     ai_models,
     owner_wallet,
-    user_id: privyUserId,
-    privy_user_id: privyUserId,
+    twitter_verification_code: pending.code,
+    twitter_username: twitterUsername,
   });
 
+  await clearPendingVerification(session_token);
   kickoffSAID(result.agent_id);
-
-  return NextResponse.json({
-    success: true,
-    data: {
-      agent_id: result.agent_id,
-      slug: result.slug,
-      api_key: result.api_key,
-      webhook_secret: result.webhook_secret,
-      twitter_username: null,
-      protocol_spec: PROTOCOL_SPEC,
-    },
-  }, { status: 201 });
+  return registrationResponse(result, { twitter_username: twitterUsername, marketable: true });
 }
 
 export async function POST(request: NextRequest) {
@@ -134,131 +328,33 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
+    const regTx = parseX402Header(request.headers.get('X-PAYMENT'));
+    const regNet = networkToChain(request.headers.get('X-Payment-Network'));
+    if (regTx) {
+      return await registerViaX402(body, regTx, regNet);
+    }
+
+    const wantsPay = regNet !== null
+      || request.nextUrl.searchParams.get('pay') === 'x402'
+      || body.pay_to_register === true;
+    if (wantsPay) {
+      return registration402Challenge(regNet ?? 'solana');
+    }
+
     const privyToken = readPrivyAccessToken(request, body);
     if (privyToken) {
       return await registerViaPrivy(body, privyToken);
     }
 
-    const { session_token, tweet_url } = body;
-
-    if (!session_token || typeof session_token !== 'string') {
-      return NextResponse.json(
-        { success: false, error: 'session_token is required. Call POST /api/agents/pre-verify first.' },
-        { status: 400 },
-      );
+    if (typeof body.session_token === 'string' && body.session_token) {
+      return await registerViaTweet(body);
     }
 
-    if (!tweet_url || typeof tweet_url !== 'string') {
-      return NextResponse.json(
-        { success: false, error: 'tweet_url is required' },
-        { status: 400 },
-      );
+    if (typeof body.owner_wallet === 'string' && (body.wallet_sig || body.wallet_sig_ts)) {
+      return await registerViaWallet(request, body);
     }
 
-    if (!TWEET_URL_REGEX.test(tweet_url.trim())) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid tweet URL. Expected: https://x.com/{username}/status/{id}' },
-        { status: 400 },
-      );
-    }
-
-    const pending = await getPendingVerification(session_token);
-    if (!pending) {
-      return NextResponse.json(
-        { success: false, error: 'Verification session expired or not found. Call POST /api/agents/pre-verify to start over.' },
-        { status: 400 },
-      );
-    }
-
-    let tweetText: string;
-    let twitterUsername: string;
-    try {
-      const oembed = await fetchTweetOembed(tweet_url.trim());
-      tweetText = oembed.text;
-      twitterUsername = oembed.username;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to fetch tweet';
-      return NextResponse.json({ success: false, error: msg }, { status: 422 });
-    }
-
-    if (!tweetText.includes(pending.code)) {
-      return NextResponse.json(
-        { success: false, error: `Tweet does not contain verification code "${pending.code}"` },
-        { status: 400 },
-      );
-    }
-
-    if (!tweetText.toLowerCase().includes('@useatelier')) {
-      return NextResponse.json(
-        { success: false, error: 'Tweet must mention @useAtelier' },
-        { status: 400 },
-      );
-    }
-
-    const stored: Partial<PendingPayload> = pending.payload || {};
-    const name = pending.name;
-    const description = body.description || stored.description;
-    const avatar_url = body.avatar_url ?? stored.avatar_url;
-    const endpoint_url = body.endpoint_url ?? stored.endpoint_url;
-    const capabilities = body.capabilities ?? stored.capabilities ?? [];
-    const ai_models = body.ai_models ?? stored.ai_models;
-    const owner_wallet = body.owner_wallet ?? stored.owner_wallet;
-
-    if (!description || typeof description !== 'string' || description.length < 10 || description.length > 500) {
-      return NextResponse.json(
-        { success: false, error: 'description is required (10-500 characters). Pass it here or in pre-verify.' },
-        { status: 400 },
-      );
-    }
-
-    if (endpoint_url) {
-      const check = validateExternalUrl(endpoint_url);
-      if (!check.valid) {
-        return NextResponse.json({ success: false, error: `Invalid endpoint_url: ${check.error}` }, { status: 400 });
-      }
-    }
-
-    if (owner_wallet && !BASE58_REGEX.test(owner_wallet)) {
-      return NextResponse.json({ success: false, error: 'owner_wallet must be a valid base58 Solana address' }, { status: 400 });
-    }
-
-    if (Array.isArray(capabilities)) {
-      const invalid = capabilities.filter((c: string) => !VALID_CAPABILITIES.includes(c as ServiceCategory));
-      if (invalid.length > 0) {
-        return NextResponse.json(
-          { success: false, error: `Invalid capabilities: ${invalid.join(', ')}` },
-          { status: 400 },
-        );
-      }
-    }
-
-    const result = await registerAtelierAgent({
-      name,
-      description,
-      avatar_url,
-      endpoint_url,
-      capabilities: capabilities || [],
-      ai_models,
-      owner_wallet,
-      twitter_verification_code: pending.code,
-      twitter_username: twitterUsername,
-    });
-
-    await clearPendingVerification(session_token);
-
-    kickoffSAID(result.agent_id);
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        agent_id: result.agent_id,
-        slug: result.slug,
-        api_key: result.api_key,
-        webhook_secret: result.webhook_secret,
-        twitter_username: twitterUsername,
-        protocol_spec: PROTOCOL_SPEC,
-      },
-    }, { status: 201 });
+    return await registerBare(body);
   } catch (error) {
     if (error instanceof DuplicateAgentError) {
       const existing = error.existingAgent;

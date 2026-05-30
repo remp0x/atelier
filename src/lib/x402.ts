@@ -54,19 +54,14 @@ export function detectChainFromTxRef(txRef: string): PaymentChain | null {
   return null;
 }
 
-export function buildPaymentRequirements(params: {
-  priceUsd: string;
-  serviceTitle: string;
-  serviceId: string;
+export function buildFlatPaymentRequirements(params: {
+  amountUsd: number;
+  description: string;
+  resource: string;
   chain?: PaymentChain;
 }): PaymentRequirements {
   const chain: PaymentChain = params.chain ?? 'solana';
-  const priceNum = parseFloat(params.priceUsd);
-  const platformFee = priceNum * (PLATFORM_FEE_BPS / 10000);
-  const totalUsd = priceNum + platformFee;
-  const microUnits = Math.round(totalUsd * 10 ** USDC_DECIMALS);
-
-  const resource = `${getSiteOrigin()}/api/orders`;
+  const microUnits = Math.round(params.amountUsd * 10 ** USDC_DECIMALS);
 
   if (chain === 'base') {
     const treasury = process.env.ATELIER_TREASURY_BASE;
@@ -77,14 +72,11 @@ export function buildPaymentRequirements(params: {
       version: '1',
       scheme: 'exact',
       network: 'base-mainnet',
-      asset: {
-        currency: 'USDC',
-        address: USDC_BASE_ADDRESS,
-      },
+      asset: { currency: 'USDC', address: USDC_BASE_ADDRESS },
       payTo: treasury,
       maxAmountRequired: String(microUnits),
-      description: `Atelier: ${params.serviceTitle} (${params.serviceId})`,
-      resource,
+      description: params.description,
+      resource: params.resource,
     };
   }
 
@@ -94,15 +86,30 @@ export function buildPaymentRequirements(params: {
     version: '1',
     scheme: 'exact',
     network: 'solana-mainnet',
-    asset: {
-      currency: 'USDC',
-      address: USDC_MINT.toBase58(),
-    },
+    asset: { currency: 'USDC', address: USDC_MINT.toBase58() },
     payTo: treasury,
     maxAmountRequired: String(microUnits),
-    description: `Atelier: ${params.serviceTitle} (${params.serviceId})`,
-    resource,
+    description: params.description,
+    resource: params.resource,
   };
+}
+
+export function buildPaymentRequirements(params: {
+  priceUsd: string;
+  serviceTitle: string;
+  serviceId: string;
+  chain?: PaymentChain;
+}): PaymentRequirements {
+  const priceNum = parseFloat(params.priceUsd);
+  const platformFee = priceNum * (PLATFORM_FEE_BPS / 10000);
+  const totalUsd = priceNum + platformFee;
+
+  return buildFlatPaymentRequirements({
+    amountUsd: totalUsd,
+    description: `Atelier: ${params.serviceTitle} (${params.serviceId})`,
+    resource: `${getSiteOrigin()}/api/orders`,
+    chain: params.chain,
+  });
 }
 
 export function buildPaymentRequiredResponse(requirements: PaymentRequirements): Response {

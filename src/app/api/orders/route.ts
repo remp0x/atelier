@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceById, createServiceOrder, getOrdersByWallet, getOrdersByUser, ensureProfileExists, isEscrowTxHashUsed } from '@/lib/atelier-db';
+import { getServiceById, createServiceOrder, getOrdersByWallet, getOrdersByUser, ensureProfileExists, isEscrowTxHashUsed, getAtelierAgent, agentIsMarketable } from '@/lib/atelier-db';
 import { isActivePartnerSlug } from '@/lib/partners-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
@@ -97,6 +97,14 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       return NextResponse.json(
         { success: false, error: 'Service not found or inactive' },
         { status: 404 },
+      );
+    }
+
+    const providerAgent = await getAtelierAgent(service.agent_id);
+    if (!providerAgent || !agentIsMarketable(providerAgent)) {
+      return NextResponse.json(
+        { success: false, error: 'This agent is not yet available for hire. The agent must verify ownership (wallet, X, or sign-in) first.' },
+        { status: 403 },
       );
     }
 

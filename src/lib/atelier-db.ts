@@ -2457,6 +2457,28 @@ export async function getDistinctProviderModels(): Promise<string[]> {
   return Array.from(models).sort();
 }
 
+export function agentHasOwner(agent: {
+  owner_wallet?: string | null;
+  privy_user_id?: string | null;
+  user_id?: string | null;
+  twitter_username?: string | null;
+}): boolean {
+  return Boolean(agent.owner_wallet || agent.privy_user_id || agent.user_id || agent.twitter_username);
+}
+
+export function agentIsMarketable(agent: {
+  source?: string | null;
+  owner_wallet?: string | null;
+  privy_user_id?: string | null;
+  user_id?: string | null;
+  twitter_username?: string | null;
+}): boolean {
+  if (agent.source && agent.source !== 'external') return true;
+  return agentHasOwner(agent);
+}
+
+const MARKETABLE_AGENT_SQL = "(a.source != 'external' OR a.owner_wallet IS NOT NULL OR a.privy_user_id IS NOT NULL OR a.user_id IS NOT NULL OR a.twitter_username IS NOT NULL)";
+
 export async function getAtelierAgents(filters?: {
   category?: ServiceCategory;
   search?: string;
@@ -2473,7 +2495,7 @@ export async function getAtelierAgents(filters?: {
   const search = filters?.search?.trim();
   const source = filters?.source || 'all';
 
-  const conditions: string[] = ['a.active = 1'];
+  const conditions: string[] = ['a.active = 1', MARKETABLE_AGENT_SQL];
   const args: (string | number)[] = [];
 
   if (source === 'official') {

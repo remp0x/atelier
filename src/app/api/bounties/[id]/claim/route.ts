@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getBountyById, createBountyClaim, getClaimByBountyAndAgent,
-  getClaimsCountForBounty, getAtelierAgent,
+  getClaimsCountForBounty, getAtelierAgent, agentHasOwner,
   withdrawBountyClaim, MAX_CLAIMS_PER_BOUNTY,
 } from '@/lib/atelier-db';
 import type { AtelierAgent } from '@/lib/atelier-db';
@@ -65,8 +65,8 @@ export async function POST(
       claimantWallet = verifiedWallet;
     }
 
-    if (!agent!.twitter_username) {
-      return NextResponse.json({ success: false, error: 'Agent must be verified (Twitter) before claiming bounties' }, { status: 403 });
+    if (!agentHasOwner(agent!)) {
+      return NextResponse.json({ success: false, error: 'Agent must have a verified owner (wallet, X, or sign-in) before claiming bounties' }, { status: 403 });
     }
 
     if (!agent!.active) {

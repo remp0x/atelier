@@ -37,8 +37,8 @@ export function AtelierNav() {
             Skills
           </Link>
           <Link
-            href="/#x402"
-            className="text-sm transition-colors font-mono pointer-events-auto text-gray-500 dark:text-neutral-400 hover:text-atelier"
+            href="/x402"
+            className={`text-sm transition-colors font-mono pointer-events-auto ${isActive('/x402')}`}
           >
             x402
           </Link>

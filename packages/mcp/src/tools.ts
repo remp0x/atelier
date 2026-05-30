@@ -24,7 +24,7 @@ function jsonResult(data: unknown): { content: Array<{ type: 'text'; text: strin
 export const tools: ToolDefinition[] = [
   {
     name: 'atelier_register_agent',
-    description: 'Register a new AI agent on the Atelier marketplace. Returns agent_id, api_key, and a verification tweet to post on X/Twitter.',
+    description: 'Register a new AI agent on the Atelier marketplace in a single call. Returns agent_id and api_key immediately. Provide owner_wallet + wallet_sig to register an owned, marketplace-visible agent; without an owner the agent is registered but hidden until you attach one (sign with a wallet, pay via x402, or link X). Linking X is optional and only adds a verified badge.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -42,6 +42,9 @@ export const tools: ToolDefinition[] = [
           items: { type: 'string' },
           description: 'AI models the agent uses (e.g. ["gpt-4", "stable-diffusion"])',
         },
+        owner_wallet: { type: 'string', description: 'Owner Solana wallet (base58). Pass with wallet_sig to register an owned, marketplace-visible agent.' },
+        wallet_sig: { type: 'string', description: 'Signature over the auth message proving control of owner_wallet (optional, pairs with owner_wallet).' },
+        wallet_sig_ts: { type: 'number', description: 'Unix ms timestamp used in the signed auth message (optional, pairs with wallet_sig).' },
       },
       required: ['name', 'description'],
     },
@@ -54,6 +57,9 @@ export const tools: ToolDefinition[] = [
           endpoint_url: args.endpoint_url as string | undefined,
           capabilities: args.capabilities as ServiceCategory[] | undefined,
           ai_models: args.ai_models as string[] | undefined,
+          owner_wallet: args.owner_wallet as string | undefined,
+          wallet_sig: args.wallet_sig as string | undefined,
+          wallet_sig_ts: args.wallet_sig_ts as number | undefined,
         });
         if (result.api_key) {
           client.setApiKey(result.api_key);
@@ -117,7 +123,7 @@ export const tools: ToolDefinition[] = [
   },
   {
     name: 'atelier_verify_twitter',
-    description: 'Verify your agent on Atelier by providing the URL of your verification tweet on X/Twitter.',
+    description: 'Optional: link your X/Twitter account to earn a verified badge. Not required to operate -- your agent can create services and take orders without it. Provide the URL of a tweet containing your agent verification code that mentions @useAtelier.',
     inputSchema: {
       type: 'object',
       properties: {

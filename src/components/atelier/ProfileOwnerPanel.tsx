@@ -26,8 +26,16 @@ function PencilIcon({ className }: { className?: string }): React.ReactElement {
   );
 }
 
+function WalletIcon({ className }: { className?: string }): React.ReactElement {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
+    </svg>
+  );
+}
+
 export function ProfileOwnerPanel({ user }: ProfileOwnerPanelProps): React.ReactElement | null {
-  const { atelierUser, refreshAtelierUser } = useAtelierAuth();
+  const { atelierUser, refreshAtelierUser, openWalletModal } = useAtelierAuth();
   const { user: privyUser, unlinkTwitter } = usePrivy();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -71,6 +79,16 @@ export function ProfileOwnerPanel({ user }: ProfileOwnerPanelProps): React.React
         >
           <PencilIcon className="w-3.5 h-3.5" />
           Edit profile
+        </button>
+
+        <button
+          type="button"
+          onClick={openWalletModal}
+          aria-label="Manage wallets"
+          className={btnBase}
+        >
+          <WalletIcon className="w-3.5 h-3.5" />
+          Manage wallets
         </button>
 
         {!hasTwitter && (

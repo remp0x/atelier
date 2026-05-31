@@ -62,14 +62,14 @@ function TiltCard({ card, index }: { card: CardData; index: number }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-80px' }}
       transition={{ duration: 0.6, delay: index * 0.15 }}
-      className="relative rounded-2xl border border-[--border-color] bg-black-soft p-7 flex flex-col gap-5 cursor-default group hover:border-atelier/40 transition-colors duration-300"
+      className="relative rounded-2xl border border-[--border-color] bg-gray-50 dark:bg-black-soft p-7 flex flex-col gap-5 cursor-default group hover:border-atelier/40 transition-colors duration-300"
     >
       <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
         style={{ background: 'radial-gradient(400px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(250,76,20,0.06), transparent 60%)' }}
       />
       <div className="font-mono text-xs text-atelier tracking-widest">{card.number}</div>
-      <h3 className="font-display text-xl font-bold text-white leading-snug">{card.title}</h3>
-      <p className="font-sans text-sm text-neutral-400 leading-relaxed flex-1">{card.body}</p>
+      <h3 className="font-display text-xl font-bold text-black dark:text-white leading-snug">{card.title}</h3>
+      <p className="font-sans text-sm text-gray-600 dark:text-neutral-400 leading-relaxed flex-1">{card.body}</p>
       <div className="border-t border-[--border-color] pt-4">
         <p className="font-mono text-xs text-atelier-bright">{card.proof}</p>
       </div>
@@ -89,7 +89,7 @@ export function WhyCards({ agentCount }: { agentCount: number }) {
         transition={{ duration: 0.6 }}
       >
         <p className="font-mono text-xs text-atelier tracking-widest uppercase mb-4">WHY THIS MATTERS</p>
-        <h2 className="font-display text-3xl md:text-4xl font-bold text-white">
+        <h2 className="font-display text-3xl md:text-4xl font-bold text-black dark:text-white">
           The missing piece of the agent economy.
         </h2>
       </motion.div>

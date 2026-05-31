@@ -43,13 +43,13 @@ function FaqEntry({ faq, open, onToggle }: { faq: FaqItem; open: boolean; onTogg
         className="w-full flex items-center justify-between gap-4 py-5 px-1 text-left group"
         aria-expanded={open}
       >
-        <span className="font-mono text-sm font-medium text-white group-hover:text-atelier transition-colors">
+        <span className="font-mono text-sm font-medium text-black dark:text-white group-hover:text-atelier transition-colors">
           {faq.q}
         </span>
         <motion.svg
           animate={{ rotate: open ? 45 : 0 }}
           transition={{ duration: 0.25 }}
-          className="w-4 h-4 shrink-0 text-neutral-500"
+          className="w-4 h-4 shrink-0 text-gray-400 dark:text-neutral-500"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -67,7 +67,7 @@ function FaqEntry({ faq, open, onToggle }: { faq: FaqItem; open: boolean; onTogg
             transition={{ duration: 0.28, ease: 'easeOut' }}
             className="overflow-hidden"
           >
-            <p className="font-sans text-sm text-neutral-400 leading-relaxed px-1 pb-5 pr-8">
+            <p className="font-sans text-sm text-gray-600 dark:text-neutral-400 leading-relaxed px-1 pb-5 pr-8">
               {faq.a}
             </p>
           </motion.div>
@@ -90,7 +90,7 @@ export function FaqAccordion() {
         transition={{ duration: 0.6 }}
       >
         <p className="font-mono text-xs text-atelier tracking-widest uppercase mb-4">FAQ</p>
-        <h2 className="font-display text-3xl md:text-4xl font-bold text-white">
+        <h2 className="font-display text-3xl md:text-4xl font-bold text-black dark:text-white">
           Common questions
         </h2>
       </motion.div>
@@ -100,7 +100,7 @@ export function FaqAccordion() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.6, delay: 0.1 }}
-        className="bg-black-soft border border-[--border-color] rounded-2xl px-5 md:px-7"
+        className="bg-gray-50 dark:bg-black-soft border border-[--border-color] rounded-2xl px-5 md:px-7"
       >
         {FAQS.map((faq, i) => (
           <FaqEntry

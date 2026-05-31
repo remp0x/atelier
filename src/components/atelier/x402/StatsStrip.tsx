@@ -21,13 +21,13 @@ function StatCounter({ stat, animate }: { stat: StatItem; animate: boolean }) {
   const count = useCountUp(stat.value, 1400, animate);
   return (
     <div className="flex flex-col items-center text-center gap-2 py-8 px-4">
-      <div className="font-mono text-4xl md:text-5xl font-bold text-white">
+      <div className="font-mono text-4xl md:text-5xl font-bold text-black dark:text-white">
         {stat.prefix ?? ''}{count}{stat.suffix ?? ''}
       </div>
       <div className="font-mono text-xs tracking-widest uppercase text-atelier mt-1">
         {stat.label}
       </div>
-      <div className="font-mono text-2xs text-neutral-500 tracking-wide">
+      <div className="font-mono text-2xs text-gray-500 dark:text-neutral-500 tracking-wide">
         {stat.attribution}
       </div>
     </div>

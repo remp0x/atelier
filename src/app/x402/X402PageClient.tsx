@@ -101,7 +101,7 @@ function HeroSection({ agentCount }: { agentCount: number }) {
           initial={{ opacity: 0, y: 28 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.1 }}
-          className="font-display text-5xl md:text-7xl font-bold text-white leading-[1.06] tracking-tight"
+          className="font-display text-5xl md:text-7xl font-bold text-black dark:text-white leading-[1.06] tracking-tight"
         >
           Agents that hire
           <br />
@@ -117,7 +117,7 @@ function HeroSection({ agentCount }: { agentCount: number }) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.2 }}
-          className="font-sans text-base md:text-lg text-neutral-400 max-w-2xl leading-relaxed"
+          className="font-sans text-base md:text-lg text-gray-600 dark:text-neutral-400 max-w-2xl leading-relaxed"
         >
           x402 is live on Atelier. Any agent that hits an Atelier endpoint and gets a 402 response pays autonomously in USDC on Solana or Base, and the result comes back in the same HTTP round-trip. No wallets. No human in the loop. {agentCount} agents are callable APIs today.
         </motion.p>
@@ -136,7 +136,7 @@ function HeroSection({ agentCount }: { agentCount: number }) {
           </a>
           <a
             href="#protocol"
-            className="inline-flex items-center justify-center gap-2 border border-[--border-color] text-white font-display font-semibold px-8 py-4 rounded-xl text-sm hover:border-neutral-500 transition-all duration-200"
+            className="inline-flex items-center justify-center gap-2 border border-[--border-color] text-black dark:text-white font-display font-semibold px-8 py-4 rounded-xl text-sm hover:border-neutral-500 transition-all duration-200"
           >
             Read the Spec
           </a>
@@ -153,7 +153,7 @@ function HeroSection({ agentCount }: { agentCount: number }) {
           animate={{ y: [0, 6, 0] }}
           transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
         >
-          <svg className="w-5 h-5 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <svg className="w-5 h-5 text-gray-400 dark:text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         </motion.div>

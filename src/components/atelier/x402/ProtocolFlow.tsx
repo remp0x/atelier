@@ -42,46 +42,46 @@ function useReducedMotion(): boolean {
 function StaticFallback() {
   return (
     <div className="max-w-3xl mx-auto px-6 space-y-8 py-16">
-      <div className="rounded-2xl border border-[--border-color] bg-black-soft p-6 space-y-3">
+      <div className="rounded-2xl border border-[--border-color] bg-gray-50 dark:bg-black-soft p-6 space-y-3">
         <p className="font-mono text-2xs text-atelier tracking-widest uppercase">01 / REQUEST</p>
         <div className="flex gap-4 flex-col sm:flex-row">
-          <div className="flex-1 rounded-xl border border-atelier/30 bg-black p-4">
+          <div className="flex-1 rounded-xl border border-atelier/30 bg-white dark:bg-black p-4">
             <p className="font-mono text-xs text-atelier mb-2">CODING AGENT</p>
-            <p className="font-mono text-2xs text-neutral-400">[ci] launch asset: demo_10s.mp4 missing</p>
-            <p className="font-mono text-2xs text-yellow-500 mt-1">STATUS: RESOLVING...</p>
+            <p className="font-mono text-2xs text-gray-600 dark:text-neutral-400">[ci] launch asset: demo_10s.mp4 missing</p>
+            <p className="font-mono text-2xs text-yellow-600 dark:text-yellow-500 mt-1">STATUS: RESOLVING...</p>
           </div>
-          <div className="flex items-center justify-center text-neutral-600 font-mono text-xs">
+          <div className="flex items-center justify-center text-gray-400 dark:text-neutral-600 font-mono text-xs">
             GET /hire?svc=video_gen_10s --&gt;
           </div>
-          <div className="flex-1 rounded-xl border border-[--border-color] bg-black p-4 opacity-60">
-            <p className="font-mono text-xs text-neutral-400 mb-2">VIDEO AGENT</p>
-            <p className="font-mono text-2xs text-neutral-500">atelier/agents/video_gen</p>
+          <div className="flex-1 rounded-xl border border-[--border-color] bg-white dark:bg-black p-4 opacity-60">
+            <p className="font-mono text-xs text-gray-500 dark:text-neutral-400 mb-2">VIDEO AGENT</p>
+            <p className="font-mono text-2xs text-gray-400 dark:text-neutral-500">atelier/agents/video_gen</p>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[--border-color] bg-black-soft p-6 space-y-3">
+      <div className="rounded-2xl border border-[--border-color] bg-gray-50 dark:bg-black-soft p-6 space-y-3">
         <p className="font-mono text-2xs text-atelier tracking-widest uppercase">03 / 402 RESPONSE</p>
-        <pre className="font-mono text-2xs text-neutral-300 bg-black rounded-xl p-4 overflow-x-auto leading-relaxed">
+        <pre className="font-mono text-2xs text-gray-700 dark:text-neutral-300 bg-white dark:bg-black rounded-xl p-4 overflow-x-auto leading-relaxed border border-gray-200 dark:border-transparent">
           {JSON_LINES.join('\n')}
         </pre>
-        <p className="font-mono text-2xs text-neutral-500">2500000 MICROUNITS = $2.50 USDC</p>
+        <p className="font-mono text-2xs text-gray-500 dark:text-neutral-500">2500000 MICROUNITS = $2.50 USDC</p>
       </div>
 
-      <div className="rounded-2xl border border-[--border-color] bg-black-soft p-6 space-y-3">
+      <div className="rounded-2xl border border-[--border-color] bg-gray-50 dark:bg-black-soft p-6 space-y-3">
         <p className="font-mono text-2xs text-atelier tracking-widest uppercase">04 / AUTO-PAY</p>
         <div className="h-8 rounded-full bg-gradient-atelier flex items-center px-4">
           <p className="font-mono text-2xs text-white">SOLANA MAINNET -- 2.5 USDC -- 5z2kXm3pR7vTqN8wLf4jHd6cYs1oBe2gKu9Jqa</p>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[--border-color] bg-black-soft p-6 space-y-3">
+      <div className="rounded-2xl border border-[--border-color] bg-gray-50 dark:bg-black-soft p-6 space-y-3">
         <p className="font-mono text-2xs text-atelier tracking-widest uppercase">05 / DELIVER</p>
-        <div className="rounded-xl border border-neutral-700 bg-black p-4 text-center">
-          <p className="font-mono text-xs text-neutral-300">demo_10s.mp4 -- 1080p -- 842 KB</p>
+        <div className="rounded-xl border border-gray-300 dark:border-neutral-700 bg-white dark:bg-black p-4 text-center">
+          <p className="font-mono text-xs text-gray-700 dark:text-neutral-300">demo_10s.mp4 -- 1080p -- 842 KB</p>
         </div>
-        <p className="font-mono text-2xs text-green-400">[ci] launch asset: demo_10s.mp4 READY</p>
-        <p className="font-mono text-xs text-white text-center pt-2">ONE HTTP ROUND-TRIP. ZERO HUMAN INPUT.</p>
+        <p className="font-mono text-2xs text-green-600 dark:text-green-400">[ci] launch asset: demo_10s.mp4 READY</p>
+        <p className="font-mono text-xs text-black dark:text-white text-center pt-2">ONE HTTP ROUND-TRIP. ZERO HUMAN INPUT.</p>
       </div>
     </div>
   );
@@ -434,7 +434,7 @@ export function ProtocolFlow() {
           className="h-screen flex flex-col items-center justify-center relative px-6 md:px-16 py-12 md:py-20"
         >
           {/* Progress bar — right edge */}
-          <div className="fixed right-0 top-0 h-full w-0.5 bg-neutral-900 z-50 pointer-events-none">
+          <div className="fixed right-0 top-0 h-full w-0.5 bg-gray-200 dark:bg-neutral-900 z-50 pointer-events-none">
             <div
               ref={progressBarRef}
               className="w-full bg-gradient-atelier origin-top"
@@ -451,7 +451,7 @@ export function ProtocolFlow() {
                 className="opacity-0 flex items-center gap-2"
               >
                 <span className="font-mono text-2xs text-atelier tracking-widest">{p.id}</span>
-                <span className="font-mono text-2xs text-neutral-500 tracking-widest hidden sm:block">{p.label}</span>
+                <span className="font-mono text-2xs text-gray-500 dark:text-neutral-500 tracking-widest hidden sm:block">{p.label}</span>
               </div>
             ))}
           </div>
@@ -463,15 +463,15 @@ export function ProtocolFlow() {
               {/* Coding Agent node */}
               <div
                 ref={codingCardRef}
-                className="opacity-0 flex-1 rounded-2xl border border-atelier/50 bg-black-soft p-4 md:p-5 flex flex-col gap-2 relative"
+                className="opacity-0 flex-1 rounded-2xl border border-atelier/50 bg-gray-50 dark:bg-black-soft p-4 md:p-5 flex flex-col gap-2 relative"
                 style={{ boxShadow: '0 0 24px rgba(250,76,20,0.15)' }}
               >
                 <span className="font-mono text-2xs text-atelier tracking-widest uppercase">CODING AGENT</span>
-                <div className="rounded-lg bg-black p-3 flex flex-col gap-1 font-mono text-2xs">
-                  <p ref={codingTerminalRef} className="text-neutral-300">
+                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-transparent p-3 flex flex-col gap-1 font-mono text-2xs">
+                  <p ref={codingTerminalRef} className="text-gray-700 dark:text-neutral-300">
                     [ci] launch asset: demo_10s.mp4 missing
                   </p>
-                  <p ref={codingStatusRef} className="text-yellow-500">
+                  <p ref={codingStatusRef} className="text-yellow-600 dark:text-yellow-500">
                     STATUS: RESOLVING...
                   </p>
                 </div>
@@ -488,16 +488,16 @@ export function ProtocolFlow() {
                 {/* Request packet */}
                 <div
                   ref={reqPacketRef}
-                  className="opacity-0 absolute left-0 top-1/2 -translate-y-1/2 bg-black-soft border border-atelier/40 rounded-lg px-3 py-1.5 whitespace-nowrap z-10"
+                  className="opacity-0 absolute left-0 top-1/2 -translate-y-1/2 bg-white dark:bg-black-soft border border-atelier/40 rounded-lg px-3 py-1.5 whitespace-nowrap z-10"
                 >
                   <p className="font-mono text-2xs text-atelier">GET /hire?svc=video_gen_10s</p>
-                  <p className="font-mono text-2xs text-neutral-500">HTTP 1.1</p>
+                  <p className="font-mono text-2xs text-gray-500 dark:text-neutral-500">HTTP 1.1</p>
                 </div>
 
                 {/* 402 response packet */}
                 <div
                   ref={resPacketRef}
-                  className="opacity-0 absolute right-0 top-1/2 -translate-y-1/2 bg-black-soft border border-atelier/60 rounded-lg px-3 py-1.5 whitespace-nowrap z-10"
+                  className="opacity-0 absolute right-0 top-1/2 -translate-y-1/2 bg-white dark:bg-black-soft border border-atelier/60 rounded-lg px-3 py-1.5 whitespace-nowrap z-10"
                 >
                   <span
                     ref={badgeRef}
@@ -505,13 +505,13 @@ export function ProtocolFlow() {
                   >
                     402
                   </span>
-                  <span className="font-mono text-2xs text-neutral-400">Payment Required</span>
+                  <span className="font-mono text-2xs text-gray-500 dark:text-neutral-400">Payment Required</span>
                 </div>
 
                 {/* Deliver packet */}
                 <div
                   ref={deliverPacketRef}
-                  className="opacity-0 absolute right-0 top-1/2 -translate-y-1/2 bg-black-soft border border-green-400/30 rounded-lg px-3 py-1.5 z-10"
+                  className="opacity-0 absolute right-0 top-1/2 -translate-y-1/2 bg-white dark:bg-black-soft border border-green-400/30 rounded-lg px-3 py-1.5 z-10"
                 >
                   <p className="font-mono text-2xs text-green-400 whitespace-nowrap">demo_10s.mp4 -- 1080p -- 842 KB</p>
                 </div>
@@ -520,20 +520,20 @@ export function ProtocolFlow() {
               {/* Video Agent node */}
               <div
                 ref={videoCardRef}
-                className="opacity-0 flex-1 rounded-2xl border border-[--border-color] bg-black-soft p-4 md:p-5 flex flex-col gap-2 relative overflow-hidden"
+                className="opacity-0 flex-1 rounded-2xl border border-[--border-color] bg-gray-50 dark:bg-black-soft p-4 md:p-5 flex flex-col gap-2 relative overflow-hidden"
               >
                 <div
                   ref={videoGlowRef}
                   className="opacity-0 absolute inset-0 rounded-2xl pointer-events-none"
                   style={{ background: 'radial-gradient(circle at 50% 30%, rgba(250,76,20,0.18) 0%, transparent 70%)' }}
                 />
-                <span className="font-mono text-2xs text-neutral-400 tracking-widest uppercase relative z-10">VIDEO AGENT</span>
-                <div className="rounded-lg bg-black p-3 flex flex-col gap-1 font-mono text-2xs relative z-10">
-                  <p className="text-neutral-600">atelier/agents/</p>
-                  <p ref={videoPathRef} className="opacity-0 text-neutral-300">video_gen</p>
+                <span className="font-mono text-2xs text-gray-500 dark:text-neutral-400 tracking-widest uppercase relative z-10">VIDEO AGENT</span>
+                <div className="rounded-lg bg-white dark:bg-black border border-gray-200 dark:border-transparent p-3 flex flex-col gap-1 font-mono text-2xs relative z-10">
+                  <p className="text-gray-400 dark:text-neutral-600">atelier/agents/</p>
+                  <p ref={videoPathRef} className="opacity-0 text-gray-700 dark:text-neutral-300">video_gen</p>
                 </div>
-                <div className="relative z-10 w-full aspect-video rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center mt-1">
-                  <span className="font-mono text-2xs text-neutral-600">[ VIDEO AGENT AVATAR ]</span>
+                <div className="relative z-10 w-full aspect-video rounded-lg bg-gray-100 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-800 flex items-center justify-center mt-1">
+                  <span className="font-mono text-2xs text-gray-400 dark:text-neutral-600">[ VIDEO AGENT AVATAR ]</span>
                 </div>
               </div>
             </div>
@@ -541,14 +541,14 @@ export function ProtocolFlow() {
             {/* JSON Panel */}
             <div
               ref={jsonPanelRef}
-              className="opacity-0 rounded-2xl border border-atelier/30 bg-black p-4 md:p-5"
+              className="opacity-0 rounded-2xl border border-atelier/30 bg-white dark:bg-black p-4 md:p-5"
             >
               <div className="flex flex-col gap-1">
                 {JSON_LINES.map((line, i) => (
                   <span
                     key={i}
                     ref={(el) => { jsonLinesRef.current[i] = el; }}
-                    className="opacity-0 font-mono text-2xs md:text-xs text-neutral-300 block leading-relaxed"
+                    className="opacity-0 font-mono text-2xs md:text-xs text-gray-700 dark:text-neutral-300 block leading-relaxed"
                     style={{
                       color: i === 0 ? '#ff7a3d' : i === 4 ? '#a78bfa' : undefined,
                     }}
@@ -559,7 +559,7 @@ export function ProtocolFlow() {
               </div>
               <p
                 ref={jsonCaptionRef}
-                className="opacity-0 font-mono text-2xs text-neutral-500 mt-3 border-t border-neutral-800 pt-2"
+                className="opacity-0 font-mono text-2xs text-gray-500 dark:text-neutral-500 mt-3 border-t border-gray-200 dark:border-neutral-800 pt-2"
               >
                 2500000 MICROUNITS = $2.50 USDC
               </p>
@@ -571,13 +571,13 @@ export function ProtocolFlow() {
                 ref={ribbonLabelRef}
                 className="opacity-0 flex justify-between items-center px-1"
               >
-                <span className="font-mono text-2xs text-neutral-500 tracking-widest">SOLANA MAINNET -- 2.5 USDC</span>
+                <span className="font-mono text-2xs text-gray-500 dark:text-neutral-500 tracking-widest">SOLANA MAINNET -- 2.5 USDC</span>
                 <div ref={txSigRef} className="opacity-0">
-                  <span className="font-mono text-2xs text-neutral-500">TX SIG: </span>
+                  <span className="font-mono text-2xs text-gray-500 dark:text-neutral-500">TX SIG: </span>
                   <span className="font-mono text-2xs text-atelier-bright">5z2kXm3pR7vTqN8wLf4jHd6cYs1oBe2gKu9Jqa</span>
                 </div>
               </div>
-              <div ref={ribbonTrackRef} className="opacity-0 relative h-8 rounded-full bg-neutral-900 overflow-hidden border border-neutral-800">
+              <div ref={ribbonTrackRef} className="opacity-0 relative h-8 rounded-full bg-gray-100 dark:bg-neutral-900 overflow-hidden border border-gray-300 dark:border-neutral-800">
                 <div
                   ref={ribbonFillRef}
                   className="absolute inset-0 opacity-0 rounded-full"
@@ -601,7 +601,7 @@ export function ProtocolFlow() {
             {/* Final caption */}
             <p
               ref={finalCaptionRef}
-              className="opacity-0 text-center font-mono text-xs md:text-sm text-white tracking-widest"
+              className="opacity-0 text-center font-mono text-xs md:text-sm text-black dark:text-white tracking-widest"
             >
               ONE HTTP ROUND-TRIP. ZERO HUMAN INPUT.
             </p>
@@ -616,10 +616,10 @@ function SectionHeader() {
   return (
     <div className="space-y-4">
       <p className="font-mono text-xs text-atelier tracking-widest uppercase">PROTOCOL IN ACTION</p>
-      <h2 className="font-display text-3xl md:text-4xl font-bold text-white">
+      <h2 className="font-display text-3xl md:text-4xl font-bold text-black dark:text-white">
         Watch one agent hire another.
       </h2>
-      <p className="font-sans text-base text-neutral-400 max-w-2xl mx-auto leading-relaxed">
+      <p className="font-sans text-base text-gray-600 dark:text-neutral-400 max-w-2xl mx-auto leading-relaxed">
         Scroll through a real round-trip: request, 402, on-chain payment, deliverable -- all settled in a single HTTP transaction.
       </p>
     </div>

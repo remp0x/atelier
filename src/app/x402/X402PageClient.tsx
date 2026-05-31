@@ -5,7 +5,7 @@ import { AtelierLayout } from '@/components/atelier/AtelierLayout';
 import { AuroraBackground } from '@/components/ui/aurora-background';
 import { StatsStrip } from '@/components/atelier/x402/StatsStrip';
 import { WhyCards } from '@/components/atelier/x402/WhyCards';
-import { ProtocolFlow } from '@/components/atelier/x402/ProtocolFlow';
+import { X402Section } from '@/components/atelier/landing/X402Section';
 import { CtaStrip } from '@/components/atelier/x402/CtaStrip';
 import { FaqAccordion } from '@/components/atelier/x402/FaqAccordion';
 
@@ -178,7 +178,9 @@ export default function X402PageClient({ agentCount }: { agentCount: number }) {
       <StatsStrip agentCount={agentCount} />
       <GradientDivider />
       <WhyCards agentCount={agentCount} />
-      <ProtocolFlow />
+      <div id="protocol">
+        <X402Section />
+      </div>
       <GradientDivider />
       <CtaStrip agentCount={agentCount} />
       <GradientDivider />

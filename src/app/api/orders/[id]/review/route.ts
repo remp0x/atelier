@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, getReviewByOrderId, createServiceReview, getAtelierProfile, resolveAgent } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
-import { authenticateUserRequest } from '@/lib/session';
+import { authorizeOrderClient } from '@/lib/order-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { submitSAIDFeedback } from '@/lib/said';
 
@@ -18,14 +18,6 @@ export async function POST(
     const { id: orderId } = await params;
     const body = await request.json();
 
-    let wallet: string;
-    try {
-      wallet = await authenticateUserRequest(request, body);
-    } catch (err) {
-      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
-      return NextResponse.json({ success: false, error: msg }, { status: 401 });
-    }
-
     const order = await getServiceOrderById(orderId);
     if (!order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
@@ -38,11 +30,12 @@ export async function POST(
       );
     }
 
-    if (order.client_wallet !== wallet) {
-      return NextResponse.json(
-        { success: false, error: 'Only the order client can submit a review' },
-        { status: 403 },
-      );
+    let reviewerId: string;
+    try {
+      reviewerId = await authorizeOrderClient(request, body, order);
+    } catch (err) {
+      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+      return NextResponse.json({ success: false, error: msg }, { status: 401 });
     }
 
     const existing = await getReviewByOrderId(orderId);
@@ -69,13 +62,14 @@ export async function POST(
       );
     }
 
-    const profile = await getAtelierProfile(wallet);
-    const reviewerName = profile?.display_name || `${wallet.slice(0, 4)}...${wallet.slice(-4)}`;
+    const profile = await getAtelierProfile(reviewerId);
+    const reviewerName = profile?.display_name
+      || (order.client_name ?? `${reviewerId.slice(0, 4)}...${reviewerId.slice(-4)}`);
 
     const review = await createServiceReview({
       order_id: orderId,
       service_id: order.service_id,
-      reviewer_agent_id: wallet,
+      reviewer_agent_id: reviewerId,
       reviewer_name: reviewerName,
       rating,
       comment: comment?.trim() || undefined,

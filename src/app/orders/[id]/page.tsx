@@ -8,6 +8,7 @@ import { useConnection } from '@solana/wallet-adapter-react';
 import { PublicKey } from '@solana/web3.js';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { sendUsdcPayment } from '@/lib/solana-pay';
 import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable, OrderMessage } from '@/lib/atelier-db';
 
@@ -347,8 +348,7 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
   );
 }
 
-function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: () => void }) {
-  const { walletAddress, getAuth } = useAtelierAuth();
+function ReviewForm({ orderId, buildAuth, onSubmitted }: { orderId: string; buildAuth: () => Promise<Record<string, unknown>>; onSubmitted: () => void }) {
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -356,12 +356,12 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = useCallback(async () => {
-    if (!walletAddress || rating === 0) return;
+    if (rating === 0) return;
     setSubmitting(true);
     setError(null);
 
     try {
-      const auth = await getAuth();
+      const auth = await buildAuth();
       const res = await fetch(`/api/orders/${orderId}/review`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -382,7 +382,7 @@ function ReviewForm({ orderId, onSubmitted }: { orderId: string; onSubmitted: ()
     } finally {
       setSubmitting(false);
     }
-  }, [getAuth, walletAddress, orderId, rating, comment, onSubmitted]);
+  }, [buildAuth, orderId, rating, comment, onSubmitted]);
 
   return (
     <div className="mt-4 p-4 rounded-lg bg-neutral-50 dark:bg-black-soft border border-neutral-200 dark:border-neutral-800">
@@ -535,7 +535,24 @@ function TimelineDot({ state, isTerminal }: { state: StepState; isTerminal: bool
 
 function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => void }) {
   const { order, deliverables: initialDeliverables } = data;
-  const { walletAddress, getAuth } = useAtelierAuth();
+  const { walletAddress, getAuth, atelierUser } = useAtelierAuth();
+
+  const walletMatches = !!walletAddress && order.client_wallet === walletAddress;
+  const isOrderClient = walletMatches
+    || (!!atelierUser?.privy_user_id && !!order.user_id && order.user_id === atelierUser.privy_user_id);
+
+  const buildOrderAuth = async (): Promise<Record<string, unknown>> => {
+    if (walletMatches) {
+      try {
+        return { ...(await getAuth()) };
+      } catch {
+        // Connected wallet can't sign; fall back to Privy identity below.
+      }
+    }
+    const token = await getPrivyAccessToken();
+    if (token) return { privy_access_token: token };
+    return { ...(await getAuth()) };
+  };
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
@@ -610,11 +627,11 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
     }
   }, [canGenerate, walletAddress, prompt, order.id, order.quota_total, onRefresh, getAuth]);
 
-  const handleApprove = useCallback(async () => {
-    if (!walletAddress) return;
+  const handleApprove = async () => {
+    if (!isOrderClient) return;
     setApproving(true);
     try {
-      const auth = await getAuth();
+      const auth = await buildOrderAuth();
       const res = await fetch(`/api/orders/${order.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -625,7 +642,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
     } finally {
       setApproving(false);
     }
-  }, [getAuth, walletAddress, order.id, onRefresh]);
+  };
 
   return (
     <div className="space-y-6">
@@ -709,7 +726,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
       )}
 
       {/* Approve button for delivered workspace orders */}
-      {order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
+      {order.status === 'delivered' && isOrderClient && (
         <button
           onClick={handleApprove}
           disabled={approving}
@@ -964,7 +981,7 @@ function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: st
 
 export default function AtelierOrderPage() {
   const params = useParams();
-  const { walletAddress, getAuth, getTransactionWallet } = useAtelierAuth();
+  const { walletAddress, getAuth, getTransactionWallet, atelierUser } = useAtelierAuth();
   const { connection } = useConnection();
   const [data, setData] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1029,8 +1046,26 @@ export default function AtelierOrderPage() {
   const isWorkspace = order.quota_total > 0;
   const isTerminal = order.status === 'cancelled' || order.status === 'disputed';
   const showWorkspace = isWorkspace && ['in_progress', 'delivered', 'completed'].includes(order.status);
-  const canCancel = ['pending_quote', 'quoted', 'accepted', 'paid'].includes(order.status)
-    && walletAddress && order.client_wallet === walletAddress;
+
+  const walletMatches = !!walletAddress && order.client_wallet === walletAddress;
+  const isOrderClient = walletMatches
+    || (!!atelierUser?.privy_user_id && !!order.user_id && order.user_id === atelierUser.privy_user_id);
+  const walletMismatch = isOrderClient && !walletMatches;
+
+  const buildOrderAuth = async (): Promise<Record<string, unknown>> => {
+    if (walletMatches) {
+      try {
+        return { ...(await getAuth()) };
+      } catch {
+        // Connected wallet can't sign; fall back to Privy identity below.
+      }
+    }
+    const token = await getPrivyAccessToken();
+    if (token) return { privy_access_token: token };
+    return { ...(await getAuth()) };
+  };
+
+  const canCancel = ['pending_quote', 'quoted', 'accepted', 'paid'].includes(order.status) && isOrderClient;
 
   return (
     <AtelierAppLayout>
@@ -1242,8 +1277,13 @@ export default function AtelierOrderPage() {
                 )}
 
                 {/* Approve / Revise / Dispute */}
-                {order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
+                {order.status === 'delivered' && isOrderClient && (
                   <>
+                    {walletMismatch && (
+                      <p className="text-2xs font-mono text-amber-500/90 px-2.5 py-2 rounded border border-amber-400/20 bg-amber-400/5 leading-relaxed">
+                        Connected wallet differs from the one used to place this order. You can still approve — releasing payment to the agent doesn&apos;t require your wallet.
+                      </p>
+                    )}
                     {order.revision_count > 0 && (
                       <p className="text-2xs font-mono text-neutral-500 px-1">
                         {order.revision_count}/{order.max_revisions} revisions used
@@ -1386,7 +1426,7 @@ export default function AtelierOrderPage() {
             {review && <ReviewInline review={review} />}
 
             {/* Revision form */}
-            {showRevisionForm && order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
+            {showRevisionForm && order.status === 'delivered' && isOrderClient && (
               <div className="p-4 rounded-lg border border-amber-400/20 bg-amber-400/5">
                 {order.revision_count >= order.max_revisions && (
                   <p className="text-xs font-mono text-amber-400/70 mb-3">
@@ -1408,7 +1448,7 @@ export default function AtelierOrderPage() {
                       if (!revisionFeedback.trim()) return;
                       setRequestingRevision(true);
                       try {
-                        const auth = await getAuth();
+                        const auth = await buildOrderAuth();
                         const res = await fetch(`/api/orders/${order.id}`, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
@@ -1453,7 +1493,7 @@ export default function AtelierOrderPage() {
             )}
 
             {/* Dispute form */}
-            {showDisputeForm && order.status === 'delivered' && walletAddress && order.client_wallet === walletAddress && (
+            {showDisputeForm && order.status === 'delivered' && isOrderClient && (
               <div className="p-4 rounded-lg border border-red-400/20 bg-red-400/5">
                 <p className="text-sm font-mono text-red-400 mb-3">Why are you disputing this order?</p>
                 <textarea
@@ -1470,7 +1510,7 @@ export default function AtelierOrderPage() {
                       if (!disputeReason.trim()) return;
                       setDisputing(true);
                       try {
-                        const auth = await getAuth();
+                        const auth = await buildOrderAuth();
                         const res = await fetch(`/api/orders/${order.id}`, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
@@ -1515,13 +1555,13 @@ export default function AtelierOrderPage() {
             )}
 
             {/* Review */}
-            {order.status === 'completed' && !review && walletAddress && order.client_wallet === walletAddress && (
+            {order.status === 'completed' && !review && isOrderClient && (
               <div>
                 <div className="p-4 rounded-lg border border-atelier/20 bg-atelier/5 mb-2">
                   <p className="text-sm font-mono text-atelier mb-1">How was your experience?</p>
                   <p className="text-xs text-neutral-500">Your review helps other buyers find great agents.</p>
                 </div>
-                <ReviewForm orderId={order.id} onSubmitted={load} />
+                <ReviewForm orderId={order.id} buildAuth={buildOrderAuth} onSubmitted={load} />
               </div>
             )}
 
@@ -1563,7 +1603,7 @@ export default function AtelierOrderPage() {
           onConfirm={async () => {
             setApproving(true);
             try {
-              const auth = await getAuth();
+              const auth = await buildOrderAuth();
               const res = await fetch(`/api/orders/${order.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -1592,7 +1632,7 @@ export default function AtelierOrderPage() {
           onConfirm={async () => {
             setCancelling(true);
             try {
-              const auth = await getAuth();
+              const auth = await buildOrderAuth();
               const res = await fetch(`/api/orders/${order.id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },

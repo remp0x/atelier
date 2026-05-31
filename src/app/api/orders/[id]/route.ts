@@ -7,6 +7,7 @@ import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, getSessionWallet } from '@/lib/session';
+import { authorizeOrderClient } from '@/lib/order-auth';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { verifySolanaUsdcPayment, verifySolanaUsdcReceived } from '@/lib/solana-verify';
 import { verifyBaseUsdcPayment, verifyBaseUsdcReceived, extractBasePayerAddress } from '@/lib/base-verify';
@@ -137,7 +138,7 @@ export async function PATCH(
         }
       } else {
         try {
-          wallet = await authenticateUserRequest(request, body, order.client_wallet);
+          wallet = await authorizeOrderClient(request, body, order);
         } catch (err) {
           const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
           return NextResponse.json({ success: false, error: msg }, { status: 401 });

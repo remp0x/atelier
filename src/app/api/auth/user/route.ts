@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isAddress, getAddress } from 'viem';
 import {
+  autoSetAgentBasePayoutForUser,
   generateDefaultUsername,
   getUserByPrivyId,
   isUsernameAvailable,
@@ -10,6 +12,16 @@ import {
   type AtelierUser,
 } from '@/lib/atelier-db';
 import { authenticatePrivyRequest, PrivyAuthError, type PrivyUserInfo } from '@/lib/privy-auth';
+
+async function autoLinkBasePayout(info: PrivyUserInfo): Promise<void> {
+  const evm = info.linkedEvmWallets[0];
+  if (!evm || !isAddress(evm)) return;
+  try {
+    await autoSetAgentBasePayoutForUser(info.privyUserId, getAddress(evm));
+  } catch (err) {
+    console.error('[auth/user] auto-link base payout failed:', err);
+  }
+}
 
 const USERNAME_SLUG_REGEX = /^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$/;
 const VERCEL_BLOB_ORIGIN = 'vercel-storage.com';
@@ -92,6 +104,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       avatar_url: avatarUrl,
       bio: existing?.bio ?? null,
     });
+
+    await autoLinkBasePayout(info);
 
     return buildUserPayload(user, isNew);
   } catch (err) {

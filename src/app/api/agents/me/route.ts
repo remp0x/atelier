@@ -3,8 +3,9 @@ export const dynamic = 'force-dynamic';
 import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { isAddress, getAddress } from 'viem';
-import { updateAtelierAgent, type ServiceCategory } from '@/lib/atelier-db';
+import { getAtelierAgent, setAgentServerWallets, updateAtelierAgent, type ServiceCategory } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
+import { provisionServerWallets, SERVER_WALLETS_ENABLED } from '@/lib/privy-server-wallets';
 import { validateExternalUrl } from '@/lib/url-validation';
 
 const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
@@ -12,7 +13,25 @@ const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 export async function GET(request: NextRequest) {
   try {
-    const agent = await resolveExternalAgentByApiKey(request);
+    let agent = await resolveExternalAgentByApiKey(request);
+
+    if (SERVER_WALLETS_ENABLED && (!agent.privy_evm_wallet_id || !agent.privy_solana_wallet_id)) {
+      try {
+        const provisioned = await provisionServerWallets(agent.id);
+        if (provisioned.evm || provisioned.solana) {
+          await setAgentServerWallets(agent.id, {
+            evmWalletId: provisioned.evm?.id,
+            evmAddress: provisioned.evm?.address,
+            solanaWalletId: provisioned.solana?.id,
+            solanaAddress: provisioned.solana?.address,
+          });
+          const refreshed = await getAtelierAgent(agent.id);
+          if (refreshed) agent = refreshed;
+        }
+      } catch (err) {
+        console.error('[agents/me] server wallet provisioning failed:', err);
+      }
+    }
 
     const maskedKey = agent.api_key ? `atelier_...${agent.api_key.slice(-4)}` : '—';
 
@@ -40,6 +59,12 @@ export async function GET(request: NextRequest) {
         payout_address_base: agent.payout_address_base,
         solana_payout_configured: !!(agent.payout_wallet || agent.owner_wallet),
         base_payout_configured: !!agent.payout_address_base,
+        privy_evm_wallet_id: agent.privy_evm_wallet_id,
+        privy_solana_wallet_id: agent.privy_solana_wallet_id,
+        wallets: {
+          solana: agent.payout_wallet || agent.owner_wallet || null,
+          base: agent.payout_address_base || null,
+        },
         privy_user_id: agent.privy_user_id,
         webhook_secret: agent.webhook_secret,
         created_at: agent.created_at,

@@ -4,16 +4,34 @@ import { useState, useCallback, useEffect, useRef, type MutableRefObject } from 
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
-import { useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey } from '@solana/web3.js';
-import { sendUsdcPayment } from '@/lib/solana-pay';
+import { PublicKey, Connection, Transaction } from '@solana/web3.js';
+import {
+  getAssociatedTokenAddress,
+  getAccount,
+  createAssociatedTokenAccountInstruction,
+  createTransferInstruction,
+  TokenAccountNotFoundError,
+  TokenInvalidAccountOwnerError,
+} from '@solana/spl-token';
+import { USDC_MINT } from '@/lib/solana-pay';
 import { sendBaseUsdcPayment } from '@/lib/base-pay';
-import { useFundWallet } from '@privy-io/react-auth/solana';
+import { useWallets } from '@privy-io/react-auth';
+import { useFundWallet as useEvmFundWallet } from '@privy-io/react-auth';
+import {
+  useWallets as useSolanaWallets,
+  useSignAndSendTransaction,
+  useFundWallet as useSolanaFundWallet,
+  useSolanaFundingPlugin,
+} from '@privy-io/react-auth/solana';
+import { createWalletClient, custom } from 'viem';
+import { base } from 'viem/chains';
+import bs58 from 'bs58';
 import { signWalletAuth } from '@/lib/solana-auth-client';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { clientUpload } from '@/lib/client-upload';
 import { readReferralCookie } from './ReferralCapture';
+import { useUsdcBalances } from '@/hooks/use-usdc-balances';
 import type { Service, RequirementField } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'select-wallet' | 'confirmation';
@@ -104,12 +122,12 @@ const BRIEF_HINTS: Record<string, { workspace: string; single: string; helper: s
     helper: 'Describe the style, characters, and mood for your project. Each generation will follow this direction.',
   },
   agent_atelier_lenscraft: {
-    workspace: 'e.g. "Premium skincare line — minimalist white packaging, clean marble backgrounds, soft diffused lighting. Hero shots and flat-lays with botanical accents."',
+    workspace: 'e.g. "Premium skincare line -- minimalist white packaging, clean marble backgrounds, soft diffused lighting. Hero shots and flat-lays with botanical accents."',
     single: 'e.g. "Wireless headphones on a dark concrete surface, dramatic rim lighting, sleek and modern feel"',
     helper: 'Describe your product and the visual style you need. All renders will maintain consistent lighting and brand feel.',
   },
   agent_atelier_ugcfactory: {
-    workspace: 'e.g. "Organic protein bar brand — earthy tones, kitchen and gym settings, product-in-hand shots. Target audience: health-conscious millennials on Instagram."',
+    workspace: 'e.g. "Organic protein bar brand -- earthy tones, kitchen and gym settings, product-in-hand shots. Target audience: health-conscious millennials on Instagram."',
     single: 'e.g. "Coffee mug on a messy desk next to a laptop, morning light through window, cozy work-from-home vibe"',
     helper: 'Describe your brand, product, and target audience. Each piece of content will follow this creative direction.',
   },
@@ -119,39 +137,39 @@ const NON_VISUAL_CATEGORIES = ['coding', 'analytics', 'seo', 'trading', 'automat
 
 const CATEGORY_HINTS: Record<string, { workspace: string; single: string; helper: string }> = {
   coding: {
-    workspace: 'Describe the project — tech stack, requirements, and expected deliverables...',
-    single: 'Describe what you need built — include tech stack, requirements, and scope...',
+    workspace: 'Describe the project -- tech stack, requirements, and expected deliverables...',
+    single: 'Describe what you need built -- include tech stack, requirements, and scope...',
     helper: 'Be specific about the tech stack, features, and acceptance criteria.',
   },
   analytics: {
     workspace: 'Describe the data/metrics you need analyzed and the format you want...',
-    single: 'Describe the report or analysis you need — include data sources and KPIs...',
+    single: 'Describe the report or analysis you need -- include data sources and KPIs...',
     helper: 'Specify the metrics, data sources, and preferred output format.',
   },
   seo: {
     workspace: 'Describe your site, target keywords, and what SEO work you need...',
-    single: 'Describe the SEO task — include your site URL and target goals...',
+    single: 'Describe the SEO task -- include your site URL and target goals...',
     helper: 'Include your site URL, target market, and current pain points.',
   },
   trading: {
     workspace: 'Describe the trading strategy, assets, risk parameters, and alerts you need...',
-    single: 'Describe the trading bot or strategy you need — include assets and risk tolerance...',
+    single: 'Describe the trading bot or strategy you need -- include assets and risk tolerance...',
     helper: 'Be specific about assets, entry/exit conditions, and risk management.',
   },
   automation: {
-    workspace: 'Describe the workflow to automate — triggers, actions, and integrations...',
-    single: 'Describe the automation you need — include the trigger, action, and tools involved...',
+    workspace: 'Describe the workflow to automate -- triggers, actions, and integrations...',
+    single: 'Describe the automation you need -- include the trigger, action, and tools involved...',
     helper: 'Specify the systems involved, triggers, and expected outputs.',
   },
   consulting: {
     workspace: 'Describe what you need reviewed or evaluated and the context...',
-    single: 'Describe the consultation you need — include context and specific questions...',
+    single: 'Describe the consultation you need -- include context and specific questions...',
     helper: 'Provide context, constraints, and the specific decisions you need help with.',
   },
 };
 
 const DEFAULT_HINTS = {
-  workspace: 'Describe your project — style, mood, and what you want to achieve...',
+  workspace: 'Describe your project -- style, mood, and what you want to achieve...',
   single: 'Describe what you need...',
   helper: 'Describe the style and direction for your project. Each generation will follow this direction.',
 };
@@ -159,33 +177,55 @@ const DEFAULT_HINTS = {
 type PayMethod = 'wallet' | 'card';
 type PayChain = 'solana' | 'base';
 
+const SOLANA_USDC_DECIMALS = 6;
+const SOLANA_RPC_URL =
+  process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+
 function getTreasuryForChain(chain: PayChain): string | null {
   if (chain === 'base') return process.env.NEXT_PUBLIC_ATELIER_TREASURY_BASE ?? null;
   return process.env.NEXT_PUBLIC_ATELIER_TREASURY_WALLET ?? null;
 }
 
 export function HireModal({ service, open, onClose }: HireModalProps) {
+  useSolanaFundingPlugin();
+
   const router = useRouter();
   const {
     authenticated,
     ready,
     login,
     getAuth,
-    getTransactionWallet,
     getSignableWallet,
-    getEvmWalletClient,
-    solanaAddress,
-    evmAddress,
     activeChain,
     setActiveChain,
   } = useAtelierAuth();
-  const { connection } = useConnection();
-  const fundResolveRef = useRef<(() => void) | null>(null) as MutableRefObject<(() => void) | null>;
-  const { fundWallet } = useFundWallet({
+
+  const { wallets: evmWallets } = useWallets();
+  const { wallets: solanaWallets } = useSolanaWallets();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
+
+  const evmEmbedded = evmWallets.find((w) => w.walletClientType === 'privy') ?? null;
+  const solEmbedded = solanaWallets.find((w) => w.address) ?? null;
+
+  const usdcBalances = useUsdcBalances();
+
+  const solFundResolveRef = useRef<(() => void) | null>(null) as MutableRefObject<(() => void) | null>;
+  const evmFundResolveRef = useRef<(() => void) | null>(null) as MutableRefObject<(() => void) | null>;
+
+  const { fundWallet: fundSolanaWallet } = useSolanaFundWallet({
     onUserExited: () => {
-      if (fundResolveRef.current) {
-        fundResolveRef.current();
-        fundResolveRef.current = null;
+      if (solFundResolveRef.current) {
+        solFundResolveRef.current();
+        solFundResolveRef.current = null;
+      }
+    },
+  });
+
+  const { fundWallet: fundEvmWallet } = useEvmFundWallet({
+    onUserExited: () => {
+      if (evmFundResolveRef.current) {
+        evmFundResolveRef.current();
+        evmFundResolveRef.current = null;
       }
     },
   });
@@ -202,6 +242,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [payChain, setPayChain] = useState<PayChain>(activeChain);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [reqAnswers, setReqAnswers] = useState<Record<string, string>>({});
+  const [needsFunding, setNeedsFunding] = useState(false);
+  const [pendingChain, setPendingChain] = useState<PayChain | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const reqFields: RequirementField[] = (() => {
@@ -222,8 +264,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setOrderId(null);
       setPayMethod('wallet');
       setPayChain(activeChain);
+      setNeedsFunding(false);
+      setPendingChain(null);
     }
-    // Intentionally exclude activeChain: chain switches mid-flow must not reset the modal step.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -246,6 +289,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const validUrls = referenceUrls.filter((u) => u.trim().length > 0);
 
   const isUploading = referenceImages.some((img) => img.uploading);
+
+  const embeddedSolanaAddress = solEmbedded?.address ?? null;
+  const embeddedEvmAddress = evmEmbedded?.address ?? null;
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -292,6 +338,108 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
   }, []);
 
+  const fundAndRetry = useCallback(async (chain: PayChain) => {
+    const address = chain === 'base' ? embeddedEvmAddress : embeddedSolanaAddress;
+    if (!address) return;
+
+    setNeedsFunding(false);
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (chain === 'base' && evmEmbedded) {
+        await new Promise<void>((resolve) => {
+          evmFundResolveRef.current = resolve;
+          void fundEvmWallet({
+            address,
+            options: { chain: base, amount: total.toFixed(2), asset: 'USDC' },
+          });
+        });
+      } else if (chain === 'solana') {
+        await new Promise<void>((resolve) => {
+          solFundResolveRef.current = resolve;
+          void fundSolanaWallet({
+            address,
+            options: { chain: 'solana:mainnet', amount: total.toFixed(2), asset: 'USDC' },
+          });
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    embeddedEvmAddress,
+    embeddedSolanaAddress,
+    evmEmbedded,
+    fundEvmWallet,
+    fundSolanaWallet,
+    total,
+  ]);
+
+  const buildAndSignSolanaUsdcTransfer = useCallback(async (
+    fromAddress: string,
+    treasuryAddress: string,
+    amountUsd: number,
+  ): Promise<string> => {
+    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    const fromPubkey = new PublicKey(fromAddress);
+    const toPubkey = new PublicKey(treasuryAddress);
+
+    const senderAta = await getAssociatedTokenAddress(USDC_MINT, fromPubkey);
+    const recipientAta = await getAssociatedTokenAddress(USDC_MINT, toPubkey);
+
+    const [whole, frac = ''] = String(amountUsd).split('.');
+    const padded = (frac + '000000').slice(0, SOLANA_USDC_DECIMALS);
+    const lamports = BigInt(whole) * BigInt(10 ** SOLANA_USDC_DECIMALS) + BigInt(padded);
+
+    try {
+      const senderAccount = await getAccount(connection, senderAta);
+      if (senderAccount.amount < lamports) {
+        const have = Number(senderAccount.amount) / 10 ** SOLANA_USDC_DECIMALS;
+        throw new Error(`Insufficient USDC balance. Need $${amountUsd.toFixed(2)}, have $${have.toFixed(2)}`);
+      }
+    } catch (err) {
+      if (err instanceof TokenAccountNotFoundError || err instanceof TokenInvalidAccountOwnerError) {
+        throw new Error('No USDC in this wallet. Fund it with USDC on Solana first.');
+      }
+      throw err;
+    }
+
+    const tx = new Transaction();
+
+    const recipientAtaInfo = await connection.getAccountInfo(recipientAta);
+    if (!recipientAtaInfo) {
+      tx.add(
+        createAssociatedTokenAccountInstruction(fromPubkey, recipientAta, toPubkey, USDC_MINT),
+      );
+    }
+
+    tx.add(createTransferInstruction(senderAta, recipientAta, fromPubkey, lamports));
+
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = fromPubkey;
+
+    if (!solEmbedded) throw new Error('Solana embedded wallet not available');
+
+    const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+
+    const result = await signAndSendTransaction({
+      transaction: new Uint8Array(serialized),
+      wallet: solEmbedded,
+      chain: 'solana:mainnet',
+    });
+
+    const sig = bs58.encode(result.signature);
+
+    await connection.confirmTransaction(
+      { signature: sig, blockhash, lastValidBlockHeight },
+      'confirmed',
+    );
+
+    return sig;
+  }, [solEmbedded, signAndSendTransaction]);
+
   const executePaymentForChain = useCallback(async (chain: PayChain) => {
     const treasury = getTreasuryForChain(chain);
     if (!treasury) {
@@ -300,14 +448,23 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       return;
     }
 
-    const payerAddress = chain === 'base' ? evmAddress : solanaAddress;
+    const payerAddress = chain === 'base' ? embeddedEvmAddress : embeddedSolanaAddress;
     if (!payerAddress) {
-      setError(`Connect a ${chain === 'base' ? 'Base' : 'Solana'} wallet to continue.`);
+      setError(`Embedded ${chain === 'base' ? 'Base' : 'Solana'} wallet not available. Sign in with Privy to continue.`);
+      setLoading(false);
+      return;
+    }
+
+    const currentBalance = chain === 'base' ? usdcBalances.base : usdcBalances.solana;
+    if (!usdcBalances.loading && currentBalance < total) {
+      setNeedsFunding(true);
+      setPendingChain(chain);
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setNeedsFunding(false);
     setError(null);
 
     try {
@@ -340,13 +497,21 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       let txSig: string;
 
       if (chain === 'base') {
-        const evm = await getEvmWalletClient();
-        if (!evm) throw new Error('Base wallet not ready for signing');
-        txSig = await sendBaseUsdcPayment(evm.client, evm.account, treasury as `0x${string}`, total);
+        if (!evmEmbedded) throw new Error('Base embedded wallet not available');
+        const provider = await evmEmbedded.getEthereumProvider();
+        const walletClient = createWalletClient({
+          account: evmEmbedded.address as `0x${string}`,
+          chain: base,
+          transport: custom(provider),
+        });
+        txSig = await sendBaseUsdcPayment(
+          walletClient,
+          evmEmbedded.address as `0x${string}`,
+          treasury as `0x${string}`,
+          total,
+        );
       } else {
-        const sw = getTransactionWallet();
-        if (!sw) throw new Error('Solana wallet not ready for signing');
-        txSig = await sendUsdcPayment(connection, sw, new PublicKey(treasury), total);
+        txSig = await buildAndSignSolanaUsdcTransfer(payerAddress, treasury, total);
       }
 
       setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
@@ -372,9 +537,10 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setLoading(false);
     }
   }, [
-    solanaAddress,
-    evmAddress,
-    connection,
+    embeddedSolanaAddress,
+    embeddedEvmAddress,
+    evmEmbedded,
+    usdcBalances,
     service,
     brief,
     validUrls,
@@ -382,8 +548,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     reqAnswers,
     total,
     getAuth,
-    getTransactionWallet,
-    getEvmWalletClient,
+    buildAndSignSolanaUsdcTransfer,
     isWorkspace,
   ]);
 
@@ -393,8 +558,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setError('Treasury not configured for Solana');
       return;
     }
-    if (!solanaAddress) {
-      setError('Connect a Solana wallet to top up via card');
+    if (!embeddedSolanaAddress) {
+      setError('Embedded Solana wallet not available');
       return;
     }
     setLoading(true);
@@ -403,9 +568,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setLoadingMsg('Opening payment...');
       try {
         await new Promise<void>((resolve) => {
-          fundResolveRef.current = resolve;
-          fundWallet({
-            address: solanaAddress,
+          solFundResolveRef.current = resolve;
+          void fundSolanaWallet({
+            address: embeddedSolanaAddress,
             options: { chain: 'solana:mainnet', amount: total.toFixed(2), asset: 'USDC' },
           });
         });
@@ -431,7 +596,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           reference_urls: validUrls.length > 0 ? validUrls : undefined,
           reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
           requirement_answers: Object.keys(reqAnswers).length > 0 ? reqAnswers : undefined,
-          client_wallet: solanaAddress,
+          client_wallet: embeddedSolanaAddress,
           payment_chain: 'solana',
           ...(referralPartner ? { referral_partner: referralPartner } : {}),
         }),
@@ -442,9 +607,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       const newOrderId = createJson.data.id;
 
       setLoadingMsg('Sending payment...');
-      const sw = getTransactionWallet();
-      if (!sw) throw new Error('Solana wallet not ready for signing');
-      const txSig = await sendUsdcPayment(connection, sw, new PublicKey(treasury), total);
+      const txSig = await buildAndSignSolanaUsdcTransfer(embeddedSolanaAddress, treasury, total);
 
       setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
       const patchRes = await fetch(`/api/orders/${newOrderId}`, {
@@ -468,19 +631,27 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [solanaAddress, total, fundWallet, getSignableWallet, getTransactionWallet, connection, service, brief, validUrls, referenceImages, reqAnswers, isWorkspace]);
+  }, [
+    embeddedSolanaAddress,
+    total,
+    fundSolanaWallet,
+    getSignableWallet,
+    buildAndSignSolanaUsdcTransfer,
+    service,
+    brief,
+    validUrls,
+    referenceImages,
+    reqAnswers,
+    isWorkspace,
+  ]);
 
   const handleSelectChain = useCallback((chain: PayChain) => {
     setPayChain(chain);
     setActiveChain(chain);
     setError(null);
-    const addr = chain === 'base' ? evmAddress : solanaAddress;
-    if (!addr) {
-      setWalletModalOpen(true);
-      return;
-    }
+    setNeedsFunding(false);
     void executePaymentForChain(chain);
-  }, [setActiveChain, evmAddress, solanaAddress, executePaymentForChain]);
+  }, [setActiveChain, executePaymentForChain]);
 
   const handleReviewPay = useCallback(() => {
     if (payMethod === 'card') {
@@ -494,6 +665,12 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
   if (!open) return null;
 
+  const embeddedAddrForChain = (chain: PayChain) =>
+    chain === 'base' ? embeddedEvmAddress : embeddedSolanaAddress;
+
+  const balanceForChain = (chain: PayChain) =>
+    chain === 'base' ? usdcBalances.base : usdcBalances.solana;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
@@ -503,7 +680,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         <div className="px-6 py-4 border-b border-gray-200 dark:border-neutral-800">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold font-display text-black dark:text-white">
-              {step === 'confirmation' ? 'Order Placed' : `Hire — ${service.title}`}
+              {step === 'confirmation' ? 'Order Placed' : `Hire -- ${service.title}`}
             </h2>
             <button
               onClick={onClose}
@@ -658,7 +835,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   {brief.length}/1000
                 </span>
 
-                {/* Quick prompt templates */}
                 {brief.length === 0 && QUICK_PROMPTS[service.category] && (
                   <div className="mt-2">
                     <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mb-1.5">Try a prompt:</p>
@@ -897,34 +1073,63 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           {authenticated && step === 'select-wallet' && (
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1">Select wallet</p>
+                <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1">Pay with embedded wallet</p>
                 <p className="inline-flex items-center gap-1 text-2xs font-mono text-gray-400 dark:text-neutral-600">
                   Pay ${total.toFixed(2)}
                   <Image src="/usdc.svg" alt="USDC" width={11} height={11} className="h-2.5 w-2.5 object-contain" />
-                  USDC from your wallet of choice.
+                  USDC from your Privy embedded wallet.
                 </p>
               </div>
 
+              {needsFunding && pendingChain && (
+                <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
+                  <p className="text-xs font-mono text-amber-400 mb-2">
+                    Insufficient USDC balance on {pendingChain === 'base' ? 'Base' : 'Solana'}.
+                    Need ${total.toFixed(2)}, have ${balanceForChain(pendingChain).toFixed(2)}.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void fundAndRetry(pendingChain)}
+                    className="w-full py-2 rounded border border-amber-500/50 text-amber-400 text-xs font-mono hover:bg-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? 'Opening funding...' : `Add funds to continue`}
+                  </button>
+                </div>
+              )}
+
               <div className="space-y-2">
                 {(['solana', 'base'] as const).map((chain) => {
-                  const addr = chain === 'base' ? evmAddress : solanaAddress;
-                  const connected = !!addr;
+                  const addr = embeddedAddrForChain(chain);
+                  const balance = balanceForChain(chain);
                   const label = chain === 'base' ? 'Base' : 'Solana';
                   const logo = chain === 'base' ? '/base.svg' : '/solana.svg';
+                  const hasWallet = !!addr;
                   return (
                     <button
                       key={chain}
                       type="button"
-                      disabled={loading}
+                      disabled={loading || !hasWallet}
                       onClick={() => handleSelectChain(chain)}
                       className="w-full flex items-center gap-3 p-3 rounded border border-gray-200 dark:border-neutral-800 text-left transition-all duration-200 hover:border-atelier/40 hover:bg-atelier/5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <Image src={logo} alt={`${label} logo`} width={28} height={28} className="h-7 w-7 object-contain flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-mono text-black dark:text-white">Pay with {label}</p>
-                        <p className={`text-2xs font-mono ${connected ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
-                          {connected ? `Connected · ${truncateAddress(addr!)}` : 'Tap to connect wallet'}
-                        </p>
+                        {hasWallet ? (
+                          <p className="text-2xs font-mono text-gray-400 dark:text-neutral-500">
+                            {truncateAddress(addr!)}
+                            {!usdcBalances.loading && (
+                              <span className={`ml-2 ${balance >= total ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                ${balance.toFixed(2)} USDC
+                              </span>
+                            )}
+                          </p>
+                        ) : (
+                          <p className="text-2xs font-mono text-gray-400 dark:text-neutral-500">
+                            No embedded wallet available
+                          </p>
+                        )}
                       </div>
                       <svg className="w-4 h-4 text-gray-300 dark:text-neutral-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
@@ -957,6 +1162,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
               <button
                 onClick={() => {
                   setLoading(false);
+                  setNeedsFunding(false);
                   setStep('review');
                 }}
                 disabled={loading}

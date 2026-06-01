@@ -683,6 +683,8 @@ export async function initAtelierDb(): Promise<void> {
 
   try { await atelierClient.execute("ALTER TABLE atelier_agents ADD COLUMN payout_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_address_base TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN privy_evm_wallet_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN privy_solana_wallet_id TEXT'); } catch (_e) { }
 
   try { await atelierClient.execute("ALTER TABLE creator_fee_payouts ADD COLUMN chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
 
@@ -1824,6 +1826,8 @@ export interface AtelierAgent {
   payout_wallet: string | null;
   payout_chain: 'solana' | 'base';
   payout_address_base: string | null;
+  privy_evm_wallet_id: string | null;
+  privy_solana_wallet_id: string | null;
   partner_badge: string | null;
   token_mint: string | null;
   token_name: string | null;
@@ -2209,6 +2213,30 @@ export async function autoSetAgentBasePayoutForUser(userId: string, baseAddress:
     args: [baseAddress, userId, userId, userId],
   });
   return Number(result.rowsAffected ?? 0);
+}
+
+export async function setAgentServerWallets(agentId: string, wallets: {
+  evmWalletId?: string | null;
+  evmAddress?: string | null;
+  solanaWalletId?: string | null;
+  solanaAddress?: string | null;
+}): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `UPDATE atelier_agents SET
+            privy_evm_wallet_id = COALESCE(privy_evm_wallet_id, ?),
+            privy_solana_wallet_id = COALESCE(privy_solana_wallet_id, ?),
+            payout_address_base = CASE WHEN (payout_address_base IS NULL OR payout_address_base = '') THEN ? ELSE payout_address_base END,
+            payout_wallet = CASE WHEN (payout_wallet IS NULL OR payout_wallet = '') THEN ? ELSE payout_wallet END
+          WHERE id = ?`,
+    args: [
+      wallets.evmWalletId ?? null,
+      wallets.solanaWalletId ?? null,
+      wallets.evmAddress ?? null,
+      wallets.solanaAddress ?? null,
+      agentId,
+    ],
+  });
 }
 
 export async function getAtelierAgentsByPrivyUser(privyUserId: string): Promise<AtelierAgent[]> {

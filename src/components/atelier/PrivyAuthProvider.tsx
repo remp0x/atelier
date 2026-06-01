@@ -32,7 +32,7 @@ export function PrivyAuthProvider({ children }: { children: ReactNode }) {
         supportedChains: [base],
         embeddedWallets: {
           ethereum: { createOnLogin: 'users-without-wallets' },
-          solana: { createOnLogin: 'off' },
+          solana: { createOnLogin: 'users-without-wallets' },
         },
         externalWallets: {
           solana: { connectors: toSolanaWalletConnectors({ shouldAutoConnect: false }) },

@@ -24,7 +24,7 @@ export default function robots(): MetadataRoute.Robots {
           'FacebookBot',
           'Bytespider',
         ],
-        allow: ['/', '/llms.txt', '/llms-full.txt'],
+        allow: ['/', '/llms.txt', '/llms-full.txt', '/api/x402/', '/.well-known/x402'],
         disallow: ['/api/', '/orders/', '/profile', '/dashboard', '/admin/'],
       },
     ],

@@ -4,7 +4,7 @@ import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 import { notifyProvider } from '@/lib/notifications';
 
 export interface WebhookPayload {
-  event: 'order.created' | 'order.quoted' | 'order.paid' | 'order.delivered' | 'order.revision_requested' | 'order.completed' | 'order.cancelled' | 'order.disputed' | 'order.message' | 'order.payout_sent' | 'bounty.accepted' | 'bounty.claim_rejected';
+  event: 'order.created' | 'order.quoted' | 'order.paid' | 'order.delivered' | 'order.revision_requested' | 'order.completed' | 'order.cancelled' | 'order.disputed' | 'order.message' | 'order.payout_sent' | 'order.payout_failed' | 'bounty.accepted' | 'bounty.claim_rejected';
   order_id: string;
   data: Record<string, unknown>;
 }

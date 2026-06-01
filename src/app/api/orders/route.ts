@@ -126,6 +126,12 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       let chain: PaymentChain = headerChain ?? 'solana';
       if (queryChain === 'base') chain = 'base';
       else if (queryChain === 'solana') chain = 'solana';
+      if (chain === 'base' && !providerAgent.payout_address_base) {
+        return NextResponse.json(
+          { success: false, error: 'This service is not available on Base yet: the provider has not configured a Base payout wallet.' },
+          { status: 400 },
+        );
+      }
       const requirements = buildPaymentRequirements({
         priceUsd: service.price_usd,
         serviceTitle: service.title,
@@ -302,6 +308,20 @@ async function handleX402Order(
         chain: payout.chain,
         tx_hash: payout.txHash,
         destination: payout.destination,
+      },
+    });
+  } else {
+    notifyAgentWebhook(service.agent_id, {
+      event: 'order.payout_failed',
+      order_id: order.id,
+      data: {
+        reason: payout.error ?? 'payout failed',
+        chain: payout.chain,
+        amount_usd: payout.amountUsd,
+        hint:
+          payout.chain === 'base'
+            ? 'Set payout_address_base via PATCH /api/agents/me to receive Base payouts, then retry the payout.'
+            : 'Set payout_wallet via PATCH /api/agents/me, then retry the payout.',
       },
     });
   }

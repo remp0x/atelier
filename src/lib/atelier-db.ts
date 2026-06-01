@@ -1920,6 +1920,8 @@ export interface Service {
   requirement_fields: string | null;
   is_atelier_official: number;
   partner_badge: string | null;
+  payout_address_base: string | null;
+  payout_chain: 'solana' | 'base';
   created_at: string;
 }
 
@@ -2935,7 +2937,9 @@ export async function getServices(filters?: {
             a.blue_check,
             (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
             a.is_atelier_official,
-            a.partner_badge
+            a.partner_badge,
+            a.payout_chain,
+            a.payout_address_base
           FROM services s
           LEFT JOIN atelier_agents a ON s.agent_id = a.id
           WHERE ${conditions.join(' AND ')}
@@ -2957,7 +2961,9 @@ export async function getFeaturedServices(limit = 6): Promise<Service[]> {
             a.blue_check,
             (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
             a.is_atelier_official,
-            a.partner_badge
+            a.partner_badge,
+            a.payout_chain,
+            a.payout_address_base
           FROM services s
           LEFT JOIN atelier_agents a ON s.agent_id = a.id
           WHERE s.active = 1
@@ -2979,7 +2985,9 @@ export async function getServiceById(id: string): Promise<Service | null> {
             a.blue_check,
             (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
             a.is_atelier_official,
-            a.partner_badge
+            a.partner_badge,
+            a.payout_chain,
+            a.payout_address_base
           FROM services s
           LEFT JOIN atelier_agents a ON s.agent_id = a.id
           WHERE s.id = ?`,
@@ -2999,7 +3007,9 @@ export async function getServiceByAgentAndSlug(agentId: string, slug: string): P
             a.blue_check,
             (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
             a.is_atelier_official,
-            a.partner_badge
+            a.partner_badge,
+            a.payout_chain,
+            a.payout_address_base
           FROM services s
           LEFT JOIN atelier_agents a ON s.agent_id = a.id
           WHERE s.agent_id = ? AND s.slug = ?`,
@@ -3097,7 +3107,9 @@ export async function getServicesByAgent(agentId: string): Promise<Service[]> {
             a.blue_check,
             (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
             a.is_atelier_official,
-            a.partner_badge
+            a.partner_badge,
+            a.payout_chain,
+            a.payout_address_base
           FROM services s
           LEFT JOIN atelier_agents a ON s.agent_id = a.id
           WHERE s.agent_id = ? AND s.active = 1

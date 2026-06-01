@@ -42,7 +42,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .map((s) => {
         const totals = computeTotalWithFee(s.price_usd);
         const payments: Record<string, unknown> = {};
+        const baseEligible = typeof s.payout_address_base === 'string' && s.payout_address_base.length > 0;
         for (const chain of chains) {
+          if (chain === 'base' && !baseEligible) continue;
           try {
             const req = buildPaymentRequirements({
               priceUsd: s.price_usd,

@@ -61,6 +61,12 @@ function resolveQueryChain(param: string | null, fallback: PaymentChain): Paymen
   return fallback;
 }
 
+function serviceBaseEligible(service: Service): boolean {
+  return typeof service.payout_address_base === 'string' && service.payout_address_base.length > 0;
+}
+
+const BASE_NOT_AVAILABLE = 'This service is not available on Base yet: the provider has not configured a Base payout wallet.';
+
 function cdpRequirementsForService(service: Service, origin: string): CdpPaymentRequirements | null {
   const treasury = process.env.ATELIER_TREASURY_BASE;
   if (!treasury) return null;
@@ -103,6 +109,10 @@ export async function GET(request: NextRequest): Promise<NextResponse | Response
     }
 
     const chain = resolveQueryChain(request.nextUrl.searchParams.get('chain'), 'solana');
+
+    if (chain === 'base' && !serviceBaseEligible(service)) {
+      return NextResponse.json({ success: false, error: BASE_NOT_AVAILABLE }, { status: 400 });
+    }
 
     if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
       const cdpRequirements = cdpRequirementsForService(service, getOrigin(request));
@@ -185,6 +195,12 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
     const paymentHeader = request.headers.get('X-PAYMENT');
     const cdpPayload = CDP_FACILITATOR_ENABLED ? decodeXPaymentPayload(paymentHeader) : null;
     if (cdpPayload) {
+      if (!serviceBaseEligible(service)) {
+        return NextResponse.json(
+          { success: false, error: `${BASE_NOT_AVAILABLE} No payment was taken.` },
+          { status: 409 },
+        );
+      }
       return handleCdpHire(request, service, cdpPayload, brief, requirementAnswers);
     }
 
@@ -193,6 +209,9 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
 
     if (!txSignature) {
       const chain = resolveQueryChain(request.nextUrl.searchParams.get('chain'), headerChain ?? 'solana');
+      if (chain === 'base' && !serviceBaseEligible(service)) {
+        return NextResponse.json({ success: false, error: BASE_NOT_AVAILABLE }, { status: 400 });
+      }
       if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
         const cdpRequirements = cdpRequirementsForService(service, getOrigin(request));
         if (cdpRequirements) {
@@ -283,6 +302,20 @@ async function recordPaidOrderAndPayout(
         chain: payout.chain,
         tx_hash: payout.txHash,
         destination: payout.destination,
+      },
+    });
+  } else {
+    notifyAgentWebhook(service.agent_id, {
+      event: 'order.payout_failed',
+      order_id: order.id,
+      data: {
+        reason: payout.error ?? 'payout failed',
+        chain: payout.chain,
+        amount_usd: payout.amountUsd,
+        hint:
+          payout.chain === 'base'
+            ? 'Set payout_address_base via PATCH /api/agents/me to receive Base payouts, then retry the payout.'
+            : 'Set payout_wallet via PATCH /api/agents/me, then retry the payout.',
       },
     });
   }

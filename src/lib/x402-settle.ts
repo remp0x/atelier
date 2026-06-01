@@ -18,6 +18,14 @@ export interface X402PayoutResult {
   error?: string;
 }
 
+export function hasX402PayoutDestination(agent: AtelierAgent, chain: PaymentChain): boolean {
+  if (chain === 'base') {
+    return typeof agent.payout_address_base === 'string' && agent.payout_address_base.length > 0;
+  }
+  const solana = getPayoutWallet(agent);
+  return typeof solana === 'string' && solana.length > 0;
+}
+
 function resolveDestination(agent: AtelierAgent, chain: PaymentChain): string | null {
   if (chain === 'base') {
     if (agent.payout_address_base) return agent.payout_address_base;

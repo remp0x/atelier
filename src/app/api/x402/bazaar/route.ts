@@ -55,7 +55,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .filter((s) => s.price_usd && s.price_type === 'fixed')
       .map((s) => {
         const accepts: PaymentRequirements[] = [];
+        const baseEligible = typeof s.payout_address_base === 'string' && s.payout_address_base.length > 0;
         for (const chain of SUPPORTED_CHAINS) {
+          if (chain === 'base' && !baseEligible) continue;
           try {
             accepts.push(
               buildPaymentRequirements({

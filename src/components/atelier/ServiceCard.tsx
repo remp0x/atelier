@@ -100,10 +100,14 @@ function AgentAvatar({ agent, size = 20 }: { agent: AgentAttribution; size?: num
 
 export function ServiceCard({ service, agent, showAgent = false, onHire, variant = 'grid' }: ServiceCardProps) {
   const cat = CATEGORY_CONFIG[service.category] || CATEGORY_CONFIG.custom;
+  const detailHref = service.agent_slug && service.slug ? `/services/${service.agent_slug}/${service.slug}` : null;
 
   if (variant === 'list') {
     return (
-      <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 transition-all duration-200 group">
+      <div className="relative p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 transition-all duration-200 group">
+        {detailHref && (
+          <Link href={detailHref} className="absolute inset-0 z-0" aria-label={service.title} />
+        )}
         <div className="flex items-center gap-4">
           <div className="w-9 h-9 rounded bg-atelier/10 flex items-center justify-center text-atelier flex-shrink-0">
             {cat.icon}
@@ -127,7 +131,7 @@ export function ServiceCard({ service, agent, showAgent = false, onHire, variant
               {showAgent && agent && (
                 <Link
                   href={atelierHref(`/atelier/agents/${agent.slug}`)}
-                  className="flex items-center gap-1.5 group/agent"
+                  className="relative z-10 flex items-center gap-1.5 group/agent"
                 >
                   <AgentAvatar agent={agent} />
                   <span className="text-2xs font-mono text-gray-500 dark:text-neutral-500 group-hover/agent:text-atelier transition-colors duration-150 truncate max-w-[160px]">
@@ -159,7 +163,7 @@ export function ServiceCard({ service, agent, showAgent = false, onHire, variant
             </span>
             <button
               onClick={onHire}
-              className="px-3 py-1.5 rounded border border-atelier text-atelier text-xs font-medium font-mono transition-all duration-200 hover:bg-atelier hover:text-white"
+              className="relative z-10 px-3 py-1.5 rounded border border-atelier text-atelier text-xs font-medium font-mono transition-all duration-200 hover:bg-atelier hover:text-white"
             >
               Hire
             </button>
@@ -170,7 +174,10 @@ export function ServiceCard({ service, agent, showAgent = false, onHire, variant
   }
 
   return (
-    <div className="p-5 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 transition-all duration-200 group">
+    <div className="relative p-5 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 transition-all duration-200 group">
+      {detailHref && (
+        <Link href={detailHref} className="absolute inset-0 z-0" aria-label={service.title} />
+      )}
       {/* Header: category + rating */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -195,7 +202,7 @@ export function ServiceCard({ service, agent, showAgent = false, onHire, variant
       {showAgent && agent && (
         <Link
           href={atelierHref(`/atelier/agents/${agent.slug}`)}
-          className="flex items-center gap-2 mb-3 group/agent"
+          className="relative z-10 flex items-center gap-2 mb-3 group/agent"
         >
           <AgentAvatar agent={agent} />
           <span className="text-xs font-mono text-gray-500 dark:text-neutral-500 group-hover/agent:text-atelier transition-colors duration-150">
@@ -261,7 +268,7 @@ export function ServiceCard({ service, agent, showAgent = false, onHire, variant
         </div>
         <button
           onClick={onHire}
-          className="px-4 py-1.5 rounded border border-atelier text-atelier text-xs font-medium font-mono transition-all duration-200 hover:bg-atelier hover:text-white"
+          className="relative z-10 px-4 py-1.5 rounded border border-atelier text-atelier text-xs font-medium font-mono transition-all duration-200 hover:bg-atelier hover:text-white"
         >
           Hire
         </button>
@@ -293,7 +300,7 @@ function ExpandableDescription({ text }: { text: string }) {
       {isClamped && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="text-2xs font-mono text-atelier hover:text-atelier-bright transition-colors mt-1"
+          className="relative z-10 text-2xs font-mono text-atelier hover:text-atelier-bright transition-colors mt-1"
         >
           {expanded ? 'See Less' : 'See More'}
         </button>

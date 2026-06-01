@@ -493,6 +493,9 @@ export async function initAtelierDb(): Promise<void> {
 
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN max_revisions INTEGER DEFAULT 3'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN requirement_fields TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE services ADD COLUMN slug TEXT'); } catch (_e) { }
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_services_agent_slug ON services(agent_id, slug) WHERE slug IS NOT NULL').catch(() => {});
+  await backfillServiceSlugs();
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN revision_count INTEGER DEFAULT 0'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN requirement_answers TEXT'); } catch (_e) { }
 
@@ -1888,6 +1891,7 @@ export interface AtelierAgentListItem {
 
 export interface Service {
   id: string;
+  slug: string | null;
   agent_id: string;
   agent_name: string;
   agent_slug: string;
@@ -2849,12 +2853,38 @@ export async function createService(data: {
   await initAtelierDb();
   const id = `svc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const detectedModel = inferModelFromText(`${data.title} ${data.description}`);
+  const slug = await generateServiceSlug(data.agent_id, data.title, id);
   await atelierClient.execute({
-    sql: `INSERT INTO services (id, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url, quota_limit, provider_model, max_revisions, requirement_fields)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null, data.quota_limit ?? 0, detectedModel, data.max_revisions ?? 3, data.requirement_fields ? JSON.stringify(data.requirement_fields) : null],
+    sql: `INSERT INTO services (id, slug, agent_id, category, title, description, price_usd, price_type, turnaround_hours, deliverables, portfolio_post_ids, demo_url, quota_limit, provider_model, max_revisions, requirement_fields)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, data.agent_id, data.category, data.title, data.description, data.price_usd, data.price_type, data.turnaround_hours || 48, JSON.stringify(data.deliverables || []), JSON.stringify(data.portfolio_post_ids || []), data.demo_url || null, data.quota_limit ?? 0, detectedModel, data.max_revisions ?? 3, data.requirement_fields ? JSON.stringify(data.requirement_fields) : null],
   });
   return getServiceById(id) as Promise<Service>;
+}
+
+async function generateServiceSlug(agentId: string, title: string, serviceId: string): Promise<string> {
+  let base = slugify(title);
+  if (!base) base = 'service';
+  let slug = base;
+  let suffix = 2;
+  while (true) {
+    const existing = await atelierClient.execute({
+      sql: 'SELECT id FROM services WHERE agent_id = ? AND slug = ? AND id != ?',
+      args: [agentId, slug, serviceId],
+    });
+    if (existing.rows.length === 0) break;
+    slug = `${base}-${suffix++}`;
+  }
+  return slug;
+}
+
+async function backfillServiceSlugs(): Promise<void> {
+  const missing = await atelierClient.execute("SELECT id, agent_id, title FROM services WHERE slug IS NULL OR slug = ''");
+  for (const row of missing.rows) {
+    const r = row as unknown as { id: string; agent_id: string; title: string };
+    const slug = await generateServiceSlug(r.agent_id, r.title, r.id);
+    await atelierClient.execute({ sql: 'UPDATE services SET slug = ? WHERE id = ?', args: [slug, r.id] });
+  }
 }
 
 export async function getServices(filters?: {
@@ -2956,6 +2986,104 @@ export async function getServiceById(id: string): Promise<Service | null> {
     args: [id],
   });
   return (result.rows[0] as unknown as Service) || null;
+}
+
+export async function getServiceByAgentAndSlug(agentId: string, slug: string): Promise<Service | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT s.*,
+            a.name as agent_name,
+            a.slug as agent_slug,
+            a.avatar_url as agent_avatar_url,
+            a.verified,
+            a.blue_check,
+            (a.bankr_wallet IS NOT NULL) as has_bankr_wallet,
+            a.is_atelier_official,
+            a.partner_badge
+          FROM services s
+          LEFT JOIN atelier_agents a ON s.agent_id = a.id
+          WHERE s.agent_id = ? AND s.slug = ?`,
+    args: [agentId, slug],
+  });
+  return (result.rows[0] as unknown as Service) || null;
+}
+
+export async function resolveServiceByAgentSlug(agentSlug: string, serviceSlug: string): Promise<Service | null> {
+  const agent = await resolveAgent(agentSlug);
+  if (!agent) return null;
+  const bySlug = await getServiceByAgentAndSlug(agent.id, serviceSlug);
+  if (bySlug) return bySlug;
+  const byId = await getServiceById(serviceSlug);
+  return byId && byId.agent_id === agent.id ? byId : null;
+}
+
+export interface TrendingService {
+  service_id: string;
+  title: string;
+  category: ServiceCategory;
+  price_usd: string;
+  agent_id: string;
+  agent_name: string;
+  agent_slug: string | null;
+  order_count: number;
+  distinct_buyers: number;
+  last_order_at: string | null;
+  score: number;
+}
+
+export async function getTrendingServices(opts?: { windowDays?: number; limit?: number }): Promise<TrendingService[]> {
+  await initAtelierDb();
+  const windowDays = Math.min(Math.max(opts?.windowDays ?? 30, 1), 90);
+  const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 50);
+
+  // distinct_buyers prefers the on-chain x402 payer, then the wallet/user that
+  // placed the order, falling back to the client agent id. payment_tx_signature
+  // is a last-resort proxy when no identity column is populated.
+  const result = await atelierClient.execute({
+    sql: `SELECT
+            s.id AS service_id,
+            s.title AS title,
+            s.category AS category,
+            s.price_usd AS price_usd,
+            a.id AS agent_id,
+            a.name AS agent_name,
+            a.slug AS agent_slug,
+            COUNT(o.id) AS order_count,
+            COUNT(DISTINCT COALESCE(o.payer_address, o.client_wallet, o.user_id, o.client_agent_id, o.payment_tx_signature)) AS distinct_buyers,
+            MAX(o.created_at) AS last_order_at,
+            (
+              COUNT(o.id)
+              + COUNT(DISTINCT COALESCE(o.payer_address, o.client_wallet, o.user_id, o.client_agent_id, o.payment_tx_signature)) * 2
+              + COUNT(o.id) * (1.0 - MIN(1.0, (julianday('now') - julianday(MAX(o.created_at))) / ?))
+            ) AS score
+          FROM service_orders o
+          JOIN services s ON s.id = o.service_id
+          JOIN atelier_agents a ON a.id = s.agent_id
+          WHERE o.service_id IS NOT NULL
+            AND o.bounty_id IS NULL
+            AND o.created_at >= datetime('now', ?)
+          GROUP BY s.id
+          ORDER BY score DESC
+          LIMIT ?`,
+    args: [windowDays, `-${windowDays} days`, limit],
+  });
+
+  return result.rows.map((row) => {
+    const r = row as unknown as Record<string, unknown>;
+    return {
+      service_id: String(r.service_id),
+      title: String(r.title),
+      category: String(r.category) as ServiceCategory,
+      price_usd: String(r.price_usd),
+      agent_id: String(r.agent_id),
+      agent_name: String(r.agent_name),
+      agent_slug: r.agent_slug === null ? null : String(r.agent_slug),
+      order_count: Number(r.order_count),
+      distinct_buyers: Number(r.distinct_buyers),
+      last_order_at: r.last_order_at === null ? null : String(r.last_order_at),
+      score: Number(r.score),
+    };
+  });
 }
 
 export async function getServicesByAgent(agentId: string): Promise<Service[]> {

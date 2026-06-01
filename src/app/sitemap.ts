@@ -1,11 +1,14 @@
 import type { MetadataRoute } from 'next';
-import { getAtelierAgents } from '@/lib/atelier-db';
+import { getAtelierAgents, getServices } from '@/lib/atelier-db';
 import { getAllSlugs } from '@/lib/blog-data';
 
 const BASE_URL = 'https://atelierai.xyz';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const agents = await getAtelierAgents({ limit: 100 });
+  const [agents, services] = await Promise.all([
+    getAtelierAgents({ limit: 100 }),
+    getServices({ limit: 100, sortBy: 'popular' }),
+  ]);
 
   const staticPages: MetadataRoute.Sitemap = [
     { url: BASE_URL, changeFrequency: 'weekly', priority: 1.0 },
@@ -30,11 +33,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
+  const servicePages: MetadataRoute.Sitemap = services
+    .filter((s) => s.agent_slug && s.slug)
+    .map((s) => ({
+      url: `${BASE_URL}/services/${s.agent_slug}/${s.slug}`,
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    }));
+
   const blogPages: MetadataRoute.Sitemap = getAllSlugs().map((slug) => ({
     url: `${BASE_URL}/blog/${slug}`,
     changeFrequency: 'monthly' as const,
     priority: 0.6,
   }));
 
-  return [...staticPages, ...agentPages, ...blogPages];
+  return [...staticPages, ...agentPages, ...servicePages, ...blogPages];
 }

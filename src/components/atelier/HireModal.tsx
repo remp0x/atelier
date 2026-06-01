@@ -20,6 +20,7 @@ import { useFundWallet as useEvmFundWallet } from '@privy-io/react-auth';
 import {
   useWallets as useSolanaWallets,
   useSignAndSendTransaction,
+  useSignMessage as useSolanaSignMessage,
   useFundWallet as useSolanaFundWallet,
   useSolanaFundingPlugin,
 } from '@privy-io/react-auth/solana';
@@ -27,8 +28,8 @@ import { createWalletClient, custom } from 'viem';
 import { base } from 'viem/chains';
 import bs58 from 'bs58';
 import { signWalletAuth } from '@/lib/solana-auth-client';
+import { signEvmWalletAuth } from '@/lib/evm-auth-client';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
-import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { clientUpload } from '@/lib/client-upload';
 import { readReferralCookie } from './ReferralCapture';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
@@ -194,8 +195,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     authenticated,
     ready,
     login,
-    getAuth,
-    getSignableWallet,
     activeChain,
     setActiveChain,
   } = useAtelierAuth();
@@ -203,6 +202,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const { wallets: evmWallets } = useWallets();
   const { wallets: solanaWallets } = useSolanaWallets();
   const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { signMessage: solSignMessage } = useSolanaSignMessage();
 
   const evmEmbedded = evmWallets.find((w) => w.walletClientType === 'privy') ?? null;
   const solEmbedded = solanaWallets.find((w) => w.address) ?? null;
@@ -240,7 +240,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [payMethod, setPayMethod] = useState<PayMethod>('wallet');
   const [payChain, setPayChain] = useState<PayChain>(activeChain);
-  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [reqAnswers, setReqAnswers] = useState<Record<string, string>>({});
   const [needsFunding, setNeedsFunding] = useState(false);
   const [pendingChain, setPendingChain] = useState<PayChain | null>(null);
@@ -318,7 +317,19 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     const idx = referenceImages.length;
 
     try {
-      const auth = await getAuth();
+      if (!embeddedSolanaAddress || !solEmbedded) {
+        setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
+        setError('Embedded Solana wallet not available. Sign in with Privy to continue.');
+        return;
+      }
+      const solSignable = {
+        publicKey: { toBase58: () => embeddedSolanaAddress },
+        signMessage: async (msg: Uint8Array) => {
+          const out = await solSignMessage({ message: msg, wallet: solEmbedded });
+          return out.signature;
+        },
+      };
+      const auth = await signWalletAuth(solSignable);
       const { url } = await clientUpload({
         file,
         auth,
@@ -332,7 +343,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
       setError(err instanceof Error ? err.message : 'Upload failed');
     }
-  }, [referenceImages.length, getAuth]);
+  }, [referenceImages.length, embeddedSolanaAddress, solEmbedded, solSignMessage]);
 
   const removeImage = useCallback((idx: number) => {
     setReferenceImages((prev) => prev.filter((_, i) => i !== idx));
@@ -469,7 +480,39 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
     try {
       setLoadingMsg('Signing wallet...');
-      const authPayload = await getAuth();
+      let authPayload;
+      if (chain === 'base') {
+        if (!evmEmbedded || !embeddedEvmAddress) {
+          setError('Embedded Base wallet not available. Sign in with Privy to continue.');
+          setLoading(false);
+          return;
+        }
+        const provider = await evmEmbedded.getEthereumProvider();
+        const evmWalletClient = createWalletClient({
+          account: embeddedEvmAddress as `0x${string}`,
+          chain: base,
+          transport: custom(provider),
+        });
+        authPayload = await signEvmWalletAuth({
+          address: embeddedEvmAddress as `0x${string}`,
+          signMessage: (message: string) =>
+            evmWalletClient.signMessage({ account: embeddedEvmAddress as `0x${string}`, message }),
+        });
+      } else {
+        if (!embeddedSolanaAddress || !solEmbedded) {
+          setError('Embedded Solana wallet not available. Sign in with Privy to continue.');
+          setLoading(false);
+          return;
+        }
+        const solSignable = {
+          publicKey: { toBase58: () => embeddedSolanaAddress },
+          signMessage: async (msg: Uint8Array) => {
+            const out = await solSignMessage({ message: msg, wallet: solEmbedded });
+            return out.signature;
+          },
+        };
+        authPayload = await signWalletAuth(solSignable);
+      }
 
       setLoadingMsg('Creating order...');
       const referralPartner = readReferralCookie();
@@ -547,7 +590,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     referenceImages,
     reqAnswers,
     total,
-    getAuth,
+    solSignMessage,
     buildAndSignSolanaUsdcTransfer,
     isWorkspace,
   ]);
@@ -580,9 +623,17 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       }
 
       setLoadingMsg('Signing wallet...');
-      const signable = getSignableWallet();
-      if (!signable) throw new Error('Solana wallet not available');
-      const auth = await signWalletAuth(signable);
+      if (!embeddedSolanaAddress || !solEmbedded) {
+        throw new Error('Embedded Solana wallet not available. Sign in with Privy to continue.');
+      }
+      const solSignable = {
+        publicKey: { toBase58: () => embeddedSolanaAddress },
+        signMessage: async (msg: Uint8Array) => {
+          const out = await solSignMessage({ message: msg, wallet: solEmbedded });
+          return out.signature;
+        },
+      };
+      const auth = await signWalletAuth(solSignable);
 
       setLoadingMsg('Creating order...');
       const referralPartner = readReferralCookie();
@@ -633,9 +684,10 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     }
   }, [
     embeddedSolanaAddress,
+    solEmbedded,
     total,
     fundSolanaWallet,
-    getSignableWallet,
+    solSignMessage,
     buildAndSignSolanaUsdcTransfer,
     service,
     brief,
@@ -1139,15 +1191,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 })}
               </div>
 
-              <button
-                type="button"
-                onClick={() => setWalletModalOpen(true)}
-                disabled={loading}
-                className="w-full text-center py-1.5 text-2xs font-mono text-gray-500 dark:text-neutral-500 hover:text-atelier transition-colors disabled:opacity-50"
-              >
-                Manage wallets · switch or disconnect
-              </button>
-
               {error && (
                 <p className="text-sm text-red-400 font-mono">{error}</p>
               )}
@@ -1199,12 +1242,6 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           )}
         </div>
       </div>
-      <WalletAccountModal
-        open={walletModalOpen}
-        onClose={() => setWalletModalOpen(false)}
-        title="Pay with which wallet?"
-        blurb="Switch the active chain, connect a different wallet, or disconnect one you don't want to pay from."
-      />
     </div>
   );
 }

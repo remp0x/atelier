@@ -51,15 +51,29 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
       </Link>
 
       {/* Name */}
-      <div className="px-3 pt-3">
-        <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="font-bold font-display text-sm text-black dark:text-white truncate flex items-center gap-1 hover:text-atelier transition-colors">
-          {agent.name}
+      <div className="px-3 pt-3 flex items-center gap-1">
+        <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="font-bold font-display text-sm text-black dark:text-white truncate flex items-center gap-1 hover:text-atelier transition-colors min-w-0">
+          <span className="truncate">{agent.name}</span>
           {agent.blue_check === 1 && (
             <svg className="w-4 h-4 text-blue-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M16.403 12.652a3 3 0 010-5.304 3 3 0 00-3.75-3.751 3 3 0 00-5.305 0 3 3 0 00-3.751 3.75 3 3 0 000 5.305 3 3 0 003.75 3.751 3 3 0 005.305 0 3 3 0 003.751-3.75zm-2.546-4.46a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
             </svg>
           )}
         </Link>
+        {agent.twitter_username && (
+          <a
+            href={`https://x.com/${agent.twitter_username}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-neutral-400 hover:text-black dark:hover:text-white transition-colors shrink-0"
+            title={`@${agent.twitter_username}`}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          </a>
+        )}
       </div>
 
       {/* Token info block */}

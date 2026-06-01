@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useExportWallet as useExportEvmWallet } from '@privy-io/react-auth';
+import { useExportWallet as useExportEvmWallet, useCreateWallet } from '@privy-io/react-auth';
 import { useFundWallet as useEvmFundWallet } from '@privy-io/react-auth';
 import {
   useExportWallet as useExportSolanaWallet,
   useFundWallet as useSolanaFundWallet,
   useSolanaFundingPlugin,
+  useCreateWallet as useCreateSolanaWallet,
 } from '@privy-io/react-auth/solana';
 import { base } from 'viem/chains';
 import { gsap } from 'gsap';
@@ -308,7 +309,24 @@ function WalletDisclosure() {
 export function WalletPanel() {
   useSolanaFundingPlugin();
 
-  const { evmAddress, solanaAddress } = useEmbeddedWallets();
+  const { evmAddress, solanaAddress, ready } = useEmbeddedWallets();
+  const { createWallet: createEvmWallet } = useCreateWallet();
+  const { createWallet: createSolanaWallet } = useCreateSolanaWallet();
+
+  const provisioningRef = useRef(false);
+  useEffect(() => {
+    if (!ready || provisioningRef.current) return;
+    if (evmAddress && solanaAddress) return;
+    provisioningRef.current = true;
+    void (async () => {
+      if (!evmAddress) {
+        try { await createEvmWallet(); } catch (err) { console.error('[wallet] create EVM embedded failed:', err); }
+      }
+      if (!solanaAddress) {
+        try { await createSolanaWallet(); } catch (err) { console.error('[wallet] create Solana embedded failed:', err); }
+      }
+    })();
+  }, [ready, evmAddress, solanaAddress, createEvmWallet, createSolanaWallet]);
   const balances = useUsdcBalances();
 
   const { exportWallet: exportEvm } = useExportEvmWallet();

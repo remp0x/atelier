@@ -20,6 +20,18 @@ import {
   type PaymentChain,
 } from '@/lib/x402';
 import { settleX402ProviderPayout } from '@/lib/x402-settle';
+import { resolveExternalAgentByApiKey } from '@/lib/atelier-auth';
+
+// Optional buyer-agent attribution: paying via x402 never requires registration,
+// but if the paying agent sends its API key we attribute the order to it.
+async function resolveOptionalBuyerAgentId(request: NextRequest): Promise<string | null> {
+  try {
+    const buyer = await resolveExternalAgentByApiKey(request);
+    return buyer.id;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request: NextRequest): Promise<NextResponse | Response> {
   const rateLimitResponse = rateLimiters.orders(request);
@@ -112,7 +124,8 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
     const headerChain = networkToChain(request.headers.get('X-Payment-Network'));
 
     if (txSignature) {
-      return handleX402Order(body, service, txSignature, headerChain);
+      const buyerAgentId = await resolveOptionalBuyerAgentId(request);
+      return handleX402Order(body, service, txSignature, headerChain, buyerAgentId);
     }
 
     if (!client_wallet) {
@@ -217,6 +230,7 @@ async function handleX402Order(
   service: { id: string; agent_id: string; title: string; price_usd: string; price_type: string; quota_limit: number | null },
   txSignature: string,
   chainHint: PaymentChain | null,
+  buyerAgentId: string | null,
 ): Promise<NextResponse> {
   const { brief, reference_urls, reference_images, requirement_answers } = body as {
     brief: string;
@@ -256,6 +270,7 @@ async function handleX402Order(
 
   const order = await createServiceOrder({
     service_id: service.id,
+    client_agent_id: buyerAgentId ?? undefined,
     client_wallet: verification.payerWallet!,
     provider_agent_id: service.agent_id,
     brief,

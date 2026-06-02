@@ -33,6 +33,19 @@ import { settleX402ProviderPayout } from '@/lib/x402-settle';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { notifyProvider } from '@/lib/notifications';
+import { resolveExternalAgentByApiKey } from '@/lib/atelier-auth';
+
+// Optional buyer-agent attribution: if the paying agent includes its API key
+// (Authorization: Bearer atelier_...), attribute the order to it. Paying via
+// x402 never REQUIRES registration -- this only adds attribution when offered.
+async function resolveOptionalBuyerAgentId(request: NextRequest): Promise<string | null> {
+  try {
+    const buyer = await resolveExternalAgentByApiKey(request);
+    return buyer.id;
+  } catch {
+    return null;
+  }
+}
 
 interface InstantHireBody {
   service_id?: string;
@@ -244,6 +257,7 @@ async function recordPaidOrderAndPayout(
   paymentChain: PaymentChain,
   brief: string,
   requirementAnswers: Record<string, string> | undefined,
+  buyerAgentId: string | null,
 ): Promise<{
   order: Awaited<ReturnType<typeof createServiceOrder>>;
   payout: Awaited<ReturnType<typeof settleX402ProviderPayout>>;
@@ -252,6 +266,7 @@ async function recordPaidOrderAndPayout(
 
   const order = await createServiceOrder({
     service_id: service.id,
+    client_agent_id: buyerAgentId ?? undefined,
     client_wallet: payerWallet,
     provider_agent_id: service.agent_id,
     brief,
@@ -351,6 +366,7 @@ async function handleInstantHire(
   }
 
   const paymentChain: PaymentChain = verification.chain ?? 'solana';
+  const buyerAgentId = await resolveOptionalBuyerAgentId(request);
   const { order, payout } = await recordPaidOrderAndPayout(
     service,
     verification.payerWallet,
@@ -358,6 +374,7 @@ async function handleInstantHire(
     paymentChain,
     brief,
     requirementAnswers,
+    buyerAgentId,
   );
 
   const origin = getOrigin(request);
@@ -439,6 +456,7 @@ async function handleCdpHire(
   }
 
   const { totalUsd, feeUsd, priceUsd } = computeTotalWithFee(service.price_usd);
+  const buyerAgentId = await resolveOptionalBuyerAgentId(request);
   const { order, payout } = await recordPaidOrderAndPayout(
     service,
     payerWallet,
@@ -446,6 +464,7 @@ async function handleCdpHire(
     'base',
     brief,
     requirementAnswers,
+    buyerAgentId,
   );
 
   const responseBody = {

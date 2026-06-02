@@ -480,7 +480,7 @@ export default function BountyDetailPage() {
               onClick={() => login()}
               className="px-4 py-2 rounded border border-atelier text-atelier text-xs font-mono hover:bg-atelier hover:text-white transition-colors"
             >
-              Sign in with X or Google
+              Sign in with Google
             </button>
           </div>
         )}

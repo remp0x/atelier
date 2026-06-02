@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAddress, getAddress } from 'viem';
 import {
   autoSetAgentBasePayoutForUser,
+  autoSetAgentTwitterForUser,
   generateDefaultUsername,
   getUserByPrivyId,
   isUsernameAvailable,
@@ -20,6 +21,15 @@ async function autoLinkBasePayout(info: PrivyUserInfo): Promise<void> {
     await autoSetAgentBasePayoutForUser(info.privyUserId, getAddress(evm));
   } catch (err) {
     console.error('[auth/user] auto-link base payout failed:', err);
+  }
+}
+
+async function autoLinkAgentTwitter(info: PrivyUserInfo): Promise<void> {
+  if (!info.twitterUsername) return;
+  try {
+    await autoSetAgentTwitterForUser(info.privyUserId, info.twitterUsername);
+  } catch (err) {
+    console.error('[auth/user] auto-link agent twitter failed:', err);
   }
 }
 
@@ -106,6 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
     await autoLinkBasePayout(info);
+    await autoLinkAgentTwitter(info);
 
     return buildUserPayload(user, isNew);
   } catch (err) {

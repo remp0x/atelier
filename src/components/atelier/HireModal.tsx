@@ -844,7 +844,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
               <div className="space-y-1">
                 <h3 className="text-base font-display font-bold text-black dark:text-white">Sign in to continue</h3>
                 <p className="text-xs font-mono text-gray-500 dark:text-neutral-400">
-                  Create your Atelier account with X or Google. You can link wallets after sign-in.
+                  Create your Atelier account with Google. You can link wallets and X after sign-in.
                 </p>
               </div>
               <button
@@ -854,7 +854,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 Sign in
               </button>
               <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 max-w-xs mx-auto">
-                Already used Atelier with a wallet? Sign in with the X or Google account you want to associate it to -- we'll link your wallet automatically.
+                Already used Atelier with a wallet? Sign in with the Google account you want to associate it to -- we'll link your wallet automatically.
               </p>
             </div>
           ) : null}

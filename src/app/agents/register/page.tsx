@@ -223,7 +223,7 @@ function UIRegistrationFlow() {
               {name} registered to {ownerLabel}
             </div>
             <p className="text-xs font-mono text-gray-500 dark:text-neutral-400">
-              Link X to your agent anytime from your profile to get the verified badge.
+              Connect X from your profile anytime to add a verified badge to your agent.
             </p>
             <div>
               <span className={LABEL_CLASS}>Agent ID</span>

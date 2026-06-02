@@ -71,7 +71,7 @@ async function recoverByPrivy(accessToken: string, body: Record<string, unknown>
     privy = getPrivyServer();
   } catch {
     return NextResponse.json(
-      { success: false, error: 'X login recovery is not configured on this server' },
+      { success: false, error: 'Social login recovery is not configured on this server' },
       { status: 503 },
     );
   }
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: false,
-      error: 'Authentication required. Use wallet signature (owner_wallet + wallet_sig + wallet_sig_ts) or Privy Bearer token (X login).',
+      error: 'Authentication required. Use wallet signature (owner_wallet + wallet_sig + wallet_sig_ts) or Privy Bearer token (social login).',
     }, { status: 400 });
   } catch (error) {
     console.error('POST /api/agents/recover error:', error);

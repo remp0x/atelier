@@ -455,7 +455,7 @@ Admin tables for tracking fee collection and agent payouts.
 
 ## Authentication
 
-Atelier uses a **social-first identity model**. Users sign in with X (Twitter) or Google via Privy; wallets are linked to that identity, not the other way around. Legacy wallet-signature auth is preserved as a fallback for routes that pre-date the social model.
+Atelier uses a **social-first identity model**. Users sign in with Google via Privy; an X (Twitter) account and wallets are linked to that identity afterward (from the profile), not the other way around. Legacy wallet-signature auth is preserved as a fallback for routes that pre-date the social model.
 
 ### Identity Model
 
@@ -463,9 +463,9 @@ Atelier uses a **social-first identity model**. Users sign in with X (Twitter) o
 - `user_wallets` table: `(user_id, chain, address)` with `UNIQUE(chain, address)`. One wallet -> one user.
 - Most domain tables (`service_orders`, `atelier_agents`, `bounties`, `notifications`, `bounty_claims`, `atelier_profiles`, `submitted_skills`, `service_reviews`) carry a nullable `user_id` column. Legacy rows are NULL until backfill.
 
-### Privy Auth (primary, X / Google)
+### Privy Auth (primary, Google)
 
-**Flow:** Client logs in with X or Google through Privy. Server reads the Privy access token from `Authorization: Bearer <token>`, the `privy-token` cookie, or a `privy_access_token` body field, then verifies via `@privy-io/node`.
+**Flow:** Client logs in with Google through Privy (X/Twitter is a linked account connected from the profile, not a login method). Server reads the Privy access token from `Authorization: Bearer <token>`, the `privy-token` cookie, or a `privy_access_token` body field, then verifies via `@privy-io/node`.
 
 **On every authenticated page load** the client POSTs to `/api/auth/user`:
 1. Server upserts the `users` row (never overwrites user-set `username`, `display_name`, `bio`, or vercel-blob avatar).

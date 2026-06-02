@@ -2254,6 +2254,24 @@ export async function autoSetAgentBasePayoutForUser(userId: string, baseAddress:
   return Number(result.rowsAffected ?? 0);
 }
 
+export async function autoSetAgentTwitterForUser(userId: string, twitterUsername: string): Promise<number> {
+  await initAtelierDb();
+  const handle = twitterUsername.trim().replace(/^@+/, '').toLowerCase();
+  if (!handle) return 0;
+  const result = await atelierClient.execute({
+    sql: `UPDATE atelier_agents
+          SET twitter_username = ?
+          WHERE (twitter_username IS NULL OR twitter_username = '')
+            AND (
+              user_id = ?
+              OR privy_user_id = ?
+              OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+            )`,
+    args: [handle, userId, userId, userId],
+  });
+  return Number(result.rowsAffected ?? 0);
+}
+
 export async function setAgentServerWallets(agentId: string, wallets: {
   evmWalletId?: string | null;
   evmAddress?: string | null;
@@ -2429,12 +2447,11 @@ export async function registerAtelierAgent(data: {
   capabilities?: string[];
   ai_models?: string[];
   owner_wallet?: string;
-  twitter_verification_code?: string;
   twitter_username?: string;
   user_id?: string;
   privy_user_id?: string;
   registration_tx?: string;
-}): Promise<{ agent_id: string; api_key: string; slug: string; twitter_verification_code: string; webhook_secret: string | null }> {
+}): Promise<{ agent_id: string; api_key: string; slug: string; webhook_secret: string | null }> {
   await initAtelierDb();
 
   const duplicate = await findRecentDuplicateAgent({
@@ -2449,7 +2466,6 @@ export async function registerAtelierAgent(data: {
   const id = `ext_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const apiKey = `atelier_${randomBytes(24).toString('hex')}`;
   const capabilities = JSON.stringify(data.capabilities || []);
-  const verificationCode = data.twitter_verification_code || randomBytes(3).toString('hex').toUpperCase();
 
   let base = slugify(data.name);
   if (!base) base = id;
@@ -2465,12 +2481,12 @@ export async function registerAtelierAgent(data: {
   const webhookSecret = data.endpoint_url ? `whsec_${randomBytes(32).toString('hex')}` : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_verification_code, twitter_username, ai_models, webhook_secret, user_id, privy_user_id, registration_tx)
-          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, verificationCode, data.twitter_username || null, aiModels, webhookSecret, data.user_id || null, data.privy_user_id || null, data.registration_tx || null],
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_username, ai_models, webhook_secret, user_id, privy_user_id, registration_tx)
+          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, data.twitter_username || null, aiModels, webhookSecret, data.user_id || null, data.privy_user_id || null, data.registration_tx || null],
   });
 
-  return { agent_id: id, api_key: apiKey, slug, twitter_verification_code: verificationCode, webhook_secret: webhookSecret };
+  return { agent_id: id, api_key: apiKey, slug, webhook_secret: webhookSecret };
 }
 
 export async function updateAtelierAgent(

@@ -7,7 +7,6 @@ import { useSearchParams } from 'next/navigation';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
-import { getPrivyAccessToken } from '@/lib/privy-client';
 import type { AtelierAgent, Service, ServiceOrder, OrderStatus, ServiceCategory, ServicePriceType } from '@/lib/atelier-db';
 import { SUGGESTED_MAX_PRICE_USD } from '@/components/atelier/constants';
 
@@ -116,7 +115,6 @@ function DashboardContent() {
   const [deletingService, setDeletingService] = useState<string | null>(null);
   const [showDeliver, setShowDeliver] = useState<string | null>(null);
   const [showQuote, setShowQuote] = useState<string | null>(null);
-  const [showLinkX, setShowLinkX] = useState(false);
   const [editingPayout, setEditingPayout] = useState(false);
   const [payoutDraft, setPayoutDraft] = useState('');
   const [payoutChainDraft, setPayoutChainDraft] = useState<'solana' | 'base'>('solana');
@@ -564,16 +562,18 @@ function DashboardContent() {
                         </svg>
                         <code className="text-xs font-mono text-gray-600 dark:text-neutral-300">@{agent.twitter_username}</code>
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowLinkX(true)}
+                    ) : atelierUser?.username ? (
+                      <Link
+                        href={`/profile/${atelierUser.username}`}
                         className="inline-flex items-center gap-1.5 text-[10px] font-mono text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors cursor-pointer"
                       >
                         <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                         </svg>
-                        Link X account
-                      </button>
+                        Connect X on your profile
+                      </Link>
+                    ) : (
+                      <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500">Connect X on your profile to add a verified badge.</span>
                     )}
                   </div>
                 </div>
@@ -678,7 +678,6 @@ function DashboardContent() {
       {showCreateService && agent && <CreateServiceModal agentId={agent.id} apiKey={activeApiKey} getAuth={getAuth} onClose={() => setShowCreateService(false)} onSuccess={() => { setShowCreateService(false); loadDashboard(); }} />}
       {showQuote && agent && <QuoteModal orderId={showQuote} apiKey={activeApiKey} getAuth={getAuth} onClose={() => setShowQuote(null)} onSuccess={() => { setShowQuote(null); loadDashboard(); }} />}
       {showDeliver && agent && <DeliverModal orderId={showDeliver} apiKey={activeApiKey} getAuth={getAuth} onClose={() => setShowDeliver(null)} onSuccess={() => { setShowDeliver(null); loadDashboard(); }} />}
-      {showLinkX && agent && <LinkXModal agentId={agent.id} agentName={agent.name} onClose={() => setShowLinkX(false)} onSuccess={(_handle) => { setShowLinkX(false); loadDashboard(); }} />}
     </div>
   );
 }
@@ -1074,146 +1073,6 @@ function DeliverModal({ orderId, apiKey, getAuth, onClose, onSuccess }: { orderI
           <button onClick={handleSubmit} disabled={saving || !deliverableUrl} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Delivering...' : 'Deliver'}</button>
         </div>
       </div>
-    </ModalOverlay>
-  );
-}
-
-interface LinkXGetData {
-  verified: boolean;
-  twitter_username: string | null;
-  verification_code?: string;
-  verification_tweet?: string;
-}
-
-function LinkXModal({ agentId, agentName, onClose, onSuccess }: { agentId: string; agentName: string; onClose: () => void; onSuccess: (handle: string) => void }) {
-  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [verificationTweet, setVerificationTweet] = useState('');
-  const [tweetUrl, setTweetUrl] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await getPrivyAccessToken();
-        const res = await fetch(`/api/agents/${agentId}/link-twitter`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        const json = await res.json() as { success: boolean; data?: LinkXGetData; error?: string };
-        if (cancelled) return;
-        if (!json.success || !json.data) { setError(json.error ?? 'Failed to load'); setLoadState('error'); return; }
-        if (json.data.verified && json.data.twitter_username) { onSuccess(json.data.twitter_username); return; }
-        setVerificationTweet(json.data.verification_tweet ?? '');
-        setLoadState('ready');
-      } catch {
-        if (!cancelled) { setError('Failed to load verification details'); setLoadState('error'); }
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [agentId, onSuccess]);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(verificationTweet);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleVerify = async () => {
-    setVerifying(true);
-    setError(null);
-    try {
-      const token = await getPrivyAccessToken();
-      if (!token) { setError('Not authenticated'); setVerifying(false); return; }
-      const res = await fetch(`/api/agents/${agentId}/link-twitter`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ tweet_url: tweetUrl.trim() }),
-      });
-      const json = await res.json() as { success: boolean; data?: { verified: boolean; twitter_username: string }; error?: string };
-      if (!json.success) { setError(json.error ?? 'Verification failed'); return; }
-      if (json.data?.twitter_username) { onSuccess(json.data.twitter_username); }
-    } catch { setError('Verification failed'); } finally { setVerifying(false); }
-  };
-
-  return (
-    <ModalOverlay onClose={onClose}>
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center flex-shrink-0">
-          <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-          </svg>
-        </div>
-        <div>
-          <h2 className="text-lg font-bold text-black dark:text-white font-display leading-none">Link X Account</h2>
-          <p className="text-xs font-mono text-gray-400 dark:text-neutral-500 mt-0.5">{agentName}</p>
-        </div>
-      </div>
-
-      {loadState === 'loading' && (
-        <div className="flex items-center justify-center py-10">
-          <div className="w-5 h-5 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-
-      {loadState === 'error' && (
-        <p className="text-xs font-mono text-red-500 dark:text-red-400 py-4">{error}</p>
-      )}
-
-      {loadState === 'ready' && (
-        <div className="space-y-5">
-          <div>
-            <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-3">
-              Post this tweet from your X account, then paste the tweet URL below to verify.
-            </p>
-            <div className="rounded-lg border border-gray-200 dark:border-neutral-800 overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900/50">
-                <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500 uppercase tracking-wider">Verification tweet</span>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={handleCopy}
-                    className="text-[10px] font-mono text-atelier hover:text-atelier-bright transition-colors cursor-pointer"
-                  >
-                    {copied ? 'Copied!' : 'Copy'}
-                  </button>
-                  <a
-                    href={`https://x.com/intent/tweet?text=${encodeURIComponent(verificationTweet)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold text-white bg-black px-2 py-1 rounded transition-opacity hover:opacity-80"
-                  >
-                    Post on X
-                    <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                    </svg>
-                  </a>
-                </div>
-              </div>
-              <pre className="p-3 bg-white dark:bg-black text-xs font-mono leading-relaxed text-gray-700 dark:text-neutral-300 whitespace-pre-wrap break-words">
-                {verificationTweet}
-              </pre>
-            </div>
-          </div>
-
-          <div>
-            <label className={LABEL_CLASS}>Tweet URL *</label>
-            <input
-              value={tweetUrl}
-              onChange={e => { setTweetUrl(e.target.value); setError(null); }}
-              placeholder="https://x.com/yourhandle/status/123..."
-              className={INPUT_CLASS}
-            />
-          </div>
-
-          {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
-
-          <div className="flex gap-3 pt-1">
-            <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
-            <button onClick={handleVerify} disabled={verifying || !tweetUrl.trim()} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{verifying ? 'Verifying...' : 'Verify'}</button>
-          </div>
-        </div>
-      )}
     </ModalOverlay>
   );
 }

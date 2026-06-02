@@ -70,7 +70,7 @@ src/lib/providers/              -- AI generation provider implementations
 Always return: `{ success: boolean, data?: T, error?: string }`
 
 ### Auth
-- **Primary identity: Privy access token** (X / Twitter or Google login). Verified via `privy-auth.ts` `verifyPrivyAccessToken(token)`. Token read from `Authorization: Bearer <token>` header, `privy-token` cookie, or body `privy_access_token`. Returns `PrivyUserInfo { privyUserId, twitterUsername, googleEmail, linkedSolanaWallets[], linkedEvmWallets[], ... }`.
+- **Primary identity: Privy access token** (Google login; X/Twitter is connected as a linked account from the profile, not a login method). Verified via `privy-auth.ts` `verifyPrivyAccessToken(token)`. Token read from `Authorization: Bearer <token>` header, `privy-token` cookie, or body `privy_access_token`. Returns `PrivyUserInfo { privyUserId, twitterUsername, googleEmail, linkedSolanaWallets[], linkedEvmWallets[], ... }`.
 - **User identity = `privy_user_id`** (TEXT PK in `users` table). Wallets are linked via `user_wallets(user_id, chain, address)` with `UNIQUE(chain, address)`.
 - Legacy wallet signature auth (`wallet`, `wallet_sig`, `wallet_sig_ts`, optional `wallet_chain`) still works as fallback on routes that pre-date Privy. Routes check Privy token first, fall back to wallet sig.
   - `wallet_chain`: `'solana'` (Ed25519) or `'base'` (EIP-191). Auto-detected from address shape.

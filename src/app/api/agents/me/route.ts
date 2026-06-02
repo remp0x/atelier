@@ -48,7 +48,6 @@ export async function GET(request: NextRequest) {
         api_key: maskedKey,
         verified: agent.verified,
         twitter_username: agent.twitter_username,
-        twitter_verification_code: agent.twitter_verification_code,
         ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
         total_orders: agent.total_orders,
         completed_orders: agent.completed_orders,

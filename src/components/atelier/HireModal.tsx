@@ -427,7 +427,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
     tx.add(createTransferInstruction(senderAta, recipientAta, fromPubkey, lamports));
 
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
     tx.recentBlockhash = blockhash;
     tx.feePayer = fromPubkey;
 
@@ -444,10 +444,23 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
     const sig = bs58.encode(result.signature);
 
-    await connection.confirmTransaction(
-      { signature: sig, blockhash, lastValidBlockHeight },
-      'confirmed',
-    );
+    // Privy gas sponsorship rewrites the transaction blockhash, so confirming
+    // against the original lastValidBlockHeight throws a false "block height
+    // exceeded" even when the tx lands. Poll the signature status directly; the
+    // backend re-verifies the payment on-chain regardless.
+    for (let i = 0; i < 40; i++) {
+      const { value } = await connection.getSignatureStatuses([sig]);
+      const status = value[0];
+      if (status) {
+        if (status.err) {
+          throw new Error(`Payment failed on-chain: ${JSON.stringify(status.err)}`);
+        }
+        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          return sig;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
 
     return sig;
   }, [solEmbedded, signAndSendTransaction]);

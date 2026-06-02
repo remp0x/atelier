@@ -4,11 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey } from '@solana/web3.js';
-import { sendUsdcPayment } from '@/lib/solana-pay';
-import { sendBaseUsdcPayment } from '@/lib/base-pay';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ChainSelector } from '@/components/atelier/ChainSelector';
 import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
@@ -58,19 +55,17 @@ function getTreasuryForChain(chain: PayChain): string | null {
 export default function BountyDetailPage() {
   const { id } = useParams();
   const router = useRouter();
-  const { connection } = useConnection();
   const {
     walletAddress,
     authenticated,
     getAuth,
     login,
-    getTransactionWallet,
-    getEvmWalletClient,
     solanaAddress,
     evmAddress,
     activeChain,
     setActiveChain,
   } = useAtelierAuth();
+  const { payUsdc } = useUsdcPayment();
 
   const [bounty, setBounty] = useState<Bounty & { claims_count: number } | null>(null);
   const [claims, setClaims] = useState<BountyClaimWithAgent[]>([]);
@@ -200,20 +195,7 @@ export default function BountyDetailPage() {
       const auth = await getAuth();
       const totalAmount = parseFloat(bounty.budget_usd) * 1.10;
 
-      let txSig: string;
-
-      if (payChain === 'base') {
-        const ew = await getEvmWalletClient();
-        if (!ew) throw new Error('Connect a Base wallet first');
-        txSig = await sendBaseUsdcPayment(ew.client, ew.account, treasury as `0x${string}`, totalAmount);
-      } else {
-        txSig = await sendUsdcPayment(
-          connection,
-          getTransactionWallet()!,
-          new PublicKey(treasury),
-          totalAmount,
-        );
-      }
+      const txSig = await payUsdc({ chain: payChain, treasury, amountUsd: totalAmount });
 
       const res = await fetch(`/api/bounties/${id}/accept`, {
         method: 'POST',
@@ -236,7 +218,7 @@ export default function BountyDetailPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [walletAddress, bounty, payChain, evmAddress, connection, id, getAuth, getTransactionWallet, getEvmWalletClient, router]);
+  }, [walletAddress, bounty, payChain, evmAddress, id, getAuth, payUsdc, router]);
 
   const handleCancel = useCallback(async () => {
     if (!authenticated) { login(); return; }

@@ -1,13 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey } from '@solana/web3.js';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { ChainLogo, chainLabel } from '@/components/atelier/ChainBadge';
-import { sendUsdcPayment } from '@/lib/solana-pay';
-import { sendBaseUsdcPayment } from '@/lib/base-pay';
 
 interface SkillGetButtonProps {
   pack: string;
@@ -31,7 +28,7 @@ export function SkillGetButton({
   creatorWallet,
 }: SkillGetButtonProps) {
   const auth = useAtelierAuth();
-  const { connection } = useConnection();
+  const { payUsdc } = useUsdcPayment();
   const isFree = price <= 0;
   const isCommunityPaid = pack === 'community' && !isFree;
   const priceLabel = `$${price.toFixed(price % 1 === 0 ? 0 : 2)}`;
@@ -171,29 +168,8 @@ export function SkillGetButton({
     try {
       setStatusMsg('Signing wallet…');
       const authPayload = await auth.getAuth();
-      let txHash: string;
-
-      if (creatorChain === 'solana') {
-        setStatusMsg(`Sending ${priceLabel} USDC on Solana…`);
-        const txWallet = auth.getTransactionWallet();
-        if (!txWallet) throw new Error('Solana transaction wallet not ready.');
-        txHash = await sendUsdcPayment(
-          connection,
-          txWallet,
-          new PublicKey(creatorWallet),
-          price,
-        );
-      } else {
-        const evmClient = await auth.getEvmWalletClient();
-        if (!evmClient) throw new Error('Base wallet not available.');
-        setStatusMsg(`Sending ${priceLabel} USDC on Base…`);
-        txHash = await sendBaseUsdcPayment(
-          evmClient.client,
-          evmClient.account,
-          creatorWallet as `0x${string}`,
-          price,
-        );
-      }
+      setStatusMsg(`Sending ${priceLabel} USDC on ${creatorChain === 'solana' ? 'Solana' : 'Base'}…`);
+      const txHash = await payUsdc({ chain: creatorChain, treasury: creatorWallet, amountUsd: price });
 
       setStatusMsg('Verifying payment…');
       await recordPurchase({

@@ -4,12 +4,10 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
-import { useConnection } from '@solana/wallet-adapter-react';
-import { PublicKey } from '@solana/web3.js';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { getPrivyAccessToken } from '@/lib/privy-client';
-import { sendUsdcPayment } from '@/lib/solana-pay';
 import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable, OrderMessage } from '@/lib/atelier-db';
 
 interface OrderData {
@@ -981,8 +979,8 @@ function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: st
 
 export default function AtelierOrderPage() {
   const params = useParams();
-  const { walletAddress, getAuth, getTransactionWallet, atelierUser } = useAtelierAuth();
-  const { connection } = useConnection();
+  const { walletAddress, getAuth, atelierUser } = useAtelierAuth();
+  const { payUsdc } = useUsdcPayment();
   const [data, setData] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1242,7 +1240,7 @@ export default function AtelierOrderPage() {
                           const total = parseFloat(order.quoted_price_usd || '0');
                           if (total <= 0) { setPayError('Invalid order total'); return; }
                           setPayMsg('Sending USDC payment...');
-                          const txSig = await sendUsdcPayment(connection, getTransactionWallet()!, new PublicKey(treasuryWallet), total);
+                          const txSig = await payUsdc({ chain: 'solana', treasury: treasuryWallet, amountUsd: total });
                           setPayMsg('Verifying payment...');
                           const auth = await getAuth();
                           const res = await fetch(`/api/orders/${order.id}`, {

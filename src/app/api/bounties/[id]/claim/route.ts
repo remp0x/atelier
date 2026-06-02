@@ -4,14 +4,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   getBountyById, createBountyClaim, getClaimByBountyAndAgent,
   getClaimsCountForBounty, getAtelierAgent, agentHasOwner,
-  withdrawBountyClaim, MAX_CLAIMS_PER_BOUNTY,
+  withdrawBountyClaim, isWalletLinkedToUser, MAX_CLAIMS_PER_BOUNTY,
 } from '@/lib/atelier-db';
 import type { AtelierAgent } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, readSigFieldsFromQuery, getSessionWallet } from '@/lib/session';
-import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
+import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 import { rateLimiters } from '@/lib/rateLimit';
+
+const isApiKeyAuth = (request: NextRequest): boolean =>
+  /^Bearer\s+atelier_/i.test(request.headers.get('authorization')?.trim() ?? '');
 
 export async function POST(
   request: NextRequest,
@@ -26,9 +29,9 @@ export async function POST(
 
     let agent: AtelierAgent | null = null;
     let claimantWallet: string | undefined;
+    let claimUserId: string | null = null;
 
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
+    if (isApiKeyAuth(request)) {
       try {
         agent = await resolveExternalAgentByApiKey(request);
       } catch (err) {
@@ -37,18 +40,6 @@ export async function POST(
         return NextResponse.json({ success: false, error: msg }, { status });
       }
     } else {
-      let verifiedWallet: string;
-      try {
-        verifiedWallet = await authenticateUserRequest(
-          request,
-          { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
-          client_wallet || null,
-        );
-      } catch (err) {
-        const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
-        return NextResponse.json({ success: false, error: msg }, { status: 401 });
-      }
-
       if (!agent_id) {
         return NextResponse.json({ success: false, error: 'agent_id required for wallet auth claims' }, { status: 400 });
       }
@@ -58,11 +49,33 @@ export async function POST(
         return NextResponse.json({ success: false, error: 'Agent not found' }, { status: 404 });
       }
 
-      if (agent.owner_wallet !== verifiedWallet) {
-        return NextResponse.json({ success: false, error: 'You do not own this agent' }, { status: 403 });
+      claimUserId = await tryResolvePrivyUserId(request, body);
+      let ownsAgent = false;
+      if (claimUserId) {
+        ownsAgent =
+          agent.user_id === claimUserId ||
+          agent.privy_user_id === claimUserId ||
+          (!!agent.owner_wallet && (await isWalletLinkedToUser(claimUserId, agent.owner_wallet)));
+        claimantWallet = agent.owner_wallet ?? undefined;
+      } else {
+        let verifiedWallet: string;
+        try {
+          verifiedWallet = await authenticateUserRequest(
+            request,
+            { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
+            client_wallet || null,
+          );
+        } catch (err) {
+          const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+          return NextResponse.json({ success: false, error: msg }, { status: 401 });
+        }
+        ownsAgent = agent.owner_wallet === verifiedWallet;
+        claimantWallet = verifiedWallet;
       }
 
-      claimantWallet = verifiedWallet;
+      if (!ownsAgent) {
+        return NextResponse.json({ success: false, error: 'You do not own this agent' }, { status: 403 });
+      }
     }
 
     if (!agentHasOwner(agent!)) {
@@ -100,17 +113,6 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Message must be under 500 characters' }, { status: 400 });
     }
 
-    let claimUserId: string | null = null;
-    const claimPrivyToken = readPrivyAccessToken(request, body);
-    if (claimPrivyToken) {
-      try {
-        const info = await verifyPrivyAccessToken(claimPrivyToken);
-        claimUserId = info.privyUserId;
-      } catch {
-        claimUserId = null;
-      }
-    }
-
     const claim = await createBountyClaim({
       bounty_id: params.id,
       agent_id: agent!.id,
@@ -133,8 +135,7 @@ export async function DELETE(
   try {
     let agentId: string | undefined;
 
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
+    if (isApiKeyAuth(request)) {
       try {
         const agent = await resolveExternalAgentByApiKey(request);
         agentId = agent.id;

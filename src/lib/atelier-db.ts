@@ -880,6 +880,25 @@ export async function hasSkillPurchase(
   return result.rows.length > 0;
 }
 
+export async function hasSkillPurchaseByUser(
+  pack: string,
+  slug: string,
+  userId: string,
+): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT 1 FROM skill_purchases
+          WHERE pack = ? AND slug = ?
+            AND (
+              buyer_user_id = ?
+              OR buyer_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+            )
+          LIMIT 1`,
+    args: [pack, slug, userId, userId],
+  });
+  return result.rows.length > 0;
+}
+
 export async function getSkillPurchaseByTx(tx_hash: string): Promise<SkillPurchase | null> {
   await initAtelierDb();
   const result = await atelierClient.execute({
@@ -1165,6 +1184,15 @@ export async function getUserWallets(userId: string): Promise<UserWallet[]> {
   return result.rows as unknown as UserWallet[];
 }
 
+export async function isWalletLinkedToUser(userId: string, wallet: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT 1 FROM user_wallets WHERE user_id = ? AND address = ? LIMIT 1',
+    args: [userId, wallet],
+  });
+  return result.rows.length > 0;
+}
+
 export async function getUserWalletById(walletId: string): Promise<UserWallet | null> {
   await initAtelierDb();
   const result = await atelierClient.execute({
@@ -1214,6 +1242,7 @@ export interface BackfillCounts {
   atelier_profiles: number;
   notifications: number;
   submitted_skills: number;
+  skill_purchases: number;
   service_reviews: number;
 }
 
@@ -1237,6 +1266,7 @@ export async function backfillUserOwnership(
     atelier_profiles: 0,
     notifications: 0,
     submitted_skills: 0,
+    skill_purchases: 0,
     service_reviews: 0,
   };
 
@@ -1325,6 +1355,15 @@ export async function backfillUserOwnership(
     );
   } catch (e) {
     console.warn('[backfillUserOwnership] submitted_skills failed:', e);
+  }
+
+  try {
+    counts.skill_purchases = await runUpdate(
+      `UPDATE skill_purchases SET buyer_user_id = ? WHERE buyer_user_id IS NULL AND buyer_wallet IN (${placeholders})`,
+      [userId, ...addresses],
+    );
+  } catch (e) {
+    console.warn('[backfillUserOwnership] skill_purchases failed:', e);
   }
 
   // service_reviews has no reviewer_wallet column; reviewer_agent_id -> atelier_agents.owner_wallet.

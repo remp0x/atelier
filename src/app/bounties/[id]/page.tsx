@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ChainSelector } from '@/components/atelier/ChainSelector';
@@ -59,7 +60,6 @@ export default function BountyDetailPage() {
   const {
     walletAddress,
     authenticated,
-    getAuth,
     login,
     solanaAddress,
     evmAddress,
@@ -68,7 +68,7 @@ export default function BountyDetailPage() {
   } = useAtelierAuth();
   const { payUsdc } = useUsdcPayment();
 
-  const [bounty, setBounty] = useState<Bounty & { claims_count: number } | null>(null);
+  const [bounty, setBounty] = useState<(Bounty & { claims_count: number; viewer_is_poster?: boolean }) | null>(null);
   const [claims, setClaims] = useState<BountyClaimWithAgent[]>([]);
   const [myAgents, setMyAgents] = useState<AtelierAgent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,14 +79,21 @@ export default function BountyDetailPage() {
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [payChain, setPayChain] = useState<PayChain>(activeChain);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
-  const isPoster = bounty && walletAddress && bounty.poster_wallet === walletAddress;
+  const isPoster = bounty?.viewer_is_poster ?? false;
   const isOpen = bounty?.status === 'open' && new Date(bounty.expires_at) > new Date();
 
   const fetchBounty = useCallback(async () => {
     try {
-      const res = await fetch(`/api/bounties/${id}`);
+      const token = await getPrivyAccessToken();
+      const res = await fetch(`/api/bounties/${id}?include_claims=1`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const json = await res.json();
-      if (json.success) setBounty(json.data);
+      if (json.success) {
+        setBounty(json.data);
+        setClaims(json.data.claims ?? []);
+      }
     } catch {
       // silent
     } finally {
@@ -94,52 +101,28 @@ export default function BountyDetailPage() {
     }
   }, [id]);
 
-  const fetchClaims = useCallback(async () => {
-    if (!walletAddress || !bounty) return;
-    if (bounty.poster_wallet !== walletAddress) return;
-    try {
-      const auth = await getAuth();
-      const params = new URLSearchParams({
-        wallet: auth.wallet,
-        wallet_sig: auth.wallet_sig,
-        wallet_sig_ts: String(auth.wallet_sig_ts),
-        include_claims: '1',
-      });
-      const res = await fetch(`/api/bounties/${id}?${params}`);
-      const json = await res.json();
-      if (json.success && json.data.claims) {
-        setClaims(json.data.claims);
-      }
-    } catch {
-      // silent - claims just won't show
-    }
-  }, [id, walletAddress, bounty, getAuth]);
-
   const fetchMyAgents = useCallback(async () => {
-    if (!walletAddress) return;
+    if (!authenticated) return;
     try {
-      const auth = await getAuth();
-      const params = new URLSearchParams({
-        wallet: auth.wallet,
-        wallet_sig: auth.wallet_sig,
-        wallet_sig_ts: String(auth.wallet_sig_ts),
+      const token = await getPrivyAccessToken();
+      const res = await fetch(`/api/agents?owner_wallet=${walletAddress ?? ''}`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const res = await fetch(`/api/agents?owner_wallet=${walletAddress}&${params}`);
       const json = await res.json();
       if (json.success) setMyAgents(json.data || []);
     } catch {
       // silent
     }
-  }, [walletAddress, getAuth]);
+  }, [authenticated, walletAddress]);
 
-  useEffect(() => { fetchBounty(); }, [fetchBounty]);
+  useEffect(() => { fetchBounty(); }, [fetchBounty, authenticated]);
 
   useEffect(() => {
-    if (bounty && walletAddress) {
-      if (isPoster) fetchClaims();
-      else fetchMyAgents();
+    if (bounty && authenticated && !isPoster) {
+      fetchMyAgents();
     }
-  }, [bounty, walletAddress, isPoster, fetchClaims, fetchMyAgents]);
+  }, [bounty, authenticated, isPoster, fetchMyAgents]);
 
   useEffect(() => {
     if (myAgents.length > 0 && !selectedAgentId) {
@@ -154,16 +137,17 @@ export default function BountyDetailPage() {
     setActionLoading(true);
     setActionError(null);
     try {
-      const auth = await getAuth();
+      const token = await getPrivyAccessToken();
       const res = await fetch(`/api/bounties/${id}/claim`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           agent_id: selectedAgentId,
           message: claimMessage || undefined,
-          client_wallet: auth.wallet,
-          wallet_sig: auth.wallet_sig,
-          wallet_sig_ts: auth.wallet_sig_ts,
         }),
       });
       const json = await res.json();
@@ -178,7 +162,7 @@ export default function BountyDetailPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [walletAddress, selectedAgentId, claimMessage, id, getAuth, login, fetchBounty]);
+  }, [authenticated, selectedAgentId, claimMessage, id, login, fetchBounty]);
 
   const handleAccept = useCallback(async (claimId: string) => {
     if (!authenticated || !walletAddress || !bounty) return;
@@ -194,19 +178,21 @@ export default function BountyDetailPage() {
     setActionLoading(true);
     setActionError(null);
     try {
-      const auth = await getAuth();
       const totalAmount = parseFloat(bounty.budget_usd) * 1.10;
 
       const txSig = await payUsdc({ chain: payChain, treasury, amountUsd: totalAmount });
 
+      const token = await getPrivyAccessToken();
       const res = await fetch(`/api/bounties/${id}/accept`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           claim_id: claimId,
-          client_wallet: auth.wallet,
-          wallet_sig: auth.wallet_sig,
-          wallet_sig_ts: auth.wallet_sig_ts,
+          client_wallet: walletAddress ?? '',
           escrow_tx_hash: txSig,
           payment_chain: payChain,
         }),
@@ -221,22 +207,24 @@ export default function BountyDetailPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [walletAddress, bounty, payChain, evmAddress, id, getAuth, payUsdc, router]);
+  }, [walletAddress, bounty, payChain, evmAddress, id, payUsdc, router]);
 
   const handleCancel = useCallback(async () => {
     if (!authenticated) { login(); return; }
     setActionLoading(true);
     setActionError(null);
     try {
-      const auth = await getAuth();
+      const token = await getPrivyAccessToken();
       const res = await fetch(`/api/bounties/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           status: 'cancelled',
-          client_wallet: auth.wallet,
-          wallet_sig: auth.wallet_sig,
-          wallet_sig_ts: auth.wallet_sig_ts,
+          client_wallet: walletAddress ?? '',
         }),
       });
       const json = await res.json();
@@ -247,7 +235,7 @@ export default function BountyDetailPage() {
     } finally {
       setActionLoading(false);
     }
-  }, [authenticated, login, id, getAuth, fetchBounty]);
+  }, [authenticated, login, id, walletAddress, fetchBounty]);
 
   if (loading) {
     return (

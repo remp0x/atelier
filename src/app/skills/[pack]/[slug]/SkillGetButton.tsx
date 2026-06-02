@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { ChainLogo, chainLabel } from '@/components/atelier/ChainBadge';
@@ -38,7 +39,7 @@ export function SkillGetButton({
   // Only flash "Checking access…" when we're actually about to hit the access
   // endpoint — i.e. paid skill AND wallet is connected. Anonymous viewers go
   // straight to SIGN IN TO BUY.
-  const [accessChecked, setAccessChecked] = useState(!isCommunityPaid || !auth.walletReady);
+  const [accessChecked, setAccessChecked] = useState(!isCommunityPaid || !auth.authenticated);
   const [resolvedDownloadUrl, setResolvedDownloadUrl] = useState<string | null>(downloadUrl ?? null);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -48,7 +49,7 @@ export function SkillGetButton({
   // Refresh purchase status from the server whenever the active wallet changes.
   useEffect(() => {
     if (!isCommunityPaid) return;
-    if (!auth.walletReady) {
+    if (!auth.authenticated) {
       setPurchased(false);
       setResolvedDownloadUrl(null);
       setAccessChecked(true);
@@ -57,22 +58,12 @@ export function SkillGetButton({
     let cancelled = false;
     (async () => {
       try {
-        const payload = await auth.getAuth({ silent: true }).catch(() => null);
-        if (!payload) {
-          // No silent session — can't check purchases without forcing a signature
-          setPurchased(false);
-          setResolvedDownloadUrl(null);
-          setAccessChecked(true);
-          return;
-        }
-        const qs = new URLSearchParams({
-          pack,
-          slug,
-          wallet: payload.wallet,
-          wallet_sig: payload.wallet_sig,
-          wallet_sig_ts: String(payload.wallet_sig_ts),
+        const token = await getPrivyAccessToken();
+        const qs = new URLSearchParams({ pack, slug });
+        const res = await fetch(`/api/skills/access?${qs.toString()}`, {
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
-        const res = await fetch(`/api/skills/access?${qs.toString()}`);
         if (cancelled) return;
         const json = await res.json();
         if (json?.success && json.data?.purchased) {
@@ -94,7 +85,7 @@ export function SkillGetButton({
     return () => {
       cancelled = true;
     };
-  }, [auth, isCommunityPaid, pack, slug]);
+  }, [auth.authenticated, isCommunityPaid, pack, slug]);
 
   const triggerDownload = useCallback(
     (url: string) => {
@@ -166,37 +157,29 @@ export function SkillGetButton({
 
     setBusy(true);
     try {
-      setStatusMsg('Signing wallet…');
-      const authPayload = await auth.getAuth();
       setStatusMsg(`Sending ${priceLabel} USDC on ${creatorChain === 'solana' ? 'Solana' : 'Base'}…`);
       const txHash = await payUsdc({ chain: creatorChain, treasury: creatorWallet, amountUsd: price });
 
       setStatusMsg('Verifying payment…');
+      const token = await getPrivyAccessToken();
       await recordPurchase({
         pack,
         slug,
         chain: creatorChain,
         tx_hash: txHash,
-        wallet: authPayload.wallet,
-        wallet_sig: authPayload.wallet_sig,
-        wallet_sig_ts: authPayload.wallet_sig_ts,
+        wallet: auth.walletAddress ?? '',
+        token,
       });
 
       // Flip UI to download state; fetch the now-unlocked URL via access API.
-      const payload = await auth.getAuth({ silent: true }).catch(() => null);
-      if (payload) {
-        const qs = new URLSearchParams({
-          pack,
-          slug,
-          wallet: payload.wallet,
-          wallet_sig: payload.wallet_sig,
-          wallet_sig_ts: String(payload.wallet_sig_ts),
-        });
-        const res = await fetch(`/api/skills/access?${qs.toString()}`);
-        const json = await res.json();
-        if (json?.success && json.data?.download_url) {
-          setResolvedDownloadUrl(json.data.download_url);
-        }
+      const qs = new URLSearchParams({ pack, slug });
+      const res = await fetch(`/api/skills/access?${qs.toString()}`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      if (json?.success && json.data?.download_url) {
+        setResolvedDownloadUrl(json.data.download_url);
       }
       setPurchased(true);
       setStatusMsg('Purchased. Click DOWNLOAD to grab the file.');
@@ -306,16 +289,20 @@ interface RecordPurchaseInput {
   slug: string;
   chain: 'solana' | 'base';
   tx_hash: string;
+  /** The wallet that sent USDC on-chain (the user's embedded wallet). */
   wallet: string;
-  wallet_sig: string;
-  wallet_sig_ts: number;
+  token: string | null;
 }
 
-async function recordPurchase(input: RecordPurchaseInput): Promise<void> {
+async function recordPurchase({ token, ...body }: RecordPurchaseInput): Promise<void> {
   const res = await fetch('/api/skills/purchase', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(input),
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
   });
   const json = await res.json();
   if (!res.ok || !json?.success) {

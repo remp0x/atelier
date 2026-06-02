@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getBountyById, getClaimById, acceptBountyClaim, getClaimsForBounty } from '@/lib/atelier-db';
+import { getBountyById, getClaimById, acceptBountyClaim, getClaimsForBounty, isWalletLinkedToUser } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
+import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 import { verifySolanaUsdcPayment } from '@/lib/solana-verify';
 import { verifyBaseUsdcPayment } from '@/lib/base-verify';
 import { notifyAgentWebhook } from '@/lib/webhook';
@@ -27,24 +28,32 @@ export async function POST(
       );
     }
 
-    let verifiedWallet: string;
-    try {
-      verifiedWallet = await authenticateUserRequest(
-        request,
-        { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
-        client_wallet,
-      );
-    } catch (err) {
-      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
-      return NextResponse.json({ success: false, error: msg }, { status: 401 });
-    }
-
     const bounty = await getBountyById(params.id);
     if (!bounty) {
       return NextResponse.json({ success: false, error: 'Bounty not found' }, { status: 404 });
     }
 
-    if (bounty.poster_wallet !== verifiedWallet) {
+    // `client_wallet` is the payer that funded escrow on-chain (verified below),
+    // independent of how we authenticate the poster's identity.
+    const userId = await tryResolvePrivyUserId(request, body);
+    let isPoster = false;
+    if (userId) {
+      isPoster = bounty.user_id === userId || (await isWalletLinkedToUser(userId, bounty.poster_wallet));
+    } else {
+      try {
+        const verifiedWallet = await authenticateUserRequest(
+          request,
+          { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
+          client_wallet,
+        );
+        isPoster = bounty.poster_wallet === verifiedWallet;
+      } catch (err) {
+        const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+        return NextResponse.json({ success: false, error: msg }, { status: 401 });
+      }
+    }
+
+    if (!isPoster) {
       return NextResponse.json({ success: false, error: 'Only the poster can accept claims' }, { status: 403 });
     }
 

@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
 import { authenticateUserRequestWithChain } from '@/lib/session';
 import { WalletAuthError } from '@/lib/solana-auth';
-import { getSubmittedSkillBySlug, hasSkillPurchase } from '@/lib/atelier-db';
+import { getSubmittedSkillBySlug, hasSkillPurchase, hasSkillPurchaseByUser } from '@/lib/atelier-db';
+import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
 
 const accessRateLimit = rateLimit(120, 60 * 1000);
 
@@ -37,15 +38,29 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
   if (!slug) return NextResponse.json({ success: false, error: 'Missing slug' }, { status: 400 });
 
-  let wallet: string;
-  try {
-    const auth = await authenticateUserRequestWithChain(req, sigFieldsFromQuery(req));
-    wallet = auth.wallet;
-  } catch (err) {
-    if (err instanceof WalletAuthError) {
-      return NextResponse.json({ success: false, error: err.message }, { status: 401 });
+  let userId: string | null = null;
+  let wallet: string | null = null;
+
+  const privyToken = readPrivyAccessToken(req, null);
+  if (privyToken) {
+    try {
+      const info = await verifyPrivyAccessToken(privyToken);
+      userId = info.privyUserId;
+    } catch {
+      // fall through to wallet auth
     }
-    return NextResponse.json({ success: false, error: 'Authentication failed' }, { status: 401 });
+  }
+
+  if (!userId) {
+    try {
+      const auth = await authenticateUserRequestWithChain(req, sigFieldsFromQuery(req));
+      wallet = auth.wallet;
+    } catch (err) {
+      if (err instanceof WalletAuthError) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 401 });
+      }
+      return NextResponse.json({ success: false, error: 'Authentication failed' }, { status: 401 });
+    }
   }
 
   const skill = await getSubmittedSkillBySlug(slug);
@@ -60,7 +75,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const owns = await hasSkillPurchase(pack, slug, wallet);
+  const owns = userId
+    ? await hasSkillPurchaseByUser(pack, slug, userId)
+    : await hasSkillPurchase(pack, slug, wallet as string);
   return NextResponse.json({
     success: true,
     data: {

@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { ChainLogo, chainLabel } from '@/components/atelier/ChainBadge';
 import { SKILL_CATEGORIES } from './marketData';
@@ -96,7 +97,7 @@ export function PublishSkillForm({ onPublished, variant = 'panel' }: PublishSkil
     setSubmitting(true);
     setError(null);
     try {
-      const sig = await auth.getAuth();
+      const token = await getPrivyAccessToken();
       const fd = new FormData();
       fd.append('file', file);
       fd.append('name', name.trim());
@@ -104,12 +105,15 @@ export function PublishSkillForm({ onPublished, variant = 'panel' }: PublishSkil
       fd.append('category', category.slug);
       fd.append('pricing', pricing);
       fd.append('price_usdc', pricing === 'paid' ? String(parsedUsdc) : '0');
-      fd.append('wallet', sig.wallet);
-      fd.append('wallet_sig', sig.wallet_sig);
-      fd.append('wallet_sig_ts', String(sig.wallet_sig_ts));
-      fd.append('creator_chain', sig.wallet_chain ?? auth.walletChain ?? 'solana');
+      fd.append('wallet', auth.walletAddress ?? '');
+      fd.append('creator_chain', auth.walletChain ?? 'solana');
 
-      const res = await fetch('/api/skills/submit', { method: 'POST', body: fd });
+      const res = await fetch('/api/skills/submit', {
+        method: 'POST',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
       const json = await res.json();
       if (!res.ok || !json.success) {
         setError(json.error || 'Submission failed. Try again in a moment.');

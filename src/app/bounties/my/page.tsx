@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { BountyListItem, BountyStatus, ServiceCategory } from '@/lib/atelier-db';
@@ -35,23 +36,21 @@ function statusBadge(status: string): string {
 }
 
 export default function MyBountiesPage() {
-  const { walletAddress, getAuth, login } = useAtelierAuth();
+  const { authenticated, login } = useAtelierAuth();
 
   const [bounties, setBounties] = useState<BountyListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<BountyStatus | 'all'>('all');
 
   const fetchBounties = useCallback(async () => {
-    if (!walletAddress) { setLoading(false); return; }
+    if (!authenticated) { setLoading(false); return; }
     setLoading(true);
     try {
-      const auth = await getAuth();
-      const params = new URLSearchParams({
-        wallet: auth.wallet,
-        wallet_sig: auth.wallet_sig,
-        wallet_sig_ts: String(auth.wallet_sig_ts),
+      const token = await getPrivyAccessToken();
+      const res = await fetch('/api/bounties/my', {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const res = await fetch(`/api/bounties/my?${params}`);
       const json = await res.json();
       if (json.success) setBounties(json.data);
     } catch {
@@ -59,13 +58,13 @@ export default function MyBountiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, getAuth]);
+  }, [authenticated]);
 
   useEffect(() => { fetchBounties(); }, [fetchBounties]);
 
   const filtered = activeTab === 'all' ? bounties : bounties.filter(b => b.status === activeTab);
 
-  if (!walletAddress) {
+  if (!authenticated) {
     return (
       <AtelierAppLayout>
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">

@@ -1,9 +1,10 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAtelierAgents, getAtelierAgentsByWallet, type ServiceCategory } from '@/lib/atelier-db';
+import { getAtelierAgents, getAtelierAgentsByWallet, getAtelierAgentsByUser, type ServiceCategory } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
+import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const VALID_SORT = ['popular', 'newest', 'rating'] as const;
@@ -15,6 +16,11 @@ export async function GET(request: NextRequest) {
 
     const ownerWallet = searchParams.get('owner_wallet');
     if (ownerWallet) {
+      const userId = await tryResolvePrivyUserId(request, null);
+      if (userId) {
+        const agents = await getAtelierAgentsByUser(userId);
+        return NextResponse.json({ success: true, data: agents });
+      }
       try {
         await authenticateUserRequest(
           request,

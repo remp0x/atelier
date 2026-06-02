@@ -7,6 +7,7 @@ import { rateLimit } from '@/lib/rateLimit';
 import { authenticateUserRequest } from '@/lib/session';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { insertSubmittedSkill, getSubmittedSkillBySlug } from '@/lib/atelier-db';
+import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
 import { SKILL_CATEGORIES } from '@/components/atelier/market/marketData';
 
 const submitRateLimit = rateLimit(10, 60 * 60 * 1000);
@@ -61,14 +62,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: false, error: 'Invalid multipart payload' }, { status: 400 });
   }
 
+  let userId: string | null = null;
   let wallet: string;
-  try {
-    wallet = await authenticateUserRequest(req, sigFieldsFromForm(form));
-  } catch (err) {
-    if (err instanceof WalletAuthError) {
-      return NextResponse.json({ success: false, error: err.message }, { status: 401 });
+
+  const privyToken = readPrivyAccessToken(req, null);
+  if (privyToken) {
+    try {
+      const info = await verifyPrivyAccessToken(privyToken);
+      userId = info.privyUserId;
+    } catch {
+      // fall through to wallet auth
     }
-    return NextResponse.json({ success: false, error: 'Authentication failed' }, { status: 401 });
+  }
+
+  if (userId) {
+    // creator_wallet is the payout destination the creator wants to be paid on.
+    const w = form.get('wallet');
+    wallet = typeof w === 'string' ? w.trim() : '';
+    if (!wallet) {
+      return NextResponse.json({ success: false, error: 'Missing payout wallet' }, { status: 400 });
+    }
+  } else {
+    try {
+      wallet = await authenticateUserRequest(req, sigFieldsFromForm(form));
+    } catch (err) {
+      if (err instanceof WalletAuthError) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 401 });
+      }
+      return NextResponse.json({ success: false, error: 'Authentication failed' }, { status: 401 });
+    }
   }
 
   const file = form.get('file');
@@ -140,6 +162,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       slug,
       creator_wallet: wallet,
       creator_chain,
+      user_id: userId,
       name,
       description,
       category,

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { clientUpload } from '@/lib/client-upload';
 import { trackBountyCreated } from '@/lib/analytics';
 import type { ServiceCategory } from '@/lib/atelier-db';
@@ -144,13 +145,17 @@ export function CreateBountyModal({ open, onClose, onCreated }: CreateBountyModa
 
     setLoading(true);
     try {
-      const auth = await getAuth();
+      const token = await getPrivyAccessToken();
       const validUrls = referenceUrls.filter(u => u.trim().length > 0);
       const validImages = referenceImages.filter(img => img.url && !img.uploading).map(img => img.url);
 
       const res = await fetch('/api/bounties', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           title,
           brief,
@@ -160,9 +165,7 @@ export function CreateBountyModal({ open, onClose, onCreated }: CreateBountyModa
           claim_window_hours: claimWindowHours,
           reference_urls: validUrls.length > 0 ? validUrls : undefined,
           reference_images: validImages.length > 0 ? validImages : undefined,
-          client_wallet: auth.wallet,
-          wallet_sig: auth.wallet_sig,
-          wallet_sig_ts: auth.wallet_sig_ts,
+          client_wallet: walletAddress ?? '',
         }),
       });
 
@@ -180,7 +183,7 @@ export function CreateBountyModal({ open, onClose, onCreated }: CreateBountyModa
     } finally {
       setLoading(false);
     }
-  }, [walletAddress, title, brief, category, budgetUsd, deadlineHours, claimWindowHours, referenceUrls, referenceImages, getAuth, login, onCreated, onClose]);
+  }, [walletAddress, title, brief, category, budgetUsd, deadlineHours, claimWindowHours, referenceUrls, referenceImages, login, onCreated, onClose]);
 
   if (!open) return null;
 

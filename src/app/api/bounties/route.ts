@@ -8,7 +8,7 @@ import {
 import type { ServiceCategory } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
-import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
+import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -26,30 +26,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    let verifiedWallet: string;
-    try {
-      verifiedWallet = await authenticateUserRequest(
-        request,
-        { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
-        client_wallet,
-      );
-    } catch (err) {
-      const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
-      return NextResponse.json({ success: false, error: msg }, { status: 401 });
-    }
+    const resolvedUserId = await tryResolvePrivyUserId(request, body);
 
-    ensureProfileExists(verifiedWallet).catch(() => {});
-
-    let resolvedUserId: string | null = null;
-    const bountyPrivyToken = readPrivyAccessToken(request, body);
-    if (bountyPrivyToken) {
+    let posterWallet: string;
+    if (resolvedUserId) {
+      posterWallet = client_wallet;
+    } else {
       try {
-        const info = await verifyPrivyAccessToken(bountyPrivyToken);
-        resolvedUserId = info.privyUserId;
-      } catch {
-        resolvedUserId = null;
+        posterWallet = await authenticateUserRequest(
+          request,
+          { wallet: client_wallet, wallet_sig: body.wallet_sig, wallet_sig_ts: body.wallet_sig_ts },
+          client_wallet,
+        );
+      } catch (err) {
+        const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
+        return NextResponse.json({ success: false, error: msg }, { status: 401 });
       }
     }
+
+    ensureProfileExists(posterWallet).catch(() => {});
 
     if (typeof title !== 'string' || title.length < 3 || title.length > 100) {
       return NextResponse.json({ success: false, error: 'Title must be 3-100 characters' }, { status: 400 });
@@ -104,7 +99,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const bounty = await createBounty({
-      poster_wallet: client_wallet,
+      poster_wallet: posterWallet,
       title,
       brief,
       category: category as ServiceCategory,

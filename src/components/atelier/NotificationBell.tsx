@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { Notification } from '@/lib/atelier-db';
 
@@ -57,7 +58,7 @@ interface NotificationBellProps {
 }
 
 export function NotificationBell({ compact }: NotificationBellProps) {
-  const { walletAddress, authenticated, getAuth } = useAtelierAuth();
+  const { authenticated } = useAtelierAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
@@ -65,15 +66,13 @@ export function NotificationBell({ compact }: NotificationBellProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = useCallback(async () => {
-    if (!authenticated || !walletAddress) return;
+    if (!authenticated) return;
     try {
-      const auth = await getAuth({ silent: true });
-      const params = new URLSearchParams({
-        wallet: auth.wallet,
-        wallet_sig: auth.wallet_sig,
-        wallet_sig_ts: String(auth.wallet_sig_ts),
+      const token = await getPrivyAccessToken();
+      const res = await fetch('/api/notifications', {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const res = await fetch(`/api/notifications?${params}`);
       const json = await res.json();
       if (json.success) {
         setNotifications(json.data);
@@ -82,7 +81,7 @@ export function NotificationBell({ compact }: NotificationBellProps) {
     } catch {
       // silent — includes expired auth sessions
     }
-  }, [walletAddress, getAuth]);
+  }, [authenticated]);
 
   useEffect(() => {
     fetchNotifications();
@@ -110,18 +109,18 @@ export function NotificationBell({ compact }: NotificationBellProps) {
   }, [open]);
 
   const markAllRead = async () => {
-    if (!authenticated || !walletAddress) return;
+    if (!authenticated) return;
     setLoading(true);
     try {
-      const auth = await getAuth();
+      const token = await getPrivyAccessToken();
       await fetch('/api/notifications', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wallet: auth.wallet,
-          wallet_sig: auth.wallet_sig,
-          wallet_sig_ts: auth.wallet_sig_ts,
-        }),
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({}),
       });
       setUnreadCount(0);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: 1 })));
@@ -132,7 +131,7 @@ export function NotificationBell({ compact }: NotificationBellProps) {
     }
   };
 
-  if (!authenticated || !walletAddress) return null;
+  if (!authenticated) return null;
 
   return (
     <div className="relative" ref={dropdownRef}>

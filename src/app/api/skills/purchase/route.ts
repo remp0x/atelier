@@ -8,9 +8,11 @@ import { WalletAuthError } from '@/lib/solana-auth';
 import {
   getSubmittedSkillBySlug,
   hasSkillPurchase,
+  hasSkillPurchaseByUser,
   insertSkillPurchase,
   getSkillPurchaseByTx,
 } from '@/lib/atelier-db';
+import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
 import { verifySolanaUsdcSentToWallet } from '@/lib/solana-verify';
 import { verifyBaseUsdcSentToWallet } from '@/lib/base-verify';
 
@@ -58,15 +60,38 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const chain = chainRaw as 'solana' | 'base';
 
+  let userId: string | null = null;
   let buyerWallet: string;
-  try {
-    const auth = await authenticateUserRequestWithChain(req, sigFieldsFromBody(body));
-    buyerWallet = auth.wallet;
-  } catch (err) {
-    if (err instanceof WalletAuthError) {
-      return NextResponse.json({ success: false, error: err.message }, { status: 401 });
+
+  const privyToken = readPrivyAccessToken(req, body);
+  if (privyToken) {
+    try {
+      const info = await verifyPrivyAccessToken(privyToken);
+      userId = info.privyUserId;
+    } catch {
+      // fall through to wallet auth
     }
-    return NextResponse.json({ success: false, error: 'Authentication failed' }, { status: 401 });
+  }
+
+  if (userId) {
+    // Embedded-wallet payments: the client reports the wallet that sent USDC.
+    // The address is not trusted on its own — the on-chain verify below binds
+    // the tx to this wallet and the creator, and tx_hash is unique.
+    const fromWallet = typeof body.wallet === 'string' ? body.wallet.trim() : '';
+    if (!fromWallet) {
+      return NextResponse.json({ success: false, error: 'Missing paying wallet' }, { status: 400 });
+    }
+    buyerWallet = fromWallet;
+  } else {
+    try {
+      const auth = await authenticateUserRequestWithChain(req, sigFieldsFromBody(body));
+      buyerWallet = auth.wallet;
+    } catch (err) {
+      if (err instanceof WalletAuthError) {
+        return NextResponse.json({ success: false, error: err.message }, { status: 401 });
+      }
+      return NextResponse.json({ success: false, error: 'Authentication failed' }, { status: 401 });
+    }
   }
 
   const skill = await getSubmittedSkillBySlug(slug);
@@ -106,7 +131,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // Idempotency: buyer may already own the skill
-  const owns = await hasSkillPurchase(pack, slug, buyerWallet);
+  const owns = userId
+    ? await hasSkillPurchaseByUser(pack, slug, userId)
+    : await hasSkillPurchase(pack, slug, buyerWallet);
   if (owns) {
     return NextResponse.json({ success: true, data: { already: true } });
   }
@@ -140,6 +167,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       pack,
       slug,
       buyer_wallet: buyerWallet,
+      buyer_user_id: userId,
       creator_wallet: skill.creator_wallet,
       chain,
       amount_usd: skill.price_usdc,

@@ -195,3 +195,22 @@ export async function authenticatePrivyRequest(
   }
   return verifyPrivyAccessToken(token);
 }
+
+/**
+ * Best-effort Privy identity resolution. Returns the privy user id when a valid
+ * token is present, or null when absent/invalid — so callers can fall back to
+ * legacy wallet-signature auth without throwing.
+ */
+export async function tryResolvePrivyUserId(
+  request: Request,
+  body?: Record<string, unknown> | null,
+): Promise<string | null> {
+  const token = readPrivyAccessToken(request, body ?? null);
+  if (!token) return null;
+  try {
+    const info = await verifyPrivyAccessToken(token);
+    return info.privyUserId;
+  } catch {
+    return null;
+  }
+}

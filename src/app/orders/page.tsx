@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import type { ServiceOrder, OrderStatus } from '@/lib/atelier-db';
 
@@ -71,14 +72,14 @@ export default function MyOrdersPage() {
 }
 
 function OrdersContent() {
-  const { walletAddress, authenticated, sessionReady, ensureSession, login } = useAtelierAuth();
+  const { authenticated, login } = useAtelierAuth();
   const [orders, setOrders] = useState<ServiceOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   const fetchOrders = useCallback(async () => {
-    if (!authenticated || !walletAddress) {
+    if (!authenticated) {
       setOrders([]);
       return;
     }
@@ -86,7 +87,11 @@ function OrdersContent() {
     setLoading(true);
     setAuthError(false);
     try {
-      const res = await fetch('/api/orders', { credentials: 'include' });
+      const token = await getPrivyAccessToken();
+      const res = await fetch('/api/orders', {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const json = await res.json();
       if (json.success) setOrders(json.data);
       else if (res.status === 401) setAuthError(true);
@@ -95,25 +100,15 @@ function OrdersContent() {
     } finally {
       setLoading(false);
     }
-  }, [authenticated, walletAddress]);
+  }, [authenticated]);
 
   useEffect(() => {
-    if (!authenticated || !walletAddress) return;
-    if (sessionReady) {
+    if (authenticated) {
       fetchOrders();
-      return;
+    } else {
+      setOrders([]);
     }
-    let cancelled = false;
-    setLoading(true);
-    ensureSession().then((ok) => {
-      if (cancelled) return;
-      if (!ok) {
-        setAuthError(true);
-        setLoading(false);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [authenticated, walletAddress, sessionReady, ensureSession, fetchOrders]);
+  }, [authenticated, fetchOrders]);
 
   const filtered = filterOrders(orders, activeTab);
   const tabCounts: Record<FilterTab, number> = {
@@ -132,7 +127,7 @@ function OrdersContent() {
         </p>
       </div>
 
-      {!authenticated || !walletAddress ? (
+      {!authenticated ? (
         <div className="text-center py-20">
           <div className="w-16 h-16 rounded-full bg-atelier/10 flex items-center justify-center mx-auto mb-4">
             <svg className="w-7 h-7 text-atelier" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -157,7 +152,7 @@ function OrdersContent() {
       ) : authError ? (
         <div className="text-center py-20">
           <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm mb-4">
-            Wallet signature required to view orders
+            Could not load your orders
           </p>
           <button
             onClick={fetchOrders}

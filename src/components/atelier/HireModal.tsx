@@ -14,8 +14,7 @@ import {
   TokenInvalidAccountOwnerError,
 } from '@solana/spl-token';
 import { USDC_MINT } from '@/lib/solana-pay';
-import { sendBaseUsdcPayment } from '@/lib/base-pay';
-import { useWallets } from '@privy-io/react-auth';
+import { useWallets, useSendTransaction } from '@privy-io/react-auth';
 import { useFundWallet as useEvmFundWallet } from '@privy-io/react-auth';
 import {
   useWallets as useSolanaWallets,
@@ -24,7 +23,7 @@ import {
   useFundWallet as useSolanaFundWallet,
   useSolanaFundingPlugin,
 } from '@privy-io/react-auth/solana';
-import { createWalletClient, custom } from 'viem';
+import { createWalletClient, custom, encodeFunctionData, erc20Abi, parseUnits } from 'viem';
 import { base } from 'viem/chains';
 import bs58 from 'bs58';
 import { signWalletAuth } from '@/lib/solana-auth-client';
@@ -203,6 +202,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const { wallets: solanaWallets } = useSolanaWallets();
   const { signAndSendTransaction } = useSignAndSendTransaction();
   const { signMessage: solSignMessage } = useSolanaSignMessage();
+  const { sendTransaction: privySendTransaction } = useSendTransaction();
 
   const evmEmbedded = evmWallets.find((w) => w.walletClientType === 'privy') ?? null;
   const solEmbedded = solanaWallets.find((w) => w.address) ?? null;
@@ -439,6 +439,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       transaction: new Uint8Array(serialized),
       wallet: solEmbedded,
       chain: 'solana:mainnet',
+      options: { sponsor: true },
     });
 
     const sig = bs58.encode(result.signature);
@@ -540,19 +541,18 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       let txSig: string;
 
       if (chain === 'base') {
-        if (!evmEmbedded) throw new Error('Base embedded wallet not available');
-        const provider = await evmEmbedded.getEthereumProvider();
-        const walletClient = createWalletClient({
-          account: evmEmbedded.address as `0x${string}`,
-          chain: base,
-          transport: custom(provider),
+        if (!evmEmbedded || !embeddedEvmAddress) throw new Error('Base embedded wallet not available');
+        const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+        const transferData = encodeFunctionData({
+          abi: erc20Abi,
+          functionName: 'transfer',
+          args: [treasury as `0x${string}`, parseUnits(total.toFixed(6), 6)],
         });
-        txSig = await sendBaseUsdcPayment(
-          walletClient,
-          evmEmbedded.address as `0x${string}`,
-          treasury as `0x${string}`,
-          total,
+        const { hash } = await privySendTransaction(
+          { to: USDC_BASE, data: transferData, chainId: 8453, value: 0 },
+          { address: embeddedEvmAddress, sponsor: true },
         );
+        txSig = hash;
       } else {
         txSig = await buildAndSignSolanaUsdcTransfer(payerAddress, treasury, total);
       }
@@ -592,6 +592,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     total,
     solSignMessage,
     buildAndSignSolanaUsdcTransfer,
+    privySendTransaction,
     isWorkspace,
   ]);
 

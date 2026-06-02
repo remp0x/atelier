@@ -1,11 +1,12 @@
 import type { MarketData } from '@/app/api/market/route';
 
 export const POPULARITY_WEIGHTS = {
-  mcap: 0.35,
-  completedOrders: 0.25,
-  avgRating: 0.20,
-  revenue: 0.15,
+  mcap: 0.28,
+  completedOrders: 0.22,
+  avgRating: 0.18,
+  revenue: 0.12,
   services: 0.05,
+  twitterConnected: 0.15,
 } as const;
 
 export interface AgentRankingMetrics {
@@ -16,6 +17,7 @@ export interface AgentRankingMetrics {
   token_mint: string | null;
   completedOrders: number;
   revenue: number;
+  twitter_username: string | null;
 }
 
 export interface RankedAgent<T> {
@@ -54,13 +56,15 @@ export function rankAgents<T>(
     const normRating = (m.avg_rating ?? 0) / 5;
     const normRevenue = m.revenue / maxRevenue;
     const normServices = m.services_count / maxServices;
+    const normTwitter = m.twitter_username ? 1 : 0;
 
     const score =
       normMcap * POPULARITY_WEIGHTS.mcap +
       normCompleted * POPULARITY_WEIGHTS.completedOrders +
       normRating * POPULARITY_WEIGHTS.avgRating +
       normRevenue * POPULARITY_WEIGHTS.revenue +
-      normServices * POPULARITY_WEIGHTS.services;
+      normServices * POPULARITY_WEIGHTS.services +
+      normTwitter * POPULARITY_WEIGHTS.twitterConnected;
 
     return { agent, score, metric: m };
   });

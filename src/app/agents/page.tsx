@@ -50,6 +50,7 @@ function sortByPopularity(
       token_mint: a.token_mint,
       completedOrders: a.completed_orders,
       revenue: a.total_revenue,
+      twitter_username: a.twitter_username,
     }),
     market,
   ).map((r) => r.agent);

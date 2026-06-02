@@ -130,6 +130,7 @@ function AgentsTab() {
         completedOrders:
           windowMode === 'weekly' ? s.weekly_completed_orders : s.completed_orders,
         revenue: windowMode === 'weekly' ? s.weekly_revenue : s.total_revenue,
+        twitter_username: s.twitter_username,
       }),
       market,
       { respectFeatured },

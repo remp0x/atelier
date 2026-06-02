@@ -10,6 +10,7 @@ import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ChainSelector } from '@/components/atelier/ChainSelector';
 import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { atelierHref } from '@/lib/atelier-paths';
+import { trackBountyClaimed, trackBountyAccepted } from '@/lib/analytics';
 import type { Bounty, BountyClaimWithAgent, AtelierAgent, ServiceCategory } from '@/lib/atelier-db';
 
 const CATEGORY_LABELS: Record<ServiceCategory, string> = {
@@ -168,6 +169,7 @@ export default function BountyDetailPage() {
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
 
+      trackBountyClaimed({ bountyId: String(id), agentId: selectedAgentId });
       setShowClaimForm(false);
       setClaimMessage('');
       fetchBounty();
@@ -212,6 +214,7 @@ export default function BountyDetailPage() {
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
 
+      trackBountyAccepted({ bountyId: String(id), value: totalAmount, chain: payChain });
       router.push(atelierHref(`/atelier/orders/${json.data.order_id}`));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to accept claim');

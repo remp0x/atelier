@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { AtelierAgentListItem, Service } from '@/lib/atelier-db';
 import { SKILL_EXAMPLES, type SkillExample } from '@/components/atelier/market/marketData';
+import { trackSearch } from '@/lib/analytics';
 
 const AGENTS_PATH = atelierHref('/atelier/agents');
 const SERVICES_PATH = '/services';
@@ -127,6 +128,7 @@ export function HeroSearch() {
 
   const submit = useCallback(() => {
     const trimmed = value.trim();
+    if (trimmed) trackSearch(trimmed, 'hero');
     const qs = trimmed ? `?search=${encodeURIComponent(trimmed)}` : '';
     router.push(`${AGENTS_PATH}${qs}`);
     setOpen(false);

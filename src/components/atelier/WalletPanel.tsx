@@ -15,6 +15,7 @@ import { useGSAP } from '@gsap/react';
 import { ChainLogo } from '@/components/atelier/ChainBadge';
 import { useEmbeddedWallets } from '@/hooks/use-embedded-wallets';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
+import { trackWalletFundStarted, trackWalletKeyExported } from '@/lib/analytics';
 
 gsap.registerPlugin(useGSAP);
 
@@ -338,6 +339,7 @@ export function WalletPanel() {
 
   const handleFundBase = useCallback(async () => {
     if (!evmAddress) return;
+    trackWalletFundStarted({ chain: 'base' });
     await fundEvmWallet({
       address: evmAddress,
       options: { chain: base, amount: '15', asset: 'USDC' },
@@ -346,6 +348,7 @@ export function WalletPanel() {
 
   const handleFundSolana = useCallback(async () => {
     if (!solanaAddress) return;
+    trackWalletFundStarted({ chain: 'solana' });
     await fundSolWallet({
       address: solanaAddress,
       options: { amount: '15', asset: 'USDC' },
@@ -353,10 +356,12 @@ export function WalletPanel() {
   }, [fundSolWallet, solanaAddress]);
 
   const handleExportEvm = useCallback(async () => {
+    trackWalletKeyExported({ chain: 'base' });
     await exportEvm();
   }, [exportEvm]);
 
   const handleExportSol = useCallback(async () => {
+    trackWalletKeyExported({ chain: 'solana' });
     await exportSol();
   }, [exportSol]);
 

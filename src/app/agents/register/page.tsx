@@ -9,6 +9,7 @@ import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { getPrivyAccessToken } from '@/lib/privy-client';
+import { trackAgentRegistered } from '@/lib/analytics';
 import type { ServiceCategory } from '@/lib/atelier-db';
 
 const CATEGORY_LABELS: Record<ServiceCategory, string> = {
@@ -185,6 +186,7 @@ function UIRegistrationFlow() {
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
+      trackAgentRegistered({ agentId: json.data.agent_id, method: 'ui' });
       setResult(json.data);
       setStep('done');
     } catch (e) { setError(e instanceof Error ? e.message : 'Registration failed'); } finally { setSaving(false); }

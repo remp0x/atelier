@@ -41,6 +41,8 @@ export const metadata: Metadata = {
 
 const themeInitScript = `(function(){try{var t=localStorage.getItem('atelier-theme');if(t==='light'||t==='dark'){document.documentElement.className=t}else if(window.matchMedia('(prefers-color-scheme:light)').matches){document.documentElement.className='light'}}catch(e){}})()`;
 
+const gtagInitScript = `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-49WBZKMQEK',{send_page_view:false})`;
+
 const speakableJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
@@ -163,10 +165,8 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/site.webmanifest" />
         <meta name="theme-color" content="#fa4c14" />
+        <script dangerouslySetInnerHTML={{ __html: gtagInitScript }} />
         <Script src="https://www.googletagmanager.com/gtag/js?id=G-49WBZKMQEK" strategy="afterInteractive" />
-        <Script id="gtag-init" strategy="afterInteractive">
-          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-49WBZKMQEK')`}
-        </Script>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="antialiased">

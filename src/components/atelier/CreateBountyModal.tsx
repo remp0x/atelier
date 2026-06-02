@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { clientUpload } from '@/lib/client-upload';
+import { trackBountyCreated } from '@/lib/analytics';
 import type { ServiceCategory } from '@/lib/atelier-db';
 import { CATEGORY_LABELS } from '@/components/atelier/constants';
 
@@ -171,6 +172,7 @@ export function CreateBountyModal({ open, onClose, onCreated }: CreateBountyModa
         return;
       }
 
+      trackBountyCreated({ category, value: budget });
       onCreated();
       onClose();
     } catch {

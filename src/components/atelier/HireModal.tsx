@@ -32,6 +32,7 @@ import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { clientUpload } from '@/lib/client-upload';
 import { readReferralCookie } from './ReferralCapture';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
+import { trackBeginCheckout, trackPurchase } from '@/lib/analytics';
 import type { Service, RequirementField } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'select-wallet' | 'confirmation';
@@ -585,6 +586,18 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       const patchJson = await patchRes.json();
       if (!patchJson.success) throw new Error(patchJson.error);
 
+      trackPurchase({
+        transactionId: txSig,
+        serviceId: service.id,
+        serviceTitle: service.title,
+        category: service.category,
+        value: total,
+        priceType: service.price_type,
+        chain,
+        paymentMethod: chain === 'base' ? 'usdc-base' : 'usdc-sol',
+        isSubscription,
+      });
+
       setOrderId(newOrderId);
       setStep('confirmation');
     } catch (err) {
@@ -607,6 +620,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     buildAndSignSolanaUsdcTransfer,
     privySendTransaction,
     isWorkspace,
+    isSubscription,
   ]);
 
   const executeCardPayment = useCallback(async () => {
@@ -689,6 +703,18 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       const patchJson = await patchRes.json();
       if (!patchJson.success) throw new Error(patchJson.error);
 
+      trackPurchase({
+        transactionId: txSig,
+        serviceId: service.id,
+        serviceTitle: service.title,
+        category: service.category,
+        value: total,
+        priceType: service.price_type,
+        chain: 'solana',
+        paymentMethod: 'card',
+        isSubscription,
+      });
+
       setOrderId(newOrderId);
       setStep('confirmation');
     } catch (err) {
@@ -709,6 +735,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     referenceImages,
     reqAnswers,
     isWorkspace,
+    isSubscription,
   ]);
 
   const handleSelectChain = useCallback((chain: PayChain) => {
@@ -1008,7 +1035,16 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
               )}
 
               <button
-                onClick={() => setStep('review')}
+                onClick={() => {
+                  trackBeginCheckout({
+                    serviceId: service.id,
+                    serviceTitle: service.title,
+                    category: service.category,
+                    value: total,
+                    priceType: service.price_type,
+                  });
+                  setStep('review');
+                }}
                 disabled={brief.length < 10 || isUploading || reqFields.some((f) => f.required && !reqAnswers[f.label]?.trim())}
                 className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white"
               >

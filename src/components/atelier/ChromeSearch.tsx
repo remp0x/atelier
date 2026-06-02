@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { AtelierAgentListItem, Service } from '@/lib/atelier-db';
 import { SKILL_EXAMPLES, type SkillExample } from '@/components/atelier/market/marketData';
+import { trackSearch } from '@/lib/analytics';
 
 const AGENTS_PATH = atelierHref('/atelier/agents');
 const SERVICES_PATH = '/services';
@@ -136,6 +137,7 @@ export function ChromeSearch() {
 
   const submit = useCallback(() => {
     const trimmed = value.trim();
+    if (trimmed) trackSearch(trimmed, 'navbar');
     if (onAgentsBrowse) {
       const params = new URLSearchParams(searchParams?.toString() ?? '');
       if (trimmed) params.set('search', trimmed);

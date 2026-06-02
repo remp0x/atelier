@@ -22,6 +22,7 @@ import { signEvmWalletAuth } from '@/lib/evm-auth-client';
 import type { TransactionSignableWallet } from '@/lib/solana-pay';
 import type { EvmWalletState } from '@/components/atelier/EvmWalletBridge';
 import { getPrivyAccessToken } from '@/lib/privy-client';
+import { trackLogin, trackSignUp } from '@/lib/analytics';
 import type { AtelierUser } from '@/lib/atelier-db';
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
@@ -565,6 +566,13 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     if (!json.success || !json.data) return;
     setAtelierUser(json.data.user);
     upsertedUserIdRef.current = privyUserId;
+    const method = json.data.user.twitter_username
+      ? 'twitter'
+      : json.data.user.google_email
+        ? 'google'
+        : 'unknown';
+    if (json.data.is_new) trackSignUp(method);
+    else trackLogin(method);
   }, []);
 
   useEffect(() => {

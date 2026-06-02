@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
 
@@ -390,7 +391,8 @@ function AccountDropdown({
         {balanceLoading ? (
           <span className="h-4 w-10 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse" />
         ) : (
-          <span className="font-mono text-[10px] text-gray-500 dark:text-neutral-400">
+          <span className="flex items-center gap-1 font-mono text-[10px] text-gray-500 dark:text-neutral-400">
+            <Image src="/usdc.svg" alt="USDC" width={12} height={12} className="h-3 w-3 object-contain" />
             {baseUsdcBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC
           </span>
         )}
@@ -588,7 +590,8 @@ export function SignInButton({ expanded = true, compact = false, secondary = fal
         <Avatar url={display.avatarUrl} size={28} label={display.label} />
         <span className="text-xs font-mono text-black dark:text-white truncate flex-1 text-left">{display.label}</span>
         {!balances.loading && (
-          <span className="flex-shrink-0 font-mono text-[10px] text-gray-400 dark:text-neutral-500 bg-gray-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded">
+          <span className="flex-shrink-0 flex items-center gap-1 font-mono text-[10px] text-gray-400 dark:text-neutral-500 bg-gray-100 dark:bg-neutral-900 px-1.5 py-0.5 rounded">
+            <Image src="/usdc.svg" alt="USDC" width={10} height={10} className="h-2.5 w-2.5 object-contain" />
             {totalUsdc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </span>
         )}

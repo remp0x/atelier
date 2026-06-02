@@ -11,7 +11,8 @@ import {
   type ReactNode,
 } from 'react';
 import dynamic from 'next/dynamic';
-import { usePrivy } from '@privy-io/react-auth';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { useWallets as useSolanaWallets, useSignMessage as useSolanaSignMessage } from '@privy-io/react-auth/solana';
 import type { User } from '@privy-io/react-auth';
 import { PublicKey, Transaction } from '@solana/web3.js';
 import { createWalletClient, custom, type WalletClient } from 'viem';
@@ -179,6 +180,24 @@ function saveEvmHidden(address: string | null): void {
   } catch {}
 }
 
+// Resolve a Privy embedded wallet address from linkedAccounts (walletClientType
+// 'privy'), distinct from any externally-connected wallet.
+function findEmbeddedAddress(accounts: readonly unknown[] | undefined, chainType: 'solana' | 'ethereum'): string | null {
+  for (const account of accounts ?? []) {
+    const a = account as { type?: string; walletClientType?: string; chainType?: string; address?: string };
+    if (
+      a.type === 'wallet' &&
+      a.walletClientType === 'privy' &&
+      a.chainType === chainType &&
+      typeof a.address === 'string' &&
+      a.address.length > 0
+    ) {
+      return a.address;
+    }
+  }
+  return null;
+}
+
 const SolanaWalletBridge = dynamic(
   () => import('@/components/atelier/SolanaWalletBridge').then(m => ({ default: m.SolanaWalletBridge })),
   { ssr: false }
@@ -246,18 +265,36 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const [atelierUser, setAtelierUser] = useState<AtelierUser | null>(null);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
 
+  const { wallets: privyEvmWallets } = useWallets();
+  const { wallets: privySolWallets } = useSolanaWallets();
+  const { signMessage: solanaEmbeddedSignMessage } = useSolanaSignMessage();
+
   const cacheRef = useRef<{ payload: WalletAuthPayload; ts: number } | null>(null);
   const inflightRef = useRef<Promise<WalletAuthPayload> | null>(null);
   const upsertedUserIdRef = useRef<string | null>(null);
   const upsertInflightRef = useRef<Promise<void> | null>(null);
 
-  const solanaAddress = solanaWallet?.address ?? null;
+  const embeddedSolanaAddress = useMemo(() => findEmbeddedAddress(user?.linkedAccounts, 'solana'), [user]);
+  const embeddedEvmAddressRaw = useMemo(() => findEmbeddedAddress(user?.linkedAccounts, 'ethereum'), [user]);
+  const embeddedEvmAddress = embeddedEvmAddressRaw && embeddedEvmAddressRaw.startsWith('0x')
+    ? (embeddedEvmAddressRaw as `0x${string}`)
+    : null;
+  const embeddedSolWallet = useMemo(
+    () => privySolWallets.find((w) => w.address === embeddedSolanaAddress) ?? null,
+    [privySolWallets, embeddedSolanaAddress],
+  );
+  const embeddedEvmWallet = useMemo(
+    () => privyEvmWallets.find((w) => w.walletClientType === 'privy') ?? null,
+    [privyEvmWallets],
+  );
+
+  const solanaAddress = solanaWallet?.address ?? embeddedSolanaAddress;
   const evmWallet = useMemo<EvmWalletState | null>(() => {
     if (!rawEvmWallet) return null;
     if (evmHiddenAddress && rawEvmWallet.address.toLowerCase() === evmHiddenAddress) return null;
     return rawEvmWallet;
   }, [rawEvmWallet, evmHiddenAddress]);
-  const evmAddress = evmWallet?.address ?? null;
+  const evmAddress = evmWallet?.address ?? embeddedEvmAddress;
 
   const walletChain: WalletChain | null = useMemo(() => {
     if (activeChain === 'base' && evmAddress) return 'base';
@@ -318,16 +355,28 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getSignableWallet = useCallback((): SignableWallet | null => {
-    if (!solanaWallet || !solanaAddress) return null;
-
-    return {
-      publicKey: { toBase58: () => solanaAddress },
-      signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
-        const result = await solanaWallet.signMessage({ message });
-        return result.signature;
-      },
-    };
-  }, [solanaWallet, solanaAddress]);
+    if (solanaWallet && solanaAddress) {
+      return {
+        publicKey: { toBase58: () => solanaAddress },
+        signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
+          const result = await solanaWallet.signMessage({ message });
+          return result.signature;
+        },
+      };
+    }
+    if (embeddedSolWallet && embeddedSolanaAddress) {
+      const wallet = embeddedSolWallet;
+      const address = embeddedSolanaAddress;
+      return {
+        publicKey: { toBase58: () => address },
+        signMessage: async (message: Uint8Array): Promise<Uint8Array> => {
+          const out = await solanaEmbeddedSignMessage({ message, wallet });
+          return out.signature;
+        },
+      };
+    }
+    return null;
+  }, [solanaWallet, solanaAddress, embeddedSolWallet, embeddedSolanaAddress, solanaEmbeddedSignMessage]);
 
   const getTransactionWallet = useCallback((): TransactionSignableWallet | null => {
     if (!solanaWallet || !solanaAddress) return null;
@@ -390,11 +439,22 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
         if (!wallet) throw new Error('No Solana wallet available for signing');
         return signWalletAuth(wallet);
       }
-      if (!evmWallet || !evmAddress) throw new Error('No EVM wallet available for signing');
-      return signEvmWalletAuth({
-        address: evmAddress,
-        signMessage: evmWallet.signMessage,
-      });
+      if (evmWallet && evmAddress) {
+        return signEvmWalletAuth({
+          address: evmAddress,
+          signMessage: evmWallet.signMessage,
+        });
+      }
+      if (embeddedEvmWallet && embeddedEvmAddress) {
+        const provider = await embeddedEvmWallet.getEthereumProvider();
+        const client = createWalletClient({ chain: base, transport: custom(provider), account: embeddedEvmAddress });
+        const address = embeddedEvmAddress;
+        return signEvmWalletAuth({
+          address,
+          signMessage: (message: string) => client.signMessage({ account: address, message }),
+        });
+      }
+      throw new Error('No EVM wallet available for signing');
     };
 
     const promise = sign()
@@ -412,7 +472,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
 
     inflightRef.current = promise;
     return promise;
-  }, [walletChain, walletAddress, getSignableWallet, evmWallet, evmAddress]);
+  }, [walletChain, walletAddress, getSignableWallet, evmWallet, evmAddress, embeddedEvmWallet, embeddedEvmAddress]);
 
   useEffect(() => {
     inflightRef.current = null;

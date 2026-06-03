@@ -4,6 +4,7 @@ const webpack = require('webpack');
 const nextConfig = {
   experimental: {
     missingSuspenseWithCSRBailout: false,
+    optimizePackageImports: ['framer-motion', 'viem', '@solana/web3.js', '@solana/spl-token'],
   },
   webpack: (config) => {
     config.resolve.fallback = {

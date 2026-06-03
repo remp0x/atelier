@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 
 const ADMIN_EMAIL = 'rempxbt@gmail.com';
@@ -136,15 +137,14 @@ function FeesContent() {
   }, [loadData]);
 
   async function handleCollect() {
-    const adminKey = prompt('Enter admin key:');
-    if (!adminKey) return;
-
     setCollecting(true);
     setError(null);
     try {
+      const token = await getPrivyAccessToken();
+      if (!token) throw new Error('Sign in required');
       const res = await fetch('/api/fees/collect', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${adminKey}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);

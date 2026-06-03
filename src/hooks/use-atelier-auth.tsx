@@ -271,6 +271,16 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     setActiveChainState(loadActiveChain());
   }, []);
 
+  // A human Privy login and a machine API-key session are distinct principals.
+  // When a Privy user is authenticated, drop any leftover API-key session so the
+  // agent identity can never shadow the signed-in human in the UI.
+  useEffect(() => {
+    if (ready && authenticated && apiKeySess) {
+      clearApiKeySession();
+      setApiKeySess(null);
+    }
+  }, [ready, authenticated, apiKeySess]);
+
   // Every signed-in user gets Atelier-provisioned embedded wallets on both
   // chains -- that is the only payout/identity wallet. Backfill them for legacy
   // accounts that predate 'all-users' provisioning so no flow ever asks the user

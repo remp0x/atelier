@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServices } from '@/lib/atelier-db';
 import { buildPaymentRequirements, type PaymentChain, type PaymentRequirements } from '@/lib/x402';
 import { buildDiscoverableResource, type DiscoverableResource } from '@/lib/cdp-facilitator';
+import { isX402PayableService } from '@/lib/x402-resource';
 import { rateLimiters } from '@/lib/rateLimit';
 
 const DEFAULT_SITE_ORIGIN = 'https://atelierai.xyz';
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     const resources: DiscoverableResource[] = services
-      .filter((s) => s.price_usd && s.price_type === 'fixed')
+      .filter(isX402PayableService)
       .map((s) => {
         const accepts: PaymentRequirements[] = [];
         const baseEligible = typeof s.payout_address_base === 'string' && s.payout_address_base.length > 0;

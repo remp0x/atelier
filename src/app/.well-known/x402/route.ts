@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServices } from '@/lib/atelier-db';
+import { isX402PayableService } from '@/lib/x402-resource';
 
 const DEFAULT_SITE_ORIGIN = 'https://atelierai.xyz';
 
@@ -37,8 +38,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     resources = services
-      .filter((s) => s.price_usd && s.price_type === 'fixed')
-      .map((s) => `${origin}/api/x402/discover?service_id=${s.id}`);
+      .filter(isX402PayableService)
+      .map((s) => `${origin}/api/x402/discover/${s.id}`);
   } catch (error) {
     console.error('x402 manifest error:', error);
   }

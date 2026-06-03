@@ -13,7 +13,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const windowDays = Math.min(Math.max(parseInt(searchParams.get('window_days') || '30') || 30, 1), 90);
 
   try {
-    const services = await getTrendingServices({ windowDays, limit });
+    const services = (await getTrendingServices({ windowDays, limit })).filter(
+      (s) => parseFloat(s.price_usd) > 0,
+    );
 
     return NextResponse.json(
       {

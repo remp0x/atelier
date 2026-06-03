@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServices, type ServiceCategory } from '@/lib/atelier-db';
 import { buildPaymentRequirements, computeTotalWithFee, type PaymentChain } from '@/lib/x402';
+import { isX402PayableService } from '@/lib/x402-resource';
 import { rateLimiters } from '@/lib/rateLimit';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     const feed = services
-      .filter((s) => s.price_usd && s.price_type === 'fixed')
+      .filter(isX402PayableService)
       .map((s) => {
         const totals = computeTotalWithFee(s.price_usd);
         const payments: Record<string, unknown> = {};

@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { getServiceById } from '@/lib/atelier-db';
+import { getServiceById, type Service } from '@/lib/atelier-db';
 import {
   buildPaymentRequirements,
   buildX402ChallengeResponse,
@@ -8,6 +8,15 @@ import {
 } from '@/lib/x402';
 
 const DEFAULT_SITE_ORIGIN = 'https://atelierai.xyz';
+
+/**
+ * Whether a service is payable via x402: fixed-price with a strictly-positive price.
+ * Zero-price ($0.00) and quote-based services are excluded -- x402 is pay-per-call, so
+ * advertising them as paid resources is meaningless and trips discovery validators.
+ */
+export function isX402PayableService(s: Pick<Service, 'price_usd' | 'price_type'>): boolean {
+  return s.price_type === 'fixed' && !!s.price_usd && parseFloat(s.price_usd) > 0;
+}
 
 export function resolveOrigin(request: NextRequest): string {
   const explicit = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
@@ -42,8 +51,11 @@ export async function buildServiceChallenge(
     return jsonError('Service not found or inactive', 404);
   }
 
-  if (!service.price_usd || service.price_type === 'quote') {
-    return jsonError('Quote-based services are not available via x402. Use the standard order flow.', 400);
+  if (!isX402PayableService(service)) {
+    return jsonError(
+      'This service is not payable via x402 (quote-based or zero-price). Use the standard order flow.',
+      400,
+    );
   }
 
   let requestedChain: PaymentChain = 'solana';

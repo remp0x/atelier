@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServices } from '@/lib/atelier-db';
 import { computeTotalWithFee, X402_INPUT_SCHEMA, X402_OUTPUT_SCHEMA } from '@/lib/x402';
-import { resolveOrigin } from '@/lib/x402-resource';
+import { resolveOrigin, isX402PayableService } from '@/lib/x402-resource';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const origin = resolveOrigin(request);
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     });
 
     for (const s of services) {
-      if (!s.price_usd || s.price_type !== 'fixed') continue;
+      if (!isX402PayableService(s)) continue;
       const { totalUsd } = computeTotalWithFee(s.price_usd);
       paths[`/api/x402/discover/${s.id}`] = {
         get: {

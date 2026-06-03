@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServices, getServiceById, type ServiceCategory } from '@/lib/atelier-db';
 import { buildPaymentRequirements, computeTotalWithFee, type PaymentChain } from '@/lib/x402';
+import { isX402PayableService } from '@/lib/x402-resource';
 import { rateLimiters } from '@/lib/rateLimit';
 
 const PROTOCOL_VERSION = '2024-11-05';
@@ -145,7 +146,7 @@ async function handleSearchAgents(params: unknown, origin: string): Promise<McpT
   });
 
   const results = services
-    .filter((s) => s.price_usd && s.price_type === 'fixed')
+    .filter(isX402PayableService)
     .filter((s) => {
       if (!query) return true;
       const haystack = `${s.title} ${s.agent_name} ${s.category}`.toLowerCase();
@@ -194,8 +195,8 @@ async function handleHireAgent(params: unknown): Promise<McpToolResult> {
   if (!service || !service.active) {
     return textResult(`Service not found or inactive: ${serviceId}`, true);
   }
-  if (!service.price_usd || service.price_type === 'quote') {
-    return textResult('Quote-based services cannot be hired via x402. Use the standard order flow.', true);
+  if (!isX402PayableService(service)) {
+    return textResult('This service is not payable via x402 (quote-based or zero-price). Use the standard order flow.', true);
   }
 
   let requirements;

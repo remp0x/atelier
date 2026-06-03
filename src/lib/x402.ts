@@ -144,62 +144,52 @@ export const X402_OUTPUT_SCHEMA = {
 
 const X402_MAX_TIMEOUT_SECONDS = 120;
 
-const CANONICAL_NETWORK: Record<X402Network, string> = {
-  'solana-mainnet': 'solana',
-  'base-mainnet': 'base',
+// CAIP-2 network identifiers (x402 v2 wire format). Solana mainnet uses its genesis hash.
+const CAIP2_NETWORK: Record<X402Network, string> = {
+  'base-mainnet': 'eip155:8453',
+  'solana-mainnet': 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
 };
 
+// Base USDC EIP-712 domain, matching the proven CDP settlement path (cdp-facilitator.ts).
+const BASE_USDC_EIP3009_EXTRA = { assetTransferMethod: 'eip3009', name: 'USD Coin', version: '2' } as const;
+
 /**
- * Canonical x402 v1 payment-requirement entry (Coinbase Bazaar / x402scan wire format):
- * `asset` is the bare token-contract string, `network` is the short id ('solana'/'base'),
- * and `outputSchema` carries the invocation input/output schemas. Distinct from our internal
- * `PaymentRequirements` (which nests `asset` as an object and uses '-mainnet' suffixes).
+ * x402 v2 payment-requirement entry (Coinbase Bazaar / x402scan wire format): `network` is
+ * CAIP-2, the amount field is `amount` (renamed from v1 `maxAmountRequired`), `asset` is the
+ * bare token-contract/mint string, and resource/description/mimeType live at the top level of
+ * the envelope (not on the entry). Distinct from our internal `PaymentRequirements`.
  */
-export interface X402AcceptV1 {
+export interface X402AcceptV2 {
   scheme: string;
   network: string;
-  maxAmountRequired: string;
-  resource: string;
-  description: string;
-  mimeType: string;
+  amount: string;
+  asset: string;
   payTo: string;
   maxTimeoutSeconds: number;
-  asset: string;
-  outputSchema: { input: unknown; output: unknown };
-  extra?: Record<string, unknown>;
+  extra: Record<string, unknown>;
 }
 
-function toX402AcceptV1(
-  req: PaymentRequirements,
-  resourceUrl: string,
-  input: unknown,
-  output: unknown,
-): X402AcceptV1 {
-  const entry: X402AcceptV1 = {
+function toX402AcceptV2(req: PaymentRequirements): X402AcceptV2 {
+  return {
     scheme: req.scheme,
-    network: CANONICAL_NETWORK[req.network] ?? req.network,
-    maxAmountRequired: req.maxAmountRequired,
-    resource: resourceUrl,
-    description: req.description,
-    mimeType: 'application/json',
+    network: CAIP2_NETWORK[req.network] ?? req.network,
+    amount: req.maxAmountRequired,
+    asset: req.asset.address,
     payTo: req.payTo,
     maxTimeoutSeconds: X402_MAX_TIMEOUT_SECONDS,
-    asset: req.asset.address,
-    outputSchema: { input, output },
+    extra: req.network === 'base-mainnet' ? { ...BASE_USDC_EIP3009_EXTRA } : {},
   };
-  if (req.network === 'base-mainnet') {
-    entry.extra = { name: 'USD Coin', version: '2' };
-  }
-  return entry;
 }
 
 /**
- * Builds an x402scan / Coinbase-Bazaar-conformant HTTP 402 challenge. The body is a
- * backward-compatible superset: it spreads the primary requirement's internal flat fields
- * (payTo/maxAmountRequired/network/asset object) for existing Atelier agent clients, and
- * adds `x402Version`, a non-empty canonical-v1 `accepts` array (asset string, short network,
- * maxTimeoutSeconds, outputSchema), and `extensions.bazaar.info` so discovery crawlers index
- * the resource as payable and invocable. See docs/x402-bazaar-setup.md and the x402scan spec.
+ * Builds an x402 **v2** HTTP 402 challenge (the format x402scan / Coinbase Bazaar require;
+ * v1 responses are rejected on registration). Envelope: `x402Version: 2`, a non-empty
+ * `accepts` array (CAIP-2 network, `amount`, bare `asset`, `extra`), a top-level `resource`
+ * object, and `extensions.bazaar` carrying the input/output schemas both at `info.*` (read by
+ * x402scan) and under `schema.properties.input.properties.body` /
+ * `schema.properties.output.properties.example` (read by @agentcash/discovery). The same
+ * envelope is emitted in the base64 `Payment-Required` response header (v2-native transport)
+ * and as the JSON body. See docs/x402-bazaar-setup.md and https://x402scan.com/discovery/spec.
  */
 export function buildX402ChallengeResponse(params: {
   requirements: PaymentRequirements[];
@@ -209,8 +199,7 @@ export function buildX402ChallengeResponse(params: {
   input?: unknown;
   output?: unknown;
 }): Response {
-  const [primary] = params.requirements;
-  if (!primary) {
+  if (params.requirements.length === 0) {
     return new Response(
       JSON.stringify({ success: false, error: 'No payment rail configured for this resource' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } },
@@ -219,28 +208,38 @@ export function buildX402ChallengeResponse(params: {
 
   const input = params.input ?? X402_INPUT_SCHEMA;
   const output = params.output ?? X402_OUTPUT_SCHEMA;
-  const accepts = params.requirements.map((req) => toX402AcceptV1(req, params.resourceUrl, input, output));
 
   const body = {
-    ...primary,
-    x402Version: 1,
-    accepts,
+    x402Version: 2,
+    error: 'X-PAYMENT header is required',
+    accepts: params.requirements.map(toX402AcceptV2),
+    resource: {
+      url: params.resourceUrl,
+      description: params.description,
+      mimeType: 'application/json',
+    },
     extensions: {
       bazaar: {
-        info: { name: params.name, description: params.description },
-        input,
-        output,
+        info: { name: params.name, input, output },
+        schema: {
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          type: 'object',
+          properties: {
+            input: { type: 'object', properties: { body: input } },
+            output: { type: 'object', properties: { example: output } },
+          },
+        },
       },
     },
   };
 
-  return new Response(JSON.stringify(body), {
+  const serialized = JSON.stringify(body);
+
+  return new Response(serialized, {
     status: 402,
     headers: {
       'Content-Type': 'application/json',
-      'X-Payment-Scheme': primary.scheme,
-      'X-Payment-Network': primary.network,
-      'X-Payment-Asset': 'USDC',
+      'Payment-Required': Buffer.from(serialized).toString('base64'),
     },
   });
 }

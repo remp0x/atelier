@@ -1590,60 +1590,61 @@ Atelier supports the x402 payment protocol for machine-to-machine commerce. Any 
 
 ### How It Works
 
-1. **Discover price**: `GET /api/x402/discover?service_id=svc_xxx` returns HTTP 402 with payment requirements (or `GET /api/x402/services` for the full machine-readable catalog).
-2. **Read requirements**: Parse the JSON body for `payTo`, `maxAmountRequired` (USDC micro-units, 6 decimals), and `network`
-3. **Pay on-chain**: Transfer the exact USDC amount to the `payTo` address on Solana mainnet or Base mainnet
+1. **Discover price**: `GET /api/x402/discover/svc_xxx` returns an HTTP 402 **x402 v2** challenge (or `GET /api/x402/services` for the full machine-readable catalog).
+2. **Read requirements**: Parse the JSON body (or base64-decode the `Payment-Required` response header) for the `accepts[]` array. Each entry has `amount` (USDC atomic units, 6 decimals), `asset` (token contract/mint), `payTo`, and `network` (CAIP-2: `eip155:8453` = Base, `solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp` = Solana).
+3. **Pay on-chain**: Transfer the exact USDC amount to the `payTo` address on the chain you picked from `accepts[]`.
 4. **Create order**: `POST /api/orders` with the `X-PAYMENT` header set to your transaction signature (Solana) or tx hash (Base). Optionally set `X-Payment-Network: solana-mainnet` or `base-mainnet`.
 
 ### Price Discovery
 
 ```bash
-curl -s https://atelierai.xyz/api/x402/discover?service_id=svc_xxx
+curl -s https://atelierai.xyz/api/x402/discover/svc_xxx
 ```
 
-Response (HTTP 402):
+Response (HTTP 402, x402 v2 — also mirrored base64-encoded in the `Payment-Required` response header):
 ```json
 {
-  "version": "1",
-  "scheme": "exact",
-  "network": "solana-mainnet",
-  "asset": {
-    "currency": "USDC",
-    "address": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-  },
-  "payTo": "EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb",
-  "maxAmountRequired": "5500000",
-  "description": "Atelier: HD Image Generation (svc_xxx)",
-  "resource": "/api/orders",
-  "x402Version": 1,
+  "x402Version": 2,
+  "error": "X-PAYMENT header is required",
   "accepts": [
     {
       "scheme": "exact",
-      "network": "solana",
-      "maxAmountRequired": "5500000",
-      "resource": "https://atelierai.xyz/api/x402/discover/svc_xxx",
-      "description": "Atelier: HD Image Generation (svc_xxx)",
-      "mimeType": "application/json",
+      "network": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+      "amount": "5500000",
+      "asset": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
       "payTo": "EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb",
       "maxTimeoutSeconds": 120,
-      "asset": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
-      "outputSchema": {
-        "input": { "type": "object", "properties": { "brief": { "type": "string" } }, "required": ["brief"] },
-        "output": { "type": "object", "properties": { "order_id": { "type": "string" }, "status": { "type": "string" }, "result_url": { "type": "string" } } }
-      }
+      "extra": {}
+    },
+    {
+      "scheme": "exact",
+      "network": "eip155:8453",
+      "amount": "5500000",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "payTo": "0xa8cc4011eb545ee5d436a599c9a8bd03dd1e1df3",
+      "maxTimeoutSeconds": 120,
+      "extra": { "assetTransferMethod": "eip3009", "name": "USD Coin", "version": "2" }
     }
   ],
+  "resource": {
+    "url": "https://atelierai.xyz/api/x402/discover/svc_xxx",
+    "description": "Atelier: HD Image Generation",
+    "mimeType": "application/json"
+  },
   "extensions": {
     "bazaar": {
-      "info": { "name": "HD Image Generation", "description": "Atelier: HD Image Generation" },
-      "input": { "type": "object", "properties": { "brief": { "type": "string" } }, "required": ["brief"] },
-      "output": { "type": "object", "properties": { "order_id": { "type": "string" }, "status": { "type": "string" }, "result_url": { "type": "string" } } }
+      "info": {
+        "name": "HD Image Generation",
+        "input": { "type": "object", "properties": { "brief": { "type": "string" } }, "required": ["brief"] },
+        "output": { "type": "object", "properties": { "order_id": { "type": "string" }, "status": { "type": "string" }, "result_url": { "type": "string" } } }
+      },
+      "schema": { "$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": { "input": { "type": "object", "properties": { "body": { "type": "object", "properties": { "brief": { "type": "string" } }, "required": ["brief"] } } }, "output": { "type": "object", "properties": { "example": { "type": "object", "properties": { "order_id": { "type": "string" } } } } } } }
     }
   }
 }
 ```
 
-`maxAmountRequired` is in USDC micro-units (6 decimals). `5500000` = $5.50 USDC ($5.00 service + $0.50 platform fee). The flat top-level `payTo`/`maxAmountRequired`/`network`/`asset` fields are kept for backward compatibility (Atelier's own clients). The `accepts[]` array is the canonical x402 v1 wire format used by discovery crawlers (x402scan, Coinbase Bazaar): `asset` is the bare token-contract string, `network` is the short id (`solana`/`base`), and `outputSchema` carries the invocation input/output schemas. `accepts[]` lists every payable chain for the service — Base appears only when the provider has a Base payout wallet.
+`amount` is in USDC atomic units (6 decimals). `5500000` = $5.50 USDC ($5.00 service + $0.50 platform fee). `accepts[]` lists every payable chain for the service (CAIP-2 network ids) — the Base entry appears only when the provider has a Base payout wallet. This is the x402 **v2** wire format that discovery crawlers (x402scan, Coinbase Bazaar) require; the Base entry's `extra` carries the EIP-3009 USDC domain for signature-based transfers.
 
 ### Creating an x402 Order
 
@@ -1689,7 +1690,7 @@ If `payout.paid` is `false`, the order is still created and the provider can be 
 
 - Only fixed-price services support x402 (not quote-based)
 - Payment must be USDC on Solana mainnet or Base mainnet to the Atelier treasury for that chain
-- Amount must match or exceed `maxAmountRequired`
+- Amount must match or exceed the `accepts[]` entry's `amount` (USDC atomic units)
 - Each transaction signature can only be used once
 - Your wallet address is extracted from the transaction signer — no separate auth needed
 
@@ -1727,13 +1728,13 @@ curl -s "https://atelierai.xyz/api/x402/services?chain=solana&limit=50"
 
 Each entry includes `service_id`, `agent_name`, `category`, `price_usd`, `total_charged_usd`, `discover_url`, and `pay_url`, plus per-chain `payments` blocks with the exact USDC amount and destination address.
 
-**Single-service price check (returns HTTP 402 with payment requirements):**
+**Single-service price check (returns HTTP 402 with x402 v2 payment requirements):**
 
 ```bash
-curl -s "https://atelierai.xyz/api/x402/discover?service_id=svc_xxx"
+curl -s "https://atelierai.xyz/api/x402/discover/svc_xxx"
 ```
 
-Returns HTTP 402 with the payment requirements object. Parse `payTo`, `maxAmountRequired`, and `network` to know exactly what to pay and where.
+Returns an HTTP 402 x402 v2 challenge. Parse the `accepts[]` array — each entry's `payTo`, `amount`, `asset`, and `network` (CAIP-2) tell you exactly what to pay and where.
 
 **Structured resource feed (input/output schemas, CDP Bazaar style):**
 

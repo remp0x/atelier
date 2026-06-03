@@ -88,11 +88,19 @@ OpenAPI. Atelier now serves all three so that every discovery path resolves:
 - `GET /.well-known/x402` -- `{ version:1, resources:[ ...discover URL strings ] }`
   (x402scan fan-out compatibility format; `resources` are bare URL strings).
 - `GET /api/x402/discover/{service_id}` (and `?service_id=`) -- runtime HTTP 402
-  whose body is x402scan-conformant: a non-empty canonical-v1 `accepts[]`
-  (`asset` as bare contract string, short `network` `solana`/`base`,
-  `maxTimeoutSeconds`, `outputSchema.{input,output}`) plus `extensions.bazaar.info`.
-  The internal flat fields (`payTo`/`maxAmountRequired`/`network`/`asset` object)
-  are retained for Atelier's own agent clients.
+  **x402 v2** challenge. x402scan registration HARD-REJECTS v1 (`x402 v1 response
+  detected -- migrate to v2 spec`); the single discriminator it checks is
+  `x402Version === 2`. Envelope: `x402Version:2`, `error`, non-empty `accepts[]`
+  (`network` CAIP-2 `eip155:8453` / `solana:5eykt4...`, `amount` (NOT
+  `maxAmountRequired`), bare `asset`, `payTo`, `maxTimeoutSeconds`, `extra` with the
+  EIP-3009 USDC domain on Base), a top-level `resource` object, and
+  `extensions.bazaar` with the I/O schema at BOTH `info.input`/`info.output` (read
+  by x402scan) and `schema.properties.input.properties.body` /
+  `schema.properties.output.properties.example` (read by @agentcash/discovery). The
+  same envelope is also emitted base64-encoded in the `Payment-Required` response
+  header (v2-native transport). Built by `buildX402ChallengeResponse` in `x402.ts`.
+  NOTE: `buildPaymentRequiredResponse` (orders/register/pay) stays v1 -- those are
+  the fulfillment side, not discovery-probed; only the discover challenge is v2.
 
 Validate after deploy:
 
@@ -100,9 +108,9 @@ Validate after deploy:
 npx -y @agentcash/discovery atelierai.xyz -v
 ```
 
-Expected: source `openapi`, one `paid … [x402]` route per fixed-price service, no
-`[error]`s. Known residual warning: `X402_VERSION_V1_NOT_SUPPORTED` -- agentcash
-prefers x402 v2, but the Coinbase/CDP/x402scan settlement path Atelier uses is v1.
+Expected: source `openapi`, one `paid … [x402]` route per fixed-price service, and
+**0 errors / 0 warnings** (the v2 migration also clears the old
+`X402_VERSION_V1_NOT_SUPPORTED` warning).
 
 ## Directory submission checklist (do today)
 

@@ -2,24 +2,30 @@
  * Retrieval layer for the Ask-Atelier support assistant.
  *
  * Chunks Atelier's public docs (llms-full.txt = product reference, skill.md =
- * agent integration), embeds them with OpenAI `text-embedding-3-small`, and
- * retrieves the top-K most relevant chunks for a question via cosine similarity.
- * The retrieved chunks are what gets fed to the generation model (Pod), so the
- * assistant is grounded in only the passages that actually matter to the query.
+ * agent integration) and retrieves the top-K chunks most relevant to a question
+ * using BM25 lexical ranking. Only those chunks are fed to the generation model
+ * (Pod), so the assistant is grounded in the passages that actually matter.
  *
- * The index is built lazily and cached in memory with a TTL (the corpus is
- * small and llms-full.txt carries live stats, so periodic rebuilds keep it
- * fresh). Every function is fail-open: callers get `null` on any failure and
- * fall back to whole-document grounding.
+ * Retrieval is in-process (no embedding/vector provider) -- Pod is the only
+ * external dependency, and it only does generation. The index is built lazily
+ * and cached in memory with a TTL (the corpus is small and llms-full.txt carries
+ * live stats, so periodic rebuilds keep it fresh). Fail-open: callers get `null`
+ * on any failure and fall back to whole-document grounding.
  */
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const EMBED_MODEL = process.env.SUPPORT_EMBED_MODEL || 'gemini-embedding-001';
-const EMBED_DIM = 1536;
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
 const INDEX_TTL_MS = 30 * 60 * 1000;
 const MAX_CHUNK_CHARS = 1100;
 const DEFAULT_TOP_K = 12;
+
+const BM25_K1 = 1.5;
+const BM25_B = 0.75;
+
+const STOPWORDS = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'of', 'to', 'in', 'on', 'for', 'with', 'is', 'are',
+  'be', 'do', 'does', 'how', 'what', 'why', 'when', 'where', 'can', 'i', 'you', 'my', 'your',
+  'it', 'its', 'this', 'that', 'as', 'at', 'by', 'from', 'me', 'we', 'they', 'them', 'their',
+]);
 
 const DOC_SOURCES: Array<{ label: string; path: string }> = [
   { label: 'ATELIER PRODUCT REFERENCE', path: '/llms-full.txt' },
@@ -29,52 +35,23 @@ const DOC_SOURCES: Array<{ label: string; path: string }> = [
 interface Chunk {
   source: string;
   content: string;
-  embedding: number[];
+  tokens: string[];
+  termFreq: Map<string, number>;
 }
 
-let indexCache: { chunks: Chunk[]; at: number } | null = null;
-let buildInFlight: Promise<Chunk[] | null> | null = null;
-
-export function isSupportRagEnabled(): boolean {
-  return typeof GEMINI_API_KEY === 'string' && GEMINI_API_KEY.length > 0;
+interface Index {
+  chunks: Chunk[];
+  df: Map<string, number>;
+  avgDocLength: number;
 }
 
-async function embed(texts: string[]): Promise<number[][] | null> {
-  if (!isSupportRagEnabled() || texts.length === 0) return null;
+let indexCache: { index: Index; at: number } | null = null;
+let buildInFlight: Promise<Index | null> | null = null;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:batchEmbedContents`;
-  const out: number[][] = [];
-  for (let i = 0; i < texts.length; i += 100) {
-    const batch = texts.slice(i, i + 100);
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'x-goog-api-key': GEMINI_API_KEY as string,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          requests: batch.map((text) => ({
-            model: `models/${EMBED_MODEL}`,
-            content: { parts: [{ text }] },
-            outputDimensionality: EMBED_DIM,
-          })),
-        }),
-        signal: AbortSignal.timeout(20000),
-      });
-      if (!res.ok) {
-        console.error(`Embedding error (${res.status}):`, await res.text().catch(() => ''));
-        return null;
-      }
-      const json = (await res.json()) as { embeddings?: Array<{ values: number[] }> };
-      if (!json.embeddings || json.embeddings.length !== batch.length) return null;
-      for (const e of json.embeddings) out.push(e.values);
-    } catch (err) {
-      console.error('Embedding request failed:', err);
-      return null;
-    }
-  }
-  return out;
+function tokenize(text: string): string[] {
+  const matches = text.toLowerCase().match(/[a-z0-9]+/g);
+  if (!matches) return [];
+  return matches.filter((t) => t.length >= 2 && !STOPWORDS.has(t));
 }
 
 function chunkDoc(source: string, text: string): Array<{ source: string; content: string }> {
@@ -114,7 +91,7 @@ async function fetchDoc(path: string): Promise<string | null> {
   }
 }
 
-async function buildIndex(): Promise<Chunk[] | null> {
+async function buildIndex(): Promise<Index | null> {
   const raw: Array<{ source: string; content: string }> = [];
   for (const { label, path } of DOC_SOURCES) {
     const text = await fetchDoc(path);
@@ -122,20 +99,29 @@ async function buildIndex(): Promise<Chunk[] | null> {
   }
   if (raw.length === 0) return null;
 
-  const embeddings = await embed(raw.map((c) => c.content));
-  if (!embeddings || embeddings.length !== raw.length) return null;
+  const df = new Map<string, number>();
+  let totalLength = 0;
 
-  return raw.map((c, i) => ({ source: c.source, content: c.content, embedding: embeddings[i] }));
+  const chunks: Chunk[] = raw.map(({ source, content }) => {
+    const tokens = tokenize(content);
+    const termFreq = new Map<string, number>();
+    for (const t of tokens) termFreq.set(t, (termFreq.get(t) ?? 0) + 1);
+    termFreq.forEach((_count, t) => df.set(t, (df.get(t) ?? 0) + 1));
+    totalLength += tokens.length;
+    return { source, content, tokens, termFreq };
+  });
+
+  return { chunks, df, avgDocLength: totalLength / chunks.length };
 }
 
-async function getIndex(): Promise<Chunk[] | null> {
-  if (indexCache && Date.now() - indexCache.at < INDEX_TTL_MS) return indexCache.chunks;
+async function getIndex(): Promise<Index | null> {
+  if (indexCache && Date.now() - indexCache.at < INDEX_TTL_MS) return indexCache.index;
   if (buildInFlight) return buildInFlight;
 
   buildInFlight = buildIndex()
-    .then((chunks) => {
-      if (chunks) indexCache = { chunks, at: Date.now() };
-      return chunks ?? indexCache?.chunks ?? null;
+    .then((index) => {
+      if (index) indexCache = { index, at: Date.now() };
+      return index ?? indexCache?.index ?? null;
     })
     .finally(() => {
       buildInFlight = null;
@@ -144,35 +130,41 @@ async function getIndex(): Promise<Chunk[] | null> {
   return buildInFlight;
 }
 
-function cosine(a: number[], b: number[]): number {
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    na += a[i] * a[i];
-    nb += b[i] * b[i];
+function scoreChunk(queryTerms: string[], chunk: Chunk, index: Index): number {
+  const N = index.chunks.length;
+  const dl = chunk.tokens.length;
+  let score = 0;
+  for (const term of queryTerms) {
+    const tf = chunk.termFreq.get(term);
+    if (!tf) continue;
+    const df = index.df.get(term) ?? 0;
+    const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5));
+    const norm = tf * (BM25_K1 + 1);
+    const denom = tf + BM25_K1 * (1 - BM25_B + (BM25_B * dl) / index.avgDocLength);
+    score += idf * (norm / denom);
   }
-  const denom = Math.sqrt(na) * Math.sqrt(nb);
-  return denom === 0 ? 0 : dot / denom;
+  return score;
 }
 
 /**
  * Retrieve the top-K doc chunks most relevant to `query`, formatted as a context
- * string. Returns null when retrieval is unavailable (no key, embed failure,
- * empty index) so the caller can fall back to whole-document grounding.
+ * string. Returns null when the index can't be built (docs unreachable) so the
+ * caller can fall back to whole-document grounding.
  */
 export async function retrieveContext(query: string, k: number = DEFAULT_TOP_K): Promise<string | null> {
-  const chunks = await getIndex();
-  if (!chunks || chunks.length === 0) return null;
+  const index = await getIndex();
+  if (!index || index.chunks.length === 0) return null;
 
-  const queryEmbedding = await embed([query]);
-  if (!queryEmbedding || queryEmbedding.length === 0) return null;
+  const queryTerms = Array.from(new Set(tokenize(query)));
+  if (queryTerms.length === 0) return null;
 
-  const scored = chunks
-    .map((c) => ({ c, score: cosine(queryEmbedding[0], c.embedding) }))
+  const scored = index.chunks
+    .map((c) => ({ c, score: scoreChunk(queryTerms, c, index) }))
+    .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, k);
+
+  if (scored.length === 0) return null;
 
   return scored.map((s) => `=== ${s.c.source} ===\n${s.c.content}`).join('\n\n');
 }

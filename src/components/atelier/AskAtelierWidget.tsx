@@ -24,6 +24,102 @@ function TypingIndicator() {
   );
 }
 
+const INLINE_TOKEN = /\*\*([^*]+)\*\*|\[([^\]]+)\]\(([^)\s]+)\)|`([^`]+)`/g;
+
+function renderInline(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  let match: RegExpExecArray | null;
+  INLINE_TOKEN.lastIndex = 0;
+  while ((match = INLINE_TOKEN.exec(text)) !== null) {
+    if (match.index > last) nodes.push(text.slice(last, match.index));
+    if (match[1] !== undefined) {
+      nodes.push(
+        <strong key={key++} className="font-semibold text-black dark:text-white">
+          {match[1]}
+        </strong>,
+      );
+    } else if (match[2] !== undefined && match[3] !== undefined) {
+      nodes.push(
+        <a
+          key={key++}
+          href={match[3]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-atelier underline underline-offset-2 hover:text-atelier-bright break-words"
+        >
+          {match[2]}
+        </a>,
+      );
+    } else if (match[4] !== undefined) {
+      nodes.push(
+        <code key={key++} className="font-mono text-[0.85em] bg-black/5 dark:bg-white/10 rounded px-1 py-0.5">
+          {match[4]}
+        </code>,
+      );
+    }
+    last = INLINE_TOKEN.lastIndex;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes;
+}
+
+const ORDERED_ITEM = /^\s*\d+\.\s+/;
+const UNORDERED_ITEM = /^\s*[-*]\s+/;
+
+function MarkdownMessage({ text }: { text: string }) {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const blocks: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+
+  while (i < lines.length) {
+    if (!lines[i].trim()) {
+      i++;
+      continue;
+    }
+
+    const ordered = ORDERED_ITEM.test(lines[i]);
+    const unordered = !ordered && UNORDERED_ITEM.test(lines[i]);
+
+    if (ordered || unordered) {
+      const itemRe = ordered ? ORDERED_ITEM : UNORDERED_ITEM;
+      const items: string[] = [];
+      while (i < lines.length && itemRe.test(lines[i])) {
+        items.push(lines[i].replace(itemRe, '').trim());
+        i++;
+      }
+      const className = `${ordered ? 'list-decimal' : 'list-disc'} pl-5 space-y-1 marker:text-gray-400 dark:marker:text-neutral-500`;
+      blocks.push(
+        ordered ? (
+          <ol key={key++} className={className}>
+            {items.map((item, idx) => (
+              <li key={idx}>{renderInline(item)}</li>
+            ))}
+          </ol>
+        ) : (
+          <ul key={key++} className={className}>
+            {items.map((item, idx) => (
+              <li key={idx}>{renderInline(item)}</li>
+            ))}
+          </ul>
+        ),
+      );
+      continue;
+    }
+
+    const paragraph: string[] = [];
+    while (i < lines.length && lines[i].trim() && !ORDERED_ITEM.test(lines[i]) && !UNORDERED_ITEM.test(lines[i])) {
+      paragraph.push(lines[i].trim());
+      i++;
+    }
+    blocks.push(<p key={key++}>{renderInline(paragraph.join(' '))}</p>);
+  }
+
+  return <div className="space-y-2">{blocks}</div>;
+}
+
 export function AskAtelierWidget() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -145,13 +241,17 @@ export function AskAtelierWidget() {
                   <div
                     className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
                       msg.role === 'user'
-                        ? 'bg-atelier text-white'
+                        ? 'bg-atelier text-white whitespace-pre-wrap'
                         : msg.isError
                         ? 'bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 font-mono text-xs'
                         : 'bg-gray-100 dark:bg-black-light text-gray-900 dark:text-white'
                     }`}
                   >
-                    {msg.text}
+                    {msg.role === 'assistant' && !msg.isError ? (
+                      <MarkdownMessage text={msg.text} />
+                    ) : (
+                      msg.text
+                    )}
                   </div>
                 </div>
               ))}

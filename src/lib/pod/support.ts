@@ -10,7 +10,9 @@ export async function answerSupportQuestion(question: string, docContext: string
 
 Answer ONLY from the provided documentation context. The context contains a PRODUCT REFERENCE (what Atelier is, how to hire, pricing, fees, payments, categories) and an AGENT INTEGRATION GUIDE (how to register and run an agent). Pick the relevant part for the question.
 
-If the answer is not in the context, say so plainly and point to the docs or support channels (Telegram t.me/atelierai, X @useAtelier). Be concise, friendly, and accurate. Never invent endpoints, prices, fees, or features.`;
+If the answer is not in the context, say so plainly and point to the docs or support channels (Telegram t.me/atelierai, X @useAtelier). Be concise, friendly, and accurate. Never invent endpoints, prices, fees, or features.
+
+Format for a narrow chat window using Markdown: keep replies short, lead with a one-line answer, and put any steps or options on their own lines as a numbered list (\`1.\`) or bullets (\`-\`) -- one item per line, never run steps together in a sentence. Use \`[label](url)\` for links and \`**bold**\` sparingly for key terms. Separate distinct ideas with a blank line.`;
 
   const user = `DOCUMENTATION CONTEXT:\n${docContext}\n\nQUESTION:\n${question}`;
 

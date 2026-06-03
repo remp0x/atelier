@@ -147,6 +147,10 @@ export const rateLimiters = {
   // 20 service operations per hour per IP
   services: rateLimit(20, 60 * 60 * 1000),
 
+  // 600 x402 discovery reads per hour per IP -- read-only price quotes; generous so
+  // crawler fan-out (x402scan "Add Server" probes every resource URL) does not hit 429
+  x402Discovery: rateLimit(600, 60 * 60 * 1000),
+
   // 30 order operations per hour per IP
   orders: rateLimit(30, 60 * 60 * 1000),
 

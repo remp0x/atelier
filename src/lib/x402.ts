@@ -124,6 +124,127 @@ export function buildPaymentRequiredResponse(requirements: PaymentRequirements):
   });
 }
 
+export const X402_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    brief: { type: 'string', description: 'Plain-language description of the work to perform' },
+    requirements: { type: 'object', description: 'Optional structured requirement fields for the service' },
+  },
+  required: ['brief'],
+} as const;
+
+export const X402_OUTPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    order_id: { type: 'string' },
+    status: { type: 'string' },
+    result_url: { type: 'string' },
+  },
+} as const;
+
+const X402_MAX_TIMEOUT_SECONDS = 120;
+
+const CANONICAL_NETWORK: Record<X402Network, string> = {
+  'solana-mainnet': 'solana',
+  'base-mainnet': 'base',
+};
+
+/**
+ * Canonical x402 v1 payment-requirement entry (Coinbase Bazaar / x402scan wire format):
+ * `asset` is the bare token-contract string, `network` is the short id ('solana'/'base'),
+ * and `outputSchema` carries the invocation input/output schemas. Distinct from our internal
+ * `PaymentRequirements` (which nests `asset` as an object and uses '-mainnet' suffixes).
+ */
+export interface X402AcceptV1 {
+  scheme: string;
+  network: string;
+  maxAmountRequired: string;
+  resource: string;
+  description: string;
+  mimeType: string;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  asset: string;
+  outputSchema: { input: unknown; output: unknown };
+  extra?: Record<string, unknown>;
+}
+
+function toX402AcceptV1(
+  req: PaymentRequirements,
+  resourceUrl: string,
+  input: unknown,
+  output: unknown,
+): X402AcceptV1 {
+  const entry: X402AcceptV1 = {
+    scheme: req.scheme,
+    network: CANONICAL_NETWORK[req.network] ?? req.network,
+    maxAmountRequired: req.maxAmountRequired,
+    resource: resourceUrl,
+    description: req.description,
+    mimeType: 'application/json',
+    payTo: req.payTo,
+    maxTimeoutSeconds: X402_MAX_TIMEOUT_SECONDS,
+    asset: req.asset.address,
+    outputSchema: { input, output },
+  };
+  if (req.network === 'base-mainnet') {
+    entry.extra = { name: 'USD Coin', version: '2' };
+  }
+  return entry;
+}
+
+/**
+ * Builds an x402scan / Coinbase-Bazaar-conformant HTTP 402 challenge. The body is a
+ * backward-compatible superset: it spreads the primary requirement's internal flat fields
+ * (payTo/maxAmountRequired/network/asset object) for existing Atelier agent clients, and
+ * adds `x402Version`, a non-empty canonical-v1 `accepts` array (asset string, short network,
+ * maxTimeoutSeconds, outputSchema), and `extensions.bazaar.info` so discovery crawlers index
+ * the resource as payable and invocable. See docs/x402-bazaar-setup.md and the x402scan spec.
+ */
+export function buildX402ChallengeResponse(params: {
+  requirements: PaymentRequirements[];
+  resourceUrl: string;
+  name: string;
+  description: string;
+  input?: unknown;
+  output?: unknown;
+}): Response {
+  const [primary] = params.requirements;
+  if (!primary) {
+    return new Response(
+      JSON.stringify({ success: false, error: 'No payment rail configured for this resource' }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  const input = params.input ?? X402_INPUT_SCHEMA;
+  const output = params.output ?? X402_OUTPUT_SCHEMA;
+  const accepts = params.requirements.map((req) => toX402AcceptV1(req, params.resourceUrl, input, output));
+
+  const body = {
+    ...primary,
+    x402Version: 1,
+    accepts,
+    extensions: {
+      bazaar: {
+        info: { name: params.name, description: params.description },
+        input,
+        output,
+      },
+    },
+  };
+
+  return new Response(JSON.stringify(body), {
+    status: 402,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Payment-Scheme': primary.scheme,
+      'X-Payment-Network': primary.network,
+      'X-Payment-Asset': 'USDC',
+    },
+  });
+}
+
 export function parseX402Header(headerValue: string | null): string | null {
   if (!headerValue) return null;
   const trimmed = headerValue.trim();

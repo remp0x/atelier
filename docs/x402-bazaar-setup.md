@@ -74,25 +74,57 @@ without live keys + a funded Base payer is the end-to-end `verify`/`settle` call
     `/api/x402/bazaar` feed already ships full input/output JSON Schemas to
     maximize this signal.
 
+## x402scan discovery conformance (shipped)
+
+x402scan (and the `@agentcash/discovery` validator) discover resources via, in
+precedence order: (1) OpenAPI at `/openapi.json`, (2) `/.well-known/x402`, then
+(3) per-URL runtime 402 probe. The current `@agentcash/discovery` CLI only parses
+OpenAPI. Atelier now serves all three so that every discovery path resolves:
+
+- `GET /openapi.json` -- OpenAPI 3.1 with one path per fixed-price service
+  (`/api/x402/discover/{service_id}`), each GET carrying `x-payment-info`
+  (`price.mode=fixed`, `protocols:[{x402:{}}]`), a `requestBody` input schema, and
+  `402`/`200` responses. This is the primary, fully-parsed surface.
+- `GET /.well-known/x402` -- `{ version:1, resources:[ ...discover URL strings ] }`
+  (x402scan fan-out compatibility format; `resources` are bare URL strings).
+- `GET /api/x402/discover/{service_id}` (and `?service_id=`) -- runtime HTTP 402
+  whose body is x402scan-conformant: a non-empty canonical-v1 `accepts[]`
+  (`asset` as bare contract string, short `network` `solana`/`base`,
+  `maxTimeoutSeconds`, `outputSchema.{input,output}`) plus `extensions.bazaar.info`.
+  The internal flat fields (`payTo`/`maxAmountRequired`/`network`/`asset` object)
+  are retained for Atelier's own agent clients.
+
+Validate after deploy:
+
+```bash
+npx -y @agentcash/discovery atelierai.xyz -v
+```
+
+Expected: source `openapi`, one `paid … [x402]` route per fixed-price service, no
+`[error]`s. Known residual warning: `X402_VERSION_V1_NOT_SUPPORTED` -- agentcash
+prefers x402 v2, but the Coinbase/CDP/x402scan settlement path Atelier uses is v1.
+
 ## Directory submission checklist (do today)
 
-These directories index x402 resources independently of CDP Bazaar. Submit the
-two canonical Atelier endpoints to each.
+These directories index x402 resources independently of CDP Bazaar.
 
 Canonical URLs to submit:
-- Well-known manifest: `https://atelierai.xyz/.well-known/x402`
+- OpenAPI spec: `https://atelierai.xyz/openapi.json`
+- Well-known resource list: `https://atelierai.xyz/.well-known/x402`
 - Service catalog: `https://atelierai.xyz/api/x402/services`
 - Bazaar discovery feed: `https://atelierai.xyz/api/x402/bazaar`
 - MCP endpoint: `https://atelierai.xyz/api/x402/mcp`
 
 Actions:
-- [ ] Register at `x402scan.com/resources/register` -- submit the well-known
-      manifest and `/api/x402/services`.
-- [ ] Submit to `x402.direct` -- well-known manifest and `/api/x402/services`.
-- [ ] Submit to `x402-list.com` -- well-known manifest and `/api/x402/services`.
+- [ ] x402scan -- "Add Server" with the bare origin `atelierai.xyz` (auto-discovers
+      via `/openapi.json`), or "Register This URL Only" with individual
+      `https://atelierai.xyz/api/x402/discover/{service_id}` URLs.
+- [ ] Submit to `x402.direct` -- `/openapi.json` and `/api/x402/services`.
+- [ ] Submit to `x402-list.com` -- `/openapi.json` and `/api/x402/services`.
 - [ ] `x402list.fun` -- no manual action; it auto-mirrors once Atelier is in CDP
       Bazaar (i.e., after the cutover above).
 
 Ready-to-paste:
+- OpenAPI URL: `https://atelierai.xyz/openapi.json`
 - Service catalog URL: `https://atelierai.xyz/api/x402/services`
 - MCP URL: `https://atelierai.xyz/api/x402/mcp`

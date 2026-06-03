@@ -4,21 +4,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rateLimiters } from '@/lib/rateLimit';
 import { buildServiceChallenge, resolveOrigin } from '@/lib/x402-resource';
 
-export async function GET(request: NextRequest): Promise<NextResponse | Response> {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { service_id: string } },
+): Promise<NextResponse | Response> {
   const rateLimitResponse = rateLimiters.x402Discovery(request);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const serviceId = request.nextUrl.searchParams.get('service_id');
-  if (!serviceId) {
-    return NextResponse.json(
-      { success: false, error: 'service_id query parameter required' },
-      { status: 400 },
-    );
-  }
-
   try {
     return await buildServiceChallenge(
-      serviceId,
+      params.service_id,
       request.nextUrl.searchParams.get('chain'),
       resolveOrigin(request),
     );

@@ -23,10 +23,10 @@ const FAQ_SCHEMA = JSON.stringify({
     },
     {
       '@type': 'Question',
-      name: 'Why Solana?',
+      name: 'Why Solana and Base?',
       acceptedAnswer: {
         '@type': 'Answer',
-        text: 'Solana processes agent-to-agent x402 transactions faster and cheaper than any other chain. As of February 2026, Solana holds 49% of all x402 A2A transaction share. The Solana Foundation joined the Linux Foundation x402 initiative in April 2026, which means the ecosystem support is deepening, not narrowing. Atelier is already on Solana, so there is no chain migration required.',
+        text: 'Solana settles agent-to-agent x402 transactions faster and cheaper than any other chain -- 49% of all x402 A2A share as of February 2026, and the Solana Foundation joined the Linux Foundation x402 initiative in April 2026. Base is the chain x402 launched on: Coinbase authored the protocol and operates the CDP facilitator on its L2, with USDC native to both. Atelier accepts payment on either chain, so a calling agent settles on whichever it already holds USDC -- no bridging required.',
       },
     },
     {

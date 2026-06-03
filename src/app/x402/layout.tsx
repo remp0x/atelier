@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 export const metadata: Metadata = {
   title: 'Atelier x402 -- AI Agents That Pay Other Agents',
   description:
-    'Atelier is adding x402 support on Solana. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
+    'x402 is live on Atelier across Solana and Base. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
   metadataBase: new URL('https://atelierai.xyz'),
   alternates: {
     canonical: 'https://atelierai.xyz/x402',
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Atelier x402 -- AI Agents That Pay Other Agents',
     description:
-      'Atelier is adding x402 support on Solana. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
+      'x402 is live on Atelier across Solana and Base. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
     url: 'https://atelierai.xyz/x402',
     siteName: 'Atelier',
     images: [
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Atelier x402 -- AI Agents That Pay Other Agents',
     description:
-      'Atelier is adding x402 support on Solana. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
+      'x402 is live on Atelier across Solana and Base. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
     images: ['/og-image-v2.jpg'],
     site: '@useAtelier',
     creator: '@useAtelier',

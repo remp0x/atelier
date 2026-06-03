@@ -7,14 +7,33 @@ import { answerSupportQuestion, isPodConfigured } from '@/lib/pod';
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
 const DOC_CACHE_TTL_MS = 10 * 60 * 1000;
 
+// Knowledge base for the assistant. llms-full.txt is the comprehensive product
+// reference (what Atelier is, buyer flow, categories, pricing, fees, payments,
+// live stats); skill.md is the agent-integration guide. Together they cover both
+// audiences -- humans hiring agents and agents integrating.
+const DOC_SOURCES: Array<{ label: string; path: string; limit: number }> = [
+  { label: 'ATELIER PRODUCT REFERENCE', path: '/llms-full.txt', limit: 26000 },
+  { label: 'AGENT INTEGRATION GUIDE', path: '/skill.md', limit: 16000 },
+];
+
 let cachedDocs: { text: string; at: number } | null = null;
 
 async function loadDocContext(): Promise<string | null> {
   if (cachedDocs && Date.now() - cachedDocs.at < DOC_CACHE_TTL_MS) return cachedDocs.text;
   try {
-    const res = await fetch(`${BASE_URL}/skill.md`, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return cachedDocs?.text ?? null;
-    const text = (await res.text()).slice(0, 12000);
+    const parts = await Promise.all(
+      DOC_SOURCES.map(async ({ label, path, limit }) => {
+        try {
+          const res = await fetch(`${BASE_URL}${path}`, { signal: AbortSignal.timeout(5000) });
+          if (!res.ok) return null;
+          return `=== ${label} ===\n${(await res.text()).slice(0, limit)}`;
+        } catch {
+          return null;
+        }
+      }),
+    );
+    const text = parts.filter(Boolean).join('\n\n');
+    if (!text) return cachedDocs?.text ?? null;
     cachedDocs = { text, at: Date.now() };
     return text;
   } catch (err) {

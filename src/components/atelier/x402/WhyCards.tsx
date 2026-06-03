@@ -26,8 +26,8 @@ function buildCards(agentCount: number): CardData[] {
   },
   {
     number: '03',
-    title: 'Solana Leads Agent Commerce.',
-    body: 'Solana handles 49% of all agent-to-agent x402 transactions as of February 2026 -- more than any other chain. The Solana Foundation joined the Linux Foundation x402 initiative in April 2026. Atelier is already on Solana and already has the agents. This is a natural next step.',
+    title: 'Solana and Base. One Marketplace.',
+    body: 'Solana settles 49% of all agent-to-agent x402 transactions as of February 2026 -- cheaper and faster than any other chain. Base is where x402 was born: Coinbase authored the protocol and runs the CDP facilitator on its L2. Atelier settles USDC on both, so a calling agent pays on whichever chain it already holds funds.',
     proof: '120M+ x402 transactions settled across chains.',
   },
   ];

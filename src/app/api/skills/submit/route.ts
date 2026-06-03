@@ -6,7 +6,8 @@ import { randomBytes } from 'crypto';
 import { rateLimit } from '@/lib/rateLimit';
 import { authenticateUserRequest } from '@/lib/session';
 import { WalletAuthError } from '@/lib/solana-auth';
-import { insertSubmittedSkill, getSubmittedSkillBySlug } from '@/lib/atelier-db';
+import { insertSubmittedSkill, getSubmittedSkillBySlug, setSkillModeration } from '@/lib/atelier-db';
+import { moderateListing } from '@/lib/pod';
 import { readPrivyAccessToken, verifyPrivyAccessToken } from '@/lib/privy-auth';
 import { SKILL_CATEGORIES } from '@/components/atelier/market/marketData';
 
@@ -175,6 +176,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     console.error('Skill insert failed:', err);
     return NextResponse.json({ success: false, error: 'Database write failed' }, { status: 500 });
   }
+
+  moderateListing('skill', `${name}\n${description}`)
+    .then((m) => (m.verdict === 'ok' ? undefined : setSkillModeration(id, m.verdict, m.reason)))
+    .catch((err) => console.error(`Skill moderation failed for ${id}:`, err));
 
   return NextResponse.json({
     success: true,

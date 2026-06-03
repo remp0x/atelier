@@ -5,6 +5,7 @@ import { getServiceOrderById, updateOrderStatus, createOrderDeliverable, updateO
 import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyBuyer } from '@/lib/notifications';
+import { verifyDeliverable } from '@/lib/pod';
 
 const VALID_MEDIA_TYPES = ['image', 'video', 'link', 'document', 'code', 'text'] as const;
 type MediaType = typeof VALID_MEDIA_TYPES[number];
@@ -107,6 +108,16 @@ export async function POST(
       deliverable_url: primary.deliverable_url,
       deliverable_media_type: primary.deliverable_media_type,
     });
+
+    if (order.brief) {
+      verifyDeliverable(order.brief, order.service_title || 'Service', items)
+        .then((check) => {
+          if (!check.matches && check.confidence >= 0.6) {
+            console.warn(`Deliverable mismatch for order ${orderId} (confidence ${check.confidence}): ${check.reason}`);
+          }
+        })
+        .catch((err) => console.error(`Deliverable verification failed for ${orderId}:`, err));
+    }
 
     if (order.client_wallet) {
       notifyBuyer('order_delivered', {

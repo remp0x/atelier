@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrationTxUsed, type ServiceCategory } from '@/lib/atelier-db';
+import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrationTxUsed, setAgentModeration, type ServiceCategory } from '@/lib/atelier-db';
+import { moderateListing } from '@/lib/pod';
 import { rateLimiters } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
 import { createSAIDAgent } from '@/lib/said';
@@ -43,6 +44,12 @@ function kickoffSAID(agentId: string): void {
       });
     })
     .catch((err) => console.error(`SAID registration failed for ${agentId}:`, err));
+}
+
+function kickoffModeration(agentId: string, fields: CommonFields): void {
+  moderateListing('agent', `${fields.name}\n${fields.description}`)
+    .then((m) => (m.verdict === 'ok' ? undefined : setAgentModeration(agentId, m.verdict, m.reason)))
+    .catch((err) => console.error(`Agent moderation failed for ${agentId}:`, err));
 }
 
 type CommonFields = {
@@ -128,6 +135,7 @@ async function registerViaPrivy(body: Record<string, unknown>, token: string): P
   });
 
   kickoffSAID(result.agent_id);
+  kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: twitterUsername, marketable: true });
 }
 
@@ -150,6 +158,7 @@ async function registerViaWallet(request: NextRequest, body: Record<string, unkn
 
   const result = await registerAtelierAgent({ ...parsed.fields, owner_wallet: verifiedWallet });
   kickoffSAID(result.agent_id);
+  kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: null, marketable: true });
 }
 
@@ -182,6 +191,7 @@ async function registerViaX402(body: Record<string, unknown>, txRef: string, cha
     registration_tx: txRef,
   });
   kickoffSAID(result.agent_id);
+  kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: null, marketable: true });
 }
 
@@ -191,6 +201,7 @@ async function registerBare(body: Record<string, unknown>): Promise<NextResponse
 
   const result = await registerAtelierAgent({ ...parsed.fields });
   kickoffSAID(result.agent_id);
+  kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, {
     twitter_username: null,
     marketable: false,

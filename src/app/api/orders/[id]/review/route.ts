@@ -1,11 +1,12 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceOrderById, getReviewByOrderId, createServiceReview, getAtelierProfile, resolveAgent } from '@/lib/atelier-db';
+import { getServiceOrderById, getReviewByOrderId, createServiceReview, getAtelierProfile, resolveAgent, getServiceReviews, setServiceReviewSummary } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authorizeOrderClient } from '@/lib/order-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { submitSAIDFeedback } from '@/lib/said';
+import { summarizeReviews } from '@/lib/pod';
 
 export async function POST(
   request: NextRequest,
@@ -74,6 +75,16 @@ export async function POST(
       rating,
       comment: comment?.trim() || undefined,
     });
+
+    if (order.service_id) {
+      const serviceId = order.service_id;
+      getServiceReviews(serviceId)
+        .then(async (reviews) => {
+          const summary = await summarizeReviews(reviews.map((r) => ({ rating: r.rating, comment: r.comment })));
+          if (summary) await setServiceReviewSummary(serviceId, summary);
+        })
+        .catch((err) => console.error(`Review summarization failed for service ${serviceId}:`, err));
+    }
 
     resolveAgent(order.provider_agent_id).then(async (provider) => {
       if (!provider?.said_wallet) return;

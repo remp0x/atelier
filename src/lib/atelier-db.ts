@@ -337,6 +337,14 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN atelier_holder INTEGER DEFAULT 0'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN holder_checked_at TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN featured INTEGER DEFAULT 0'); } catch (_e) { }
+
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN moderation_status TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN moderation_reason TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN llm_quality_score REAL'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE services ADD COLUMN moderation_status TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE services ADD COLUMN moderation_reason TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE services ADD COLUMN review_summary TEXT'); } catch (_e) { }
+
   await atelierClient.execute({
     sql: `UPDATE atelier_agents SET atelier_holder = 0, blue_check = 0, holder_checked_at = NULL
           WHERE owner_wallet = ?`,
@@ -680,6 +688,8 @@ export async function initAtelierDb(): Promise<void> {
 
   try { await atelierClient.execute("ALTER TABLE bounties ADD COLUMN payment_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE bounties ADD COLUMN payer_address TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE bounties ADD COLUMN moderation_status TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE bounties ADD COLUMN moderation_reason TEXT'); } catch (_e) { }
 
   try { await atelierClient.execute("ALTER TABLE atelier_agents ADD COLUMN payout_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_address_base TEXT'); } catch (_e) { }
@@ -695,6 +705,8 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute("ALTER TABLE atelier_sessions ADD COLUMN wallet_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
 
   try { await atelierClient.execute("ALTER TABLE submitted_skills ADD COLUMN creator_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE submitted_skills ADD COLUMN moderation_status TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE submitted_skills ADD COLUMN moderation_reason TEXT'); } catch (_e) { }
 
   // P3.A: user_id columns -- privy_user_id ownership for legacy wallet-keyed tables.
   // Idempotent ALTERs wrapped in try/catch; indexes are IF NOT EXISTS.
@@ -1966,6 +1978,7 @@ export interface Service {
   partner_badge: string | null;
   payout_address_base: string | null;
   payout_chain: 'solana' | 'base';
+  review_summary: string | null;
   created_at: string;
 }
 
@@ -2993,6 +3006,105 @@ async function backfillServiceSlugs(): Promise<void> {
     const slug = await generateServiceSlug(r.agent_id, r.title, r.id);
     await atelierClient.execute({ sql: 'UPDATE services SET slug = ? WHERE id = ?', args: [slug, r.id] });
   }
+}
+
+export type ModerationStatus = 'ok' | 'review' | 'spam';
+
+async function setModeration(table: 'atelier_agents' | 'services' | 'bounties', column: 'id', id: string, status: ModerationStatus, reason: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: `UPDATE ${table} SET moderation_status = ?, moderation_reason = ? WHERE ${column} = ?`,
+    args: [status, reason.slice(0, 200), id],
+  }).catch((e) => console.error(`setModeration(${table}) failed:`, e));
+}
+
+export function setAgentModeration(agentId: string, status: ModerationStatus, reason: string): Promise<void> {
+  return setModeration('atelier_agents', 'id', agentId, status, reason);
+}
+
+export function setServiceModeration(serviceId: string, status: ModerationStatus, reason: string): Promise<void> {
+  return setModeration('services', 'id', serviceId, status, reason);
+}
+
+export function setBountyModeration(bountyId: string, status: ModerationStatus, reason: string): Promise<void> {
+  return setModeration('bounties', 'id', bountyId, status, reason);
+}
+
+export async function setSkillModeration(id: string, status: ModerationStatus, reason: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE submitted_skills SET moderation_status = ?, moderation_reason = ? WHERE id = ?',
+    args: [status, reason.slice(0, 200), id],
+  }).catch((e) => console.error('setSkillModeration failed:', e));
+}
+
+export type ModerationKind = 'agent' | 'service' | 'bounty' | 'skill';
+
+export interface ModerationQueueItem {
+  kind: ModerationKind;
+  id: string;
+  title: string;
+  status: ModerationStatus;
+  reason: string | null;
+  created_at: string;
+}
+
+const MODERATION_SOURCES: Array<{ kind: ModerationKind; table: string; titleCol: string }> = [
+  { kind: 'agent', table: 'atelier_agents', titleCol: 'name' },
+  { kind: 'service', table: 'services', titleCol: 'title' },
+  { kind: 'bounty', table: 'bounties', titleCol: 'title' },
+  { kind: 'skill', table: 'submitted_skills', titleCol: 'name' },
+];
+
+export async function getModerationQueue(): Promise<ModerationQueueItem[]> {
+  await initAtelierDb();
+  const items: ModerationQueueItem[] = [];
+  for (const { kind, table, titleCol } of MODERATION_SOURCES) {
+    const result = await atelierClient.execute(
+      `SELECT id, ${titleCol} AS title, moderation_status, moderation_reason, created_at
+       FROM ${table}
+       WHERE moderation_status IN ('review', 'spam')
+       ORDER BY created_at DESC`,
+    ).catch(() => ({ rows: [] as unknown[] }));
+    for (const row of result.rows) {
+      const r = row as unknown as { id: string; title: string | null; moderation_status: ModerationStatus; moderation_reason: string | null; created_at: string };
+      items.push({
+        kind,
+        id: r.id,
+        title: r.title ?? '(untitled)',
+        status: r.moderation_status,
+        reason: r.moderation_reason,
+        created_at: r.created_at,
+      });
+    }
+  }
+  return items.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+}
+
+export async function clearModeration(kind: ModerationKind, id: string): Promise<void> {
+  await initAtelierDb();
+  const source = MODERATION_SOURCES.find((s) => s.kind === kind);
+  if (!source) throw new Error(`Unknown moderation kind: ${kind}`);
+  await atelierClient.execute({
+    sql: `UPDATE ${source.table} SET moderation_status = 'ok', moderation_reason = NULL WHERE id = ?`,
+    args: [id],
+  });
+}
+
+export async function setServiceReviewSummary(serviceId: string, summary: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE services SET review_summary = ? WHERE id = ?',
+    args: [summary.slice(0, 300), serviceId],
+  }).catch((e) => console.error('setServiceReviewSummary failed:', e));
+}
+
+export async function setAgentQualityScore(agentId: string, score: number): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE atelier_agents SET llm_quality_score = ? WHERE id = ?',
+    args: [Math.max(0, Math.min(1, score)), agentId],
+  }).catch((e) => console.error('setAgentQualityScore failed:', e));
 }
 
 export async function getServices(filters?: {

@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimiters } from '@/lib/rateLimit';
 import { answerSupportQuestion, isPodConfigured } from '@/lib/pod';
+import { retrieveContext } from '@/lib/support-rag';
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
 const DOC_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -60,7 +61,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ success: false, error: 'question must be 3-500 characters' }, { status: 400 });
     }
 
-    const docContext = await loadDocContext();
+    // RAG: retrieve the passages most relevant to the question; fall back to
+    // grounding on the whole docs if retrieval (embeddings) is unavailable.
+    const retrieved = await retrieveContext(question);
+    if (!retrieved) console.warn('support/ask: RAG retrieval unavailable, using whole-doc fallback');
+    const docContext = retrieved ?? (await loadDocContext());
     if (!docContext) {
       return NextResponse.json(
         { success: false, error: 'Documentation is temporarily unavailable. Reach us on Telegram (t.me/atelierai) or X (@useAtelier).' },

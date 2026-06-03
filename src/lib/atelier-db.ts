@@ -2588,18 +2588,27 @@ export function agentHasOwner(agent: {
   return Boolean(agent.owner_wallet || agent.privy_user_id || agent.user_id || agent.twitter_username);
 }
 
+export function agentHasPayout(agent: {
+  payout_wallet?: string | null;
+  payout_address_base?: string | null;
+}): boolean {
+  return Boolean(agent.payout_wallet || agent.payout_address_base);
+}
+
 export function agentIsMarketable(agent: {
   source?: string | null;
   owner_wallet?: string | null;
   privy_user_id?: string | null;
   user_id?: string | null;
   twitter_username?: string | null;
+  payout_wallet?: string | null;
+  payout_address_base?: string | null;
 }): boolean {
   if (agent.source && agent.source !== 'external') return true;
-  return agentHasOwner(agent);
+  return agentHasOwner(agent) || agentHasPayout(agent);
 }
 
-const MARKETABLE_AGENT_SQL = "(a.source != 'external' OR a.owner_wallet IS NOT NULL OR a.privy_user_id IS NOT NULL OR a.user_id IS NOT NULL OR a.twitter_username IS NOT NULL)";
+const MARKETABLE_AGENT_SQL = "(a.source != 'external' OR a.owner_wallet IS NOT NULL OR a.privy_user_id IS NOT NULL OR a.user_id IS NOT NULL OR a.twitter_username IS NOT NULL OR a.payout_wallet IS NOT NULL OR a.payout_address_base IS NOT NULL)";
 
 export async function getAtelierAgents(filters?: {
   category?: ServiceCategory;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -31,6 +31,7 @@ export function AskAtelierWidget() {
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (open && inputRef.current) {
@@ -85,7 +86,7 @@ export function AskAtelierWidget() {
   const canSend = input.trim().length >= 3 && !loading;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+    <div className="fixed bottom-20 right-5 md:bottom-16 z-50 flex flex-col items-end gap-3">
       <AnimatePresence>
         {open && (
           <motion.div
@@ -185,43 +186,70 @@ export function AskAtelierWidget() {
       </AnimatePresence>
 
       {/* FAB */}
-      <motion.button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={open ? 'Close support chat' : 'Open support chat'}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.94 }}
-        className="w-13 h-13 rounded-full bg-atelier text-white shadow-lg shadow-atelier/30 flex items-center justify-center transition-colors hover:bg-atelier-bright"
-        style={{ width: 52, height: 52 }}
-      >
-        <AnimatePresence mode="wait" initial={false}>
-          {open ? (
+      <div className="relative" style={{ width: 52, height: 52 }}>
+        <AnimatePresence>
+          {!open && !reduceMotion && (
             <motion.span
-              key="close"
-              initial={{ opacity: 0, rotate: -90 }}
-              animate={{ opacity: 1, rotate: 0 }}
-              exit={{ opacity: 0, rotate: 90 }}
-              transition={{ duration: 0.15 }}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </motion.span>
-          ) : (
-            <motion.span
-              key="open"
-              initial={{ opacity: 0, rotate: 90 }}
-              animate={{ opacity: 1, rotate: 0 }}
-              exit={{ opacity: 0, rotate: -90 }}
-              transition={{ duration: 0.15 }}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-              </svg>
-            </motion.span>
+              key="halo"
+              aria-hidden="true"
+              className="absolute inset-0 rounded-full bg-atelier-bright"
+              initial={{ opacity: 0.45, scale: 1 }}
+              animate={{ opacity: 0, scale: 1.7 }}
+              exit={{ opacity: 0, scale: 1 }}
+              transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
+            />
           )}
         </AnimatePresence>
-      </motion.button>
+
+        <motion.button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-label={open ? 'Close support chat' : 'Open support chat'}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          animate={!open && !reduceMotion ? { y: [0, -5, 0] } : { y: 0 }}
+          transition={
+            !open && !reduceMotion
+              ? { duration: 3.2, repeat: Infinity, ease: 'easeInOut' }
+              : { type: 'spring', stiffness: 500, damping: 30 }
+          }
+          className="relative w-full h-full rounded-full overflow-hidden bg-gradient-to-br from-atelier-bright to-atelier text-white flex items-center justify-center ring-1 ring-white/20 shadow-lg shadow-atelier/40 transition-[filter,box-shadow] hover:brightness-110 hover:shadow-xl hover:shadow-atelier/50"
+        >
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent"
+          />
+          <AnimatePresence mode="wait" initial={false}>
+            {open ? (
+              <motion.span
+                key="close"
+                className="relative"
+                initial={{ opacity: 0, rotate: -90 }}
+                animate={{ opacity: 1, rotate: 0 }}
+                exit={{ opacity: 0, rotate: 90 }}
+                transition={{ duration: 0.15 }}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </motion.span>
+            ) : (
+              <motion.span
+                key="open"
+                className="relative"
+                initial={{ opacity: 0, rotate: 90 }}
+                animate={{ opacity: 1, rotate: 0 }}
+                exit={{ opacity: 0, rotate: -90 }}
+                transition={{ duration: 0.15 }}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </motion.button>
+      </div>
     </div>
   );
 }

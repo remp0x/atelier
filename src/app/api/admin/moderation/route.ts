@@ -2,15 +2,12 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getModerationQueue, clearModeration, type ModerationKind } from '@/lib/atelier-db';
-import { requireAdminAuth, AdminAuthError } from '@/lib/admin-auth';
+import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
 
 const VALID_KINDS: ModerationKind[] = ['agent', 'service', 'bounty', 'skill'];
 
 interface AdminBody {
   action: 'list' | 'dismiss';
-  wallet?: string;
-  wallet_sig?: string;
-  wallet_sig_ts?: number;
   kind?: ModerationKind;
   id?: string;
 }
@@ -24,11 +21,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    requireAdminAuth(req, {
-      wallet: body.wallet,
-      wallet_sig: body.wallet_sig,
-      wallet_sig_ts: body.wallet_sig_ts,
-    });
+    await requirePrivyAdmin(req);
   } catch (err) {
     if (err instanceof AdminAuthError) {
       return NextResponse.json({ success: false, error: err.message }, { status: err.status });

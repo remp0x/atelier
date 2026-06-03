@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 
-const TREASURY_WALLET = 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb';
+const ADMIN_EMAIL = 'rempxbt@gmail.com';
 
 interface Partner {
   slug: string;
@@ -60,11 +61,7 @@ export default function PartnersAdminPage() {
 }
 
 function PartnersContent() {
-  const { walletAddress, getAuth } = useAtelierAuth();
-  const [adminKey, setAdminKey] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
-    return sessionStorage.getItem('atelier_admin_key') || '';
-  });
+  const { user, login } = useAtelierAuth();
 
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,23 +77,25 @@ function PartnersContent() {
 
   const [createForm, setCreateForm] = useState({ slug: '', name: '', wallet_address: '', fee_split_bps: 5000 });
 
-  const isAdmin = walletAddress === TREASURY_WALLET;
+  const signedIn = user !== null;
+  const adminEmail = (user?.google?.email ?? user?.email?.address ?? '').toLowerCase();
+  const isAdmin = adminEmail === ADMIN_EMAIL;
 
   const adminCall = useCallback(async (path: string, extra: Record<string, unknown>) => {
-    if (!adminKey) throw new Error('Missing admin key');
-    const auth = await getAuth();
+    const token = await getPrivyAccessToken();
+    if (!token) throw new Error('Sign in required');
     const res = await fetch(path, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${adminKey}`,
+        Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ ...auth, ...extra }),
+      body: JSON.stringify(extra),
     });
     const json = await res.json();
     if (!json.success) throw new Error(json.error || 'Request failed');
     return json.data;
-  }, [adminKey, getAuth]);
+  }, []);
 
   const loadPartners = useCallback(async () => {
     setLoading(true);
@@ -141,23 +140,17 @@ function PartnersContent() {
   }, [adminCall]);
 
   useEffect(() => {
-    if (isAdmin && adminKey) {
+    if (isAdmin) {
       loadPartners();
       loadPayouts();
     }
-  }, [isAdmin, adminKey, loadPartners, loadPayouts]);
+  }, [isAdmin, loadPartners, loadPayouts]);
 
   useEffect(() => {
     if (selectedSlug) {
       loadListings(selectedSlug, searchQ);
     }
   }, [selectedSlug, searchQ, loadListings]);
-
-  function saveAdminKey(key: string) {
-    setAdminKey(key);
-    if (key) sessionStorage.setItem('atelier_admin_key', key);
-    else sessionStorage.removeItem('atelier_admin_key');
-  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -217,47 +210,37 @@ function PartnersContent() {
     }
   }
 
-  if (!walletAddress) {
+  if (!signedIn) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-neutral-500 font-mono text-sm">Sign in to access partners dashboard</p>
+      <div className="max-w-2xl mx-auto px-6 py-16">
+        <h1 className="font-display text-2xl font-bold text-black dark:text-white mb-3">
+          Partners admin
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-neutral-400 mb-6">
+          Sign in with the Atelier admin account to continue.
+        </p>
+        <button
+          type="button"
+          onClick={login}
+          className="px-5 py-2.5 rounded bg-atelier text-white font-mono text-sm font-medium tracking-wide hover:bg-atelier-bright transition-colors"
+        >
+          Sign in
+        </button>
       </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-neutral-500 font-mono text-sm">Admin only — connect treasury wallet</p>
-      </div>
-    );
-  }
-
-  if (!adminKey) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const key = new FormData(e.currentTarget as HTMLFormElement).get('key') as string;
-            if (key) saveAdminKey(key.trim());
-          }}
-          className="flex flex-col gap-3 p-6 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 w-full max-w-sm"
-        >
-          <p className="text-sm font-mono text-neutral-400">Enter admin key</p>
-          <input
-            name="key"
-            type="password"
-            autoFocus
-            className="px-3 py-2 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono focus:outline-none focus:border-atelier/50"
-          />
-          <button
-            type="submit"
-            className="px-4 py-2 rounded border border-atelier/60 text-atelier text-xs font-medium font-mono hover:bg-atelier hover:text-white transition-all"
-          >
-            Unlock
-          </button>
-        </form>
+      <div className="max-w-2xl mx-auto px-6 py-16">
+        <h1 className="font-display text-2xl font-bold text-black dark:text-white mb-3">
+          Not authorized
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-neutral-400">
+          {adminEmail
+            ? `${adminEmail} is not an Atelier admin account.`
+            : 'This account is not an Atelier admin account.'}
+        </p>
       </div>
     );
   }
@@ -266,12 +249,6 @@ function PartnersContent() {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold font-display">Partners Admin</h1>
-        <button
-          onClick={() => saveAdminKey('')}
-          className="text-xs font-mono text-neutral-500 hover:text-atelier"
-        >
-          Lock
-        </button>
       </div>
 
       {error && (

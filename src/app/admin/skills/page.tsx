@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 
-const TREASURY_WALLET = 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb';
+const ADMIN_EMAIL = 'rempxbt@gmail.com';
 
 interface SubmittedSkillRow {
   id: string;
@@ -51,37 +52,32 @@ export default function SkillsAdminPage() {
 }
 
 function SkillsAdminContent() {
-  const { walletAddress, getAuth, login, walletReady } = useAtelierAuth();
-  const [adminKey, setAdminKey] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
-    return sessionStorage.getItem('atelier_admin_key') || '';
-  });
+  const { user, login } = useAtelierAuth();
 
   const [skills, setSkills] = useState<SubmittedSkillRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const isAdmin = walletAddress === TREASURY_WALLET;
+  const signedIn = user !== null;
+  const adminEmail = (user?.google?.email ?? user?.email?.address ?? '').toLowerCase();
+  const isAdmin = adminEmail === ADMIN_EMAIL;
 
-  const adminCall = useCallback(
-    async (extra: Record<string, unknown>) => {
-      if (!adminKey) throw new Error('Missing admin key');
-      const auth = await getAuth();
-      const res = await fetch('/api/admin/skills', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${adminKey}`,
-        },
-        body: JSON.stringify({ ...auth, ...extra }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error || 'Request failed');
-      return json.data;
-    },
-    [adminKey, getAuth],
-  );
+  const adminCall = useCallback(async (extra: Record<string, unknown>) => {
+    const token = await getPrivyAccessToken();
+    if (!token) throw new Error('Sign in required');
+    const res = await fetch('/api/admin/skills', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(extra),
+    });
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Request failed');
+    return json.data;
+  }, []);
 
   const loadSkills = useCallback(async () => {
     setLoading(true);
@@ -97,16 +93,10 @@ function SkillsAdminContent() {
   }, [adminCall]);
 
   useEffect(() => {
-    if (isAdmin && adminKey) {
+    if (isAdmin) {
       loadSkills();
     }
-  }, [isAdmin, adminKey, loadSkills]);
-
-  function saveAdminKey(key: string) {
-    setAdminKey(key);
-    if (key) sessionStorage.setItem('atelier_admin_key', key);
-    else sessionStorage.removeItem('atelier_admin_key');
-  }
+  }, [isAdmin, loadSkills]);
 
   async function handleDelete(row: SubmittedSkillRow) {
     if (!confirm(`Delete "${row.name}"? This is permanent.`)) return;
@@ -135,21 +125,21 @@ function SkillsAdminContent() {
     }
   }
 
-  if (!walletReady) {
+  if (!signedIn) {
     return (
       <div className="max-w-2xl mx-auto px-6 py-16">
         <h1 className="font-display text-2xl font-bold text-black dark:text-white mb-3">
           Skills admin
         </h1>
         <p className="text-sm text-gray-500 dark:text-neutral-400 mb-6">
-          Connect your wallet to continue.
+          Sign in with the Atelier admin account to continue.
         </p>
         <button
           type="button"
           onClick={login}
           className="px-5 py-2.5 rounded bg-atelier text-white font-mono text-sm font-medium tracking-wide hover:bg-atelier-bright transition-colors"
         >
-          Connect wallet
+          Sign in
         </button>
       </div>
     );
@@ -162,7 +152,9 @@ function SkillsAdminContent() {
           Not authorized
         </h1>
         <p className="text-sm text-gray-500 dark:text-neutral-400">
-          This wallet ({shortAddr(walletAddress ?? '')}) is not the Atelier treasury wallet.
+          {adminEmail
+            ? `${adminEmail} is not an Atelier admin account.`
+            : 'This account is not an Atelier admin account.'}
         </p>
       </div>
     );
@@ -179,22 +171,13 @@ function SkillsAdminContent() {
             Community submissions go live automatically. Hide or delete anything that breaks the rules.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="password"
-            placeholder="Admin key"
-            value={adminKey}
-            onChange={(e) => saveAdminKey(e.target.value)}
-            className="rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-black/50 px-3 py-2 font-mono text-xs text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 outline-none focus:border-atelier/60 focus:ring-1 focus:ring-atelier/30 transition-colors min-w-[220px]"
-          />
-          <button
-            type="button"
-            onClick={loadSkills}
-            className="px-3 py-2 rounded-md border border-gray-200 dark:border-neutral-700 text-xs font-mono text-gray-600 dark:text-neutral-300 hover:border-atelier/40 hover:text-atelier transition-colors"
-          >
-            Reload
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={loadSkills}
+          className="px-3 py-2 rounded-md border border-gray-200 dark:border-neutral-700 text-xs font-mono text-gray-600 dark:text-neutral-300 hover:border-atelier/40 hover:text-atelier transition-colors"
+        >
+          Reload
+        </button>
       </div>
 
       {error && (

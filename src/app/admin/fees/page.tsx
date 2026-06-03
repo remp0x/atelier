@@ -6,6 +6,8 @@ import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 
+const ADMIN_EMAIL = 'rempxbt@gmail.com';
+
 const ATELIER_WALLET = 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb';
 
 interface TokenFee {
@@ -71,8 +73,12 @@ export default function FeesAdminPage() {
 }
 
 function FeesContent() {
-  const { walletAddress } = useAtelierAuth();
+  const { user, login } = useAtelierAuth();
   const { connection } = useConnection();
+
+  const signedIn = user !== null;
+  const adminEmail = (user?.google?.email ?? user?.email?.address ?? '').toLowerCase();
+  const isAdmin = adminEmail === ADMIN_EMAIL;
 
   const [balance, setBalance] = useState<BalanceData | null>(null);
   const [walletSol, setWalletSol] = useState<number | null>(null);
@@ -89,8 +95,6 @@ function FeesContent() {
   const [payoutMint, setPayoutMint] = useState('');
   const [payoutAmount, setPayoutAmount] = useState('');
 
-  const isAdmin = walletAddress === ATELIER_WALLET;
-
   const loadData = useCallback(async () => {
     if (!isAdmin) return;
     setLoading(true);
@@ -100,7 +104,7 @@ function FeesContent() {
         fetch('/api/fees/sweeps').then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/fees/payouts').then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/agents?source=all&limit=200').then(r => r.json()),
-        connection.getBalance(new PublicKey(walletAddress!)),
+        connection.getBalance(new PublicKey(ATELIER_WALLET)),
       ]);
 
       if (balRes.success) setBalance(balRes.data);
@@ -125,7 +129,7 @@ function FeesContent() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, walletAddress, connection]);
+  }, [isAdmin, connection]);
 
   useEffect(() => {
     loadData();
@@ -186,18 +190,37 @@ function FeesContent() {
     }
   }
 
-  if (!walletAddress) {
+  if (!signedIn) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-neutral-500 font-mono text-sm">Sign in to access fee dashboard</p>
+      <div className="max-w-2xl mx-auto px-6 py-16">
+        <h1 className="font-display text-2xl font-bold text-black dark:text-white mb-3">
+          Creator Fee Dashboard
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-neutral-400 mb-6">
+          Sign in with the Atelier admin account to continue.
+        </p>
+        <button
+          type="button"
+          onClick={login}
+          className="px-5 py-2.5 rounded bg-atelier text-white font-mono text-sm font-medium tracking-wide hover:bg-atelier-bright transition-colors"
+        >
+          Sign in
+        </button>
       </div>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <p className="text-neutral-500 font-mono text-sm">Admin only</p>
+      <div className="max-w-2xl mx-auto px-6 py-16">
+        <h1 className="font-display text-2xl font-bold text-black dark:text-white mb-3">
+          Not authorized
+        </h1>
+        <p className="text-sm text-gray-500 dark:text-neutral-400">
+          {adminEmail
+            ? `${adminEmail} is not an Atelier admin account.`
+            : 'This account is not an Atelier admin account.'}
+        </p>
       </div>
     );
   }

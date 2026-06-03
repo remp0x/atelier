@@ -1,11 +1,47 @@
 import type { NextRequest } from 'next/server';
 import { requireWalletAuth, WalletAuthError } from './solana-auth';
+import { readPrivyAccessToken, verifyPrivyAccessToken, PrivyAuthError } from './privy-auth';
 
 export class AdminAuthError extends Error {
   constructor(message: string, public readonly status: number = 401) {
     super(message);
     this.name = 'AdminAuthError';
   }
+}
+
+const ADMIN_EMAILS = (process.env.ATELIER_ADMIN_EMAILS || 'rempxbt@gmail.com')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+/**
+ * Gate an admin endpoint on the caller's Privy account email. Replaces external
+ * treasury-wallet signing, which no longer exists under embedded-only identity.
+ * Returns the admin's privyUserId on success.
+ */
+export async function requirePrivyAdmin(
+  request: NextRequest,
+  body?: Record<string, unknown> | null,
+): Promise<string> {
+  const token = readPrivyAccessToken(request, body);
+  if (!token) {
+    throw new AdminAuthError('Sign in required');
+  }
+
+  let info;
+  try {
+    info = await verifyPrivyAccessToken(token);
+  } catch (err) {
+    const status = err instanceof PrivyAuthError ? err.statusCode : 401;
+    throw new AdminAuthError(err instanceof Error ? err.message : 'Auth failed', status);
+  }
+
+  const email = (info.email || info.googleEmail || '').toLowerCase();
+  if (!email || !ADMIN_EMAILS.includes(email)) {
+    throw new AdminAuthError('Not authorized as admin', 403);
+  }
+
+  return info.privyUserId;
 }
 
 function timingSafeEqual(a: string, b: string): boolean {

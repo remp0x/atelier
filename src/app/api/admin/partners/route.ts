@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { AdminAuthError, requireAdminAuth } from '@/lib/admin-auth';
+import { AdminAuthError, requirePrivyAdmin } from '@/lib/admin-auth';
 import {
   createPartnerChannel,
   listPartnerChannels,
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    requireAdminAuth(request, body as { wallet?: string; wallet_sig?: string; wallet_sig_ts?: number });
+    await requirePrivyAdmin(request);
   } catch (err) {
     const e = err as AdminAuthError;
     return NextResponse.json({ success: false, error: e.message }, { status: e.status || 401 });

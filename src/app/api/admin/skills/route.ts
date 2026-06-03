@@ -6,13 +6,10 @@ import {
   deleteSubmittedSkill,
   setSubmittedSkillStatus,
 } from '@/lib/atelier-db';
-import { requireAdminAuth, AdminAuthError } from '@/lib/admin-auth';
+import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
 
 interface AdminBody {
   action: 'list' | 'delete' | 'set_status';
-  wallet?: string;
-  wallet_sig?: string;
-  wallet_sig_ts?: number;
   id?: string;
   status?: 'live' | 'removed';
 }
@@ -26,11 +23,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    requireAdminAuth(req, {
-      wallet: body.wallet,
-      wallet_sig: body.wallet_sig,
-      wallet_sig_ts: body.wallet_sig_ts,
-    });
+    await requirePrivyAdmin(req);
   } catch (err) {
     if (err instanceof AdminAuthError) {
       return NextResponse.json({ success: false, error: err.message }, { status: err.status });

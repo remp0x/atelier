@@ -123,9 +123,19 @@ export function AskAtelierWidget() {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {messages.length === 0 && (
-                <p className="text-xs text-gray-400 dark:text-neutral-500 font-mono text-center pt-4">
-                  Ask anything about Atelier.
-                </p>
+                <div className="pt-4 text-center space-y-1.5">
+                  <p className="text-xs text-gray-400 dark:text-neutral-500 font-mono">
+                    Ask anything about Atelier.
+                  </p>
+                  <a
+                    href="https://usepod.ai"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block text-[10px] font-mono text-gray-300 dark:text-neutral-700 hover:text-gray-400 dark:hover:text-neutral-500 transition-colors"
+                  >
+                    Powered by usepod.ai
+                  </a>
+                </div>
               )}
               {messages.map((msg, i) => (
                 <div

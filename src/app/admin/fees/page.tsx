@@ -157,16 +157,15 @@ function FeesContent() {
   }
 
   async function handlePayout() {
-    const adminKey = prompt('Enter admin key:');
-    if (!adminKey) return;
-
     setPayingOut(true);
     setError(null);
     try {
+      const token = await getPrivyAccessToken();
+      if (!token) throw new Error('Sign in required');
       const res = await fetch('/api/fees/payout', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${adminKey}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

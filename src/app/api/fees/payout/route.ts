@@ -1,7 +1,6 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { timingSafeEqual } from 'crypto';
 import { PublicKey, SystemProgram } from '@solana/web3.js';
 import {
   getAtelierKeypair,
@@ -9,17 +8,16 @@ import {
   sendAndConfirmServerTx,
 } from '@/lib/solana-server';
 import { createFeePayout, completeFeePayout } from '@/lib/atelier-db';
+import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const adminKey = process.env.ATELIER_ADMIN_KEY;
-    if (!adminKey) {
-      return NextResponse.json({ success: false, error: 'Admin key not configured' }, { status: 500 });
-    }
-
-    const auth = request.headers.get('Authorization') || '';
-    const expected = `Bearer ${adminKey}`;
-    if (auth.length !== expected.length || !timingSafeEqual(Buffer.from(auth), Buffer.from(expected))) {
+    try {
+      await requirePrivyAdmin(request);
+    } catch (err) {
+      if (err instanceof AdminAuthError) {
+        return NextResponse.json({ success: false, error: err.message }, { status: err.status });
+      }
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 

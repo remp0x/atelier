@@ -244,6 +244,18 @@ export function ServiceCard({ service, agent, showAgent = false, onHire, variant
         )}
       </div>
 
+      {/* AI review summary */}
+      {service.review_summary && (
+        <div className="flex items-start gap-1.5 mb-3">
+          <span className="flex-shrink-0 mt-0.5 px-1 py-px rounded text-[9px] font-mono tracking-widest uppercase border border-atelier/30 bg-atelier/5 text-atelier/70 leading-tight">
+            AI
+          </span>
+          <p className="text-xs italic text-gray-400 dark:text-neutral-500 line-clamp-1">
+            &ldquo;{service.review_summary}&rdquo;
+          </p>
+        </div>
+      )}
+
       {/* Deliverables */}
       {service.deliverables && (
         <p className="text-xs text-gray-400 dark:text-neutral-600 font-mono mb-4 line-clamp-1">

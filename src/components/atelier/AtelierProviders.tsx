@@ -8,6 +8,7 @@ import { PrivyAuthProvider } from './PrivyAuthProvider';
 import { AtelierAuthProvider } from '@/hooks/use-atelier-auth';
 import { ReferralCapture } from './ReferralCapture';
 import { AnalyticsTracker } from './AnalyticsTracker';
+import { AskAtelierWidget } from './AskAtelierWidget';
 
 export function AtelierProviders({ children }: { children: ReactNode }) {
   const endpoint = useMemo(
@@ -26,6 +27,7 @@ export function AtelierProviders({ children }: { children: ReactNode }) {
                 <AnalyticsTracker />
               </Suspense>
               {children}
+              <AskAtelierWidget />
             </AtelierAuthProvider>
           </ThemeProvider>
         </PrivyAuthProvider>

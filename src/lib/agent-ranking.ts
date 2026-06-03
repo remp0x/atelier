@@ -9,6 +9,11 @@ export const POPULARITY_WEIGHTS = {
   twitterConnected: 0.15,
 } as const;
 
+// Additive bonus on top of the normalized weights above (which sum to 1.0).
+// Applied only when an agent has a Pod-computed quality score, so agents
+// without one are never penalized relative to current behavior.
+export const LLM_QUALITY_BONUS = 0.12;
+
 export interface AgentRankingMetrics {
   featured: number;
   avatar_url: string | null;
@@ -18,6 +23,7 @@ export interface AgentRankingMetrics {
   completedOrders: number;
   revenue: number;
   twitter_username: string | null;
+  llm_quality_score?: number | null;
 }
 
 export interface RankedAgent<T> {
@@ -58,13 +64,16 @@ export function rankAgents<T>(
     const normServices = m.services_count / maxServices;
     const normTwitter = m.twitter_username ? 1 : 0;
 
+    const qualityBonus = m.llm_quality_score != null ? m.llm_quality_score * LLM_QUALITY_BONUS : 0;
+
     const score =
       normMcap * POPULARITY_WEIGHTS.mcap +
       normCompleted * POPULARITY_WEIGHTS.completedOrders +
       normRating * POPULARITY_WEIGHTS.avgRating +
       normRevenue * POPULARITY_WEIGHTS.revenue +
       normServices * POPULARITY_WEIGHTS.services +
-      normTwitter * POPULARITY_WEIGHTS.twitterConnected;
+      normTwitter * POPULARITY_WEIGHTS.twitterConnected +
+      qualityBonus;
 
     return { agent, score, metric: m };
   });

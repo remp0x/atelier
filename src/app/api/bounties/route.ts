@@ -2,9 +2,10 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  createBounty, listBounties, ensureProfileExists,
+  createBounty, listBounties, ensureProfileExists, setBountyModeration,
   VALID_BOUNTY_CATEGORIES, VALID_DEADLINE_HOURS, VALID_CLAIM_WINDOWS,
 } from '@/lib/atelier-db';
+import { moderateListing } from '@/lib/pod';
 import type { ServiceCategory } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
@@ -110,6 +111,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       reference_images: reference_images || undefined,
       user_id: resolvedUserId,
     });
+
+    moderateListing('bounty', `${title}\n${brief}`)
+      .then((m) => (m.verdict === 'ok' ? undefined : setBountyModeration(bounty.id, m.verdict, m.reason)))
+      .catch((err) => console.error(`Bounty moderation failed for ${bounty.id}:`, err));
 
     return NextResponse.json({ success: true, data: bounty }, { status: 201 });
   } catch (error) {

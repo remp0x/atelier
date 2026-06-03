@@ -68,3 +68,6 @@ scripts/
 
 # clude
 .mcp.json
+
+# local-only video tooling (Remotion) for X posts -- not part of the app
+/remotion-bounties

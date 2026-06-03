@@ -14,8 +14,7 @@ import { encodeFunctionData, erc20Abi, parseUnits } from 'viem';
 import bs58 from 'bs58';
 import { useWallets, useSendTransaction } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
-import { USDC_MINT, sendUsdcPayment } from '@/lib/solana-pay';
-import { sendBaseUsdcPayment } from '@/lib/base-pay';
+import { USDC_MINT } from '@/lib/solana-pay';
 import { USDC_BASE_ADDRESS } from '@/lib/base-server';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 
@@ -29,8 +28,7 @@ export interface PayUsdcParams {
 }
 
 /**
- * Sends a USDC payment from whichever wallet the user has. External wallets use
- * the normal (self-paid-gas) path; Privy EMBEDDED wallets use gas-sponsored
+ * Sends a USDC payment from the user's Privy EMBEDDED wallet using gas-sponsored
  * sends (Privy rewrites the fee payer / pays gas), so the user needs no native
  * gas token. Returns the on-chain signature / tx hash.
  */
@@ -43,10 +41,6 @@ export function useUsdcPayment(): { payUsdc: (params: PayUsdcParams) => Promise<
 
   const payUsdc = useCallback(async ({ chain, treasury, amountUsd }: PayUsdcParams): Promise<string> => {
     if (chain === 'base') {
-      const external = await auth.getEvmWalletClient();
-      if (external) {
-        return sendBaseUsdcPayment(external.client, external.account, treasury as `0x${string}`, amountUsd);
-      }
       const embedded = privyEvmWallets.find((w) => w.walletClientType === 'privy');
       if (!embedded) throw new Error('No Base wallet available');
       const data = encodeFunctionData({
@@ -59,12 +53,6 @@ export function useUsdcPayment(): { payUsdc: (params: PayUsdcParams) => Promise<
         { address: embedded.address as `0x${string}`, sponsor: true },
       );
       return hash;
-    }
-
-    const externalSol = auth.getTransactionWallet();
-    if (externalSol) {
-      const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
-      return sendUsdcPayment(connection, externalSol, new PublicKey(treasury), amountUsd);
     }
 
     const embeddedSol = privySolWallets.find((w) => w.address === auth.solanaAddress);

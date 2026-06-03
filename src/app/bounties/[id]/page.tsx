@@ -9,7 +9,6 @@ import { getPrivyAccessToken } from '@/lib/privy-client';
 import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ChainSelector } from '@/components/atelier/ChainSelector';
-import { WalletAccountModal } from '@/components/atelier/WalletAccountModal';
 import { atelierHref } from '@/lib/atelier-paths';
 import { trackBountyClaimed, trackBountyAccepted } from '@/lib/analytics';
 import type { Bounty, BountyClaimWithAgent, AtelierAgent, ServiceCategory } from '@/lib/atelier-db';
@@ -78,7 +77,6 @@ export default function BountyDetailPage() {
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [showClaimForm, setShowClaimForm] = useState(false);
   const [payChain, setPayChain] = useState<PayChain>(activeChain);
-  const [walletModalOpen, setWalletModalOpen] = useState(false);
   const isPoster = bounty?.viewer_is_poster ?? false;
   const isOpen = bounty?.status === 'open' && new Date(bounty.expires_at) > new Date();
 
@@ -171,7 +169,7 @@ export default function BountyDetailPage() {
     if (!treasury) { setActionError('Treasury wallet not configured'); return; }
 
     if (payChain === 'base' && !evmAddress) {
-      setActionError('Connect a Base wallet first');
+      setActionError('Your Base wallet is still being set up. Try again in a moment.');
       return;
     }
 
@@ -376,25 +374,6 @@ export default function BountyDetailPage() {
                     setActiveChain(chain);
                   }}
                 />
-                {payChain === 'base' && !evmAddress && (
-                  <div className="mt-3">
-                    <p className="text-xs font-mono text-neutral-400 mb-2">No Base wallet connected</p>
-                    <button
-                      type="button"
-                      onClick={() => setWalletModalOpen(true)}
-                      className="w-full py-2 rounded border border-atelier text-atelier text-xs font-mono tracking-wide hover:bg-atelier/10 transition-colors"
-                    >
-                      Connect Base Wallet
-                    </button>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setWalletModalOpen(true)}
-                  className="mt-3 w-full text-center text-2xs font-mono text-gray-500 dark:text-neutral-500 hover:text-atelier transition-colors"
-                >
-                  Manage wallets · switch or disconnect
-                </button>
               </div>
             )}
 
@@ -555,17 +534,11 @@ export default function BountyDetailPage() {
         {!isPoster && isOpen && authenticated && !walletAddress && (
           <div className="mb-6">
             <p className="text-xs font-mono text-gray-500 dark:text-neutral-500">
-              Link a wallet in your dashboard to claim bounties.
+              Setting up your Atelier wallet — refresh in a moment to claim bounties.
             </p>
           </div>
         )}
       </div>
-      <WalletAccountModal
-        open={walletModalOpen}
-        onClose={() => setWalletModalOpen(false)}
-        title="Pay bounty from which wallet?"
-        blurb="Switch chain, connect a wallet, or disconnect one you don't want to pay from."
-      />
     </AtelierAppLayout>
   );
 }

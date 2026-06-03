@@ -278,7 +278,7 @@ export function SkillGetButton({
         open={walletModalOpen}
         onClose={() => setWalletModalOpen(false)}
         title={`Pay on ${chainLabel(creatorChain)}`}
-        blurb={`This skill's creator gets paid on ${chainLabel(creatorChain)}, so you also pay on ${chainLabel(creatorChain)}. Connect or switch to a ${chainLabel(creatorChain)} wallet.`}
+        blurb={`This skill's creator gets paid on ${chainLabel(creatorChain)}, so you pay on ${chainLabel(creatorChain)} too. Switch your Atelier wallet to ${chainLabel(creatorChain)} below.`}
       />
     </>
   );

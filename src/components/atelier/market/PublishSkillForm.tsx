@@ -172,7 +172,7 @@ export function PublishSkillForm({ onPublished, variant = 'panel' }: PublishSkil
       <div className={containerCls}>
         <SignInGate
           onSignIn={auth.login}
-          mode={auth.authenticated ? 'connect-wallet' : 'sign-in'}
+          mode={auth.authenticated ? 'preparing' : 'sign-in'}
         />
       </div>
     );
@@ -444,8 +444,8 @@ function CreatorChip(): JSX.Element {
       <WalletAccountModal
         open={open}
         onClose={() => setOpen(false)}
-        title="Connect & pick payout wallet"
-        blurb="Payouts and creator credit go to the wallet you pick here. Connect any wallet you own, disconnect the ones you don't want."
+        title="Your payout wallet"
+        blurb="Payouts and creator credit land in your Atelier wallet. Pick the chain — Solana or Base — you want to be paid on."
       />
     </>
   );
@@ -456,33 +456,43 @@ function SignInGate({
   mode = 'sign-in',
 }: {
   onSignIn: () => void;
-  mode?: 'sign-in' | 'connect-wallet';
+  mode?: 'sign-in' | 'preparing';
 }): JSX.Element {
-  const isConnectWallet = mode === 'connect-wallet';
+  if (mode === 'preparing') {
+    return (
+      <div className="py-2">
+        <div className="font-mono text-[10px] tracking-[0.18em] text-atelier mb-4">
+          SETTING UP
+        </div>
+        <h3 className="font-display font-bold text-lg md:text-xl tracking-[-0.02em] mb-2 text-black dark:text-white">
+          Preparing your Atelier wallet…
+        </h3>
+        <p className="text-[13.5px] leading-[1.55] text-gray-600 dark:text-neutral-400">
+          We&apos;re provisioning your payout wallet on Solana and Base. This only takes a second — the form will appear automatically.
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="py-2">
       <div className="font-mono text-[10px] tracking-[0.18em] text-atelier mb-4">
-        {isConnectWallet ? 'WALLET REQUIRED' : 'SIGN IN REQUIRED'}
+        SIGN IN REQUIRED
       </div>
       <h3 className="font-display font-bold text-lg md:text-xl tracking-[-0.02em] mb-2 text-black dark:text-white">
-        {isConnectWallet
-          ? 'Connect a wallet to receive payouts.'
-          : 'Connect your wallet to publish.'}
+        Sign in to publish.
       </h3>
       <p className="text-[13.5px] leading-[1.55] text-gray-600 dark:text-neutral-400 mb-5">
-        {isConnectWallet
-          ? 'Pick the Solana or Base wallet where you want USDC payouts to land. You can change it later.'
-          : 'Your wallet is your creator identity. USDC payouts go straight there — no accounts, no email, no review queue.'}
+        Every account gets an Atelier wallet on sign-in. USDC payouts go straight there — no accounts, no email, no review queue.
       </p>
       <button
         type="button"
         onClick={onSignIn}
         className="w-full inline-flex items-center justify-center gap-2 px-5 h-11 rounded font-mono text-[13px] font-medium tracking-wide bg-atelier text-white hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black-soft"
       >
-        {isConnectWallet ? 'Connect wallet →' : 'Sign in to continue →'}
+        Sign in to continue →
       </button>
       <p className="mt-2.5 font-mono text-[10.5px] leading-[1.5] text-gray-500 dark:text-neutral-400 text-center">
-        Solana or Base. Privy social login also works.
+        Continue with Google. Your wallet is created automatically.
       </p>
     </div>
   );

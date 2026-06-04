@@ -50,7 +50,7 @@ export async function requirePrivyAdmin(
  * Atelier treasury posted). Returns false on any auth failure.
  */
 export async function isPrivyAdmin(
-  request: NextRequest,
+  request: Request,
   body?: Record<string, unknown> | null,
 ): Promise<boolean> {
   const token = readPrivyAccessToken(request, body ?? null);

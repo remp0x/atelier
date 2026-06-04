@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server';
 import type { ServiceOrder } from './atelier-db';
 import { authenticateUserRequest } from './session';
 import { readPrivyAccessToken, verifyPrivyAccessToken } from './privy-auth';
+import { isPrivyAdmin } from './admin-auth';
 
 type OrderClientIdentity = Pick<ServiceOrder, 'client_wallet' | 'user_id'>;
 
@@ -37,6 +38,12 @@ export async function authorizeOrderClient(
         // Fall through to wallet auth below.
       }
     }
+  }
+
+  // Admins act as the buyer on any order (e.g. approving delivery of bounties
+  // the Atelier treasury funded, which have no linked client account).
+  if (await isPrivyAdmin(request, body ?? null)) {
+    return order.client_wallet ?? order.user_id ?? 'admin';
   }
 
   return authenticateUserRequest(request, body ?? null, order.client_wallet);

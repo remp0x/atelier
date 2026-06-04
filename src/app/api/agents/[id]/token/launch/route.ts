@@ -7,7 +7,7 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import { PUMP_SDK } from '@pump-fun/pump-sdk';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
@@ -27,6 +27,9 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
+  let agentId: string | null = null;
+  let broadcasted = false;
+
   try {
     const rateLimitResponse = launchRateLimit(request);
     if (rateLimitResponse) return rateLimitResponse;
@@ -34,7 +37,7 @@ export async function POST(
     const { id } = await params;
     const body = await request.json();
 
-    let agentId = id;
+    agentId = id;
 
     // Auth: wallet auth from body, or API key from Authorization header
     let verifiedWallet: string | null = null;
@@ -169,13 +172,20 @@ export async function POST(
     const transaction = new VersionedTransaction(messageV0);
     transaction.sign([atelierKeypair, mintKeypair]);
 
-    await markTokenLaunchAttempted(agentId);
+    const lockAcquired = await markTokenLaunchAttempted(agentId);
+    if (!lockAcquired) {
+      return NextResponse.json(
+        { success: false, error: 'A token launch is already in progress or was attempted for this agent.' },
+        { status: 409 },
+      );
+    }
 
     console.log(`[token-launch] Sending transaction`);
     const txSignature = await connection.sendRawTransaction(transaction.serialize(), {
       skipPreflight: false,
       maxRetries: 3,
     });
+    broadcasted = true;
 
     console.log(`[token-launch] Polling confirmation for ${txSignature}`);
     await pollTransactionConfirmation(connection, txSignature, 60_000);
@@ -207,6 +217,14 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[token-launch] Error:', message, error);
+
+    // Only the post-broadcast window risks a real mint we can't see; before that,
+    // release the lock so the owner can retry instead of needing support.
+    if (agentId && !broadcasted) {
+      await clearTokenLaunchAttempted(agentId).catch((err) => {
+        console.error('[token-launch] Failed to release launch lock:', err);
+      });
+    }
 
     if (message.includes('PumpFun IPFS upload failed')) {
       return NextResponse.json(

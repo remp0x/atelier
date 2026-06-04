@@ -4085,6 +4085,15 @@ export async function markTokenLaunchAttempted(agentId: string): Promise<boolean
   return result.rowsAffected > 0;
 }
 
+export async function clearTokenLaunchAttempted(agentId: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'UPDATE atelier_agents SET token_launch_attempted = 0 WHERE id = ? AND token_mint IS NULL',
+    args: [agentId],
+  });
+  return result.rowsAffected > 0;
+}
+
 export async function updateAgentToken(
   agentId: string,
   tokenData: {

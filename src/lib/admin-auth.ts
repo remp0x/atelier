@@ -44,6 +44,26 @@ export async function requirePrivyAdmin(
   return info.privyUserId;
 }
 
+/**
+ * Non-throwing admin check for routes that aren't admin-gated but should grant
+ * the admin account poster-level powers (e.g. accepting claims on bounties the
+ * Atelier treasury posted). Returns false on any auth failure.
+ */
+export async function isPrivyAdmin(
+  request: NextRequest,
+  body?: Record<string, unknown> | null,
+): Promise<boolean> {
+  const token = readPrivyAccessToken(request, body ?? null);
+  if (!token) return false;
+  try {
+    const info = await verifyPrivyAccessToken(token);
+    const email = (info.email || info.googleEmail || '').toLowerCase();
+    return !!email && ADMIN_EMAILS.includes(email);
+  } catch {
+    return false;
+  }
+}
+
 function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let mismatch = 0;

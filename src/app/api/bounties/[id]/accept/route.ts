@@ -5,6 +5,7 @@ import { getBountyById, getClaimById, acceptBountyClaim, getClaimsForBounty, isW
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
 import { tryResolvePrivyUserId } from '@/lib/privy-auth';
+import { isPrivyAdmin } from '@/lib/admin-auth';
 import { verifySolanaUsdcPayment } from '@/lib/solana-verify';
 import { verifyBaseUsdcPayment } from '@/lib/base-verify';
 import { notifyAgentWebhook } from '@/lib/webhook';
@@ -51,6 +52,10 @@ export async function POST(
         const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
         return NextResponse.json({ success: false, error: msg }, { status: 401 });
       }
+    }
+
+    if (!isPoster && (await isPrivyAdmin(request, body))) {
+      isPoster = true;
     }
 
     if (!isPoster) {

@@ -5,6 +5,7 @@ import { getBountyById, getClaimsForBounty, cancelBounty, getClaimsCountForBount
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 import { tryResolvePrivyUserId } from '@/lib/privy-auth';
+import { isPrivyAdmin } from '@/lib/admin-auth';
 
 export async function GET(
   request: NextRequest,
@@ -29,6 +30,10 @@ export async function GET(
         isPoster = verifiedWallet === bounty.poster_wallet;
       } catch {
       }
+    }
+
+    if (!isPoster && (await isPrivyAdmin(request, null))) {
+      isPoster = true;
     }
 
     const data = { ...bounty, claims_count: claimsCount, viewer_is_poster: isPoster };

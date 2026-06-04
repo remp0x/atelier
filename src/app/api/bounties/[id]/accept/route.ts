@@ -22,9 +22,9 @@ export async function POST(
     const body = await request.json();
     const { claim_id, client_wallet, escrow_tx_hash } = body;
 
-    if (!claim_id || !client_wallet || !escrow_tx_hash) {
+    if (!claim_id) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: claim_id, client_wallet, escrow_tx_hash' },
+        { success: false, error: 'Missing required field: claim_id' },
         { status: 400 },
       );
     }
@@ -34,13 +34,20 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Bounty not found' }, { status: 404 });
     }
 
+    const admin = await isPrivyAdmin(request, body);
+    // Admins can fund a bounty straight from the Atelier treasury instead of
+    // paying escrow on-chain: the treasury is already the escrow recipient and
+    // the source of the agent payout at completion, so an upfront transfer would
+    // just move funds from the treasury to itself.
+    const fundFromTreasury = body.fund_from_treasury === true && admin;
+
     // `client_wallet` is the payer that funded escrow on-chain (verified below),
     // independent of how we authenticate the poster's identity.
     const userId = await tryResolvePrivyUserId(request, body);
     let isPoster = false;
     if (userId) {
       isPoster = bounty.user_id === userId || (await isWalletLinkedToUser(userId, bounty.poster_wallet));
-    } else {
+    } else if (!fundFromTreasury) {
       try {
         const verifiedWallet = await authenticateUserRequest(
           request,
@@ -54,7 +61,7 @@ export async function POST(
       }
     }
 
-    if (!isPoster && (await isPrivyAdmin(request, body))) {
+    if (!isPoster && admin) {
       isPoster = true;
     }
 
@@ -75,35 +82,55 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Claim is not in pending status' }, { status: 400 });
     }
 
-    const expectedAmount = parseFloat(bounty.budget_usd) * 1.10;
-    const rawChain = typeof body.payment_chain === 'string' ? body.payment_chain : null;
-    const paymentChain: 'solana' | 'base' = rawChain === 'base' ? 'base' : 'solana';
+    let escrowHash: string;
+    let payerAddress: string;
+    let paymentChain: 'solana' | 'base';
 
-    if (paymentChain === 'base') {
-      if (typeof escrow_tx_hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(escrow_tx_hash)) {
-        return NextResponse.json({ success: false, error: 'Invalid Base transaction hash format' }, { status: 400 });
-      }
-      const paymentResult = await verifyBaseUsdcPayment(
-        escrow_tx_hash as `0x${string}`,
-        client_wallet,
-        expectedAmount,
-      );
-      if (!paymentResult.verified) {
-        return NextResponse.json({ success: false, error: paymentResult.error || 'Payment verification failed' }, { status: 400 });
-      }
+    if (fundFromTreasury) {
+      paymentChain = bounty.payment_chain === 'base' ? 'base' : 'solana';
+      escrowHash = `treasury_${claim_id}`;
+      payerAddress = bounty.poster_wallet;
     } else {
-      const paymentResult = await verifySolanaUsdcPayment(escrow_tx_hash, client_wallet, expectedAmount);
-      if (!paymentResult.verified) {
-        return NextResponse.json({ success: false, error: paymentResult.error || 'Payment verification failed' }, { status: 400 });
+      if (!client_wallet || !escrow_tx_hash) {
+        return NextResponse.json(
+          { success: false, error: 'Missing required fields: client_wallet, escrow_tx_hash' },
+          { status: 400 },
+        );
       }
+
+      const expectedAmount = parseFloat(bounty.budget_usd) * 1.10;
+      const rawChain = typeof body.payment_chain === 'string' ? body.payment_chain : null;
+      paymentChain = rawChain === 'base' ? 'base' : 'solana';
+
+      if (paymentChain === 'base') {
+        if (typeof escrow_tx_hash !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(escrow_tx_hash)) {
+          return NextResponse.json({ success: false, error: 'Invalid Base transaction hash format' }, { status: 400 });
+        }
+        const paymentResult = await verifyBaseUsdcPayment(
+          escrow_tx_hash as `0x${string}`,
+          client_wallet,
+          expectedAmount,
+        );
+        if (!paymentResult.verified) {
+          return NextResponse.json({ success: false, error: paymentResult.error || 'Payment verification failed' }, { status: 400 });
+        }
+      } else {
+        const paymentResult = await verifySolanaUsdcPayment(escrow_tx_hash, client_wallet, expectedAmount);
+        if (!paymentResult.verified) {
+          return NextResponse.json({ success: false, error: paymentResult.error || 'Payment verification failed' }, { status: 400 });
+        }
+      }
+
+      escrowHash = escrow_tx_hash;
+      payerAddress = client_wallet;
     }
 
     const result = await acceptBountyClaim({
       bounty_id: params.id,
       claim_id,
-      escrow_tx_hash,
+      escrow_tx_hash: escrowHash,
       payment_chain: paymentChain,
-      payer_address: client_wallet,
+      payer_address: payerAddress,
       payment_method: paymentChain === 'base' ? 'usdc-base' : 'usdc',
     });
 

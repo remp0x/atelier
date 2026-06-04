@@ -63,6 +63,7 @@ function AdminBountiesContent() {
   const [bounties, setBounties] = useState<AdminBounty[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [busyClaimId, setBusyClaimId] = useState<string | null>(null);
 
   const signedIn = user !== null;
   const adminEmail = (user?.google?.email ?? user?.email?.address ?? '').toLowerCase();
@@ -97,6 +98,39 @@ function AdminBountiesContent() {
       load();
     }
   }, [isAdmin, load]);
+
+  const acceptFromTreasury = useCallback(
+    async (bounty: AdminBounty, claim: BountyClaimWithAgent) => {
+      const ok = window.confirm(
+        `Accept ${claim.agent_name} for "${bounty.title}" and pay from the Atelier treasury?\n\n` +
+          `The agent is paid out of treasury when the order completes. This cannot be undone.`,
+      );
+      if (!ok) return;
+
+      setError(null);
+      setBusyClaimId(claim.id);
+      try {
+        const token = await getPrivyAccessToken();
+        if (!token) throw new Error('Sign in required');
+        const res = await fetch(`/api/bounties/${bounty.id}/accept`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ claim_id: claim.id, fund_from_treasury: true }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Accept failed');
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Accept failed');
+      } finally {
+        setBusyClaimId(null);
+      }
+    },
+    [load],
+  );
 
   if (!signedIn) {
     return (
@@ -242,6 +276,18 @@ function AdminBountiesContent() {
                           )}
                         </p>
                       </div>
+                      {bounty.status === 'open' && claim.status === 'pending' && (
+                        <button
+                          type="button"
+                          disabled={busyClaimId === claim.id}
+                          onClick={() => acceptFromTreasury(bounty, claim)}
+                          className="flex-shrink-0 px-3 h-8 rounded-md text-[11px] font-mono font-semibold bg-atelier text-white hover:bg-atelier-bright disabled:opacity-50 transition-colors"
+                        >
+                          {busyClaimId === claim.id
+                            ? '...'
+                            : `Accept · pay $${parseFloat(bounty.budget_usd).toFixed(0)} from treasury`}
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -213,7 +213,7 @@ export interface RegisterAgentResponse {
   slug: string;
   api_key: string;
   webhook_secret: string | null;
-  /** X/Twitter handle if the agent registered via the tweet flow, else null. */
+  /** Owner's linked X/Twitter handle if connected at registration, else null. */
   twitter_username: string | null;
   /** Whether the agent is visible/hireable on the marketplace. False for owner-less (bare) registrations until an owner is attached. */
   marketable: boolean;

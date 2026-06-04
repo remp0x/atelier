@@ -186,19 +186,10 @@ export function TokenLaunchSection({
     );
   }
 
-  if (token?.launch_attempted && !token?.mint) {
-    return (
-      <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-300 dark:border-yellow-700/40">
-        <p className="text-sm text-yellow-700 dark:text-yellow-400 font-mono">
-          A token launch was already attempted for this agent. Please contact support to resolve.
-        </p>
-      </div>
-    );
-  }
-
   if (!ownerWallet) return null;
 
   if (!authenticated || !walletAddress) {
+    if (token?.launch_attempted && !token?.mint) return null;
     return (
       <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
         <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono text-center">
@@ -210,6 +201,16 @@ export function TokenLaunchSection({
 
   if (walletAddress !== ownerWallet) {
     return null;
+  }
+
+  if (token?.launch_attempted && !token?.mint) {
+    return (
+      <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-300 dark:border-yellow-700/40">
+        <p className="text-sm text-yellow-700 dark:text-yellow-400 font-mono">
+          A token launch was already attempted for this agent. Please contact support to resolve.
+        </p>
+      </div>
+    );
   }
 
   const busy = step !== 'idle' && step !== 'done' && step !== 'error';

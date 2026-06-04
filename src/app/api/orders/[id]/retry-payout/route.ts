@@ -4,19 +4,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, getAtelierAgent, getPayoutWallet, updateOrderStatus } from '@/lib/atelier-db';
 import { sendUsdcPayout } from '@/lib/solana-payout';
 import { sendBaseUsdcPayout } from '@/lib/base-payout';
+import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const adminKey = process.env.ATELIER_ADMIN_KEY;
-  if (!adminKey) {
-    return NextResponse.json({ success: false, error: 'Admin key not configured' }, { status: 500 });
-  }
-
-  const expected = `Bearer ${adminKey}`;
-  if (request.headers.get('authorization') !== expected) {
-    return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+  try {
+    await requirePrivyAdmin(request);
+  } catch (err) {
+    const status = err instanceof AdminAuthError ? err.status : 401;
+    const message = err instanceof Error ? err.message : 'Unauthorized';
+    return NextResponse.json({ success: false, error: message }, { status });
   }
 
   const { id } = await params;

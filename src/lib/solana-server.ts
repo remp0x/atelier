@@ -59,28 +59,72 @@ export async function pollTransactionConfirmation(
   throw new Error(`Transaction confirmation timed out after ${timeoutMs}ms: ${signature}`);
 }
 
+async function confirmUntilBlockhashExpiry(
+  connection: Connection,
+  signature: string,
+  lastValidBlockHeight: number,
+  pollIntervalMs = 2_000,
+): Promise<'confirmed' | 'expired'> {
+  while (true) {
+    const { value } = await connection.getSignatureStatuses([signature]);
+    const status = value?.[0];
+
+    if (status?.err) {
+      throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+    }
+    if (status && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized')) {
+      return 'confirmed';
+    }
+
+    if ((await connection.getBlockHeight('confirmed')) > lastValidBlockHeight) {
+      const { value: final } = await connection.getSignatureStatuses([signature]);
+      const finalStatus = final?.[0];
+      if (finalStatus?.err) throw new Error(`Transaction failed: ${JSON.stringify(finalStatus.err)}`);
+      if (finalStatus && (finalStatus.confirmationStatus === 'confirmed' || finalStatus.confirmationStatus === 'finalized')) {
+        return 'confirmed';
+      }
+      return 'expired';
+    }
+
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+}
+
+// Double-pay safety: each blockhash window has a single signed tx. Re-broadcasting that
+// exact serialized tx is idempotent (the network dedupes by signature), and we only build
+// a fresh tx after the previous blockhash has provably expired -- once block height passes
+// lastValidBlockHeight the old tx can never land, so a rebuild cannot duplicate a transfer.
 export async function sendAndConfirmServerTx(
   connection: Connection,
   instructions: TransactionInstruction[],
   keypair: Keypair,
+  maxAttempts = 3,
 ): Promise<string> {
-  const { blockhash } = await connection.getLatestBlockhash('confirmed');
+  let lastError: Error | null = null;
 
-  const messageV0 = new TransactionMessage({
-    payerKey: keypair.publicKey,
-    recentBlockhash: blockhash,
-    instructions,
-  }).compileToV0Message();
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
 
-  const tx = new VersionedTransaction(messageV0);
-  tx.sign([keypair]);
+    const messageV0 = new TransactionMessage({
+      payerKey: keypair.publicKey,
+      recentBlockhash: blockhash,
+      instructions,
+    }).compileToV0Message();
 
-  const signature = await connection.sendRawTransaction(tx.serialize(), {
-    skipPreflight: false,
-    maxRetries: 3,
-  });
+    const tx = new VersionedTransaction(messageV0);
+    tx.sign([keypair]);
+    const raw = tx.serialize();
 
-  await pollTransactionConfirmation(connection, signature);
+    const signature = await connection.sendRawTransaction(raw, {
+      skipPreflight: false,
+      maxRetries: 5,
+    });
 
-  return signature;
+    const outcome = await confirmUntilBlockhashExpiry(connection, signature, lastValidBlockHeight);
+    if (outcome === 'confirmed') return signature;
+
+    lastError = new Error(`Transaction expired before confirmation (attempt ${attempt + 1}/${maxAttempts}): ${signature}`);
+  }
+
+  throw lastError ?? new Error('Transaction failed to confirm');
 }

@@ -35,6 +35,11 @@ const ADMIN_SECTIONS: AdminSection[] = [
     description: 'Creator-fee balance, sweeps, and payouts.',
   },
   {
+    title: 'Payouts',
+    route: '/admin/payouts',
+    description: 'Release stuck order payouts that failed to send automatically.',
+  },
+  {
     title: 'Kanban',
     route: '/admin/kanban',
     description: 'Internal task board.',

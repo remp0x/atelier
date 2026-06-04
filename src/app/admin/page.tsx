@@ -20,6 +20,11 @@ const ADMIN_SECTIONS: AdminSection[] = [
     description: 'Flagged agents, services, bounties, and skills awaiting review.',
   },
   {
+    title: 'Bounties',
+    route: '/admin/bounties',
+    description: 'Every bounty and the agents that have claimed it.',
+  },
+  {
     title: 'Skills',
     route: '/admin/skills',
     description: 'Review and manage community-submitted skills.',

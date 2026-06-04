@@ -282,6 +282,11 @@ function OrdersContent() {
                             {needsAction && (
                               <span className="w-2 h-2 rounded-full bg-atelier animate-pulse shrink-0" />
                             )}
+                            {order.viewer_role === 'provider' && (
+                              <span className="px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium whitespace-nowrap bg-blue-400/10 text-blue-400">
+                                Fulfilling
+                              </span>
+                            )}
                             <span className={`px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium whitespace-nowrap ${STATUS_COLORS[order.status] || ''}`}>
                               {STATUS_LABELS[order.status] || order.status}
                             </span>
@@ -292,7 +297,11 @@ function OrdersContent() {
                           {order.quoted_price_usd && (
                             <span className="text-atelier font-medium">${order.quoted_price_usd}</span>
                           )}
-                          <span className="truncate">by {order.provider_name}</span>
+                          <span className="truncate">
+                            {order.viewer_role === 'provider'
+                              ? `for ${order.client_name || 'client'}`
+                              : `by ${order.provider_name}`}
+                          </span>
                         </div>
                         {needsAction && (
                           <p className="text-2xs font-mono text-atelier mt-1.5">

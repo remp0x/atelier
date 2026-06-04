@@ -2019,6 +2019,7 @@ export interface ServiceOrder {
   user_id: string | null;
   completed_at: string | null;
   created_at: string;
+  viewer_role?: 'client' | 'provider';
 }
 
 export interface Bounty {
@@ -3624,14 +3625,16 @@ export async function getOrdersByWallet(wallet: string): Promise<ServiceOrder[]>
             COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
             pa.name as provider_name,
-            pa.slug as provider_slug
+            pa.slug as provider_slug,
+            CASE WHEN o.client_wallet = :wallet THEN 'client' ELSE 'provider' END as viewer_role
           FROM service_orders o
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
           LEFT JOIN atelier_agents pa ON o.provider_agent_id = pa.id
-          WHERE o.client_wallet = ?
+          WHERE o.client_wallet = :wallet
+             OR o.provider_agent_id IN (SELECT id FROM atelier_agents WHERE owner_wallet = :wallet)
           ORDER BY o.created_at DESC`,
-    args: [wallet],
+    args: { wallet },
   });
   return result.rows as unknown as ServiceOrder[];
 }
@@ -3643,15 +3646,23 @@ export async function getOrdersByUser(userId: string): Promise<ServiceOrder[]> {
             COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
             pa.name as provider_name,
-            pa.slug as provider_slug
+            pa.slug as provider_slug,
+            CASE WHEN o.user_id = :uid
+                      OR o.client_wallet IN (SELECT address FROM user_wallets WHERE user_id = :uid)
+                 THEN 'client' ELSE 'provider' END as viewer_role
           FROM service_orders o
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
           LEFT JOIN atelier_agents pa ON o.provider_agent_id = pa.id
-          WHERE o.user_id = ?
-             OR o.client_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+          WHERE o.user_id = :uid
+             OR o.client_wallet IN (SELECT address FROM user_wallets WHERE user_id = :uid)
+             OR o.provider_agent_id IN (
+                  SELECT id FROM atelier_agents
+                  WHERE user_id = :uid OR privy_user_id = :uid
+                     OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = :uid)
+                )
           ORDER BY o.created_at DESC`,
-    args: [userId, userId],
+    args: { uid: userId },
   });
   return result.rows as unknown as ServiceOrder[];
 }
@@ -3659,10 +3670,15 @@ export async function getOrdersByUser(userId: string): Promise<ServiceOrder[]> {
 export async function getOrdersCountByUser(userId: string): Promise<number> {
   await initAtelierDb();
   const result = await atelierClient.execute({
-    sql: `SELECT COUNT(*) as count FROM service_orders
-          WHERE user_id = ?
-             OR client_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)`,
-    args: [userId, userId],
+    sql: `SELECT COUNT(*) as count FROM service_orders o
+          WHERE o.user_id = :uid
+             OR o.client_wallet IN (SELECT address FROM user_wallets WHERE user_id = :uid)
+             OR o.provider_agent_id IN (
+                  SELECT id FROM atelier_agents
+                  WHERE user_id = :uid OR privy_user_id = :uid
+                     OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = :uid)
+                )`,
+    args: { uid: userId },
   });
   const row = result.rows[0] as unknown as { count: number } | undefined;
   return Number(row?.count ?? 0);

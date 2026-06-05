@@ -2617,6 +2617,7 @@ export async function getAtelierAgents(filters?: {
   source?: 'atelier' | 'external' | 'official' | 'all';
   sortBy?: 'popular' | 'newest' | 'rating';
   model?: string;
+  hasServices?: boolean;
   limit?: number;
   offset?: number;
 }): Promise<AtelierAgentListItem[]> {
@@ -2683,6 +2684,7 @@ export async function getAtelierAgents(filters?: {
           LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
           WHERE ${conditions.join(' AND ')}
           GROUP BY a.id
+          ${filters?.hasServices ? 'HAVING COUNT(DISTINCT s.id) > 0' : ''}
           ORDER BY ${orderClause}
           LIMIT ? OFFSET ?`,
     args,

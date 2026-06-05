@@ -79,6 +79,7 @@ function BrowseContent() {
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [pricing, setPricing] = useState('all');
   const [model, setModel] = useState(searchParams.get('model') || 'all');
+  const [showAllAgents, setShowAllAgents] = useState(searchParams.get('show') === 'all');
   const [modelOptions, setModelOptions] = useState<string[]>([]);
 
   const [agents, setAgents] = useState<AtelierAgentListItem[]>([]);
@@ -103,10 +104,11 @@ function BrowseContent() {
     if (search) params.set('search', search);
     if (pricing !== 'all') params.set('pricing', pricing);
     if (model !== 'all') params.set('model', model);
+    if (showAllAgents) params.set('show', 'all');
     const qs = params.toString();
     const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
     window.history.replaceState(null, '', url);
-  }, [category, sort, search, pricing, model]);
+  }, [category, sort, search, pricing, model, showAllAgents]);
 
   const fetchAgents = useCallback(async () => {
     setLoading(true);
@@ -118,6 +120,7 @@ function BrowseContent() {
       if (backendSort !== 'popular') params.set('sortBy', backendSort);
       if (search) params.set('search', search);
       if (model !== 'all') params.set('model', model);
+      if (!showAllAgents) params.set('services', 'with');
       params.set('limit', '500');
       params.set('offset', '0');
 
@@ -157,7 +160,7 @@ function BrowseContent() {
     } finally {
       setLoading(false);
     }
-  }, [category, sort, search, model]);
+  }, [category, sort, search, model, showAllAgents]);
 
   useEffect(() => {
     fetch('/api/models').then(r => r.json()).then(json => {
@@ -185,7 +188,11 @@ function BrowseContent() {
     fetchAgents();
   }, [fetchAgents]);
 
-  const featuredIds = useMemo(() => new Set(featuredAgents.map(a => a.id)), [featuredAgents]);
+  const visibleFeatured = useMemo(
+    () => (showAllAgents ? featuredAgents : featuredAgents.filter(a => a.services_count > 0)),
+    [featuredAgents, showAllAgents],
+  );
+  const featuredIds = useMemo(() => new Set(visibleFeatured.map(a => a.id)), [visibleFeatured]);
   const allFiltered = useMemo(() => agents.filter(a => !featuredIds.has(a.id)), [agents, featuredIds]);
   const filteredAgents = useMemo(() => allFiltered.slice(0, visibleCount), [allFiltered, visibleCount]);
   const hasMore = visibleCount < allFiltered.length;
@@ -290,13 +297,15 @@ function BrowseContent() {
             model={model}
             setModel={setModel}
             modelOptions={modelOptions}
+            showAllAgents={showAllAgents}
+            setShowAllAgents={setShowAllAgents}
           />
           <SortDropdown sort={sort} setSort={setSort} />
         </div>
       </div>
 
       {/* Featured Holders */}
-      {featuredAgents.length > 0 && (
+      {visibleFeatured.length > 0 && (
         <>
           <div className="mb-6">
             <h2 className="text-sm font-bold font-display text-black dark:text-white mb-3 flex items-center gap-2">
@@ -304,7 +313,7 @@ function BrowseContent() {
               Featured Agents
             </h2>
             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
-              {featuredAgents.map((agent) => (
+              {visibleFeatured.map((agent) => (
                 <div key={`featured-${agent.id}`} className="w-[calc(50%-6px)] md:w-[calc(25%-9px)] shrink-0 snap-start">
                   <AgentCard
                     agent={agent}
@@ -338,9 +347,18 @@ function BrowseContent() {
       ) : (
         <div className="text-center py-20">
           <p className="text-gray-500 dark:text-neutral-400 font-mono text-sm">No agents found</p>
-          <p className="text-gray-400 dark:text-neutral-400 text-xs mt-2">
-            Be the first to register — <code className="text-atelier">POST /api/agents/register</code>
-          </p>
+          {!showAllAgents ? (
+            <button
+              onClick={() => setShowAllAgents(true)}
+              className="text-atelier hover:underline text-xs mt-2 font-mono"
+            >
+              Show all agents, including those without services
+            </button>
+          ) : (
+            <p className="text-gray-400 dark:text-neutral-400 text-xs mt-2">
+              Be the first to register — <code className="text-atelier">POST /api/agents/register</code>
+            </p>
+          )}
         </div>
       )}
 
@@ -464,15 +482,19 @@ function FiltersDropdown({
   model,
   setModel,
   modelOptions,
+  showAllAgents,
+  setShowAllAgents,
 }: {
   pricing: string;
   setPricing: (v: string) => void;
   model: string;
   setModel: (v: string) => void;
   modelOptions: string[];
+  showAllAgents: boolean;
+  setShowAllAgents: (v: boolean) => void;
 }) {
   const { open, setOpen, ref } = useDropdown();
-  const activeCount = (pricing !== 'all' ? 1 : 0) + (model !== 'all' ? 1 : 0);
+  const activeCount = (pricing !== 'all' ? 1 : 0) + (model !== 'all' ? 1 : 0) + (showAllAgents ? 1 : 0);
 
   return (
     <div className="relative flex-shrink-0" ref={ref}>
@@ -490,6 +512,20 @@ function FiltersDropdown({
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-neutral-800 shadow-xl z-40 p-3 space-y-3 animate-slide-up">
+          <FilterGroup label="Availability">
+            {[
+              { value: false, label: 'With services' },
+              { value: true, label: 'All agents' },
+            ].map((opt) => (
+              <FilterOption
+                key={String(opt.value)}
+                selected={showAllAgents === opt.value}
+                onClick={() => setShowAllAgents(opt.value)}
+                label={opt.label}
+              />
+            ))}
+          </FilterGroup>
+
           <FilterGroup label="Pricing">
             {[
               { value: 'all', label: 'All pricing' },
@@ -526,7 +562,7 @@ function FiltersDropdown({
           {activeCount > 0 && (
             <button
               type="button"
-              onClick={() => { setPricing('all'); setModel('all'); }}
+              onClick={() => { setPricing('all'); setModel('all'); setShowAllAgents(false); }}
               className="w-full h-8 rounded-lg border border-gray-200 dark:border-neutral-800 text-[11px] font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier hover:border-atelier/40 transition-colors cursor-pointer"
             >
               Clear filters

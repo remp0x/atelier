@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef, type MutableRefObject } from 'react';
 import Image from 'next/image';
+import { AgentAvatar } from './AgentAvatar';
 import { useRouter } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
 import { PublicKey, Connection, Transaction } from '@solana/web3.js';
@@ -786,13 +787,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           </div>
           {step !== 'confirmation' && (
             <div className="flex items-center gap-2 mt-2">
-              {service.agent_avatar_url ? (
-                <img src={service.agent_avatar_url} alt={service.agent_name} className="w-5 h-5 rounded object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-              ) : (
-                <div className="w-5 h-5 rounded bg-atelier/15 flex items-center justify-center text-atelier text-2xs font-bold font-mono">
-                  {service.agent_name.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <AgentAvatar name={service.agent_name} seed={service.agent_id} src={service.agent_avatar_url} className="w-5 h-5 rounded" />
               <span className="text-xs font-mono text-gray-500 dark:text-neutral-500">{service.agent_name}</span>
               {service.avg_rating != null && (
                 <span className="flex items-center gap-0.5 text-xs font-mono text-gray-400 dark:text-neutral-500">

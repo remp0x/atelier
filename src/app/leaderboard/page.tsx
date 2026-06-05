@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
+import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { atelierHref } from '@/lib/atelier-paths';
 import { formatMcap, formatPrice } from '@/lib/format';
 import type { AtelierAgentListItem, SellerLeaderboardItem } from '@/lib/atelier-db';
@@ -349,27 +349,13 @@ function PodiumCard({
         #{rank} {style.label}
       </div>
       <div className="flex items-center gap-4">
-        {imageSrc ? (
-          <Image
-            src={imageSrc}
-            alt={agent.name}
-            width={avatarSize}
-            height={avatarSize}
-            className="rounded-xl object-cover flex-shrink-0"
-            style={{ width: avatarSize, height: avatarSize }}
-            unoptimized
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        ) : (
-          <div
-            className="rounded-xl bg-atelier/10 flex items-center justify-center flex-shrink-0"
-            style={{ width: avatarSize, height: avatarSize }}
-          >
-            <span className={`${size === 'lg' ? 'text-3xl' : 'text-xl'} font-bold font-display text-atelier/60`}>
-              {agent.name.charAt(0).toUpperCase()}
-            </span>
-          </div>
-        )}
+        <AgentAvatar
+          name={agent.name}
+          seed={agent.id}
+          src={imageSrc}
+          className="rounded-xl flex-shrink-0"
+          style={{ width: avatarSize, height: avatarSize }}
+        />
         <div className="min-w-0 flex-1">
           <div className={`font-display font-bold text-black dark:text-white truncate ${size === 'lg' ? 'text-lg' : 'text-sm'}`}>
             {agent.name}
@@ -464,23 +450,7 @@ function SellerRow({
           href={atelierHref(`/atelier/agents/${agent.slug}`)}
           className="flex items-center gap-3 group"
         >
-          {imageSrc ? (
-            <Image
-              src={imageSrc}
-              alt={agent.name}
-              width={32}
-              height={32}
-              className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
-              unoptimized
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
-              <span className="text-sm font-bold font-display text-atelier/60">
-                {agent.name.charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
+          <AgentAvatar name={agent.name} seed={agent.id} src={imageSrc} className="w-8 h-8 rounded-lg flex-shrink-0" />
           <span className="font-display font-semibold text-black dark:text-white group-hover:text-atelier transition-colors truncate">
             {agent.name}
           </span>
@@ -530,13 +500,7 @@ function SellerRowMobile({
     >
       <div className="flex items-center gap-3">
         <span className="text-xs font-mono text-neutral-400 w-5">#{rank}</span>
-        {imageSrc ? (
-          <Image src={imageSrc} alt={agent.name} width={32} height={32} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-        ) : (
-          <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
-            <span className="text-sm font-bold font-display text-atelier/60">{agent.name.charAt(0).toUpperCase()}</span>
-          </div>
-        )}
+        <AgentAvatar name={agent.name} seed={agent.id} src={imageSrc} className="w-8 h-8 rounded-lg flex-shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="font-display font-semibold text-sm text-black dark:text-white truncate">{agent.name}</div>
           {agent.token_symbol && (
@@ -696,23 +660,7 @@ function MarketcapTab() {
                           href={atelierHref(`/atelier/agents/${agent.slug}`)}
                           className="flex items-center gap-3 group"
                         >
-                          {imageSrc ? (
-                            <Image
-                              src={imageSrc}
-                              alt={agent.name}
-                              width={32}
-                              height={32}
-                              className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
-                              unoptimized
-                              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
-                              <span className="text-sm font-bold font-display text-atelier/60">
-                                {agent.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                          )}
+                          <AgentAvatar name={agent.name} seed={agent.id} src={imageSrc} className="w-8 h-8 rounded-lg flex-shrink-0" />
                           <span className="font-display font-semibold text-black dark:text-white group-hover:text-atelier transition-colors truncate">
                             {agent.name}
                           </span>
@@ -764,13 +712,7 @@ function MarketcapTab() {
                 <div key={agent.id} className="rounded-lg border border-gray-200 dark:border-neutral-800 p-4">
                   <div className="flex items-center gap-3 mb-3">
                     <span className="text-xs font-mono text-neutral-400 w-5">#{rank}</span>
-                    {imageSrc ? (
-                      <Image src={imageSrc} alt={agent.name} width={32} height={32} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    ) : (
-                      <div className="w-8 h-8 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm font-bold font-display text-atelier/60">{agent.name.charAt(0).toUpperCase()}</span>
-                      </div>
-                    )}
+                    <AgentAvatar name={agent.name} seed={agent.id} src={imageSrc} className="w-8 h-8 rounded-lg flex-shrink-0" />
                     <div className="min-w-0 flex-1">
                       <Link
                         href={atelierHref(`/atelier/agents/${agent.slug}`)}

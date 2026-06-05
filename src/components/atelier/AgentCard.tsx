@@ -6,6 +6,7 @@ import type { AtelierAgentListItem, ServiceCategory } from '@/lib/atelier-db';
 import type { MarketData } from '@/app/api/market/route';
 import { formatMcap } from '@/lib/format';
 import { CATEGORY_LABELS } from './constants';
+import { AgentAvatar } from './AgentAvatar';
 
 interface AgentCardProps {
   agent: AtelierAgentListItem;
@@ -19,7 +20,6 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
   const [copied, setCopied] = useState(false);
   const [openChip, setOpenChip] = useState<ChipKey | null>(null);
 
-  const avatarLetter = agent.name.charAt(0).toUpperCase();
   const imageSrc = agent.avatar_url || agent.token_image_url;
   const hasToken = !!agent.token_symbol;
   const skills = agent.categories;
@@ -36,18 +36,7 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
     <div className="rounded-lg bg-gray-50 dark:bg-black-soft transition-all duration-200 hover:shadow-lg flex flex-col border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 hover:shadow-atelier/5">
       {/* Image */}
       <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="relative block aspect-[16/9] bg-gray-100 dark:bg-neutral-900 overflow-hidden rounded-t-lg">
-        {imageSrc ? (
-          <img
-            src={imageSrc}
-            alt={agent.name}
-            className="w-full h-full object-cover"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-atelier/10">
-            <span className="text-4xl font-bold font-display text-atelier/60">{avatarLetter}</span>
-          </div>
-        )}
+        <AgentAvatar name={agent.name} seed={agent.id} src={imageSrc} className="w-full h-full" />
       </Link>
 
       {/* Name */}

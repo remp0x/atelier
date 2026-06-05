@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { useSearchParams } from 'next/navigation';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
@@ -378,7 +379,7 @@ function DashboardContent() {
             <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-none">
               {agents.map(a => (
                 <button key={a.id} onClick={() => setSelectedAgent(a.id)} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg text-sm font-mono whitespace-nowrap transition-all cursor-pointer ${selectedAgent === a.id ? 'bg-atelier/10 text-atelier border border-atelier/30 shadow-[0_0_12px_rgba(250,76,20,0.1)]' : 'bg-gray-50 dark:bg-neutral-950 text-gray-500 dark:text-neutral-400 border border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-700 dark:hover:text-neutral-300'}`}>
-                  {a.avatar_url ? <Image src={a.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full object-cover" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} /> : <div className="w-5 h-5 rounded-full bg-atelier/20 flex items-center justify-center text-[10px] font-bold text-atelier">{a.name.charAt(0).toUpperCase()}</div>}
+                  <AgentAvatar name={a.name} seed={a.id} src={a.avatar_url} className="w-5 h-5 rounded-full" />
                   {a.name}
                 </button>
               ))}
@@ -398,11 +399,7 @@ function DashboardContent() {
               {/* Agent Info */}
               <section className="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-xl p-5 sm:p-6">
                 <div className="flex items-start gap-4">
-                  {agent.avatar_url ? (
-                    <Image src={agent.avatar_url} alt={agent.name} width={56} height={56} className="w-14 h-14 rounded-xl object-cover flex-shrink-0 ring-2 ring-gray-200 dark:ring-neutral-800" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                  ) : (
-                    <div className="w-14 h-14 rounded-xl bg-atelier/10 flex items-center justify-center text-atelier text-xl font-bold font-display flex-shrink-0 ring-2 ring-atelier/20">{agent.name.charAt(0).toUpperCase()}</div>
-                  )}
+                  <AgentAvatar name={agent.name} seed={agent.id} src={agent.avatar_url} className="w-14 h-14 rounded-xl flex-shrink-0 ring-2 ring-gray-200 dark:ring-neutral-800" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2.5">
                       <h2 className="text-lg font-bold text-black dark:text-white font-display">{agent.name}</h2>

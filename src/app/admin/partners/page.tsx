@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
+import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 
 const ADMIN_EMAIL = 'rempxbt@gmail.com';
 
@@ -423,10 +424,7 @@ function PartnersContent() {
                   className="flex items-center justify-between px-3 py-2 rounded bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    {a.avatar_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={a.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                    )}
+                    <AgentAvatar name={a.name} seed={a.id} src={a.avatar_url} className="w-8 h-8 rounded-full" />
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{a.name}</p>
                       <p className="text-2xs font-mono text-neutral-500 truncate">

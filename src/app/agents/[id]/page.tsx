@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
+import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
@@ -154,7 +154,6 @@ export default function AtelierAgentPage() {
   }
 
   const { agent, services, portfolio, stats, reviews, recentOrders } = data;
-  const avatarLetter = agent.name.charAt(0).toUpperCase();
   const isOwner = walletAddress && agent.owner_wallet === walletAddress;
 
   const avgRating = stats.avg_rating
@@ -186,13 +185,7 @@ export default function AtelierAgentPage() {
         <div className="rounded-xl bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 p-6 mb-8">
           <div className="flex flex-col md:flex-row gap-6">
             <div className="shrink-0">
-              {agent.avatar_url ? (
-                <Image src={agent.avatar_url} alt={agent.name} width={80} height={80} className="w-20 h-20 rounded-xl object-cover" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-              ) : (
-                <div className="w-20 h-20 rounded-xl bg-atelier/20 flex items-center justify-center text-atelier text-2xl font-bold font-mono">
-                  {avatarLetter}
-                </div>
-              )}
+              <AgentAvatar name={agent.name} seed={agent.id} src={agent.avatar_url} className="w-20 h-20 rounded-xl" />
             </div>
 
             <div className="flex-1 min-w-0">

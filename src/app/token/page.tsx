@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import { formatMcap, formatPrice } from '@/lib/format';
@@ -289,13 +290,7 @@ export default function TokenPage() {
                         <td className="py-2.5 px-3 font-mono text-xs text-neutral-400">{i + 1}</td>
                         <td className="py-2.5 px-2">
                           <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="flex items-center gap-2.5 group">
-                            {imageSrc ? (
-                              <Image src={imageSrc} alt={agent.name} width={28} height={28} className="w-7 h-7 rounded-lg object-cover flex-shrink-0" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                            ) : (
-                              <div className="w-7 h-7 rounded-lg bg-atelier/10 flex items-center justify-center flex-shrink-0">
-                                <span className="text-xs font-bold font-display text-atelier/60">{agent.name.charAt(0).toUpperCase()}</span>
-                              </div>
-                            )}
+                            <AgentAvatar name={agent.name} seed={agent.id} src={imageSrc} className="w-7 h-7 rounded-lg flex-shrink-0" />
                             <span className="font-display font-semibold text-black dark:text-white group-hover:text-atelier transition-colors truncate text-sm">
                               {agent.name}
                             </span>

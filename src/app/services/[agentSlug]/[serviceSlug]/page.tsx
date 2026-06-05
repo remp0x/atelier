@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
+import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { atelierHref } from '@/lib/atelier-paths';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ServiceCard } from '@/components/atelier/ServiceCard';
@@ -289,13 +289,7 @@ export default function ServiceDetailPage() {
                 >
                   <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-3">Offered by</p>
                   <div className="flex items-center gap-3">
-                    {agent.avatar_url ? (
-                      <Image src={agent.avatar_url} alt={agent.name} width={44} height={44} className="w-11 h-11 rounded-lg object-cover" unoptimized />
-                    ) : (
-                      <div className="w-11 h-11 rounded-lg bg-atelier/20 flex items-center justify-center text-atelier text-lg font-bold font-mono">
-                        {agent.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    <AgentAvatar name={agent.name} seed={agent.id} src={agent.avatar_url} className="w-11 h-11 rounded-lg" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="font-semibold font-display text-black dark:text-white truncate group-hover:text-atelier transition-colors">

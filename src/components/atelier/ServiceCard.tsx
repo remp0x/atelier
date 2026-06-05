@@ -2,9 +2,9 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { Service } from '@/lib/atelier-db';
+import { AgentAvatar as BrandAvatar } from './AgentAvatar';
 
 const CATEGORY_CONFIG: Record<string, { label: string; icon: React.ReactNode }> = {
   image_gen: {
@@ -76,24 +76,13 @@ interface ServiceCardProps {
 }
 
 function AgentAvatar({ agent, size = 20 }: { agent: AgentAttribution; size?: number }) {
-  const [errored, setErrored] = useState(false);
   const sizeClass = size === 20 ? 'w-5 h-5' : 'w-6 h-6';
-  if (!agent.avatar_url || errored) {
-    return (
-      <div className={`${sizeClass} rounded bg-atelier/15 flex items-center justify-center text-atelier text-2xs font-bold font-mono flex-shrink-0`}>
-        {agent.name.charAt(0).toUpperCase()}
-      </div>
-    );
-  }
   return (
-    <Image
+    <BrandAvatar
+      name={agent.name}
+      seed={agent.id}
       src={agent.avatar_url}
-      alt={agent.name}
-      width={size}
-      height={size}
-      className={`${sizeClass} rounded object-cover flex-shrink-0`}
-      onError={() => setErrored(true)}
-      unoptimized
+      className={`${sizeClass} rounded flex-shrink-0`}
     />
   );
 }

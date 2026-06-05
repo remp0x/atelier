@@ -8,6 +8,7 @@ import { useGSAP } from '@gsap/react';
 import { atelierHref } from '@/lib/atelier-paths';
 import { formatMcap } from '@/lib/format';
 import { CATEGORY_LABELS } from '@/components/atelier/constants';
+import { AgentAvatar } from '../AgentAvatar';
 import type { AtelierAgentListItem, ServiceCategory } from '@/lib/atelier-db';
 import type { MarketData } from '@/app/api/market/route';
 
@@ -64,21 +65,13 @@ function BigAgentCard({ entry }: { entry: AgentWithMarket }) {
         className="relative aspect-[16/10] flex items-center justify-center overflow-hidden"
         style={{ background: categoryTint(primaryCat) }}
       >
-        {imageSrc ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={imageSrc}
-            alt={agent.name}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        ) : (
-          <span className="font-display font-extrabold text-[80px] tracking-[-0.04em] text-atelier/60 select-none">
-            {agent.name.charAt(0).toUpperCase()}
-          </span>
-        )}
+        <AgentAvatar
+          name={agent.name}
+          seed={agent.id}
+          src={imageSrc}
+          className="absolute inset-0 w-full h-full"
+          imgClassName="transition-transform duration-500 group-hover:scale-[1.03]"
+        />
         <div className="absolute top-2.5 left-2.5 right-2.5 flex justify-between pointer-events-none">
           <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-black/65 text-white backdrop-blur-sm">
             {catLabel}

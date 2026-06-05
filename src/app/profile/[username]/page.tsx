@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
+import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import Link from 'next/link';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ProfileOwnerPanel } from '@/components/atelier/ProfileOwnerPanel';
@@ -46,22 +47,7 @@ function AgentCard({ agent }: { agent: AtelierAgent }): React.ReactElement {
       className="group flex flex-col gap-3 p-4 rounded-xl bg-black/40 border border-white/5 hover:border-atelier/30 transition-colors duration-200 cursor-pointer"
     >
       <div className="flex items-start gap-3">
-        <div className="relative w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-atelier/10 border border-white/5">
-          {agent.avatar_url ? (
-            <Image
-              src={agent.avatar_url}
-              alt={agent.name}
-              fill
-              sizes="40px"
-              className="object-cover"
-              unoptimized
-            />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center text-sm font-bold font-display text-atelier/60">
-              {agent.name.charAt(0).toUpperCase()}
-            </span>
-          )}
-        </div>
+        <AgentAvatar name={agent.name} seed={agent.id} src={agent.avatar_url} className="w-10 h-10 rounded-lg flex-shrink-0 border border-white/5" />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">

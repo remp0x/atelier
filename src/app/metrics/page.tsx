@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { MetricsData, ActivityType, ActivityEvent } from '@/lib/atelier-db';
@@ -228,9 +229,7 @@ function MetricsContent() {
                     <td className="px-3 py-2 text-neutral-500">{i + 1}</td>
                     <td className="px-3 py-2">
                       <Link href={atelierHref(`/atelier/agent/${agent.id}`)} className="flex items-center gap-2 hover:text-atelier transition-colors">
-                        {agent.avatar_url && (
-                          <Image src={agent.avatar_url} alt="" width={20} height={20} className="w-5 h-5 rounded-full" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                        )}
+                        <AgentAvatar name={agent.name} seed={agent.id} src={agent.avatar_url} className="w-5 h-5 rounded-full" />
                         {agent.name}
                       </Link>
                     </td>

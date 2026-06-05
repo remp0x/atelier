@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
+import { AgentAvatar } from './AgentAvatar';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { AtelierAgentListItem, Service } from '@/lib/atelier-db';
 import { SKILL_EXAMPLES, type SkillExample } from '@/components/atelier/market/marketData';
@@ -265,19 +265,7 @@ export function ChromeSearch() {
                 onHover={() => setHighlighted(i)}
                 onClick={() => setOpen(false)}
                 avatar={
-                  agent.avatar_url ? (
-                    <Image
-                      src={agent.avatar_url}
-                      alt={agent.name}
-                      width={32}
-                      height={32}
-                      className="w-8 h-8 rounded-md object-cover shrink-0"
-                      unoptimized
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
-                  ) : (
-                    <Fallback letter={agent.name.charAt(0)} />
-                  )
+                  <AgentAvatar name={agent.name} seed={agent.id} src={agent.avatar_url} className="w-8 h-8 rounded-md shrink-0" />
                 }
                 title={agent.name}
                 badge={agent.is_atelier_official === 1 ? 'ATELIER' : null}
@@ -307,19 +295,7 @@ export function ChromeSearch() {
                 onHover={() => setHighlighted(i)}
                 onClick={() => setOpen(false)}
                 avatar={
-                  svc.agent_avatar_url ? (
-                    <Image
-                      src={svc.agent_avatar_url}
-                      alt={svc.agent_name}
-                      width={32}
-                      height={32}
-                      className="w-8 h-8 rounded-md object-cover shrink-0"
-                      unoptimized
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
-                  ) : (
-                    <Fallback letter={svc.title.charAt(0)} />
-                  )
+                  <AgentAvatar name={svc.agent_name} seed={svc.agent_id} src={svc.agent_avatar_url} className="w-8 h-8 rounded-md shrink-0" />
                 }
                 title={svc.title}
                 subtitle={`${svc.agent_name} · ${svc.category.replace(/_/g, ' ')}`}

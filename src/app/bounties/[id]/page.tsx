@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import { useUsdcPayment } from '@/hooks/use-usdc-payment';
@@ -60,6 +61,7 @@ export default function BountyDetailPage() {
     walletAddress,
     authenticated,
     login,
+    user,
     solanaAddress,
     evmAddress,
     activeChain,
@@ -79,6 +81,8 @@ export default function BountyDetailPage() {
   const [payChain, setPayChain] = useState<PayChain>(activeChain);
   const isPoster = bounty?.viewer_is_poster ?? false;
   const isOpen = bounty?.status === 'open' && new Date(bounty.expires_at) > new Date();
+  const adminEmail = (user?.google?.email ?? user?.email?.address ?? '').toLowerCase();
+  const isAdmin = adminEmail === 'rempxbt@gmail.com';
 
   const fetchBounty = useCallback(async () => {
     try {
@@ -206,6 +210,34 @@ export default function BountyDetailPage() {
       setActionLoading(false);
     }
   }, [walletAddress, bounty, payChain, evmAddress, id, payUsdc, router]);
+
+  const handleAcceptTreasury = useCallback(async (claimId: string) => {
+    if (!bounty) return;
+
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const token = await getPrivyAccessToken();
+      if (!token) throw new Error('Sign in required');
+      const res = await fetch(`/api/bounties/${id}/accept`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ claim_id: claimId, fund_from_treasury: true }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+
+      router.push(atelierHref(`/atelier/orders/${json.data.order_id}`));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to accept claim');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [bounty, id, router]);
 
   const handleCancel = useCallback(async () => {
     if (!authenticated) { login(); return; }
@@ -364,7 +396,7 @@ export default function BountyDetailPage() {
           <div className="mb-6">
             <h2 className="text-lg font-bold text-black dark:text-white font-display mb-4">Claims</h2>
 
-            {claims.filter(c => c.status === 'pending').length > 0 && (
+            {!isAdmin && claims.filter(c => c.status === 'pending').length > 0 && (
               <div className="mb-4 p-4 border border-gray-200 dark:border-neutral-800 rounded-xl bg-white dark:bg-black/50">
                 <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Payment network</p>
                 <ChainSelector
@@ -382,15 +414,7 @@ export default function BountyDetailPage() {
                 {claims.filter(c => c.status === 'pending').map(claim => (
                   <div key={claim.id} className="border border-gray-200 dark:border-neutral-800 rounded-xl p-4 bg-white dark:bg-black/50">
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="relative w-10 h-10 rounded-full bg-gray-100 dark:bg-neutral-900 overflow-hidden flex-shrink-0">
-                        {claim.agent_avatar_url ? (
-                          <Image src={claim.agent_avatar_url} alt={claim.agent_name} fill sizes="40px" className="object-cover" unoptimized onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm font-mono">
-                            {claim.agent_name.charAt(0)}
-                          </div>
-                        )}
-                      </div>
+                      <AgentAvatar name={claim.agent_name} seed={claim.agent_id} src={claim.agent_avatar_url} className="w-10 h-10 rounded-full flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <Link href={atelierHref(`/atelier/agents/${claim.agent_slug || claim.agent_id}`)} className="text-sm font-semibold text-black dark:text-white hover:text-atelier">
                           {claim.agent_name}
@@ -411,13 +435,23 @@ export default function BountyDetailPage() {
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleAccept(claim.id)}
-                        disabled={actionLoading || (payChain === 'base' && !evmAddress)}
-                        className="px-4 py-2 rounded-lg text-xs font-mono font-semibold bg-atelier text-white hover:bg-atelier/90 disabled:opacity-50 transition-colors"
-                      >
-                        {actionLoading ? 'Processing...' : `Accept & Pay $${(parseFloat(bounty.budget_usd) * 1.10).toFixed(2)}`}
-                      </button>
+                      {isAdmin ? (
+                        <button
+                          onClick={() => handleAcceptTreasury(claim.id)}
+                          disabled={actionLoading}
+                          className="px-4 py-2 rounded-lg text-xs font-mono font-semibold bg-atelier text-white hover:bg-atelier/90 disabled:opacity-50 transition-colors"
+                        >
+                          {actionLoading ? 'Processing...' : `Accept · pay $${parseFloat(bounty.budget_usd).toFixed(0)} from treasury`}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleAccept(claim.id)}
+                          disabled={actionLoading || (payChain === 'base' && !evmAddress)}
+                          className="px-4 py-2 rounded-lg text-xs font-mono font-semibold bg-atelier text-white hover:bg-atelier/90 disabled:opacity-50 transition-colors"
+                        >
+                          {actionLoading ? 'Processing...' : `Accept & Pay $${(parseFloat(bounty.budget_usd) * 1.10).toFixed(2)}`}
+                        </button>
+                      )}
                     </div>
                     {claim.message && (
                       <p className="text-xs text-gray-600 dark:text-neutral-400 pl-13">{claim.message}</p>

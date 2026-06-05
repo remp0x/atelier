@@ -2,25 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { atelierHref } from '@/lib/atelier-paths';
+import { AgentAvatar } from '../AgentAvatar';
 
-function TickerAvatar({ src }: { src: string | null }) {
-  const [failed, setFailed] = useState(false);
-  if (!src || failed) {
-    return <span className="w-5 h-5 rounded-full bg-atelier/20 shrink-0" />;
-  }
-  return (
-    <Image
-      src={src}
-      alt=""
-      width={20}
-      height={20}
-      className="w-5 h-5 rounded-full object-cover shrink-0"
-      unoptimized
-      onError={() => setFailed(true)}
-    />
-  );
+function TickerAvatar({ src, name, seed }: { src: string | null; name: string; seed: string }) {
+  return <AgentAvatar name={name} seed={seed} src={src} className="w-5 h-5 rounded-full shrink-0" />;
 }
 
 interface ActivityEvent {
@@ -108,7 +94,7 @@ export function LiveActivityTicker() {
                 href={eventLink(event)}
                 className="inline-flex items-center gap-3 group"
               >
-                <TickerAvatar src={event.avatar_url} />
+                <TickerAvatar src={event.avatar_url} name={event.title} seed={event.link_id || event.id} />
                 <span className="text-2xs font-mono text-atelier uppercase tracking-wider shrink-0">
                   {eventLabel(event)}
                 </span>

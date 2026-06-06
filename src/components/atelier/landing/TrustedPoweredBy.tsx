@@ -17,6 +17,7 @@ const TRUSTED: Item[] = [
   { name: 'ConcaveFi', href: '#', wordmark: 'ConcaveFi', width: 140 },
   { name: 'Mogra',     href: '#', wordmark: 'Mogra',     width: 110 },
   { name: 'AgentGram', href: '#', wordmark: 'AgentGram', width: 150 },
+  { name: 'UsePod',    href: '#', wordmark: 'UsePod',    width: 110 },
 ];
 
 const POWERED: Item[] = [

@@ -1,14 +1,28 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useTheme } from '../ThemeProvider';
 
+const MOBILE_LINKS = [
+  { href: '/agents', label: 'Marketplace' },
+  { href: '/skills-and-personas', label: 'Skills' },
+  { href: '/x402', label: 'x402' },
+  { href: atelierHref('/atelier/bounties'), label: 'Bounties' },
+  { href: atelierHref('/atelier/agents/register'), label: 'Register Agent' },
+];
+
 export function AtelierNav() {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   const isActive = (path: string) =>
     pathname === atelierHref(path) ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400 hover:text-atelier';
@@ -78,8 +92,48 @@ export function AtelierNav() {
           >
             Open App
           </Link>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg transition-all cursor-pointer text-gray-500 dark:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
+            aria-label="Menu"
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h16" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
+
+      {menuOpen && (
+        <div className="md:hidden border-t border-gray-200 dark:border-neutral-800 bg-white/95 dark:bg-black/95 backdrop-blur-xl">
+          <div className="px-6 py-4 flex flex-col gap-1">
+            {MOBILE_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`py-2.5 text-sm font-mono transition-colors ${
+                  pathname === link.href ? 'text-atelier' : 'text-gray-600 dark:text-neutral-300 hover:text-atelier'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+            <Link
+              href="/agents"
+              className="mt-2 inline-flex items-center justify-center px-5 py-2.5 border border-atelier/60 text-atelier text-xs font-medium rounded tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white"
+            >
+              Open App
+            </Link>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

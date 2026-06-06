@@ -10,10 +10,13 @@ import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable, OrderMessage } from '@/lib/atelier-db';
 
+type ViewerRole = 'buyer' | 'seller' | 'admin';
+
 interface OrderData {
   order: ServiceOrder;
   review: ServiceReview | null;
   deliverables: OrderDeliverable[];
+  viewer_role?: ViewerRole;
 }
 
 type StepState = 'done' | 'active' | 'pending';
@@ -847,8 +850,17 @@ function DeliveryCard({ delivery, index }: { delivery: DeliveryInfo; index: numb
   );
 }
 
-function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: string; wallet: string; deliveries: DeliveryInfo[] }) {
-  const { getAuth, clearAuth } = useAtelierAuth();
+interface ChatAuth {
+  token?: string;
+  sig?: { wallet: string; wallet_sig: string; wallet_sig_ts: string };
+}
+
+function OrderChat({ orderId, selfIds, deliveries, buildAuth }: {
+  orderId: string;
+  selfIds: string[];
+  deliveries: DeliveryInfo[];
+  buildAuth: () => Promise<ChatAuth>;
+}) {
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -857,23 +869,20 @@ function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: st
 
   const fetchMessages = useCallback(async () => {
     try {
-      const auth = await getAuth({ silent: true });
-      const qs = new URLSearchParams({
-        wallet: auth.wallet,
-        wallet_sig: auth.wallet_sig,
-        wallet_sig_ts: String(auth.wallet_sig_ts),
+      const auth = await buildAuth();
+      const qs = auth.sig ? `?${new URLSearchParams(auth.sig)}` : '';
+      const res = await fetch(`/api/orders/${orderId}/messages${qs}`, {
+        credentials: 'include',
+        headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
       });
-      const res = await fetch(`/api/orders/${orderId}/messages?${qs}`);
       const json = await res.json();
       if (json.success) {
         setMessages(json.data);
-      } else if (json.error?.includes('expired')) {
-        clearAuth();
       }
     } catch {
       // silent — includes expired auth sessions
     }
-  }, [orderId, getAuth, clearAuth]);
+  }, [orderId, buildAuth]);
 
   useEffect(() => {
     fetchMessages();
@@ -889,11 +898,19 @@ function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: st
     if (!input.trim() || sending) return;
     setSending(true);
     try {
-      const auth = await getAuth();
+      const auth = await buildAuth();
       const res = await fetch(`/api/orders/${orderId}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...auth, content: input.trim() }),
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(auth.token ? { Authorization: `Bearer ${auth.token}` } : {}),
+        },
+        body: JSON.stringify({
+          ...(auth.sig ?? {}),
+          ...(auth.token ? { privy_access_token: auth.token } : {}),
+          content: input.trim(),
+        }),
       });
       const json = await res.json();
       if (json.success) {
@@ -905,7 +922,7 @@ function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: st
     } finally {
       setSending(false);
     }
-  }, [orderId, getAuth, input, sending]);
+  }, [orderId, buildAuth, input, sending]);
 
   return (
     <div>
@@ -918,7 +935,7 @@ function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: st
           <p className="text-xs text-neutral-400 dark:text-neutral-600 font-mono text-center py-4">No messages yet</p>
         )}
         {messages.map((msg, idx) => {
-          const isMe = msg.sender_id === walletAddress;
+          const isMe = selfIds.includes(msg.sender_id);
           const msgDate = new Date(msg.created_at);
           const prevDate = idx > 0 ? new Date(messages[idx - 1].created_at) : null;
           const showDateSep = !prevDate || msgDate.toDateString() !== prevDate.toDateString();
@@ -1021,6 +1038,19 @@ export default function AtelierOrderPage() {
     }
   }, [params.id]);
 
+  const buildChatAuth = useCallback(async (): Promise<ChatAuth> => {
+    const out: ChatAuth = {};
+    try {
+      const token = await getPrivyAccessToken();
+      if (token) out.token = token;
+    } catch { /* no Privy token */ }
+    try {
+      const a = await getAuth({ silent: true });
+      out.sig = { wallet: a.wallet, wallet_sig: a.wallet_sig, wallet_sig_ts: String(a.wallet_sig_ts) };
+    } catch { /* no signable wallet */ }
+    return out;
+  }, [getAuth]);
+
   useEffect(() => {
     if (!ready) return;
     load();
@@ -1050,6 +1080,11 @@ export default function AtelierOrderPage() {
   }
 
   const { order, review } = data;
+
+  if (data.viewer_role === 'seller') {
+    return <SellerOrderView data={data} onRefresh={load} buildChatAuth={buildChatAuth} />;
+  }
+
   const isWorkspace = order.quota_total > 0;
   const isTerminal = order.status === 'cancelled' || order.status === 'disputed';
   const showWorkspace = isWorkspace && ['in_progress', 'delivered', 'completed'].includes(order.status);
@@ -1577,7 +1612,8 @@ export default function AtelierOrderPage() {
             {walletAddress && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
               <OrderChat
                 orderId={order.id}
-                wallet={walletAddress}
+                selfIds={[walletAddress]}
+                buildAuth={buildChatAuth}
                 deliveries={data.deliverables.length > 0
                   ? data.deliverables
                       .filter((d) => d.status === 'completed' && d.deliverable_url)
@@ -1656,6 +1692,504 @@ export default function AtelierOrderPage() {
             }
           }}
         />
+      </div>
+    </AtelierAppLayout>
+  );
+}
+
+const DELIVER_MEDIA_TYPES = ['image', 'video', 'link', 'document', 'code', 'text'] as const;
+type DeliverMediaType = typeof DELIVER_MEDIA_TYPES[number];
+
+interface DeliverItem {
+  deliverable_url: string;
+  deliverable_media_type: DeliverMediaType;
+}
+
+function SellerQuoteForm({ orderId, buildAuth, onDone }: {
+  orderId: string;
+  buildAuth: () => Promise<Record<string, unknown>>;
+  onDone: () => void;
+}) {
+  const [price, setPrice] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = useCallback(async () => {
+    const value = parseFloat(price);
+    if (isNaN(value) || value <= 0) { setError('Enter a valid price'); return; }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const auth = await buildAuth();
+      const res = await fetch(`/api/orders/${orderId}/quote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...auth, price_usd: value.toFixed(2) }),
+      });
+      const json = await res.json();
+      if (!json.success) { setError(json.error || 'Failed to send quote'); return; }
+      onDone();
+    } catch {
+      setError('Network error');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [price, buildAuth, orderId, onDone]);
+
+  return (
+    <div className="p-5 rounded-lg border border-atelier/20 bg-atelier/5">
+      <h3 className="text-sm font-bold font-display text-black dark:text-white mb-1">Send a quote</h3>
+      <p className="text-xs text-neutral-500 font-mono mb-4">Price the buyer&apos;s brief. They pay this amount (plus platform fee) to start.</p>
+      <div className="flex items-center gap-2 mb-3">
+        <div className="relative flex-1">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-sm">$</span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="0.00"
+            className="w-full pl-7 pr-3 py-2.5 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono focus:outline-none focus:border-atelier"
+          />
+        </div>
+        <span className="text-xs font-mono text-neutral-500">USDC</span>
+      </div>
+      {error && <p className="text-xs text-red-400 font-mono mb-2">{error}</p>}
+      <button
+        onClick={submit}
+        disabled={!price || submitting}
+        className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
+      >
+        {submitting ? (
+          <>
+            <div className="w-4 h-4 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
+            Sending...
+          </>
+        ) : 'Send Quote'}
+      </button>
+    </div>
+  );
+}
+
+function SellerDeliverForm({ orderId, buildAuth, buildUploadAuth, revisionRequested, onDone }: {
+  orderId: string;
+  buildAuth: () => Promise<Record<string, unknown>>;
+  buildUploadAuth: () => Promise<{ headers: Record<string, string>; query: string }>;
+  revisionRequested: boolean;
+  onDone: () => void;
+}) {
+  const [items, setItems] = useState<DeliverItem[]>([]);
+  const [url, setUrl] = useState('');
+  const [mediaType, setMediaType] = useState<DeliverMediaType>('image');
+  const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const addUrl = useCallback(() => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    try { new URL(trimmed); } catch { setError('Enter a valid URL'); return; }
+    setItems((prev) => [...prev, { deliverable_url: trimmed, deliverable_media_type: mediaType }]);
+    setUrl('');
+    setError(null);
+  }, [url, mediaType]);
+
+  const handleUpload = useCallback(async (file: File) => {
+    setUploading(true);
+    setError(null);
+    try {
+      const auth = await buildUploadAuth();
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`/api/orders/${orderId}/upload${auth.query}`, {
+        method: 'POST',
+        headers: auth.headers,
+        credentials: 'include',
+        body: form,
+      });
+      const json = await res.json();
+      if (!json.success) { setError(json.error || 'Upload failed'); return; }
+      setItems((prev) => [...prev, {
+        deliverable_url: json.data.url,
+        deliverable_media_type: json.data.media_type as DeliverMediaType,
+      }]);
+    } catch {
+      setError('Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  }, [buildUploadAuth, orderId]);
+
+  const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
+
+  const submit = useCallback(async () => {
+    if (items.length === 0) { setError('Add at least one deliverable'); return; }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const auth = await buildAuth();
+      const res = await fetch(`/api/orders/${orderId}/deliver`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...auth, deliverables: items }),
+      });
+      const json = await res.json();
+      if (!json.success) { setError(json.error || 'Failed to deliver'); return; }
+      onDone();
+    } catch {
+      setError('Network error');
+    } finally {
+      setSubmitting(false);
+    }
+  }, [items, buildAuth, orderId, onDone]);
+
+  return (
+    <div className="p-5 rounded-lg border border-atelier/20 bg-atelier/5">
+      <h3 className="text-sm font-bold font-display text-black dark:text-white mb-1">
+        {revisionRequested ? 'Submit revised work' : 'Deliver work'}
+      </h3>
+      <p className="text-xs text-neutral-500 font-mono mb-4">
+        Upload a file or paste a link. You can add more than one deliverable.
+      </p>
+
+      {items.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {items.map((it, i) => (
+            <div key={i} className="flex items-center gap-2 p-2 rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-black">
+              <span className="text-2xs font-mono px-1.5 py-0.5 rounded bg-atelier/10 text-atelier uppercase shrink-0">{it.deliverable_media_type}</span>
+              <span className="text-xs font-mono text-neutral-600 dark:text-neutral-400 truncate flex-1">{it.deliverable_url}</span>
+              <button onClick={() => removeItem(i)} className="text-neutral-400 hover:text-red-400 shrink-0" title="Remove">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-2 mb-3">
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }}
+          placeholder="Paste a delivery URL..."
+          className="flex-1 px-3 py-2 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+        />
+        <select
+          value={mediaType}
+          onChange={(e) => setMediaType(e.target.value as DeliverMediaType)}
+          className="px-3 py-2 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono focus:outline-none focus:border-atelier"
+        >
+          {DELIVER_MEDIA_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <button
+          onClick={addUrl}
+          disabled={!url.trim()}
+          className="px-4 py-2 rounded border border-neutral-300 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 text-sm font-mono hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40 transition-colors"
+        >
+          Add
+        </button>
+      </div>
+
+      <label className="flex items-center justify-center gap-2 w-full py-2 mb-4 rounded border border-dashed border-neutral-300 dark:border-neutral-700 text-neutral-500 text-xs font-mono cursor-pointer hover:border-atelier hover:text-atelier transition-colors">
+        {uploading ? (
+          <>
+            <div className="w-3.5 h-3.5 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
+            Uploading...
+          </>
+        ) : (
+          <>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 7.5L12 3m0 0L7.5 7.5M12 3v13.5" />
+            </svg>
+            Upload a file (max 50MB)
+          </>
+        )}
+        <input
+          type="file"
+          className="hidden"
+          disabled={uploading}
+          onChange={(e) => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ''; }}
+        />
+      </label>
+
+      {error && <p className="text-xs text-red-400 font-mono mb-2">{error}</p>}
+      <button
+        onClick={submit}
+        disabled={items.length === 0 || submitting}
+        className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
+      >
+        {submitting ? (
+          <>
+            <div className="w-4 h-4 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />
+            Delivering...
+          </>
+        ) : revisionRequested ? 'Submit Revision' : 'Deliver to Buyer'}
+      </button>
+    </div>
+  );
+}
+
+function SellerOrderView({ data, onRefresh, buildChatAuth }: {
+  data: OrderData;
+  onRefresh: () => void;
+  buildChatAuth: () => Promise<ChatAuth>;
+}) {
+  const { order } = data;
+  const { getAuth } = useAtelierAuth();
+  const [retrying, setRetrying] = useState(false);
+  const [retryMsg, setRetryMsg] = useState<string | null>(null);
+
+  const buildProviderBody = useCallback(async (): Promise<Record<string, unknown>> => {
+    const token = await getPrivyAccessToken();
+    if (token) return { privy_access_token: token };
+    return { ...(await getAuth()) };
+  }, [getAuth]);
+
+  const buildUploadAuth = useCallback(async (): Promise<{ headers: Record<string, string>; query: string }> => {
+    const token = await getPrivyAccessToken();
+    if (token) return { headers: { Authorization: `Bearer ${token}` }, query: '' };
+    const a = await getAuth();
+    const q = new URLSearchParams({ wallet: a.wallet, wallet_sig: a.wallet_sig, wallet_sig_ts: String(a.wallet_sig_ts) });
+    return { headers: {}, query: `?${q}` };
+  }, [getAuth]);
+
+  const quoted = parseFloat(order.quoted_price_usd || '0');
+  const fee = parseFloat(order.platform_fee_usd || '0');
+  const net = Math.max(0, Math.round((quoted - fee) * 100) / 100);
+
+  const canDeliver = ['paid', 'in_progress', 'revision_requested', 'disputed'].includes(order.status);
+  const showChat = !['pending_quote', 'quoted', 'accepted'].includes(order.status);
+
+  const requestPayoutRetry = useCallback(async () => {
+    setRetrying(true);
+    setRetryMsg(null);
+    try {
+      const token = await getPrivyAccessToken();
+      const res = await fetch(`/api/orders/${order.id}/request-payout-retry`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const json = await res.json();
+      setRetryMsg(json.success ? 'Payout retry requested. The team will process it shortly.' : `Error: ${json.error}`);
+    } catch {
+      setRetryMsg('Error: request failed');
+    } finally {
+      setRetrying(false);
+    }
+  }, [order.id]);
+
+  const references: string[] = (() => {
+    try { return order.reference_images ? JSON.parse(order.reference_images) : []; } catch { return []; }
+  })();
+  const requirements: [string, string][] = (() => {
+    try {
+      const a: Record<string, string> = order.requirement_answers ? JSON.parse(order.requirement_answers) : {};
+      return Object.entries(a).filter(([, v]) => v?.trim());
+    } catch { return []; }
+  })();
+
+  return (
+    <AtelierAppLayout>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-20">
+        <Link
+          href={atelierHref('/atelier/orders')}
+          className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-atelier font-mono mb-6 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          Orders
+        </Link>
+
+        <div className="flex flex-col lg:grid lg:grid-cols-[1fr_360px] lg:gap-8">
+          {/* Sidebar */}
+          <div className="lg:order-last mb-6 lg:mb-0">
+            <div className="lg:sticky lg:top-20 space-y-3">
+              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-2xs font-mono px-2 py-0.5 rounded-full bg-atelier/10 text-atelier uppercase tracking-wider">Selling</span>
+                  <span className={`shrink-0 inline-flex px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium ${STATUS_COLORS[order.status] || 'bg-neutral-800 text-neutral-300'}`}>
+                    {STATUS_LABELS[order.status] || order.status}
+                  </span>
+                </div>
+                <h1 className="text-base font-bold font-display truncate">{order.service_title}</h1>
+                <p className="text-2xs font-mono text-neutral-500 mt-0.5 mb-3">{order.id}</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
+                    <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
+                  </div>
+                  {order.client_name && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-500 font-mono text-2xs">Buyer</span>
+                      <span className="text-black dark:text-white text-xs font-mono">{order.client_name}</span>
+                    </div>
+                  )}
+                  {quoted > 0 && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500 font-mono text-2xs">Quote</span>
+                        <span className="text-black dark:text-white text-xs font-mono">${quoted.toFixed(2)} USDC</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-neutral-500 font-mono text-2xs">Platform fee</span>
+                        <span className="text-neutral-500 text-xs font-mono">-${fee.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-1 border-t border-neutral-200 dark:border-neutral-800">
+                        <span className="text-neutral-500 font-mono text-2xs">You earn</span>
+                        <span className="text-emerald-500 text-xs font-mono font-bold">${net.toFixed(2)} USDC</span>
+                      </div>
+                    </>
+                  )}
+                  {order.payout_tx_hash && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-neutral-500 font-mono text-2xs">Payout</span>
+                      <span className="text-atelier-bright text-2xs font-mono">{truncateId(order.payout_tx_hash)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {order.brief && (
+                <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                  <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Brief</p>
+                  <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed break-all">{order.brief}</p>
+                  {references.length > 0 && (
+                    <div className="flex gap-2 mt-3 flex-wrap">
+                      {references.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          <img src={url} alt={`Reference ${i + 1}`} className="w-12 h-12 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors" onError={(e) => { const el = e.currentTarget.closest('a'); if (el instanceof HTMLElement) el.style.display = 'none'; }} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {requirements.length > 0 && (
+                <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                  <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Requirements</p>
+                  <div className="space-y-2">
+                    {requirements.map(([label, value]) => (
+                      <div key={label}>
+                        <p className="text-2xs font-mono text-neutral-500">{label}</p>
+                        <p className="text-sm text-gray-700 dark:text-neutral-300">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <a
+                href="https://t.me/atelierai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center text-2xs font-mono text-neutral-500 hover:text-atelier transition-colors py-2"
+              >
+                Need help?
+              </a>
+            </div>
+          </div>
+
+          {/* Main */}
+          <div className="lg:order-first min-w-0 space-y-6">
+            {order.status === 'pending_quote' && (
+              <SellerQuoteForm orderId={order.id} buildAuth={buildProviderBody} onDone={onRefresh} />
+            )}
+
+            {(order.status === 'quoted' || order.status === 'accepted') && (
+              <div className="p-4 rounded-lg border border-atelier/20 bg-atelier/5">
+                <p className="text-sm font-mono text-atelier">
+                  Quote sent (${quoted.toFixed(2)}). Waiting for the buyer to accept and pay.
+                </p>
+              </div>
+            )}
+
+            {order.status === 'revision_requested' && (
+              <div className="p-4 rounded-lg border border-amber-400/20 bg-amber-400/5">
+                <p className="text-sm font-mono text-amber-400">
+                  The buyer requested a revision ({order.revision_count}/{order.max_revisions} used). See the chat below for details, then re-deliver.
+                </p>
+              </div>
+            )}
+
+            {order.status === 'disputed' && (
+              <div className="p-4 rounded-lg border border-red-400/20 bg-red-400/5">
+                <p className="text-sm font-mono text-red-400">
+                  The buyer opened a dispute. Review the chat and re-deliver, or contact support.
+                </p>
+              </div>
+            )}
+
+            {canDeliver && (
+              <SellerDeliverForm
+                orderId={order.id}
+                buildAuth={buildProviderBody}
+                buildUploadAuth={buildUploadAuth}
+                revisionRequested={order.status === 'revision_requested'}
+                onDone={onRefresh}
+              />
+            )}
+
+            {order.status === 'delivered' && (
+              <div className="p-4 rounded-lg border border-emerald-400/20 bg-emerald-400/5">
+                <p className="text-sm font-mono text-emerald-400">
+                  Delivered. Waiting for the buyer to approve and release payment.
+                </p>
+              </div>
+            )}
+
+            {order.status === 'completed' && (
+              <div className="p-5 rounded-lg border border-emerald-400/20 bg-emerald-400/5">
+                <p className="text-sm font-mono text-emerald-400 mb-1">Order complete.</p>
+                <p className="text-2xl font-display font-bold text-black dark:text-white">${net.toFixed(2)} <span className="text-sm font-mono text-neutral-500">USDC earned</span></p>
+                {order.payout_tx_hash ? (
+                  <p className="text-2xs font-mono text-neutral-500 mt-2">Payout sent: <span className="text-atelier-bright">{truncateId(order.payout_tx_hash)}</span></p>
+                ) : (
+                  <div className="mt-3">
+                    <p className="text-2xs font-mono text-amber-400/80 mb-2">Payout pending.</p>
+                    {retryMsg && <p className={`text-2xs font-mono mb-2 ${retryMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{retryMsg}</p>}
+                    <button
+                      onClick={requestPayoutRetry}
+                      disabled={retrying}
+                      className="py-2 px-4 rounded border border-amber-400/40 text-amber-400 text-xs font-mono hover:bg-amber-400/10 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      {retrying ? 'Requesting...' : 'Request Payout Retry'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {order.status === 'cancelled' && (
+              <div className="p-4 rounded-lg border border-red-400/20 bg-red-400/5">
+                <p className="text-sm font-mono text-red-400">This order was cancelled.</p>
+              </div>
+            )}
+
+            {data.deliverables.length > 0 && <DeliverablesGallery deliverables={data.deliverables} />}
+
+            {showChat && (
+              <OrderChat
+                orderId={order.id}
+                selfIds={[order.provider_agent_id]}
+                buildAuth={buildChatAuth}
+                deliveries={data.deliverables
+                  .filter((d) => d.status === 'completed' && d.deliverable_url)
+                  .map((d) => ({
+                    url: d.deliverable_url!,
+                    mediaType: d.deliverable_media_type,
+                    deliveredAt: d.created_at,
+                    revisionCount: 0,
+                  }))}
+              />
+            )}
+          </div>
+        </div>
       </div>
     </AtelierAppLayout>
   );

@@ -9,7 +9,8 @@ import {
   getAtelierAgent,
   getAtelierProfile,
 } from '@/lib/atelier-db';
-import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
+import { AuthError } from '@/lib/atelier-auth';
+import { authorizeOrderProvider } from '@/lib/order-auth';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 import { rateLimiters } from '@/lib/rateLimit';
@@ -21,11 +22,17 @@ interface AuthResult {
   id: string;
 }
 
-async function resolveAuth(request: NextRequest, body?: Record<string, unknown>): Promise<AuthResult> {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const agent = await resolveExternalAgentByApiKey(request);
+async function resolveAuth(
+  request: NextRequest,
+  order: { provider_agent_id: string },
+  body?: Record<string, unknown>,
+): Promise<AuthResult> {
+  try {
+    const agent = await authorizeOrderProvider(request, body ?? null, order);
     return { type: 'agent', id: agent.id };
+  } catch (e) {
+    if (!(e instanceof AuthError)) throw e;
+    // Not the provider; try buyer (wallet/session) auth below.
   }
 
   const sigFallback = body ?? readSigFieldsFromQuery(request);
@@ -44,12 +51,13 @@ export async function GET(
 ) {
   try {
     const { id: orderId } = await params;
-    const auth = await resolveAuth(request);
 
     const order = await getServiceOrderById(orderId);
     if (!order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
+
+    const auth = await resolveAuth(request, order);
 
     const isClient = auth.type === 'client' && auth.id === order.client_wallet;
     const isAgent = auth.type === 'agent' && auth.id === order.provider_agent_id;
@@ -80,12 +88,13 @@ export async function POST(
   try {
     const { id: orderId } = await params;
     const body = await request.json();
-    const auth = await resolveAuth(request, body);
 
     const order = await getServiceOrderById(orderId);
     if (!order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
+
+    const auth = await resolveAuth(request, order, body);
 
     const isClient = auth.type === 'client' && auth.id === order.client_wallet;
     const isAgent = auth.type === 'agent' && auth.id === order.provider_agent_id;

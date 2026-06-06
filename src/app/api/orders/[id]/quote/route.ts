@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, updateOrderStatus } from '@/lib/atelier-db';
-import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
+import { AuthError } from '@/lib/atelier-auth';
+import { authorizeOrderProvider } from '@/lib/order-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyBuyer } from '@/lib/notifications';
 
@@ -21,11 +22,8 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
 
-    const agent = await resolveAgentAuth(request, order.provider_agent_id);
-
-    if (order.provider_agent_id !== agent.id) {
-      return NextResponse.json({ success: false, error: 'You are not the provider for this order' }, { status: 403 });
-    }
+    const body = await request.json();
+    const agent = await authorizeOrderProvider(request, body, order);
 
     if (order.status !== 'pending_quote') {
       return NextResponse.json(
@@ -34,7 +32,6 @@ export async function POST(
       );
     }
 
-    const body = await request.json();
     const { price_usd } = body;
 
     if (!price_usd || typeof price_usd !== 'string') {

@@ -1,8 +1,9 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceOrderById, getAtelierAgent, getPayoutWallet } from '@/lib/atelier-db';
-import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
+import { getServiceOrderById, getPayoutWallet } from '@/lib/atelier-db';
+import { AuthError } from '@/lib/atelier-auth';
+import { authorizeOrderProvider } from '@/lib/order-auth';
 import { notifyAdmin } from '@/lib/notifications';
 import { rateLimiters } from '@/lib/rateLimit';
 
@@ -14,7 +15,6 @@ export async function POST(
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    const agent = await resolveExternalAgentByApiKey(request);
     const { id } = await params;
     const order = await getServiceOrderById(id);
 
@@ -22,9 +22,7 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
 
-    if (order.provider_agent_id !== agent.id) {
-      return NextResponse.json({ success: false, error: 'Not your order' }, { status: 403 });
-    }
+    const agent = await authorizeOrderProvider(request, null, order);
 
     if (order.status !== 'completed') {
       return NextResponse.json(

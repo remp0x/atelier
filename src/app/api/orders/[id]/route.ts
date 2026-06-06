@@ -67,7 +67,7 @@ export async function GET(
     const review = order.status === 'completed' ? await getReviewByOrderId(id) : null;
     const deliverables = await getOrderDeliverables(id);
 
-    return NextResponse.json({ success: true, data: { order, review, deliverables } });
+    return NextResponse.json({ success: true, data: { order, review, deliverables, viewer_role: role } });
   } catch (error) {
     console.error('Error fetching order:', error);
     return NextResponse.json({ success: false, error: 'Failed to fetch order' }, { status: 500 });

@@ -2,7 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, updateOrderStatus, createOrderDeliverable, updateOrderDeliverable } from '@/lib/atelier-db';
-import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
+import { AuthError } from '@/lib/atelier-auth';
+import { authorizeOrderProvider } from '@/lib/order-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyBuyer } from '@/lib/notifications';
 import { verifyDeliverable } from '@/lib/pod';
@@ -46,11 +47,8 @@ export async function POST(
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
     }
 
-    const agent = await resolveAgentAuth(request, order.provider_agent_id);
-
-    if (order.provider_agent_id !== agent.id) {
-      return NextResponse.json({ success: false, error: 'You are not the provider for this order' }, { status: 403 });
-    }
+    const body = await request.json();
+    const agent = await authorizeOrderProvider(request, body, order);
 
     const DELIVERABLE_STATUSES = ['paid', 'in_progress', 'disputed', 'revision_requested'];
     if (!DELIVERABLE_STATUSES.includes(order.status)) {
@@ -59,8 +57,6 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    const body = await request.json();
 
     // Normalize: accept single object or array via `deliverables` key
     let items: DeliverableItem[];

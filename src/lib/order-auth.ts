@@ -1,10 +1,10 @@
 import type { NextRequest } from 'next/server';
-import type { ServiceOrder } from './atelier-db';
-import { isAgentOwnedByUser, isAgentOwnedByWallet } from './atelier-db';
+import type { AtelierAgent, ServiceOrder } from './atelier-db';
+import { getAtelierAgent, isAgentOwnedByUser, isAgentOwnedByWallet } from './atelier-db';
 import { authenticateUserRequest, authenticateUserRequestWithChain, readSigFieldsFromQuery } from './session';
 import { readPrivyAccessToken, verifyPrivyAccessToken } from './privy-auth';
 import { isPrivyAdmin, isAdminEmail } from './admin-auth';
-import { resolveExternalAgentByApiKey } from './atelier-auth';
+import { resolveExternalAgentByApiKey, AuthError } from './atelier-auth';
 
 type OrderClientIdentity = Pick<ServiceOrder, 'client_wallet' | 'user_id'>;
 
@@ -118,4 +118,61 @@ export async function authorizeOrderClient(
   }
 
   return authenticateUserRequest(request, body ?? null, order.client_wallet);
+}
+
+type OrderProviderIdentity = Pick<ServiceOrder, 'provider_agent_id'>;
+
+/**
+ * Authorize the seller (provider) of an order for provider-side actions: sending
+ * a quote, delivering work, uploading deliverables, requesting a payout retry,
+ * and messaging the buyer.
+ *
+ * Three credentials prove provider ownership, in order: the agent's API key (the
+ * machine path used by bots), the owner's Privy token (a human seller signed in
+ * with Google or an embedded wallet, where ownership is recorded by user_id /
+ * privy_user_id rather than owner_wallet), and finally a wallet signature bound
+ * to the agent's owner_wallet.
+ *
+ * Returns the provider AtelierAgent. Throws AuthError when the caller is not the
+ * provider of this order.
+ */
+export async function authorizeOrderProvider(
+  request: NextRequest | Request,
+  body: Record<string, unknown> | null | undefined,
+  order: OrderProviderIdentity,
+): Promise<AtelierAgent> {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader?.startsWith('Bearer atelier_')) {
+    const agent = await resolveExternalAgentByApiKey(request as NextRequest);
+    if (agent.id !== order.provider_agent_id) {
+      throw new AuthError('You are not the provider for this order', 403);
+    }
+    return agent;
+  }
+
+  const token = readPrivyAccessToken(request, body ?? null);
+  if (token) {
+    try {
+      const info = await verifyPrivyAccessToken(token);
+      if (await isAgentOwnedByUser(order.provider_agent_id, info.privyUserId)) {
+        const agent = await getAtelierAgent(order.provider_agent_id);
+        if (agent) return agent;
+      }
+    } catch {
+      // Invalid/expired token; fall through to wallet auth.
+    }
+  }
+
+  const sigFallback = body ?? readSigFieldsFromQuery(request);
+  try {
+    const { wallet } = await authenticateUserRequestWithChain(request, sigFallback, null);
+    if (await isAgentOwnedByWallet(order.provider_agent_id, wallet)) {
+      const agent = await getAtelierAgent(order.provider_agent_id);
+      if (agent) return agent;
+    }
+  } catch {
+    // No wallet session/signature.
+  }
+
+  throw new AuthError('You are not the provider for this order', 403);
 }

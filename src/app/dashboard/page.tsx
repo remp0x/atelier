@@ -4,9 +4,9 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { AgentAvatar } from '@/components/atelier/AgentAvatar';
-import { useSearchParams } from 'next/navigation';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { AtelierAgent, Service, ServiceOrder, OrderStatus, ServiceCategory, ServicePriceType } from '@/lib/atelier-db';
 import { SUGGESTED_MAX_PRICE_USD } from '@/components/atelier/constants';
@@ -100,7 +100,7 @@ export default function DashboardPage() {
 }
 
 function DashboardContent() {
-  const { walletAddress, authenticated, ready, getAuth, login, authMode, apiKeySession, loginWithApiKey, logoutApiKey, user, atelierUser } = useAtelierAuth();
+  const { walletAddress, authenticated, ready, getAuth, login, authMode, user, atelierUser } = useAtelierAuth();
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,19 +122,14 @@ function DashboardContent() {
   const [payoutSaving, setPayoutSaving] = useState(false);
   const [payoutError, setPayoutError] = useState<string | null>(null);
 
-  const [linkingWallet, setLinkingWallet] = useState(false);
-  const [linkingAccount, setLinkingAccount] = useState(false);
+  const [showLinkAgent, setShowLinkAgent] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       let res: Response;
-      if (authMode === 'apikey' && apiKeySession) {
-        res = await fetch('/api/dashboard', {
-          headers: { Authorization: `Bearer ${apiKeySession.apiKey}` },
-        });
-      } else if (authMode === 'privy' && user?.id) {
+      if (user?.id) {
         res = await fetch(`/api/dashboard?privy_user_id=${encodeURIComponent(user.id)}`);
       } else if (walletAddress) {
         const auth = await getAuth();
@@ -159,21 +154,20 @@ function DashboardContent() {
     } finally {
       setLoading(false);
     }
-  }, [authMode, apiKeySession, walletAddress, getAuth, selectedAgent, user?.id]);
+  }, [authMode, walletAddress, getAuth, selectedAgent, user?.id]);
 
   useEffect(() => {
-    if (authMode === 'apikey' || authMode === 'wallet') {
+    if (authMode === 'wallet') {
       loadDashboard();
     } else if (authMode === 'privy' && user?.id) {
       loadDashboard();
-    } else if (ready && !authenticated && !apiKeySession) {
+    } else if (ready && !authenticated) {
       setLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authMode, walletAddress, authenticated, ready, user?.id]);
 
   const activeApiKey = (() => {
-    if (apiKeySession) return apiKeySession.apiKey;
     const agents = data?.agents || [];
     const agent = agents.find(a => a.id === selectedAgent);
     return agent?.api_key ?? null;
@@ -211,11 +205,10 @@ function DashboardContent() {
       }
 
       let res: Response;
-      const effectiveKey = agentApiKey || apiKeySession?.apiKey;
-      if (effectiveKey) {
+      if (agentApiKey) {
         res = await fetch('/api/agents/me', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${effectiveKey}` },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentApiKey}` },
           body: JSON.stringify(body),
         });
       } else {
@@ -237,42 +230,7 @@ function DashboardContent() {
     }
   };
 
-  const linkedWalletRef = useRef<string | null>(null);
-  const linkedPrivyRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!walletAddress || !apiKeySession || linkingWallet) return;
-    if (linkedWalletRef.current === walletAddress) return;
-    linkedWalletRef.current = walletAddress;
-    setLinkingWallet(true);
-    fetch('/api/agents/me', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKeySession.apiKey}` },
-      body: JSON.stringify({ owner_wallet: walletAddress }),
-    })
-      .then(r => r.json())
-      .then(json => { if (json.success) loadDashboard(); })
-      .catch(() => {})
-      .finally(() => setLinkingWallet(false));
-  }, [walletAddress, apiKeySession, linkingWallet, loadDashboard]);
-
-  useEffect(() => {
-    if (!user?.id || !apiKeySession || linkingAccount) return;
-    if (linkedPrivyRef.current === user.id) return;
-    linkedPrivyRef.current = user.id;
-    setLinkingAccount(true);
-    fetch('/api/agents/me', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKeySession.apiKey}` },
-      body: JSON.stringify({ privy_user_id: user.id }),
-    })
-      .then(r => r.json())
-      .then(json => { if (json.success) loadDashboard(); })
-      .catch(() => {})
-      .finally(() => setLinkingAccount(false));
-  }, [user?.id, apiKeySession, linkingAccount, loadDashboard]);
-
-  if (!ready && !apiKeySession) {
+  if (!ready) {
     return (
       <div className="flex items-center justify-center py-32">
         <div className="w-6 h-6 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
@@ -289,7 +247,7 @@ function DashboardContent() {
   }
 
   if (!authMode) {
-    return <LoginScreen login={login} loginWithApiKey={loginWithApiKey} />;
+    return <LoginScreen login={login} />;
   }
 
   if (error) {
@@ -298,7 +256,6 @@ function DashboardContent() {
         <p className="text-sm text-red-500 dark:text-red-400 font-mono mb-4">{error}</p>
         <div className="flex items-center justify-center gap-4">
           <button onClick={loadDashboard} className="text-sm font-mono text-atelier hover:underline cursor-pointer">Retry</button>
-          {authMode === 'apikey' && <button onClick={() => { logoutApiKey(); setData(null); setError(null); }} className="text-sm font-mono text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300 cursor-pointer">Sign Out</button>}
         </div>
       </div>
     );
@@ -318,46 +275,19 @@ function DashboardContent() {
         <div>
           <h1 className="text-2xl font-bold text-black dark:text-white font-display">Dashboard</h1>
           <div className="flex items-center gap-2 mt-1">
-            {authMode === 'apikey' && (
-              <>
-                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400">API Key</span>
-                <button onClick={() => { logoutApiKey(); setData(null); }} className="text-[10px] font-mono text-gray-400 hover:text-gray-600 dark:hover:text-neutral-300 cursor-pointer">Sign Out</button>
-              </>
-            )}
             {authMode === 'wallet' && <p className="text-sm text-gray-400 dark:text-neutral-500 font-mono">{truncateWallet(walletAddress)}</p>}
             {authMode === 'privy' && !walletAddress && <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-atelier/15 text-atelier">Social Login</span>}
           </div>
         </div>
-        <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono font-semibold text-white bg-atelier px-4 py-2.5 rounded-lg hover:bg-atelier-dark transition-colors">
-          {agents.length === 0 ? 'Register Agent' : '+ New Agent'}
-        </Link>
-      </div>
-
-      {/* Link prompts for API key mode */}
-      {authMode === 'apikey' && agent && (
-        <div className="flex flex-wrap gap-2 mb-6">
-          {!agent.owner_wallet && (
-            <button
-              onClick={login}
-              disabled={linkingWallet}
-              className="inline-flex items-center gap-2 text-xs font-mono px-3 py-2 rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 text-gray-500 dark:text-neutral-400 hover:border-atelier hover:text-atelier transition-colors cursor-pointer"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 013 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 013 6v3" /></svg>
-              {linkingWallet ? 'Linking...' : 'Link Wallet'}
-            </button>
-          )}
-          {!agent.privy_user_id && (
-            <button
-              onClick={login}
-              disabled={linkingAccount}
-              className="inline-flex items-center gap-2 text-xs font-mono px-3 py-2 rounded-lg border border-dashed border-gray-300 dark:border-neutral-700 text-gray-500 dark:text-neutral-400 hover:border-atelier hover:text-atelier transition-colors cursor-pointer"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
-              {linkingAccount ? 'Linking...' : 'Link Social Account'}
-            </button>
-          )}
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowLinkAgent(true)} className="text-sm font-mono font-semibold text-atelier border border-atelier/30 px-4 py-2.5 rounded-lg hover:bg-atelier/10 transition-colors cursor-pointer">
+            Link agent
+          </button>
+          <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono font-semibold text-white bg-atelier px-4 py-2.5 rounded-lg hover:bg-atelier-dark transition-colors">
+            {agents.length === 0 ? 'Register Agent' : '+ New Agent'}
+          </Link>
         </div>
-      )}
+      </div>
 
       {agents.length === 0 ? (
         <div className="text-center py-16 bg-gray-50 dark:bg-neutral-950 border border-dashed border-gray-200 dark:border-neutral-800 rounded-xl">
@@ -366,12 +296,21 @@ function DashboardContent() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
             </svg>
           </div>
-          <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mb-4">
-            {authMode === 'privy' ? 'No agents linked to this account.' : 'No agents registered for this wallet.'}
+          <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mb-1">
+            No agents linked to this account yet.
           </p>
-          <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono font-semibold text-atelier hover:text-atelier-dark dark:hover:text-atelier-bright transition-colors">
-            Register your first agent
-          </Link>
+          <p className="text-xs text-gray-400 dark:text-neutral-500 font-mono mb-4">
+            Already registered an agent? Link it with its API key.
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            <button onClick={() => setShowLinkAgent(true)} className="text-sm font-mono font-semibold text-atelier hover:text-atelier-dark dark:hover:text-atelier-bright transition-colors cursor-pointer">
+              Link existing agent
+            </button>
+            <span className="text-gray-300 dark:text-neutral-700">|</span>
+            <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono font-semibold text-atelier hover:text-atelier-dark dark:hover:text-atelier-bright transition-colors">
+              Register your first agent
+            </Link>
+          </div>
         </div>
       ) : (
         <>
@@ -675,31 +614,12 @@ function DashboardContent() {
       {showCreateService && agent && <CreateServiceModal agentId={agent.id} apiKey={activeApiKey} getAuth={getAuth} onClose={() => setShowCreateService(false)} onSuccess={() => { setShowCreateService(false); loadDashboard(); }} />}
       {showQuote && agent && <QuoteModal orderId={showQuote} apiKey={activeApiKey} getAuth={getAuth} onClose={() => setShowQuote(null)} onSuccess={() => { setShowQuote(null); loadDashboard(); }} />}
       {showDeliver && agent && <DeliverModal orderId={showDeliver} apiKey={activeApiKey} getAuth={getAuth} onClose={() => setShowDeliver(null)} onSuccess={() => { setShowDeliver(null); loadDashboard(); }} />}
+      {showLinkAgent && <LinkAgentModal onClose={() => setShowLinkAgent(false)} onSuccess={() => { setShowLinkAgent(false); loadDashboard(); }} />}
     </div>
   );
 }
 
-function LoginScreen({ login, loginWithApiKey }: { login: () => void; loginWithApiKey: (key: string) => Promise<void> }) {
-  const searchParams = useSearchParams();
-  const initialTab = searchParams?.get('tab') === 'apikey' ? 'apikey' : 'signin';
-  const [tab, setTab] = useState<'signin' | 'apikey'>(initialTab);
-  const [apiKey, setApiKey] = useState('');
-  const [validating, setValidating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleApiKeyLogin = async () => {
-    if (!apiKey.trim()) return;
-    setValidating(true);
-    setError(null);
-    try {
-      await loginWithApiKey(apiKey.trim());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Invalid API key');
-    } finally {
-      setValidating(false);
-    }
-  };
-
+function LoginScreen({ login }: { login: () => void }) {
   return (
     <div className="max-w-md mx-auto px-4 sm:px-6 py-24">
       <div className="text-center mb-8">
@@ -712,50 +632,82 @@ function LoginScreen({ login, loginWithApiKey }: { login: () => void; loginWithA
         <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono">Sign in to manage your agents</p>
       </div>
 
-      <div className="flex gap-1 mb-6 bg-gray-100 dark:bg-neutral-900 rounded-lg p-1">
-        <button onClick={() => { setTab('signin'); setError(null); }} className={`flex-1 text-xs font-mono font-semibold py-2 rounded-md transition-colors cursor-pointer ${tab === 'signin' ? 'bg-white dark:bg-neutral-800 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300'}`}>
-          Wallet / Social
+      <div className="flex flex-col items-center gap-3">
+        <button onClick={login} className="w-full py-2.5 rounded-lg text-sm font-mono font-semibold transition-all cursor-pointer" style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)', color: 'white' }}>
+          Sign In
         </button>
-        <button onClick={() => { setTab('apikey'); setError(null); }} className={`flex-1 text-xs font-mono font-semibold py-2 rounded-md transition-colors cursor-pointer ${tab === 'apikey' ? 'bg-white dark:bg-neutral-800 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-neutral-400 hover:text-gray-700 dark:hover:text-neutral-300'}`}>
-          API Key
-        </button>
+        <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono text-atelier hover:text-atelier-bright transition-colors">
+          Register Agent
+        </Link>
       </div>
+    </div>
+  );
+}
 
-      {tab === 'signin' ? (
-        <div className="flex flex-col items-center gap-3">
-          <button onClick={login} className="w-full py-2.5 rounded-lg text-sm font-mono font-semibold transition-all cursor-pointer" style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)', color: 'white' }}>
-            Sign In
-          </button>
-          <Link href={atelierHref('/atelier/agents/register')} className="text-sm font-mono text-atelier hover:text-atelier-bright transition-colors">
-            Register Agent
-          </Link>
+function LinkAgentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [apiKey, setApiKey] = useState('');
+  const [linking, setLinking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [linkedName, setLinkedName] = useState<string | null>(null);
+
+  const handleLink = async () => {
+    const key = apiKey.trim();
+    if (!key) return;
+    setLinking(true);
+    setError(null);
+    try {
+      const token = await getPrivyAccessToken();
+      if (!token) throw new Error('Sign in first to link an agent');
+      const res = await fetch('/api/agents/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ api_key: key }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Failed to link agent');
+      setLinkedName(json.data.agent.name);
+      setTimeout(onSuccess, 900);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to link agent');
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <h2 className="text-lg font-bold text-black dark:text-white font-display mb-1">Link an existing agent</h2>
+      <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-5">
+        Already registered an agent? Paste its API key to link it to this account.
+      </p>
+      {linkedName ? (
+        <div className="flex items-center gap-2 text-sm font-mono text-emerald-600 dark:text-emerald-400 py-4">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+          {linkedName} linked to your account
         </div>
       ) : (
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1.5 uppercase tracking-wider">API Key</label>
+            <label className={LABEL_CLASS}>Agent API Key</label>
             <input
               value={apiKey}
               onChange={e => setApiKey(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleApiKeyLogin(); }}
+              onKeyDown={e => { if (e.key === 'Enter') handleLink(); }}
               placeholder="atelier_..."
-              className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier transition-colors"
+              className={INPUT_CLASS}
             />
           </div>
           {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
-          <button
-            onClick={handleApiKeyLogin}
-            disabled={validating || !apiKey.trim()}
-            className="w-full py-2.5 rounded-lg border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {validating ? 'Validating...' : 'Sign In with API Key'}
-          </button>
-          <p className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 text-center">
-            You received your API key when you registered your agent
+          <div className="flex gap-3 pt-1">
+            <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
+            <button onClick={handleLink} disabled={linking || !apiKey.trim()} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{linking ? 'Linking...' : 'Link agent'}</button>
+          </div>
+          <p className="text-[10px] font-mono text-gray-400 dark:text-neutral-600">
+            You received the API key when you registered your agent. It stays valid for machine API calls.
           </p>
         </div>
       )}
-    </div>
+    </ModalOverlay>
   );
 }
 

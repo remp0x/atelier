@@ -29,7 +29,6 @@ import type { AtelierUser } from '@/lib/atelier-db';
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 const SERVER_SESSION_TTL = 6 * 24 * 60 * 60 * 1000;
 const STORAGE_KEY_PREFIX = 'atelier_auth_';
-const APIKEY_STORAGE_KEY = 'atelier_apikey_session';
 const SERVER_SESSION_KEY_PREFIX = 'atelier_server_session_';
 const ACTIVE_CHAIN_KEY = 'atelier_active_chain';
 
@@ -74,41 +73,6 @@ function saveServerSessionMarker(chain: WalletChain, wallet: string): void {
 function clearServerSessionMarker(chain: WalletChain, wallet: string): void {
   try {
     localStorage.removeItem(chainServerKey(chain, wallet));
-  } catch {}
-}
-
-interface ApiKeySession {
-  apiKey: string;
-  agentId: string;
-  agentName?: string;
-  agentAvatarUrl?: string | null;
-  ts: number;
-}
-
-function loadApiKeySession(): ApiKeySession | null {
-  try {
-    const raw = localStorage.getItem(APIKEY_STORAGE_KEY);
-    if (!raw) return null;
-    const session = JSON.parse(raw) as ApiKeySession;
-    if (Date.now() - session.ts >= SESSION_TTL) {
-      localStorage.removeItem(APIKEY_STORAGE_KEY);
-      return null;
-    }
-    return session;
-  } catch {
-    return null;
-  }
-}
-
-function saveApiKeySession(session: ApiKeySession): void {
-  try {
-    localStorage.setItem(APIKEY_STORAGE_KEY, JSON.stringify(session));
-  } catch {}
-}
-
-function clearApiKeySession(): void {
-  try {
-    localStorage.removeItem(APIKEY_STORAGE_KEY);
   } catch {}
 }
 
@@ -188,7 +152,7 @@ const WalletAccountModal = dynamic(
   { ssr: false }
 );
 
-type AuthMode = 'wallet' | 'apikey' | 'privy' | null;
+type AuthMode = 'wallet' | 'privy' | null;
 
 interface AtelierAuthContextValue {
   authenticated: boolean;
@@ -210,9 +174,6 @@ interface AtelierAuthContextValue {
   getSignableWallet: () => SignableWallet | null;
   openWalletModal: () => void;
   authMode: AuthMode;
-  apiKeySession: ApiKeySession | null;
-  loginWithApiKey: (apiKey: string) => Promise<void>;
-  logoutApiKey: () => void;
   atelierUser: AtelierUser | null;
   refreshAtelierUser: () => Promise<void>;
 }
@@ -221,7 +182,6 @@ const AtelierAuthContext = createContext<AtelierAuthContextValue | null>(null);
 
 export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const { authenticated, ready, login, logout, user } = usePrivy();
-  const [apiKeySess, setApiKeySess] = useState<ApiKeySession | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
   const [activeChain, setActiveChainState] = useState<WalletChain>('solana');
   const [atelierUser, setAtelierUser] = useState<AtelierUser | null>(null);
@@ -267,19 +227,8 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const walletReady = authenticated && walletAddress !== null;
 
   useEffect(() => {
-    setApiKeySess(loadApiKeySession());
     setActiveChainState(loadActiveChain());
   }, []);
-
-  // A human Privy login and a machine API-key session are distinct principals.
-  // When a Privy user is authenticated, drop any leftover API-key session so the
-  // agent identity can never shadow the signed-in human in the UI.
-  useEffect(() => {
-    if (ready && authenticated && apiKeySess) {
-      clearApiKeySession();
-      setApiKeySess(null);
-    }
-  }, [ready, authenticated, apiKeySess]);
 
   // Every signed-in user gets Atelier-provisioned embedded wallets on both
   // chains -- that is the only payout/identity wallet. Backfill them for legacy
@@ -307,10 +256,9 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
 
   const authMode: AuthMode = useMemo(() => {
     if (walletReady) return 'wallet';
-    if (apiKeySess) return 'apikey';
     if (authenticated) return 'privy';
     return null;
-  }, [walletReady, apiKeySess, authenticated]);
+  }, [walletReady, authenticated]);
 
   const getSignableWallet = useCallback((): SignableWallet | null => {
     if (embeddedSolWallet && embeddedSolanaAddress) {
@@ -443,28 +391,6 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     if (walletChain && walletAddress) clearCachedAuth(walletChain, walletAddress);
   }, [walletChain, walletAddress]);
 
-  const loginWithApiKey = useCallback(async (apiKey: string) => {
-    const res = await fetch('/api/agents/me', {
-      headers: { Authorization: `Bearer ${apiKey}` },
-    });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || 'Invalid API key');
-    const session: ApiKeySession = {
-      apiKey,
-      agentId: json.data.id,
-      agentName: json.data.name ?? undefined,
-      agentAvatarUrl: json.data.avatar_url ?? null,
-      ts: Date.now(),
-    };
-    saveApiKeySession(session);
-    setApiKeySess(session);
-  }, []);
-
-  const logoutApiKey = useCallback(() => {
-    clearApiKeySession();
-    setApiKeySess(null);
-  }, []);
-
   const upsertAtelierUser = useCallback(async (privyUserId: string): Promise<void> => {
     const token = await getPrivyAccessToken();
     if (!token) return;
@@ -527,11 +453,10 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
     } catch {}
     setSessionReady(false);
     clearAuth();
-    logoutApiKey();
     upsertedUserIdRef.current = null;
     setAtelierUser(null);
     await logout();
-  }, [clearAuth, logoutApiKey, logout, walletChain, walletAddress]);
+  }, [clearAuth, logout, walletChain, walletAddress]);
 
   const openWalletModal = useCallback(() => {
     setWalletModalOpen(true);
@@ -544,7 +469,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AtelierAuthContextValue>(
     () => ({
-      authenticated: authenticated || apiKeySess !== null,
+      authenticated,
       ready,
       login: smartLogin,
       logout: handleLogout,
@@ -563,9 +488,6 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       getSignableWallet,
       openWalletModal,
       authMode,
-      apiKeySession: apiKeySess,
-      loginWithApiKey,
-      logoutApiKey,
       atelierUser,
       refreshAtelierUser,
     }),
@@ -589,9 +511,6 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       getSignableWallet,
       openWalletModal,
       authMode,
-      apiKeySess,
-      loginWithApiKey,
-      logoutApiKey,
       atelierUser,
       refreshAtelierUser,
     ]

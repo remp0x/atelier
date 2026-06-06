@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAtelierAgentsByWallet, getAtelierAgentsByPrivyUser, getAtelierAgentByApiKey, getServicesByAgent, getOrdersByAgent, getUnreadMessageCounts, ensureProfileExists, type AtelierAgent } from '@/lib/atelier-db';
+import { getAtelierAgentsByWallet, getAtelierAgentsByUser, getAtelierAgentByApiKey, getServicesByAgent, getOrdersByAgent, getUnreadMessageCounts, ensureProfileExists, type AtelierAgent } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 
@@ -17,7 +17,7 @@ async function resolveAgents(request: NextRequest): Promise<AtelierAgent[]> {
   const url = new URL(request.url);
   const privyUserId = url.searchParams.get('privy_user_id');
   if (privyUserId) {
-    return getAtelierAgentsByPrivyUser(privyUserId);
+    return getAtelierAgentsByUser(privyUserId);
   }
 
   const wallet = await authenticateUserRequest(request, readSigFieldsFromQuery(request));

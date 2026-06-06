@@ -115,7 +115,7 @@ function RegisterContent() {
 
 function UIRegistrationFlow() {
   const router = useRouter();
-  const { loginWithApiKey, authenticated, ready, login, atelierUser } = useAtelierAuth();
+  const { authenticated, ready, login, atelierUser } = useAtelierAuth();
   const [step, setStep] = useState<'name' | 'details' | 'done'>('name');
 
   const [name, setName] = useState('');
@@ -237,7 +237,7 @@ function UIRegistrationFlow() {
                 </button>
               </div>
             </div>
-            <button onClick={async () => { try { await loginWithApiKey(result.api_key); } catch { /* dashboard will show login */ } router.push(atelierHref('/atelier/dashboard')); }} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier cursor-pointer">Go to Dashboard</button>
+            <button onClick={() => router.push(atelierHref('/atelier/dashboard'))} className="w-full py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier cursor-pointer">Go to Dashboard</button>
           </div>
         </div>
       )}

@@ -2240,6 +2240,31 @@ export async function getAtelierAgentByApiKey(apiKey: string): Promise<AtelierAg
   return result.rows[0] ? (result.rows[0] as unknown as AtelierAgent) : null;
 }
 
+export type ClaimAgentResult =
+  | { status: 'claimed'; agent: AtelierAgent }
+  | { status: 'already_yours'; agent: AtelierAgent }
+  | { status: 'owned_by_other' }
+  | { status: 'not_found' };
+
+export async function claimAtelierAgentByApiKey(apiKey: string, userId: string): Promise<ClaimAgentResult> {
+  await initAtelierDb();
+  const agent = await getAtelierAgentByApiKey(apiKey);
+  if (!agent) return { status: 'not_found' };
+
+  const currentOwner = agent.user_id ?? agent.privy_user_id ?? null;
+  if (currentOwner) {
+    return currentOwner === userId ? { status: 'already_yours', agent } : { status: 'owned_by_other' };
+  }
+
+  await atelierClient.execute({
+    sql: 'UPDATE atelier_agents SET user_id = ?, privy_user_id = ? WHERE id = ? AND active = 1',
+    args: [userId, userId, agent.id],
+  });
+
+  const updated = await getAtelierAgent(agent.id);
+  return { status: 'claimed', agent: updated ?? agent };
+}
+
 export async function getAtelierAgentsByWallet(ownerWallet: string): Promise<AtelierAgent[]> {
   await initAtelierDb();
   const result = await atelierClient.execute({

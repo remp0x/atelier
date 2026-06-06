@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { emotionFromText } from '@/lib/live2d/emotion';
 import { createRecognition, isSpeechRecognitionAvailable, type RecognitionHandle } from '@/lib/live2d/speech-recognition';
 import type { HarukaStageHandle } from '@/lib/live2d/types';
+import { StageBoundary } from './companion/StageBoundary';
 
 const COMPANION_ENABLED = process.env.NEXT_PUBLIC_HARUKA_COMPANION === 'true';
 
@@ -292,9 +293,11 @@ export function AskAtelierWidget() {
             </div>
 
             {COMPANION_ENABLED && (
-              <div className="flex-shrink-0 flex justify-center py-3 border-b border-gray-100 dark:border-neutral-800 bg-gray-50/60 dark:bg-black-light/40">
-                <HarukaStage voiceEnabled={voiceEnabled} onHandle={handleStage} />
-              </div>
+              <StageBoundary>
+                <div className="flex-shrink-0 flex justify-center py-3 border-b border-gray-100 dark:border-neutral-800 bg-gray-50/60 dark:bg-black-light/40">
+                  <HarukaStage voiceEnabled={voiceEnabled} onHandle={handleStage} />
+                </div>
+              </StageBoundary>
             )}
 
             {/* Messages */}

@@ -691,6 +691,14 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE bounties ADD COLUMN moderation_status TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE bounties ADD COLUMN moderation_reason TEXT'); } catch (_e) { }
 
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS escrow_refunds (
+      escrow_tx_hash TEXT PRIMARY KEY,
+      refund_tx_hash TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   try { await atelierClient.execute("ALTER TABLE atelier_agents ADD COLUMN payout_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_address_base TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN privy_evm_wallet_id TEXT'); } catch (_e) { }
@@ -2040,6 +2048,8 @@ export interface Bounty {
   payment_chain: 'solana' | 'base';
   payer_address: string | null;
   created_at: string;
+  moderation_status: ModerationStatus | null;
+  moderation_reason: string | null;
 }
 
 export interface BountyListItem extends Bounty {
@@ -5039,6 +5049,48 @@ export async function expireStaleBounties(): Promise<void> {
     sql: "UPDATE bounties SET status = 'expired' WHERE status = 'open' AND expires_at < ?",
     args: [now],
   });
+}
+
+// Idempotency ledger for escrow refunds. Claiming a hash is atomic via the
+// PRIMARY KEY: the first caller inserts and proceeds, concurrent/duplicate
+// callers fail the insert and must NOT refund again (prevents treasury drain
+// from a client replaying the same valid escrow tx).
+export async function tryClaimEscrowRefund(escrowTxHash: string): Promise<boolean> {
+  await initAtelierDb();
+  try {
+    await atelierClient.execute({
+      sql: 'INSERT INTO escrow_refunds (escrow_tx_hash) VALUES (?)',
+      args: [escrowTxHash],
+    });
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
+export async function releaseEscrowRefund(escrowTxHash: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'DELETE FROM escrow_refunds WHERE escrow_tx_hash = ?',
+    args: [escrowTxHash],
+  });
+}
+
+export async function recordEscrowRefundTx(escrowTxHash: string, refundTxHash: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE escrow_refunds SET refund_tx_hash = ? WHERE escrow_tx_hash = ?',
+    args: [refundTxHash, escrowTxHash],
+  });
+}
+
+export async function isEscrowRefunded(escrowTxHash: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT 1 FROM escrow_refunds WHERE escrow_tx_hash = ? LIMIT 1',
+    args: [escrowTxHash],
+  });
+  return result.rows.length > 0;
 }
 
 export async function completeBountyByOrderId(orderId: string): Promise<void> {

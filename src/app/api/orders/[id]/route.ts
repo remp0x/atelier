@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet, isEscrowTxHashUsed, atomicStatusTransition, incrementRevisionCount } from '@/lib/atelier-db';
+import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet, isEscrowTxHashUsed, atomicStatusTransition, incrementRevisionCount, completeBountyByOrderId } from '@/lib/atelier-db';
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { WalletAuthError } from '@/lib/solana-auth';
@@ -289,6 +289,12 @@ export async function PATCH(
           payoutFailed = true;
           console.error(`Payout failed for order ${id}:`, payoutErr);
         }
+      }
+
+      if (order.bounty_id) {
+        await completeBountyByOrderId(id).catch((err) =>
+          console.error(`Failed to mark bounty completed for order ${id}:`, err),
+        );
       }
 
       if (agentPaid && order.referral_partner && platformFee > 0) {

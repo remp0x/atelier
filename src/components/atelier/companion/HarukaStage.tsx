@@ -1,67 +1,59 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { motion, useReducedMotion } from 'framer-motion';
+import { motion } from 'framer-motion';
+import * as PIXI from 'pixi.js';
+import type { Live2DModel, Cubism4InternalModel } from 'pixi-live2d-display/cubism4';
+import { loadCubismCore } from '@/lib/live2d/cubism-core';
 import { createSpeechController, type SpeechController } from '@/lib/live2d/lipsync';
 import type { ExpressionName } from '@/lib/live2d/emotion';
 import type { HarukaStageHandle, HarukaStageProps } from '@/lib/live2d/types';
 
-const EYE_BY_EXPRESSION: Record<ExpressionName, { d: string; rest: boolean }> = {
-  neutral: { d: 'M 0 0 a 4 4 0 1 0 0.01 0', rest: true },
-  happy: { d: 'M -5 1 q 5 -6 10 0', rest: false },
-  thinking: { d: 'M -5 0 h 9', rest: false },
-  apologetic: { d: 'M -5 -2 q 5 4 10 0', rest: false },
-  surprised: { d: 'M 0 0 a 5 5 0 1 0 0.01 0', rest: true },
+const MODEL_URL = '/live2d/hiyori/Hiyori.model3.json';
+const MOUTH_PARAM = 'ParamMouthOpenY';
+
+const CANVAS_W = 180;
+const CANVAS_H = 200;
+const MODEL_ZOOM = 2.0;
+const MODEL_Y_RATIO = 0.78;
+
+const REACTION_BY_EXPRESSION: Partial<Record<ExpressionName, string>> = {
+  happy: 'TapBody',
+  surprised: 'TapBody',
 };
 
-function Eye({ expression, cx }: { expression: ExpressionName; cx: number }) {
-  const cfg = EYE_BY_EXPRESSION[expression];
-  if (cfg.rest) {
-    const r = expression === 'surprised' ? 5 : 4;
-    return <circle cx={cx} cy={44} r={r} fill="currentColor" />;
-  }
-  return (
-    <path
-      transform={`translate(${cx} 44)`}
-      d={cfg.d}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.6}
-      strokeLinecap="round"
-    />
-  );
-}
+type Status = 'loading' | 'ready' | 'error';
 
 /**
- * Placeholder renderer standing in for the licensed Live2D Cubism stage. It
- * implements the full HarukaStageHandle contract (speak / stopSpeaking /
- * setExpression) and consumes the lipsync onMouth signal, so replacing it with
- * the Cubism canvas is a drop-in swap that leaves the widget untouched.
+ * Renders the Hiyori Live2D model (the "Haruka" face) and drives its mouth from
+ * the lipsync controller. The HarukaStageHandle contract is identical to the
+ * earlier placeholder, so the widget is unaware of the renderer swap.
  */
 export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps) {
-  const [expression, setExpression] = useState<ExpressionName>('neutral');
-  const [blinking, setBlinking] = useState(false);
+  const [status, setStatus] = useState<Status>('loading');
   const [speaking, setSpeaking] = useState(false);
-  const mouthRef = useRef<SVGGElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const appRef = useRef<PIXI.Application | null>(null);
+  const modelRef = useRef<Live2DModel<Cubism4InternalModel> | null>(null);
+  const mouthRef = useRef(0);
   const voiceRef = useRef(voiceEnabled);
   const controllerRef = useRef<SpeechController | null>(null);
-  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     voiceRef.current = voiceEnabled;
   }, [voiceEnabled]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const controller = createSpeechController({
       onMouth: (open) => {
-        const el = mouthRef.current;
-        if (el) el.style.transform = `scaleY(${0.18 + open})`;
+        mouthRef.current = open;
       },
       onStart: () => setSpeaking(true),
       onEnd: () => {
         setSpeaking(false);
-        const el = mouthRef.current;
-        if (el) el.style.transform = 'scaleY(0.18)';
+        mouthRef.current = 0;
       },
     });
     controllerRef.current = controller;
@@ -69,56 +61,102 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
     const handle: HarukaStageHandle = {
       speak: (text) => controller.speak(text, voiceRef.current),
       stopSpeaking: () => controller.cancel(),
-      setExpression: (next) => setExpression(next),
+      setExpression: (expression) => {
+        const reaction = REACTION_BY_EXPRESSION[expression];
+        if (reaction) modelRef.current?.motion(reaction);
+      },
     };
     onHandle(handle);
 
+    async function init() {
+      try {
+        await loadCubismCore();
+        if (cancelled || !canvasRef.current) return;
+
+        const { Live2DModel: Live2DModelClass } = await import('pixi-live2d-display/cubism4');
+        if (cancelled || !canvasRef.current) return;
+
+        const app = new PIXI.Application({
+          view: canvasRef.current,
+          width: CANVAS_W,
+          height: CANVAS_H,
+          backgroundAlpha: 0,
+          antialias: true,
+          autoDensity: true,
+          resolution: Math.min(window.devicePixelRatio || 1, 2),
+        });
+        appRef.current = app;
+
+        const model = (await Live2DModelClass.from(MODEL_URL, {
+          autoInteract: false,
+        })) as Live2DModel<Cubism4InternalModel>;
+
+        if (cancelled) {
+          model.destroy();
+          return;
+        }
+
+        model.autoUpdate = false;
+        model.anchor.set(0.5, 0.5);
+        const scale = (CANVAS_H / model.height) * MODEL_ZOOM;
+        model.scale.set(scale);
+        model.position.set(CANVAS_W / 2, CANVAS_H * MODEL_Y_RATIO);
+        app.stage.addChild(model);
+        modelRef.current = model;
+
+        app.ticker.add(() => {
+          const m = modelRef.current;
+          if (!m) return;
+          m.internalModel.coreModel.setParameterValueById(MOUTH_PARAM, mouthRef.current);
+          m.update(app.ticker.deltaMS);
+        });
+
+        setStatus('ready');
+      } catch {
+        if (!cancelled) setStatus('error');
+      }
+    }
+
+    init();
+
     return () => {
+      cancelled = true;
       controller.dispose();
       controllerRef.current = null;
       onHandle(null);
+      modelRef.current?.destroy();
+      modelRef.current = null;
+      appRef.current?.destroy(false, { children: true });
+      appRef.current = null;
     };
   }, [onHandle]);
 
-  useEffect(() => {
-    if (reduceMotion) return;
-    const interval = setInterval(() => {
-      setBlinking(true);
-      const timeout = setTimeout(() => setBlinking(false), 130);
-      return () => clearTimeout(timeout);
-    }, 4200);
-    return () => clearInterval(interval);
-  }, [reduceMotion]);
-
-  const eyeExpression = blinking ? 'thinking' : expression;
-
   return (
-    <div className="relative" style={{ width: 96, height: 96 }}>
+    <div className="relative" style={{ width: CANVAS_W, height: CANVAS_H }}>
       <motion.div
-        className="absolute inset-0 rounded-full bg-gradient-to-br from-atelier-bright/25 to-atelier/10"
-        animate={speaking && !reduceMotion ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+        className="absolute inset-x-6 bottom-3 h-6 rounded-[50%] bg-atelier/20 blur-md"
+        animate={speaking ? { opacity: [0.5, 0.8, 0.5] } : { opacity: 0.4 }}
         transition={{ duration: 0.9, repeat: speaking ? Infinity : 0, ease: 'easeInOut' }}
       />
-      <motion.div
-        className="relative w-full h-full rounded-full bg-gradient-to-br from-atelier-bright to-atelier ring-1 ring-white/20 shadow-lg shadow-atelier/30 flex items-center justify-center overflow-hidden"
-        animate={reduceMotion ? { y: 0 } : { y: [0, -3, 0] }}
-        transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/25 to-transparent"
-        />
-        <svg viewBox="0 0 100 100" className="w-3/4 h-3/4 text-white" aria-hidden="true">
-          <Eye expression={eyeExpression} cx={36} />
-          <Eye expression={eyeExpression} cx={64} />
-          <g
-            ref={mouthRef}
-            style={{ transformBox: 'fill-box', transformOrigin: 'center', transform: 'scaleY(0.18)' }}
-          >
-            <ellipse cx={50} cy={66} rx={11} ry={9} fill="currentColor" />
-          </g>
-        </svg>
-      </motion.div>
+      <canvas
+        ref={canvasRef}
+        width={CANVAS_W}
+        height={CANVAS_H}
+        className={`relative transition-opacity duration-300 ${status === 'ready' ? 'opacity-100' : 'opacity-0'}`}
+      />
+      {status !== 'ready' && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          {status === 'loading' ? (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-atelier-bright to-atelier animate-pulse" />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-atelier-bright to-atelier ring-1 ring-white/20 flex items-center justify-center text-white">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+              </svg>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

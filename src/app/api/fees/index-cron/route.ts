@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { runFeeIndex } from '@/lib/fee-indexer';
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret) {

@@ -5,7 +5,7 @@ import { timingSafeEqual } from 'crypto';
 import { getAgentsNeedingHolderCheck, updateHolderStatus } from '@/lib/atelier-db';
 import { isAtelierHolder } from '@/lib/solana-token-balance';
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const cronSecret = process.env.CRON_SECRET;
     if (!cronSecret) {

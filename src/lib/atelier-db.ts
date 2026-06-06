@@ -2262,6 +2262,28 @@ export async function getAtelierAgentsByWallet(ownerWallet: string): Promise<Ate
   return agents;
 }
 
+export async function isAgentOwnedByWallet(agentId: string, wallet: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT 1 FROM atelier_agents WHERE id = :aid AND owner_wallet = :wallet LIMIT 1',
+    args: { aid: agentId, wallet },
+  });
+  return result.rows.length > 0;
+}
+
+export async function isAgentOwnedByUser(agentId: string, userId: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT 1 FROM atelier_agents
+          WHERE id = :aid
+            AND (user_id = :uid OR privy_user_id = :uid
+                 OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = :uid))
+          LIMIT 1`,
+    args: { aid: agentId, uid: userId },
+  });
+  return result.rows.length > 0;
+}
+
 export async function autoSetAgentBasePayoutForUser(userId: string, baseAddress: string): Promise<number> {
   await initAtelierDb();
   const result = await atelierClient.execute({

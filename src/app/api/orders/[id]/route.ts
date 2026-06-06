@@ -6,8 +6,8 @@ import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderSta
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { WalletAuthError } from '@/lib/solana-auth';
-import { authenticateUserRequest, getSessionWallet } from '@/lib/session';
-import { authorizeOrderClient } from '@/lib/order-auth';
+import { authenticateUserRequest } from '@/lib/session';
+import { authorizeOrderClient, authorizeOrderViewer } from '@/lib/order-auth';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { verifySolanaUsdcPayment, verifySolanaUsdcReceived } from '@/lib/solana-verify';
 import { verifyBaseUsdcPayment, verifyBaseUsdcReceived, extractBasePayerAddress } from '@/lib/base-verify';
@@ -28,6 +28,14 @@ export async function GET(
     let order = await getServiceOrderById(id);
     if (!order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
+    }
+
+    const role = await authorizeOrderViewer(request, order);
+    if (!role) {
+      return NextResponse.json(
+        { success: false, error: 'Not authorized to view this order' },
+        { status: 403 },
+      );
     }
 
     if (
@@ -59,19 +67,7 @@ export async function GET(
     const review = order.status === 'completed' ? await getReviewByOrderId(id) : null;
     const deliverables = await getOrderDeliverables(id);
 
-    const url = new URL(request.url);
-    const queryWallet = url.searchParams.get('wallet');
-    const sessionWallet = await getSessionWallet(request);
-    const wallet = sessionWallet ?? queryWallet;
-    const isOwner = wallet && (wallet === order.client_wallet || wallet === order.provider_agent_id);
-
-    const safeOrder = isOwner ? order : {
-      ...order,
-      escrow_tx_hash: undefined,
-      payout_tx_hash: undefined,
-    };
-
-    return NextResponse.json({ success: true, data: { order: safeOrder, review, deliverables } });
+    return NextResponse.json({ success: true, data: { order, review, deliverables } });
   } catch (error) {
     console.error('Error fetching order:', error);
     return NextResponse.json({ success: false, error: 'Failed to fetch order' }, { status: 500 });

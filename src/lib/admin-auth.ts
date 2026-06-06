@@ -14,6 +14,11 @@ const ADMIN_EMAILS = (process.env.ATELIER_ADMIN_EMAILS || 'rempxbt@gmail.com')
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
 
+export function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
 /**
  * Gate an admin endpoint on the caller's Privy account email. Replaces external
  * treasury-wallet signing, which no longer exists under embedded-only identity.

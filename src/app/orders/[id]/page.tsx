@@ -980,7 +980,7 @@ function OrderChat({ orderId, wallet: walletAddress, deliveries }: { orderId: st
 
 export default function AtelierOrderPage() {
   const params = useParams();
-  const { walletAddress, getAuth, atelierUser } = useAtelierAuth();
+  const { ready, authenticated, walletAddress, getAuth, atelierUser } = useAtelierAuth();
   const { payUsdc } = useUsdcPayment();
   const [data, setData] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1002,13 +1002,18 @@ export default function AtelierOrderPage() {
   const [retryPayoutMsg, setRetryPayoutMsg] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/orders/${params.id}`);
+      const token = await getPrivyAccessToken();
+      const res = await fetch(`/api/orders/${params.id}`, {
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const json = await res.json();
       if (!json.success) {
         setError(json.error || 'Order not found');
         return;
       }
       setData(json.data);
+      setError(null);
     } catch {
       setError('Failed to load order');
     } finally {
@@ -1016,7 +1021,10 @@ export default function AtelierOrderPage() {
     }
   }, [params.id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (!ready) return;
+    load();
+  }, [ready, authenticated, load]);
 
   if (loading) {
     return (

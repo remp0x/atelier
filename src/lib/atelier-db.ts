@@ -1897,7 +1897,7 @@ export interface AtelierAgent {
   token_name: string | null;
   token_symbol: string | null;
   token_image_url: string | null;
-  token_mode: 'pumpfun' | 'byot' | null;
+  token_mode: 'pumpfun' | 'clawpump' | 'byot' | null;
   token_creator_wallet: string | null;
   token_tx_hash: string | null;
   token_created_at: string | null;
@@ -2125,7 +2125,7 @@ export interface AgentTokenInfo {
   token_name: string | null;
   token_symbol: string | null;
   token_image_url: string | null;
-  token_mode: 'pumpfun' | 'byot' | null;
+  token_mode: 'pumpfun' | 'clawpump' | 'byot' | null;
   token_creator_wallet: string | null;
   token_tx_hash: string | null;
   token_created_at: string | null;
@@ -2160,7 +2160,7 @@ export async function ensureAtelierAgent(coreAgent: {
   token_name: string | null;
   token_symbol: string | null;
   token_image_url: string | null;
-  token_mode: 'pumpfun' | 'byot' | null;
+  token_mode: 'pumpfun' | 'clawpump' | 'byot' | null;
   token_creator_wallet: string | null;
   token_tx_hash: string | null;
   token_created_at: string | null;
@@ -4252,7 +4252,7 @@ export async function updateAgentToken(
     token_name: string;
     token_symbol: string;
     token_image_url?: string;
-    token_mode: 'pumpfun' | 'byot';
+    token_mode: 'pumpfun' | 'clawpump' | 'byot';
     token_creator_wallet: string;
     token_tx_hash?: string;
   }
@@ -4515,7 +4515,7 @@ export interface MetricsData {
   totalOrders: number;
   ordersByStatus: Record<string, number>;
   totalAgents: number;
-  agentsWithTokens: { total: number; pumpfun: number; byot: number };
+  agentsWithTokens: { total: number; pumpfun: number; clawpump: number; byot: number };
   servicesByCategory: Record<string, number>;
   servicesByProvider: Record<string, number>;
   servicesByModel: Record<string, number>;
@@ -4556,6 +4556,7 @@ export async function getMetricsData(): Promise<MetricsData> {
       `SELECT
         SUM(CASE WHEN token_mint IS NOT NULL THEN 1 ELSE 0 END) as total,
         SUM(CASE WHEN token_mint IS NOT NULL AND token_mode = 'pumpfun' THEN 1 ELSE 0 END) as pumpfun,
+        SUM(CASE WHEN token_mint IS NOT NULL AND token_mode = 'clawpump' THEN 1 ELSE 0 END) as clawpump,
         SUM(CASE WHEN token_mint IS NOT NULL AND token_mode = 'byot' THEN 1 ELSE 0 END) as byot
       FROM atelier_agents WHERE active = 1`
     ),
@@ -4614,10 +4615,11 @@ export async function getMetricsData(): Promise<MetricsData> {
     count: Number(row.count),
   }));
 
-  let tokenTotal = 0, tokenPumpfun = 0, tokenByot = 0;
+  let tokenTotal = 0, tokenPumpfun = 0, tokenClawpump = 0, tokenByot = 0;
   if (tokensResult.rows[0]) {
     tokenTotal = Number(tokensResult.rows[0].total);
     tokenPumpfun = Number(tokensResult.rows[0].pumpfun);
+    tokenClawpump = Number(tokensResult.rows[0].clawpump);
     tokenByot = Number(tokensResult.rows[0].byot);
   }
 
@@ -4628,7 +4630,7 @@ export async function getMetricsData(): Promise<MetricsData> {
     totalOrders: Number(totalOrdersResult.rows[0].count),
     ordersByStatus,
     totalAgents: Number(totalAgentsResult.rows[0].count),
-    agentsWithTokens: { total: tokenTotal, pumpfun: tokenPumpfun, byot: tokenByot },
+    agentsWithTokens: { total: tokenTotal, pumpfun: tokenPumpfun, clawpump: tokenClawpump, byot: tokenByot },
     servicesByCategory,
     servicesByProvider,
     servicesByModel,

@@ -134,9 +134,9 @@ export async function POST(
       );
     }
 
-    if (token_mode !== 'pumpfun' && token_mode !== 'byot') {
+    if (token_mode !== 'pumpfun' && token_mode !== 'clawpump' && token_mode !== 'byot') {
       return NextResponse.json(
-        { success: false, error: 'token_mode must be "pumpfun" or "byot"' },
+        { success: false, error: 'token_mode must be "pumpfun", "clawpump", or "byot"' },
         { status: 400 }
       );
     }

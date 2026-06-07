@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { linkExistingToken } from '@/lib/pumpfun-client';
+import { providerLabel, agentFeePct, badgeLabelForMode } from '@/lib/token-economics';
 import Image from 'next/image';
 import type { MarketData } from '@/app/api/market/route';
 
@@ -11,7 +12,7 @@ interface TokenInfo {
   name: string | null;
   symbol: string | null;
   image_url: string | null;
-  mode: 'pumpfun' | 'byot' | null;
+  mode: 'pumpfun' | 'clawpump' | 'byot' | null;
   creator_wallet: string | null;
   tx_hash: string | null;
   launch_attempted: boolean;
@@ -121,9 +122,9 @@ export function TokenLaunchSection({
                 </div>
               )}
               <span className={`px-1.5 py-0.5 rounded text-2xs font-mono ${
-                token.mode === 'pumpfun' ? 'bg-green-500/10 text-green-400' : 'bg-atelier/10 text-atelier'
+                token.mode === 'byot' ? 'bg-atelier/10 text-atelier' : 'bg-green-500/10 text-green-400'
               }`}>
-                {token.mode === 'pumpfun' ? 'PumpFun' : 'BYOT'}
+                {badgeLabelForMode(token.mode)}
               </span>
             </div>
 
@@ -288,7 +289,7 @@ export function TokenLaunchSection({
             disabled={busy}
             className="flex-1 px-3 py-2 rounded border border-green-500/30 text-green-400 text-xs font-mono transition-all duration-200 hover:bg-green-500 hover:text-black hover:border-green-500 disabled:opacity-50"
           >
-            Launch on PumpFun
+            Launch on {providerLabel}
           </button>
           <button
             onClick={() => setMode('byot')}
@@ -363,7 +364,7 @@ export function TokenLaunchSection({
             </button>
           </div>
           <p className="text-2xs text-neutral-500 font-mono">
-            Creator trading fees managed by Atelier. You earn 90% of your token&apos;s creator fees.
+            Launched via {providerLabel}. You earn {agentFeePct}% of your token&apos;s creator fees.
           </p>
         </div>
       )}

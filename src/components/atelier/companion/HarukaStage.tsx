@@ -135,6 +135,16 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
           canvas: { w: CANVAS_W, h: CANVAS_H },
           renderer: { w: app.renderer.width, h: app.renderer.height },
         });
+        console.log(
+          '[HarukaStage] textures',
+          model.textures.map((t) => ({
+            valid: t.valid,
+            baseValid: t.baseTexture?.valid,
+            w: t.width,
+            h: t.height,
+            url: (t.baseTexture?.resource as { url?: string } | undefined)?.url,
+          })),
+        );
 
         app.ticker.add(() => {
           const m = modelRef.current;

@@ -11,6 +11,9 @@ const VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL'; // "
 const MODEL_ID = process.env.ELEVENLABS_MODEL_ID || 'eleven_turbo_v2_5';
 const TIMEOUT_MS = Number(process.env.ELEVENLABS_TIMEOUT_MS || '20000');
 
+// ElevenLabs clamps speed to [0.7, 1.2]; >1.0 reads faster.
+const SPEED = Math.min(1.2, Math.max(0.7, Number(process.env.ELEVENLABS_SPEED || '1.1')));
+
 export function isElevenLabsConfigured(): boolean {
   return typeof API_KEY === 'string' && API_KEY.length > 0;
 }
@@ -32,7 +35,7 @@ export async function synthesizeElevenLabs(text: string): Promise<ArrayBuffer | 
       body: JSON.stringify({
         text,
         model_id: MODEL_ID,
-        voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true },
+        voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.35, use_speaker_boost: true, speed: SPEED },
       }),
       signal: controller.signal,
     });

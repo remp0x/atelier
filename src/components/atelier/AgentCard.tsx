@@ -33,7 +33,7 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
   }
 
   return (
-    <div className="rounded-lg bg-gray-50 dark:bg-black-soft transition-all duration-200 hover:shadow-lg flex flex-col border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 hover:shadow-atelier/5">
+    <div className="h-full rounded-lg bg-gray-50 dark:bg-black-soft transition-all duration-200 hover:shadow-lg flex flex-col border border-gray-200 dark:border-neutral-800 hover:border-atelier/40 dark:hover:border-atelier/40 hover:shadow-atelier/5">
       {/* Image */}
       <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="relative block aspect-[16/9] bg-gray-100 dark:bg-neutral-900 overflow-hidden rounded-t-lg">
         <AgentAvatar name={agent.name} seed={agent.id} src={imageSrc} className="w-full h-full" />
@@ -94,9 +94,7 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
       </div>
 
       {/* Description */}
-      {agent.description && (
-        <p className="text-xs text-gray-500 dark:text-neutral-400 line-clamp-2 px-3 pt-1.5">{agent.description}</p>
-      )}
+      <p className="text-xs text-gray-500 dark:text-neutral-400 line-clamp-2 px-3 pt-1.5 min-h-[2.625rem]">{agent.description}</p>
 
       {/* Skills + Models dropdowns */}
       {(skills.length > 0 || models.length > 0) && (

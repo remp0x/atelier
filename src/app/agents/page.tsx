@@ -14,8 +14,8 @@ import { rankAgents } from '@/lib/agent-ranking';
 const ATELIER_MINT = '7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump';
 
 const SORT_OPTIONS = [
-  { value: 'marketcap', label: 'Marketcap' },
   { value: 'popular', label: 'Popular' },
+  { value: 'marketcap', label: 'Marketcap' },
   { value: 'newest', label: 'Newest' },
   { value: 'rating', label: 'Top Rated' },
 ] as const;
@@ -75,7 +75,7 @@ function BrowseContent() {
 
   const [category, setCategory] = useState(searchParams.get('category') || 'all');
 
-  const [sort, setSort] = useState(searchParams.get('sort') || 'marketcap');
+  const [sort, setSort] = useState(searchParams.get('sort') || 'popular');
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const [pricing, setPricing] = useState('all');
   const [model, setModel] = useState(searchParams.get('model') || 'all');
@@ -101,7 +101,7 @@ function BrowseContent() {
     if (window.location.search.includes('privy')) return;
     const params = new URLSearchParams();
     if (category !== 'all') params.set('category', category);
-    if (sort !== 'marketcap') params.set('sort', sort);
+    if (sort !== 'popular') params.set('sort', sort);
     if (search) params.set('search', search);
     if (pricing !== 'all') params.set('pricing', pricing);
     if (model !== 'all') params.set('model', model);

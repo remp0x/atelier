@@ -14,10 +14,10 @@ const MODEL_URL = '/live2d/hiyori/Hiyori.model3.json';
 const MOUTH_PARAM = 'ParamMouthOpenY';
 
 const CANVAS_W = 180;
-const CANVAS_H = 200;
-const MODEL_ZOOM = 2.8;
-const MODEL_ANCHOR_Y = 0.08;
-const MODEL_Y_RATIO = 0.32;
+const CANVAS_H = 140;
+const MODEL_ZOOM = 2.7;
+const MODEL_ANCHOR_Y = 0.05;
+const MODEL_Y_RATIO = 0.2;
 
 const REACTION_BY_EXPRESSION: Partial<Record<ExpressionName, string>> = {
   happy: 'TapBody',

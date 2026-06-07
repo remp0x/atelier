@@ -294,7 +294,7 @@ export function AskAtelierWidget() {
 
             {COMPANION_ENABLED && (
               <StageBoundary>
-                <div className="flex-shrink-0 flex justify-center py-3 border-b border-gray-100 dark:border-neutral-800 bg-gray-50/60 dark:bg-black-light/40">
+                <div className="flex-shrink-0 flex justify-center pt-1 pb-2 border-b border-gray-100 dark:border-neutral-800 bg-gray-50/60 dark:bg-black-light/40">
                   <HarukaStage voiceEnabled={voiceEnabled} onHandle={handleStage} />
                 </div>
               </StageBoundary>

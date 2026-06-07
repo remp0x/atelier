@@ -143,6 +143,21 @@ export function createSpeechController(cb: LipsyncCallbacks): SpeechController {
     return audioCtx;
   };
 
+  // Autoplay policy: Web Audio can only start from a user gesture, but speech
+  // begins after the answer fetch resolves (gesture expired). Create + resume
+  // the context on the first interaction so later playback is unblocked.
+  const unlock = () => {
+    try {
+      ensureCtx().resume().catch(() => {});
+    } catch {
+      /* AudioContext unsupported */
+    }
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+  }
+
   const realSpeak = async (text: string, myToken: number): Promise<boolean> => {
     let res: Response;
     try {
@@ -224,6 +239,10 @@ export function createSpeechController(cb: LipsyncCallbacks): SpeechController {
     active = false;
     stopLoop();
     stopSource();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    }
     if (isTtsAvailable()) window.speechSynthesis.cancel();
     if (audioCtx) {
       audioCtx.close().catch(() => {});

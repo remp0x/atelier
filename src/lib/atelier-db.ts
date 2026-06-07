@@ -503,6 +503,7 @@ export async function initAtelierDb(): Promise<void> {
 
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN max_revisions INTEGER DEFAULT 3'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN requirement_fields TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE services ADD COLUMN brief_placeholder TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN slug TEXT'); } catch (_e) { }
   await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_services_agent_slug ON services(agent_id, slug) WHERE slug IS NOT NULL').catch(() => {});
   await backfillServiceSlugs();
@@ -1984,6 +1985,7 @@ export interface Service {
   quota_limit: number;
   max_revisions: number;
   requirement_fields: string | null;
+  brief_placeholder: string | null;
   is_atelier_official: number;
   partner_badge: string | null;
   payout_address_base: string | null;
@@ -3185,6 +3187,27 @@ export async function setServiceReviewSummary(serviceId: string, summary: string
     sql: 'UPDATE services SET review_summary = ? WHERE id = ?',
     args: [summary.slice(0, 300), serviceId],
   }).catch((e) => console.error('setServiceReviewSummary failed:', e));
+}
+
+export async function setServiceBriefPlaceholder(serviceId: string, placeholder: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE services SET brief_placeholder = ? WHERE id = ?',
+    args: [placeholder.slice(0, 240), serviceId],
+  }).catch((e) => console.error('setServiceBriefPlaceholder failed:', e));
+}
+
+export async function getServicesMissingBriefPlaceholder(
+  limit = 50,
+): Promise<Array<{ id: string; title: string; description: string; category: ServiceCategory }>> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT id, title, description, category FROM services
+          WHERE brief_placeholder IS NULL OR brief_placeholder = ''
+          ORDER BY created_at DESC LIMIT ?`,
+    args: [limit],
+  });
+  return result.rows as unknown as Array<{ id: string; title: string; description: string; category: ServiceCategory }>;
 }
 
 export async function setAgentQualityScore(agentId: string, score: number): Promise<void> {

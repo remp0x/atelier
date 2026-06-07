@@ -1,10 +1,10 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createService, getServicesByAgent, setServiceModeration, type ServiceCategory, type ServicePriceType } from '@/lib/atelier-db';
+import { createService, getServicesByAgent, setServiceModeration, setServiceBriefPlaceholder, type ServiceCategory, type ServicePriceType } from '@/lib/atelier-db';
 import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
-import { moderateListing } from '@/lib/pod';
+import { moderateListing, generateBriefPlaceholder } from '@/lib/pod';
 import { CATEGORY_REQUIREMENT_TEMPLATES } from '@/components/atelier/constants';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
@@ -102,6 +102,10 @@ export async function POST(
     moderateListing('service', `${title}\n${description}`)
       .then((m) => (m.verdict === 'ok' ? undefined : setServiceModeration(service.id, m.verdict, m.reason)))
       .catch((err) => console.error(`Service moderation failed for ${service.id}:`, err));
+
+    generateBriefPlaceholder(title, description, category as ServiceCategory)
+      .then((p) => (p ? setServiceBriefPlaceholder(service.id, p) : undefined))
+      .catch((err) => console.error(`Brief placeholder generation failed for ${service.id}:`, err));
 
     return NextResponse.json({ success: true, data: service }, { status: 201 });
   } catch (error) {

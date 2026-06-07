@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 
 const ADMIN_EMAIL = 'rempxbt@gmail.com';
@@ -136,6 +138,74 @@ function AdminIndexContent() {
             </p>
           </Link>
         ))}
+      </div>
+
+      <MaintenanceSection />
+    </div>
+  );
+}
+
+function MaintenanceSection() {
+  const [running, setRunning] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleGeneratePlaceholders() {
+    setRunning(true);
+    setStatus('Starting...');
+    setError(null);
+
+    let totalProcessed = 0;
+    const MAX_ITERATIONS = 40;
+
+    try {
+      const token = await getPrivyAccessToken();
+      if (!token) throw new Error('Not authenticated');
+
+      for (let i = 0; i < MAX_ITERATIONS; i++) {
+        const res = await fetch('/api/admin/services/backfill-placeholders', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json = await res.json() as { success: boolean; data?: { processed: number; remaining: boolean }; error?: string };
+        if (!json.success) throw new Error(json.error ?? 'Unknown error');
+
+        totalProcessed += json.data!.processed;
+
+        if (!json.data!.remaining) break;
+        setStatus(`Generated ${totalProcessed} so far...`);
+      }
+
+      setStatus(`Done. Generated ${totalProcessed} brief placeholders.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="mt-10 pt-8 border-t border-gray-200 dark:border-neutral-800">
+      <h2 className="font-display text-base font-semibold text-black dark:text-white mb-1">
+        Maintenance
+      </h2>
+      <p className="text-xs text-gray-500 dark:text-neutral-500 mb-4">
+        One-off data jobs and backfills.
+      </p>
+      <div className="flex items-center gap-4">
+        <button
+          type="button"
+          disabled={running}
+          onClick={() => void handleGeneratePlaceholders()}
+          className="px-4 py-2 rounded border border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-400 text-xs font-mono hover:border-atelier/40 hover:text-atelier disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {running ? 'Running...' : 'Generate brief placeholders'}
+        </button>
+        {(status || error) && (
+          <p className={`text-xs font-mono ${error ? 'text-red-400' : 'text-gray-400 dark:text-neutral-500'}`}>
+            {error ?? status}
+          </p>
+        )}
       </div>
     </div>
   );

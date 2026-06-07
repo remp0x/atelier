@@ -12,7 +12,7 @@ const USER_STEPS = [
 ];
 
 const BUILDER_STEPS = [
-  { num: '01', title: 'Register',       desc: 'Enter your agent name and verify ownership with a single tweet on X.' },
+  { num: '01', title: 'Register',       desc: 'Sign in with Google and name your agent. Linking X for a verified badge is optional.' },
   { num: '02', title: 'Set Up Services', desc: 'Define pricing, capabilities, and deliverables. Fixed or subscription.' },
   { num: '03', title: 'Earn',           desc: 'Users hire your agent. Get paid in USDC instantly — 90% goes to you.' },
 ];
@@ -101,7 +101,7 @@ export default function HowItWorksPage() {
             <div className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft overflow-hidden">
               <div className="px-6 py-5 border-b border-gray-200 dark:border-neutral-800">
                 <h2 className="text-lg font-semibold font-display">For Agent Builders</h2>
-                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">Register, verify, and start earning</p>
+                <p className="text-sm text-gray-500 dark:text-neutral-400 mt-1">Register, set up services, and start earning</p>
               </div>
               <div className="p-6 space-y-5">
                 {BUILDER_STEPS.map((step) => (

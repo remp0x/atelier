@@ -41,7 +41,7 @@ function CopyButton({ text, label }: { text: string; label: string }) {
     <button
       type="button"
       onClick={() => void handleCopy()}
-      className="inline-flex items-center justify-center w-6 h-6 rounded text-neutral-600 hover:text-atelier focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/50 transition-colors cursor-pointer shrink-0"
+      className="inline-flex items-center justify-center w-6 h-6 rounded text-gray-400 dark:text-neutral-600 hover:text-atelier dark:hover:text-atelier focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/50 transition-colors cursor-pointer shrink-0"
       aria-label={label}
     >
       {copied ? (
@@ -138,22 +138,22 @@ function WalletCard({
   return (
     <div
       data-wallet-card
-      className="rounded-xl border border-neutral-800 bg-[#0d0d0d] overflow-hidden"
+      className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] overflow-hidden"
     >
       {/* Card header */}
-      <div className="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-neutral-800/60">
-        <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-neutral-900 border border-neutral-800 shrink-0 mt-0.5">
+      <div className="flex items-start gap-3 px-5 pt-5 pb-4 border-b border-gray-200 dark:border-neutral-800/60">
+        <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shrink-0 mt-0.5">
           <ChainLogo chain={chain} size={18} />
         </span>
 
         {/* Address block -- the hero */}
         <div className="flex-1 min-w-0">
-          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-neutral-500 mb-1">
+          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500 mb-1">
             {chainLabel}
           </p>
           <div className="flex items-center gap-2 min-w-0">
             <span
-              className="font-mono text-[13px] text-white leading-tight truncate"
+              className="font-mono text-[13px] text-black dark:text-white leading-tight truncate"
               title={address}
             >
               {/* Show more chars on wider screens via CSS -- middle ellipsis in JS for mobile */}
@@ -166,13 +166,13 @@ function WalletCard({
 
         {/* Balance -- top right */}
         <div className="text-right shrink-0 pl-2">
-          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-neutral-500 mb-1">
+          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500 mb-1">
             USDC
           </p>
           {balanceLoading ? (
-            <div className="h-6 w-20 rounded bg-neutral-800 animate-pulse" />
+            <div className="h-6 w-20 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
           ) : (
-            <p className="font-mono text-lg font-semibold text-white leading-tight">
+            <p className="font-mono text-lg font-semibold text-black dark:text-white leading-tight">
               <span ref={balanceRef}>
                 {balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
@@ -211,7 +211,7 @@ function WalletCard({
           type="button"
           onClick={() => void handleExport()}
           disabled={exporting}
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md font-mono text-[11px] border border-neutral-800 text-neutral-500 hover:border-neutral-700 hover:text-neutral-300 disabled:opacity-50 disabled:cursor-wait focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/40 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md font-mono text-[11px] border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-500 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-700 dark:hover:text-neutral-300 disabled:opacity-50 disabled:cursor-wait focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/40 transition-colors cursor-pointer"
         >
           {exporting ? 'Opening...' : 'Export key'}
         </button>
@@ -232,17 +232,17 @@ function PreparingCard({ chain }: { chain: 'base' | 'solana' }) {
   return (
     <div
       data-wallet-card
-      className="rounded-xl border border-neutral-800 bg-[#0d0d0d] px-5 py-5"
+      className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-5"
     >
       <div className="flex items-center gap-3">
-        <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-neutral-900 border border-neutral-800 shrink-0">
+        <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 shrink-0">
           <ChainLogo chain={chain} size={18} />
         </span>
         <div className="flex-1 min-w-0">
-          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-neutral-500 mb-1">
+          <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500 mb-1">
             {chainLabel}
           </p>
-          <p className="font-mono text-xs text-neutral-500">
+          <p className="font-mono text-xs text-gray-400 dark:text-neutral-500">
             Preparing wallet...
           </p>
         </div>
@@ -281,24 +281,24 @@ function WalletDisclosure() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-label="About these wallets"
-        className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-neutral-700 text-neutral-500 hover:border-neutral-600 hover:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 transition-colors shrink-0 cursor-pointer"
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-300 dark:border-neutral-700 text-gray-400 dark:text-neutral-500 hover:border-gray-400 dark:hover:border-neutral-600 hover:text-gray-600 dark:hover:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 transition-colors shrink-0 cursor-pointer"
       >
         <span className="font-mono text-[9px] leading-none select-none">i</span>
       </button>
-      <span className="font-mono text-[10px] text-neutral-600 select-none">
+      <span className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 select-none">
         About these wallets
       </span>
 
       {open && (
         <div
           role="tooltip"
-          className="absolute bottom-full left-0 mb-2 w-72 rounded-xl border border-neutral-800 bg-[#0d0d0d] shadow-2xl p-3 space-y-2 z-50"
+          className="absolute bottom-full left-0 mb-2 w-72 rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] shadow-2xl p-3 space-y-2 z-50"
         >
-          <p className="font-mono text-[10px] text-neutral-400 leading-snug">
+          <p className="font-mono text-[10px] text-gray-600 dark:text-neutral-400 leading-snug">
             Wallets are non-custodial embedded wallets powered by Privy. You hold the keys.
             Export your private key at any time using the button above.
           </p>
-          <p className="font-mono text-[10px] text-neutral-400 leading-snug">
+          <p className="font-mono text-[10px] text-gray-600 dark:text-neutral-400 leading-snug">
             Funding and bridging are provided by third parties (Coinbase, Relay). Pricing, timing, and execution are not controlled by Atelier and are subject to the provider&apos;s terms.
           </p>
         </div>
@@ -413,7 +413,7 @@ export function WalletPanel() {
         <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-atelier mb-1.5">
           WALLET
         </p>
-        <h1 className="font-display font-bold text-2xl tracking-[-0.02em] text-white">
+        <h1 className="font-display font-bold text-2xl tracking-[-0.02em] text-black dark:text-white">
           Your{' '}
           <span
             className="text-transparent bg-clip-text"
@@ -423,7 +423,7 @@ export function WalletPanel() {
           </span>{' '}
           Wallet
         </h1>
-        <p className="mt-2 text-[13px] text-neutral-400 leading-relaxed max-w-xl">
+        <p className="mt-2 text-[13px] text-gray-500 dark:text-neutral-400 leading-relaxed max-w-xl">
           Fund your embedded wallets with USDC to hire agents on Atelier. Each account gets
           a Solana and a Base wallet automatically on sign-in.
         </p>
@@ -437,8 +437,8 @@ export function WalletPanel() {
         <svg className="w-4 h-4 text-atelier shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
         </svg>
-        <p className="text-[12px] font-mono text-neutral-300 leading-relaxed">
-          Click <strong className="text-white">Fund</strong> to buy USDC via card,
+        <p className="text-[12px] font-mono text-gray-600 dark:text-neutral-300 leading-relaxed">
+          Click <strong className="text-black dark:text-white">Fund</strong> to buy USDC via card,
           bank transfer, or receive from an external wallet.
         </p>
       </div>
@@ -473,7 +473,7 @@ export function WalletPanel() {
       </div>
 
       {/* Disclosure footer */}
-      <div data-wallet-footer className="pt-2 border-t border-neutral-800/50">
+      <div data-wallet-footer className="pt-2 border-t border-gray-200 dark:border-neutral-800/50">
         <WalletDisclosure />
       </div>
     </div>

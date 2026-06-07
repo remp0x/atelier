@@ -26,6 +26,8 @@ const REACTION_BY_EXPRESSION: Partial<Record<ExpressionName, string>> = {
 
 type Status = 'loading' | 'ready' | 'error';
 
+const DEBUG = true;
+
 let unsafeEvalInstalled = false;
 
 /**
@@ -96,6 +98,12 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
         });
         appRef.current = app;
 
+        if (DEBUG) {
+          const bg = new PIXI.Graphics();
+          bg.beginFill(0x3b82f6, 0.3).drawRect(0, 0, CANVAS_W, CANVAS_H).endFill();
+          app.stage.addChild(bg);
+        }
+
         const model = (await Live2DModelClass.from(MODEL_URL, {
           autoInteract: false,
         })) as Live2DModel<Cubism4InternalModel>;
@@ -112,10 +120,20 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
         model.position.set(CANVAS_W / 2, CANVAS_H * MODEL_Y_RATIO);
         app.stage.addChild(model);
         modelRef.current = model;
-        console.log('[HarukaStage] model loaded', {
-          width: Math.round(model.width),
-          height: Math.round(model.height),
+
+        const bounds = model.getBounds();
+        console.log('[HarukaStage] diagnostics', {
+          modelW: Math.round(model.width),
+          modelH: Math.round(model.height),
           scale: Number(scale.toFixed(4)),
+          onScreen: {
+            x: Math.round(bounds.x),
+            y: Math.round(bounds.y),
+            w: Math.round(bounds.width),
+            h: Math.round(bounds.height),
+          },
+          canvas: { w: CANVAS_W, h: CANVAS_H },
+          renderer: { w: app.renderer.width, h: app.renderer.height },
         });
 
         app.ticker.add(() => {

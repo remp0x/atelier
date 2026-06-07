@@ -252,7 +252,7 @@ export function AskAtelierWidget() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
                   </svg>
                 </span>
-                <span className="font-display font-semibold text-sm text-black dark:text-white">Ask Atelier</span>
+                <span className="font-display font-semibold text-sm text-black dark:text-white">Atelier AI</span>
               </div>
               <div className="flex items-center gap-1">
                 {COMPANION_ENABLED && (

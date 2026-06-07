@@ -70,6 +70,7 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
 
     async function init() {
       try {
+        (window as unknown as { PIXI: typeof PIXI }).PIXI = PIXI;
         await loadCubismCore();
         if (cancelled || !canvasRef.current) return;
 
@@ -112,7 +113,8 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
         });
 
         setStatus('ready');
-      } catch {
+      } catch (err) {
+        console.error('[HarukaStage] failed to initialize Live2D model', err);
         if (!cancelled) setStatus('error');
       }
     }

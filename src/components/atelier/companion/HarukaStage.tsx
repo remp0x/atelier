@@ -74,6 +74,11 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
     };
     onHandle(handle);
 
+    const applyMouth = () => {
+      const m = modelRef.current;
+      if (m) m.internalModel.coreModel.setParameterValueById(MOUTH_PARAM, mouthRef.current);
+    };
+
     async function init() {
       try {
         (window as unknown as { PIXI: typeof PIXI }).PIXI = PIXI;
@@ -94,6 +99,7 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
           backgroundAlpha: 0,
           antialias: true,
           autoDensity: true,
+          sharedTicker: true,
           resolution: Math.min(window.devicePixelRatio || 1, 2),
         });
         appRef.current = app;
@@ -105,7 +111,9 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
         }
 
         const model = (await Live2DModelClass.from(MODEL_URL, {
-          autoInteract: false,
+          ticker: PIXI.Ticker.shared,
+          autoHitTest: false,
+          autoFocus: false,
         })) as Live2DModel<Cubism4InternalModel>;
 
         if (cancelled) {
@@ -113,7 +121,6 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
           return;
         }
 
-        model.automator.autoUpdate = false;
         model.anchor.set(0.5, MODEL_ANCHOR_Y);
         const scale = (CANVAS_H / model.height) * MODEL_ZOOM;
         model.scale.set(scale);
@@ -148,12 +155,7 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
           ),
         );
 
-        app.ticker.add(() => {
-          const m = modelRef.current;
-          if (!m) return;
-          m.internalModel.coreModel.setParameterValueById(MOUTH_PARAM, mouthRef.current);
-          m.update(app.ticker.deltaMS);
-        });
+        PIXI.Ticker.shared.add(applyMouth, undefined, PIXI.UPDATE_PRIORITY.HIGH);
 
         setStatus('ready');
       } catch (err) {
@@ -166,6 +168,7 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
 
     return () => {
       cancelled = true;
+      PIXI.Ticker.shared.remove(applyMouth);
       controller.dispose();
       controllerRef.current = null;
       onHandle(null);

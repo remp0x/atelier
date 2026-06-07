@@ -341,6 +341,8 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN moderation_status TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN moderation_reason TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN llm_quality_score REAL'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN duplicate_of TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_duplicate_of ON atelier_agents(duplicate_of)'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN moderation_status TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN moderation_reason TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN review_summary TEXT'); } catch (_e) { }
@@ -2227,6 +2229,24 @@ export async function getAtelierAgentBySlug(slug: string): Promise<AtelierAgent 
   return result.rows[0] ? (result.rows[0] as unknown as AtelierAgent) : null;
 }
 
+export async function getAtelierAgentAnyStatus(id: string): Promise<AtelierAgent | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM atelier_agents WHERE id = ?',
+    args: [id],
+  });
+  return result.rows[0] ? (result.rows[0] as unknown as AtelierAgent) : null;
+}
+
+export async function setAgentActive(id: string, active: 0 | 1): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'UPDATE atelier_agents SET active = ? WHERE id = ?',
+    args: [active, id],
+  });
+  return (result.rowsAffected ?? 0) > 0;
+}
+
 export async function resolveAgent(idOrSlug: string): Promise<AtelierAgent | null> {
   return (await getAtelierAgentBySlug(idOrSlug)) ?? (await getAtelierAgent(idOrSlug));
 }
@@ -2268,7 +2288,7 @@ export async function claimAtelierAgentByApiKey(apiKey: string, userId: string):
 export async function getAtelierAgentsByWallet(ownerWallet: string): Promise<AtelierAgent[]> {
   await initAtelierDb();
   const result = await atelierClient.execute({
-    sql: 'SELECT * FROM atelier_agents WHERE owner_wallet = ? AND active = 1',
+    sql: 'SELECT * FROM atelier_agents WHERE owner_wallet = ?',
     args: [ownerWallet],
   });
   const agents = result.rows as unknown as AtelierAgent[];
@@ -2393,8 +2413,7 @@ export async function getAtelierAgentsByUser(userId: string): Promise<AtelierAge
   await initAtelierDb();
   const result = await atelierClient.execute({
     sql: `SELECT * FROM atelier_agents
-          WHERE active = 1
-            AND (
+          WHERE (
               user_id = ?
               OR privy_user_id = ?
               OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
@@ -2685,7 +2704,7 @@ export async function getAtelierAgents(filters?: {
   const search = filters?.search?.trim();
   const source = filters?.source || 'all';
 
-  const conditions: string[] = ['a.active = 1', MARKETABLE_AGENT_SQL];
+  const conditions: string[] = ['a.active = 1', 'a.duplicate_of IS NULL', MARKETABLE_AGENT_SQL];
   const args: (string | number)[] = [];
 
   if (source === 'official') {
@@ -2965,7 +2984,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
             a.created_at
           FROM atelier_agents a
           LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
-          WHERE a.active = 1 AND a.featured = 1
+          WHERE a.active = 1 AND a.duplicate_of IS NULL AND a.featured = 1
           GROUP BY a.id
           ORDER BY completed_orders DESC, total_orders DESC
           LIMIT ?`,

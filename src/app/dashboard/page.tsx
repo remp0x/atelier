@@ -114,6 +114,7 @@ function DashboardContent() {
   const [showCreateService, setShowCreateService] = useState(false);
   const [showEditService, setShowEditService] = useState<Service | null>(null);
   const [deletingService, setDeletingService] = useState<string | null>(null);
+  const [togglingActive, setTogglingActive] = useState(false);
   const [showDeliver, setShowDeliver] = useState<string | null>(null);
   const [showQuote, setShowQuote] = useState<string | null>(null);
   const [editingPayout, setEditingPayout] = useState(false);
@@ -188,6 +189,36 @@ function DashboardContent() {
       if (json.success) loadDashboard();
     } finally {
       setDeletingService(null);
+    }
+  };
+
+  const toggleAgentActive = async (agentId: string, agentApiKey: string | null, currentActive: number) => {
+    const next = currentActive !== 1;
+    if (!next && !confirm('Deactivate this agent? It will be hidden from the marketplace. You can reactivate it anytime.')) return;
+    setTogglingActive(true);
+    try {
+      let res: Response;
+      if (agentApiKey) {
+        res = await fetch(`/api/agents/${agentId}/active`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${agentApiKey}` },
+          body: JSON.stringify({ active: next }),
+        });
+      } else {
+        const auth = await getAuth();
+        res = await fetch(`/api/agents/${agentId}/active`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...auth, active: next }),
+        });
+      }
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      loadDashboard();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update agent status');
+    } finally {
+      setTogglingActive(false);
     }
   };
 
@@ -327,6 +358,13 @@ function DashboardContent() {
 
           {agent && (
             <div className="space-y-6">
+              {agent.active !== 1 && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center justify-between gap-3">
+                  <p className="text-xs font-mono text-amber-700 dark:text-amber-400">This agent is deactivated and hidden from the marketplace.</p>
+                  <button onClick={() => toggleAgentActive(agent.id, agent.api_key ?? null, agent.active)} disabled={togglingActive} className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 disabled:opacity-50 cursor-pointer whitespace-nowrap">{togglingActive ? '...' : 'Reactivate'}</button>
+                </div>
+              )}
+
               {/* KPI Stats */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatCard label="Services" value={String(agentServices.length)} accent="text-atelier" />
@@ -343,7 +381,13 @@ function DashboardContent() {
                     <div className="flex items-center gap-2.5">
                       <h2 className="text-lg font-bold text-black dark:text-white font-display">{agent.name}</h2>
                       {agent.verified === 1 && <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">Verified</span>}
-                      <button onClick={() => setShowEditAgent(true)} className="text-[11px] font-mono text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors ml-auto cursor-pointer">Edit</button>
+                      {agent.active !== 1 && <span className="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-neutral-500/15 text-neutral-500 dark:text-neutral-400">Inactive</span>}
+                      <div className="ml-auto flex items-center gap-3">
+                        <button onClick={() => setShowEditAgent(true)} className="text-[11px] font-mono text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors cursor-pointer">Edit</button>
+                        <button onClick={() => toggleAgentActive(agent.id, agent.api_key ?? null, agent.active)} disabled={togglingActive} className={`text-[11px] font-mono transition-colors cursor-pointer disabled:opacity-50 ${agent.active === 1 ? 'text-gray-400 dark:text-neutral-500 hover:text-red-500 dark:hover:text-red-400' : 'text-emerald-600 dark:text-emerald-400 hover:text-emerald-500'}`}>
+                          {togglingActive ? '...' : agent.active === 1 ? 'Deactivate' : 'Activate'}
+                        </button>
+                      </div>
                     </div>
                     <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mt-1 line-clamp-2">{agent.description}</p>
                     <div className="flex items-center gap-4 mt-3 text-xs font-mono text-gray-400 dark:text-neutral-500">

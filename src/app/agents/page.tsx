@@ -80,6 +80,7 @@ function BrowseContent() {
   const [pricing, setPricing] = useState('all');
   const [model, setModel] = useState(searchParams.get('model') || 'all');
   const [showAllAgents, setShowAllAgents] = useState(searchParams.get('show') === 'all');
+  const [hasOrders, setHasOrders] = useState(searchParams.get('orders') === '1');
   const [modelOptions, setModelOptions] = useState<string[]>([]);
 
   const [agents, setAgents] = useState<AtelierAgentListItem[]>([]);
@@ -105,10 +106,11 @@ function BrowseContent() {
     if (pricing !== 'all') params.set('pricing', pricing);
     if (model !== 'all') params.set('model', model);
     if (showAllAgents) params.set('show', 'all');
+    if (hasOrders) params.set('orders', '1');
     const qs = params.toString();
     const url = `${window.location.pathname}${qs ? `?${qs}` : ''}`;
     window.history.replaceState(null, '', url);
-  }, [category, sort, search, pricing, model, showAllAgents]);
+  }, [category, sort, search, pricing, model, showAllAgents, hasOrders]);
 
   const fetchAgents = useCallback(async () => {
     setLoading(true);
@@ -188,12 +190,16 @@ function BrowseContent() {
     fetchAgents();
   }, [fetchAgents]);
 
-  const visibleFeatured = useMemo(
-    () => (showAllAgents ? featuredAgents : featuredAgents.filter(a => a.services_count > 0)),
-    [featuredAgents, showAllAgents],
-  );
+  const visibleFeatured = useMemo(() => {
+    let list = showAllAgents ? featuredAgents : featuredAgents.filter(a => a.services_count > 0);
+    if (hasOrders) list = list.filter(a => a.total_orders > 0);
+    return list;
+  }, [featuredAgents, showAllAgents, hasOrders]);
   const featuredIds = useMemo(() => new Set(visibleFeatured.map(a => a.id)), [visibleFeatured]);
-  const allFiltered = useMemo(() => agents.filter(a => !featuredIds.has(a.id)), [agents, featuredIds]);
+  const allFiltered = useMemo(
+    () => agents.filter(a => !featuredIds.has(a.id) && (!hasOrders || a.total_orders > 0)),
+    [agents, featuredIds, hasOrders],
+  );
   const filteredAgents = useMemo(() => allFiltered.slice(0, visibleCount), [allFiltered, visibleCount]);
   const hasMore = visibleCount < allFiltered.length;
 
@@ -299,6 +305,8 @@ function BrowseContent() {
             modelOptions={modelOptions}
             showAllAgents={showAllAgents}
             setShowAllAgents={setShowAllAgents}
+            hasOrders={hasOrders}
+            setHasOrders={setHasOrders}
           />
           <SortDropdown sort={sort} setSort={setSort} />
         </div>
@@ -484,6 +492,8 @@ function FiltersDropdown({
   modelOptions,
   showAllAgents,
   setShowAllAgents,
+  hasOrders,
+  setHasOrders,
 }: {
   pricing: string;
   setPricing: (v: string) => void;
@@ -492,9 +502,11 @@ function FiltersDropdown({
   modelOptions: string[];
   showAllAgents: boolean;
   setShowAllAgents: (v: boolean) => void;
+  hasOrders: boolean;
+  setHasOrders: (v: boolean) => void;
 }) {
   const { open, setOpen, ref } = useDropdown();
-  const activeCount = (pricing !== 'all' ? 1 : 0) + (model !== 'all' ? 1 : 0) + (showAllAgents ? 1 : 0);
+  const activeCount = (pricing !== 'all' ? 1 : 0) + (model !== 'all' ? 1 : 0) + (showAllAgents ? 1 : 0) + (hasOrders ? 1 : 0);
 
   return (
     <div className="relative flex-shrink-0" ref={ref}>
@@ -521,6 +533,20 @@ function FiltersDropdown({
                 key={String(opt.value)}
                 selected={showAllAgents === opt.value}
                 onClick={() => setShowAllAgents(opt.value)}
+                label={opt.label}
+              />
+            ))}
+          </FilterGroup>
+
+          <FilterGroup label="Orders">
+            {[
+              { value: false, label: 'Any' },
+              { value: true, label: 'With orders' },
+            ].map((opt) => (
+              <FilterOption
+                key={String(opt.value)}
+                selected={hasOrders === opt.value}
+                onClick={() => setHasOrders(opt.value)}
                 label={opt.label}
               />
             ))}
@@ -562,7 +588,7 @@ function FiltersDropdown({
           {activeCount > 0 && (
             <button
               type="button"
-              onClick={() => { setPricing('all'); setModel('all'); setShowAllAgents(false); }}
+              onClick={() => { setPricing('all'); setModel('all'); setShowAllAgents(false); setHasOrders(false); }}
               className="w-full h-8 rounded-lg border border-gray-200 dark:border-neutral-800 text-[11px] font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier hover:border-atelier/40 transition-colors cursor-pointer"
             >
               Clear filters

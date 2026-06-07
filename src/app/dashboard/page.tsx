@@ -792,7 +792,32 @@ function CreateServiceModal({ agentId, apiKey, getAuth, onClose, onSuccess }: { 
   const [deliverables, setDeliverables] = useState('');
   const [demoUrl, setDemoUrl] = useState('');
   const [saving, setSaving] = useState(false);
+  const [improving, setImproving] = useState(false);
+  const [improveError, setImproveError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const canImprove = title.trim().length >= 3 && description.trim().length >= 10;
+
+  const handleImprove = async () => {
+    setImproving(true);
+    setImproveError(null);
+    try {
+      const res = await authFetch(
+        `/api/agents/${agentId}/services/improve`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, description }) },
+        apiKey,
+        getAuth,
+      );
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Improve failed');
+      if (json.data?.description) setDescription(json.data.description);
+      if (json.data?.title) setTitle(json.data.title);
+    } catch {
+      setImproveError("Couldn't improve right now");
+    } finally {
+      setImproving(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setSaving(true); setError(null);
@@ -810,7 +835,30 @@ function CreateServiceModal({ agentId, apiKey, getAuth, onClose, onSuccess }: { 
       <div className="space-y-4">
         <div><label className={LABEL_CLASS}>Category *</label><select value={category} onChange={e => setCategory(e.target.value as ServiceCategory)} className={INPUT_CLASS}>{VALID_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}</select></div>
         <div><label className={LABEL_CLASS}>Title *</label><input value={title} onChange={e => setTitle(e.target.value)} maxLength={100} placeholder="Professional Avatar Generation" className={INPUT_CLASS} /></div>
-        <div><label className={LABEL_CLASS}>Description *</label><textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1000} rows={3} placeholder="Describe what this service provides..." className={`${INPUT_CLASS} resize-none`} /></div>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={LABEL_CLASS} style={{ marginBottom: 0 }}>Description *</label>
+            <button
+              type="button"
+              onClick={handleImprove}
+              disabled={!canImprove || improving}
+              className="flex items-center gap-1 text-[10px] font-mono text-atelier border border-atelier/30 px-2 py-0.5 rounded hover:bg-atelier/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {improving ? (
+                <><div className="w-2.5 h-2.5 border border-atelier/40 border-t-atelier rounded-full animate-spin" />Improving...</>
+              ) : (
+                <>
+                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                  Improve with AI
+                </>
+              )}
+            </button>
+          </div>
+          <textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1000} rows={3} placeholder="Describe what this service provides..." className={`${INPUT_CLASS} resize-none`} />
+          {improveError && <p className="text-[10px] font-mono text-amber-500 dark:text-amber-400 mt-1">{improveError}</p>}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={LABEL_CLASS}>Price (USD) *</label>
@@ -959,7 +1007,32 @@ function EditServiceModal({ service, apiKey, getAuth, onClose, onSuccess }: { se
   const [turnaroundHours, setTurnaroundHours] = useState(String(service.turnaround_hours || ''));
   const [demoUrl, setDemoUrl] = useState(service.demo_url || '');
   const [saving, setSaving] = useState(false);
+  const [improving, setImproving] = useState(false);
+  const [improveError, setImproveError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const canImprove = title.trim().length >= 3 && description.trim().length >= 10;
+
+  const handleImprove = async () => {
+    setImproving(true);
+    setImproveError(null);
+    try {
+      const res = await authFetch(
+        `/api/agents/${service.agent_id}/services/improve`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, description }) },
+        apiKey,
+        getAuth,
+      );
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Improve failed');
+      if (json.data?.description) setDescription(json.data.description);
+      if (json.data?.title) setTitle(json.data.title);
+    } catch {
+      setImproveError("Couldn't improve right now");
+    } finally {
+      setImproving(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setSaving(true); setError(null);
@@ -977,7 +1050,30 @@ function EditServiceModal({ service, apiKey, getAuth, onClose, onSuccess }: { se
       <div className="space-y-4">
         <div><label className={LABEL_CLASS}>Category</label><select value={category} onChange={e => setCategory(e.target.value as ServiceCategory)} className={INPUT_CLASS}>{VALID_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}</select></div>
         <div><label className={LABEL_CLASS}>Title</label><input value={title} onChange={e => setTitle(e.target.value)} maxLength={100} className={INPUT_CLASS} /></div>
-        <div><label className={LABEL_CLASS}>Description</label><textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1000} rows={3} className={`${INPUT_CLASS} resize-none`} /></div>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={LABEL_CLASS} style={{ marginBottom: 0 }}>Description</label>
+            <button
+              type="button"
+              onClick={handleImprove}
+              disabled={!canImprove || improving}
+              className="flex items-center gap-1 text-[10px] font-mono text-atelier border border-atelier/30 px-2 py-0.5 rounded hover:bg-atelier/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {improving ? (
+                <><div className="w-2.5 h-2.5 border border-atelier/40 border-t-atelier rounded-full animate-spin" />Improving...</>
+              ) : (
+                <>
+                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                  </svg>
+                  Improve with AI
+                </>
+              )}
+            </button>
+          </div>
+          <textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={1000} rows={3} className={`${INPUT_CLASS} resize-none`} />
+          {improveError && <p className="text-[10px] font-mono text-amber-500 dark:text-amber-400 mt-1">{improveError}</p>}
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={LABEL_CLASS}>Price (USD)</label><input value={priceUsd} onChange={e => setPriceUsd(e.target.value)} type="number" min="0" step="0.01" className={INPUT_CLASS} /></div>
           <div><label className={LABEL_CLASS}>Price Type</label><div className="flex gap-2 mt-1.5">{(['fixed', 'quote'] as const).map(pt => <button key={pt} onClick={() => setPriceType(pt)} className={`flex-1 text-xs font-mono py-2 rounded-lg border transition-colors cursor-pointer ${priceType === pt ? 'bg-atelier/10 text-atelier border-atelier/30' : 'text-gray-500 dark:text-neutral-500 border-gray-200 dark:border-neutral-800 hover:border-gray-300 dark:hover:border-neutral-700'}`}>{pt === 'fixed' ? 'Fixed' : 'Quote'}</button>)}</div></div>

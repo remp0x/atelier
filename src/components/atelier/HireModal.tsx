@@ -245,6 +245,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [needsFunding, setNeedsFunding] = useState(false);
   const [pendingChain, setPendingChain] = useState<PayChain | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [briefNudge, setBriefNudge] = useState<string[] | null>(null);
+  const [briefChecking, setBriefChecking] = useState(false);
+  const briefNudgeDismissed = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -259,6 +262,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setPayChain(activeChain);
       setNeedsFunding(false);
       setPendingChain(null);
+      setBriefNudge(null);
+      briefNudgeDismissed.current = false;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -970,8 +975,59 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 <p className="text-sm text-red-400 font-mono">{error}</p>
               )}
 
+              {briefNudge && briefNudge.length > 0 && (
+                <div className="rounded-lg border border-atelier/20 bg-atelier/5 px-3 py-2.5">
+                  <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1.5">A couple things that would help the agent:</p>
+                  <ul className="space-y-0.5">
+                    {briefNudge.map((item, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs font-mono text-gray-600 dark:text-neutral-300">
+                        <span className="text-atelier mt-px">·</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <button
-                onClick={() => {
+                onClick={async () => {
+                  if (briefNudgeDismissed.current) {
+                    trackBeginCheckout({
+                      serviceId: service.id,
+                      serviceTitle: service.title,
+                      category: service.category,
+                      value: total,
+                      priceType: service.price_type,
+                    });
+                    setStep('review');
+                    return;
+                  }
+
+                  setBriefChecking(true);
+                  const TIMEOUT_MS = 6000;
+                  try {
+                    const controller = new AbortController();
+                    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+                    const res = await fetch('/api/orders/check-brief', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ service_id: service.id, brief }),
+                      signal: controller.signal,
+                    });
+                    clearTimeout(timer);
+                    const json = await res.json();
+                    if (json.success && json.data?.complete === false && Array.isArray(json.data.missing) && json.data.missing.length > 0) {
+                      setBriefNudge(json.data.missing);
+                      briefNudgeDismissed.current = true;
+                      setBriefChecking(false);
+                      return;
+                    }
+                  } catch {
+                    // timeout or network error — advance silently
+                  }
+
+                  briefNudgeDismissed.current = true;
+                  setBriefChecking(false);
                   trackBeginCheckout({
                     serviceId: service.id,
                     serviceTitle: service.title,
@@ -981,10 +1037,14 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   });
                   setStep('review');
                 }}
-                disabled={brief.length < 10 || isUploading}
-                className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white"
+                disabled={brief.length < 10 || isUploading || briefChecking}
+                className="w-full py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
               >
-                Continue
+                {briefChecking ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-atelier/40 border-t-atelier rounded-full animate-spin" />Checking...</>
+                ) : (
+                  'Continue'
+                )}
               </button>
             </div>
           )}

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import * as PIXI from 'pixi.js';
+import { install as installUnsafeEval } from '@pixi/unsafe-eval';
 import type { Live2DModel, Cubism4InternalModel } from 'pixi-live2d-display/cubism4';
 import { loadCubismCore } from '@/lib/live2d/cubism-core';
 import { createSpeechController, type SpeechController } from '@/lib/live2d/lipsync';
@@ -23,6 +24,8 @@ const REACTION_BY_EXPRESSION: Partial<Record<ExpressionName, string>> = {
 };
 
 type Status = 'loading' | 'ready' | 'error';
+
+let unsafeEvalInstalled = false;
 
 /**
  * Renders the Hiyori Live2D model (the "Haruka" face) and drives its mouth from
@@ -71,6 +74,10 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
     async function init() {
       try {
         (window as unknown as { PIXI: typeof PIXI }).PIXI = PIXI;
+        if (!unsafeEvalInstalled) {
+          installUnsafeEval(PIXI);
+          unsafeEvalInstalled = true;
+        }
         await loadCubismCore();
         if (cancelled || !canvasRef.current) return;
 

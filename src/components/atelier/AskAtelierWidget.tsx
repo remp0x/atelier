@@ -161,6 +161,7 @@ export function AskAtelierWidget() {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [listening, setListening] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastAssistantRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stageRef = useRef<HarukaStageHandle | null>(null);
   const recognitionRef = useRef<RecognitionHandle | null>(null);
@@ -187,7 +188,12 @@ export function AskAtelierWidget() {
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const last = messages[messages.length - 1];
+    if (last?.role === 'assistant') {
+      lastAssistantRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, loading]);
 
   async function submit() {
@@ -344,6 +350,7 @@ export function AskAtelierWidget() {
               {messages.map((msg, i) => (
                 <div
                   key={i}
+                  ref={msg.role === 'assistant' && i === messages.length - 1 ? lastAssistantRef : undefined}
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div

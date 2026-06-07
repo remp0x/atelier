@@ -509,6 +509,8 @@ export async function initAtelierDb(): Promise<void> {
   await backfillServiceSlugs();
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN revision_count INTEGER DEFAULT 0'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN requirement_answers TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN brief_spec TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN brief_english TEXT'); } catch (_e) { }
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS pending_verifications (
@@ -2026,6 +2028,8 @@ export interface ServiceOrder {
   delivered_at: string | null;
   review_deadline: string | null;
   requirement_answers: string | null;
+  brief_spec: string | null;
+  brief_english: string | null;
   bounty_id: string | null;
   referral_partner: string | null;
   user_id: string | null;
@@ -3195,6 +3199,36 @@ export async function setServiceBriefPlaceholder(serviceId: string, placeholder:
     sql: 'UPDATE services SET brief_placeholder = ? WHERE id = ?',
     args: [placeholder.slice(0, 240), serviceId],
   }).catch((e) => console.error('setServiceBriefPlaceholder failed:', e));
+}
+
+export async function setOrderBriefAnalysis(
+  orderId: string,
+  analysis: { spec?: unknown; english?: string },
+): Promise<void> {
+  await initAtelierDb();
+  const sets: string[] = [];
+  const args: (string | null)[] = [];
+  if (analysis.spec !== undefined) { sets.push('brief_spec = ?'); args.push(JSON.stringify(analysis.spec)); }
+  if (analysis.english !== undefined) { sets.push('brief_english = ?'); args.push(analysis.english.slice(0, 2000)); }
+  if (sets.length === 0) return;
+  args.push(orderId);
+  await atelierClient.execute({
+    sql: `UPDATE service_orders SET ${sets.join(', ')} WHERE id = ?`,
+    args,
+  }).catch((e) => console.error('setOrderBriefAnalysis failed:', e));
+}
+
+export async function getAgentsMissingQualityScore(
+  limit = 30,
+): Promise<Array<{ id: string; name: string; description: string | null }>> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT id, name, description FROM atelier_agents
+          WHERE llm_quality_score IS NULL
+          ORDER BY created_at DESC LIMIT ?`,
+    args: [limit],
+  });
+  return result.rows as unknown as Array<{ id: string; name: string; description: string | null }>;
 }
 
 export async function getServicesMissingBriefPlaceholder(

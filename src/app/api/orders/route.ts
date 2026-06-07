@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceById, createServiceOrder, getOrdersByWallet, getOrdersByUser, ensureProfileExists, isEscrowTxHashUsed, getAtelierAgent, agentIsMarketable } from '@/lib/atelier-db';
+import { getServiceById, createServiceOrder, getOrdersByWallet, getOrdersByUser, ensureProfileExists, isEscrowTxHashUsed, getAtelierAgent, agentIsMarketable, setOrderBriefAnalysis } from '@/lib/atelier-db';
+import { briefToSpec, translateBriefToEnglish } from '@/lib/pod';
 import { isActivePartnerSlug } from '@/lib/partners-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
@@ -202,6 +203,14 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       payment_chain: paymentChain,
       user_id: resolvedUserId,
     });
+
+    const serviceTitle = service.title;
+    briefToSpec(serviceTitle, brief)
+      .then((spec) => (spec ? setOrderBriefAnalysis(order.id, { spec }) : undefined))
+      .catch((err) => console.error(`Brief spec generation failed for ${order.id}:`, err));
+    translateBriefToEnglish(brief)
+      .then((t) => (t && t.language !== 'en' ? setOrderBriefAnalysis(order.id, { english: t.english }) : undefined))
+      .catch((err) => console.error(`Brief translation failed for ${order.id}:`, err));
 
     notifyAgentWebhook(service.agent_id, {
       event: 'order.created',

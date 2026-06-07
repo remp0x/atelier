@@ -211,3 +211,73 @@ export async function podCompleteText(
     options,
   );
 }
+
+const POD_VISION_MODEL = process.env.POD_VISION_MODEL || 'gpt-4o-mini';
+
+interface VisionContentPart {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: { url: string };
+}
+
+/**
+ * Run a vision prompt: a system instruction plus a user message combining `text`
+ * and one or more image URLs, parsing the reply as JSON. Uses a vision-capable
+ * model. Returns `null` on any failure. Fail-open like the rest of the client.
+ */
+export async function podVisionJson<T>(
+  system: string,
+  text: string,
+  imageUrls: string[],
+  options: PodChatOptions = {},
+): Promise<T | null> {
+  if (!isPodConfigured()) return null;
+  const urls = imageUrls.filter((u) => typeof u === 'string' && /^https?:\/\//.test(u)).slice(0, 6);
+  if (urls.length === 0) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? POD_TIMEOUT_MS);
+
+  try {
+    const userContent: VisionContentPart[] = [
+      { type: 'text', text },
+      ...urls.map((url) => ({ type: 'image_url' as const, image_url: { url } })),
+    ];
+    const res = await fetch(`${POD_PROXY_BASE}/${POD_TOKEN}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer placeholder', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: options.model ?? POD_VISION_MODEL,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: userContent },
+        ],
+        temperature: options.temperature ?? 0,
+        max_tokens: options.maxTokens ?? 512,
+      }),
+      signal: controller.signal,
+    });
+
+    recordBalance(res.headers.get('X-Balance-Remaining'));
+
+    if (!res.ok) {
+      console.error(`Pod vision error (${res.status}):`, await res.text().catch(() => ''));
+      return null;
+    }
+
+    const json = (await res.json()) as PodChatCompletion;
+    const content = json.choices?.[0]?.message?.content;
+    if (typeof content !== 'string') return null;
+    try {
+      return JSON.parse(extractJson(content)) as T;
+    } catch {
+      console.error('Pod vision returned non-JSON output:', content.slice(0, 200));
+      return null;
+    }
+  } catch (err) {
+    console.error('Pod vision request failed:', err);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

@@ -13,6 +13,8 @@ export interface SpeechController {
 const WORDS_PER_MINUTE = 165;
 const MIN_DURATION_MS = 800;
 const MAX_DURATION_MS = 22000;
+const BOUNDARY_FRESH_MS = 220;
+const KICK_DECAY = 0.8;
 
 export function isTtsAvailable(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window;
@@ -25,16 +27,18 @@ function estimateDurationMs(text: string): number {
 }
 
 /**
- * Browser speechSynthesis exposes no audio node, so the visible mouth is driven
- * by a synthetic phoneme envelope rather than real amplitude. The licensed
- * Cubism renderer consumes the same onMouth signal, so swapping in real
- * audio-analyser amplitude later is contained to this file.
+ * Browser speechSynthesis exposes no audio stream, so the mouth is driven two
+ * ways: when the voice fires word `boundary` events, each word kicks the mouth
+ * open and decays (speech-rhythm synced); otherwise it falls back to a phoneme
+ * envelope. Swapping in real audio-analyser amplitude is contained to this file.
  */
 export function createSpeechController(cb: LipsyncCallbacks): SpeechController {
   let rafId: number | null = null;
   let startTime = 0;
   let durationMs = 0;
   let active = false;
+  let kick = 0;
+  let lastBoundary = 0;
 
   const stopLoop = () => {
     if (rafId !== null) {
@@ -46,6 +50,7 @@ export function createSpeechController(cb: LipsyncCallbacks): SpeechController {
   const finish = () => {
     if (!active) return;
     active = false;
+    kick = 0;
     stopLoop();
     cb.onMouth(0);
     cb.onEnd?.();
@@ -53,16 +58,22 @@ export function createSpeechController(cb: LipsyncCallbacks): SpeechController {
 
   const tick = () => {
     if (!active) return;
-    const elapsed = performance.now() - startTime;
-    if (elapsed >= durationMs) {
+    const now = performance.now();
+    if (now - startTime >= durationMs) {
       finish();
       return;
     }
-    const phase = elapsed / 85;
-    const base = Math.sin(phase) * 0.5 + 0.5;
-    const flutter = Math.sin(phase * 2.7) * 0.5 + 0.5;
-    const open = Math.min(1, Math.max(0, base * 0.65 + flutter * 0.35));
-    cb.onMouth(open);
+    let open: number;
+    if (now - lastBoundary < BOUNDARY_FRESH_MS) {
+      kick *= KICK_DECAY;
+      open = kick;
+    } else {
+      const phase = (now - startTime) / 85;
+      const base = Math.sin(phase) * 0.5 + 0.5;
+      const flutter = Math.sin(phase * 2.7) * 0.5 + 0.5;
+      open = base * 0.55 + flutter * 0.3;
+    }
+    cb.onMouth(Math.min(1, Math.max(0, open)));
     rafId = requestAnimationFrame(tick);
   };
 
@@ -79,6 +90,12 @@ export function createSpeechController(cb: LipsyncCallbacks): SpeechController {
     if (withAudio && isTtsAvailable()) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.05;
+      utterance.onboundary = (event) => {
+        if (event.name === 'word' || event.name === undefined) {
+          lastBoundary = performance.now();
+          kick = 0.75 + (event.charLength ? Math.min(0.25, event.charLength / 40) : 0.15);
+        }
+      };
       utterance.onend = finish;
       utterance.onerror = finish;
       window.speechSynthesis.cancel();

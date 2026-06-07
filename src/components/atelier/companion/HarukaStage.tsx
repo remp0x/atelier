@@ -42,6 +42,7 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
   const mouthRef = useRef(0);
   const voiceRef = useRef(voiceEnabled);
   const controllerRef = useRef<SpeechController | null>(null);
+  const pointerCleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     voiceRef.current = voiceEnabled;
@@ -119,6 +120,23 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
         app.stage.addChild(model);
         modelRef.current = model;
 
+        const canvas = canvasRef.current;
+        const toLocal = (e: PointerEvent): [number, number] => {
+          const rect = canvas.getBoundingClientRect();
+          return [e.clientX - rect.left, e.clientY - rect.top];
+        };
+        const onMove = (e: PointerEvent) => model.focus(...toLocal(e));
+        const onLeave = () => model.focus(CANVAS_W / 2, CANVAS_H * 0.3);
+        const onDown = (e: PointerEvent) => model.tap(...toLocal(e));
+        canvas.addEventListener('pointermove', onMove);
+        canvas.addEventListener('pointerleave', onLeave);
+        canvas.addEventListener('pointerdown', onDown);
+        pointerCleanupRef.current = () => {
+          canvas.removeEventListener('pointermove', onMove);
+          canvas.removeEventListener('pointerleave', onLeave);
+          canvas.removeEventListener('pointerdown', onDown);
+        };
+
         PIXI.Ticker.shared.add(applyMouth, undefined, PIXI.UPDATE_PRIORITY.HIGH);
 
         setStatus('ready');
@@ -133,6 +151,8 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
     return () => {
       cancelled = true;
       PIXI.Ticker.shared.remove(applyMouth);
+      pointerCleanupRef.current?.();
+      pointerCleanupRef.current = null;
       controller.dispose();
       controllerRef.current = null;
       onHandle(null);

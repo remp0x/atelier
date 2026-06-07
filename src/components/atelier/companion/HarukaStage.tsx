@@ -15,9 +15,9 @@ const MOUTH_PARAM = 'ParamMouthOpenY';
 
 const CANVAS_W = 180;
 const CANVAS_H = 200;
-const MODEL_ZOOM = 0.92;
-const MODEL_ANCHOR_Y = 0.5;
-const MODEL_Y_RATIO = 0.5;
+const MODEL_ZOOM = 2.8;
+const MODEL_ANCHOR_Y = 0.08;
+const MODEL_Y_RATIO = 0.32;
 
 const REACTION_BY_EXPRESSION: Partial<Record<ExpressionName, string>> = {
   happy: 'TapBody',
@@ -25,8 +25,6 @@ const REACTION_BY_EXPRESSION: Partial<Record<ExpressionName, string>> = {
 };
 
 type Status = 'loading' | 'ready' | 'error';
-
-const DEBUG = true;
 
 let unsafeEvalInstalled = false;
 
@@ -99,16 +97,9 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
           backgroundAlpha: 0,
           antialias: true,
           autoDensity: true,
-          sharedTicker: true,
           resolution: Math.min(window.devicePixelRatio || 1, 2),
         });
         appRef.current = app;
-
-        if (DEBUG) {
-          const bg = new PIXI.Graphics();
-          bg.beginFill(0x3b82f6, 0.3).drawRect(0, 0, CANVAS_W, CANVAS_H).endFill();
-          app.stage.addChild(bg);
-        }
 
         const model = (await Live2DModelClass.from(MODEL_URL, {
           ticker: PIXI.Ticker.shared,
@@ -127,33 +118,6 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
         model.position.set(CANVAS_W / 2, CANVAS_H * MODEL_Y_RATIO);
         app.stage.addChild(model);
         modelRef.current = model;
-
-        const bounds = model.getBounds();
-        console.log('[HarukaStage] diagnostics', {
-          modelW: Math.round(model.width),
-          modelH: Math.round(model.height),
-          scale: Number(scale.toFixed(4)),
-          onScreen: {
-            x: Math.round(bounds.x),
-            y: Math.round(bounds.y),
-            w: Math.round(bounds.width),
-            h: Math.round(bounds.height),
-          },
-          canvas: { w: CANVAS_W, h: CANVAS_H },
-          renderer: { w: app.renderer.width, h: app.renderer.height },
-        });
-        console.log(
-          '[HarukaStage] textures',
-          JSON.stringify(
-            model.textures.map((t) => ({
-              valid: t.valid,
-              baseValid: t.baseTexture?.valid,
-              w: t.width,
-              h: t.height,
-              url: (t.baseTexture?.resource as { url?: string } | undefined)?.url,
-            })),
-          ),
-        );
 
         PIXI.Ticker.shared.add(applyMouth, undefined, PIXI.UPDATE_PRIORITY.HIGH);
 

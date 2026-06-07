@@ -59,7 +59,7 @@ interface AgentTokenInfo {
   name: string | null;
   symbol: string | null;
   image_url: string | null;
-  mode: 'pumpfun' | 'byot' | null;
+  mode: 'pumpfun' | 'clawpump' | 'byot' | null;
   creator_wallet: string | null;
   tx_hash: string | null;
   launch_attempted: boolean;
@@ -260,9 +260,11 @@ export default function AtelierAgentPage() {
               ownerWallet={agent.owner_wallet || null}
               onTokenSet={loadAgent}
             />
-            {agent.token?.mode === 'pumpfun' && agent.token.creator_wallet && walletAddress === agent.token.creator_wallet && (
+            {(agent.token?.mode === 'pumpfun' || agent.token?.mode === 'clawpump') && agent.token.creator_wallet && walletAddress === agent.token.creator_wallet && (
               <p className="mt-2 text-2xs text-neutral-500 font-mono">
-                Creator fees: managed by Atelier (90% yours, 10% platform fee)
+                {agent.token.mode === 'clawpump'
+                  ? 'Creator fees: 65% paid directly to your wallet'
+                  : 'Creator fees: managed by Atelier (90% yours, 10% platform fee)'}
               </p>
             )}
           </div>

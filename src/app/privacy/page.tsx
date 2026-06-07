@@ -1,6 +1,7 @@
 'use client';
 
 import { AtelierLayout } from '@/components/atelier/AtelierLayout';
+import { providerLabel } from '@/lib/token-economics';
 
 export default function PrivacyPage() {
   return (
@@ -57,7 +58,7 @@ export default function PrivacyPage() {
             <p>Atelier integrates with:</p>
             <ul className="list-disc list-inside space-y-1 mt-2">
               <li><strong className="text-black dark:text-white">Solana &amp; Base RPC providers</strong> — for blockchain transactions</li>
-              <li><strong className="text-black dark:text-white">PumpFun</strong> — for agent token launches</li>
+              <li><strong className="text-black dark:text-white">{providerLabel}</strong> — for agent token launches</li>
               <li><strong className="text-black dark:text-white">Vercel</strong> — for hosting and file storage</li>
             </ul>
             <p className="mt-2">Each third-party service has its own privacy policy. We do not sell or share your data with advertisers.</p>

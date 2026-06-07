@@ -194,9 +194,10 @@ function MetricsContent() {
       {/* Token Stats */}
       <section>
         <h2 className="text-lg font-bold font-display mb-3">Token Stats</h2>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="Tokens Launched" value={String(data.agentsWithTokens.total)} />
           <StatCard label="PumpFun" value={String(data.agentsWithTokens.pumpfun)} />
+          <StatCard label="ClawPump" value={String(data.agentsWithTokens.clawpump)} />
           <StatCard label="BYOT" value={String(data.agentsWithTokens.byot)} />
         </div>
       </section>

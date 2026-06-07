@@ -15,8 +15,9 @@ const MOUTH_PARAM = 'ParamMouthOpenY';
 
 const CANVAS_W = 180;
 const CANVAS_H = 200;
-const MODEL_ZOOM = 2.0;
-const MODEL_Y_RATIO = 0.78;
+const MODEL_ZOOM = 0.92;
+const MODEL_ANCHOR_Y = 0.5;
+const MODEL_Y_RATIO = 0.5;
 
 const REACTION_BY_EXPRESSION: Partial<Record<ExpressionName, string>> = {
   happy: 'TapBody',
@@ -105,12 +106,17 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
         }
 
         model.autoUpdate = false;
-        model.anchor.set(0.5, 0.5);
+        model.anchor.set(0.5, MODEL_ANCHOR_Y);
         const scale = (CANVAS_H / model.height) * MODEL_ZOOM;
         model.scale.set(scale);
         model.position.set(CANVAS_W / 2, CANVAS_H * MODEL_Y_RATIO);
         app.stage.addChild(model);
         modelRef.current = model;
+        console.log('[HarukaStage] model loaded', {
+          width: Math.round(model.width),
+          height: Math.round(model.height),
+          scale: Number(scale.toFixed(4)),
+        });
 
         app.ticker.add(() => {
           const m = modelRef.current;

@@ -20,6 +20,9 @@ const POD_PROXY_BASE = process.env.POD_BASE_URL || 'https://api.usepod.ai/proxy'
 const POD_TOKEN = process.env.POD_TOKEN;
 const POD_DEFAULT_MODEL = process.env.POD_MODEL || 'gpt-4o-mini';
 const POD_TIMEOUT_MS = Number(process.env.POD_TIMEOUT_MS || '25000');
+const POD_TTS_MODEL = process.env.POD_TTS_MODEL || 'tts-1';
+const POD_TTS_VOICE = process.env.POD_TTS_VOICE || 'shimmer';
+const POD_TTS_TIMEOUT_MS = Number(process.env.POD_TTS_TIMEOUT_MS || '20000');
 // Pod is prepaid (order-book pricing, so spend per call is variable). Warn once
 // the balance reported on each response dips under this floor so the token gets
 // topped up before LLM features silently fail-open to no-ops.
@@ -102,6 +105,53 @@ async function podChat(messages: PodChatMessage[], options: PodChatOptions = {})
     return typeof content === 'string' ? content.trim() : null;
   } catch (err) {
     console.error('Pod inference request failed:', err);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Synthesize speech via Pod's OpenAI-compatible `/v1/audio/speech` endpoint and
+ * return raw audio bytes (mp3), or `null` on any failure (unconfigured, network,
+ * non-audio response, timeout). Debits the same prepaid Pod balance as inference.
+ */
+export async function podSynthesizeSpeech(text: string): Promise<ArrayBuffer | null> {
+  if (!isPodConfigured()) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), POD_TTS_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${POD_PROXY_BASE}/${POD_TOKEN}/v1/audio/speech`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer placeholder',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: POD_TTS_MODEL,
+        voice: POD_TTS_VOICE,
+        input: text,
+        response_format: 'mp3',
+      }),
+      signal: controller.signal,
+    });
+
+    recordBalance(res.headers.get('X-Balance-Remaining'));
+
+    if (!res.ok) {
+      console.error(`Pod TTS error (${res.status}):`, await res.text().catch(() => ''));
+      return null;
+    }
+    if ((res.headers.get('content-type') || '').includes('application/json')) {
+      console.error('Pod TTS returned JSON, not audio:', (await res.text()).slice(0, 200));
+      return null;
+    }
+
+    return await res.arrayBuffer();
+  } catch (err) {
+    console.error('Pod TTS request failed:', err);
     return null;
   } finally {
     clearTimeout(timeout);

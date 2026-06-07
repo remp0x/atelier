@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import * as PIXI from 'pixi.js';
 import { install as installUnsafeEval } from '@pixi/unsafe-eval';
-import type { Live2DModel, Cubism4InternalModel } from 'pixi-live2d-display/cubism4';
+import type { Live2DModel, Cubism4InternalModel } from 'pixi-live2d-display-lipsyncpatch/cubism4';
 import { loadCubismCore } from '@/lib/live2d/cubism-core';
 import { createSpeechController, type SpeechController } from '@/lib/live2d/lipsync';
 import type { ExpressionName } from '@/lib/live2d/emotion';
@@ -84,7 +84,7 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
         await loadCubismCore();
         if (cancelled || !canvasRef.current) return;
 
-        const { Live2DModel: Live2DModelClass } = await import('pixi-live2d-display/cubism4');
+        const { Live2DModel: Live2DModelClass } = await import('pixi-live2d-display-lipsyncpatch/cubism4');
         if (cancelled || !canvasRef.current) return;
 
         const app = new PIXI.Application({
@@ -113,7 +113,7 @@ export default function HarukaStage({ voiceEnabled, onHandle }: HarukaStageProps
           return;
         }
 
-        model.autoUpdate = false;
+        model.automator.autoUpdate = false;
         model.anchor.set(0.5, MODEL_ANCHOR_Y);
         const scale = (CANVAS_H / model.height) * MODEL_ZOOM;
         model.scale.set(scale);

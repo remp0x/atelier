@@ -56,14 +56,14 @@ function renderInline(text: string): React.ReactNode[] {
           href={match[3]}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-atelier underline underline-offset-2 hover:text-atelier-bright break-words"
+          className="text-atelier underline underline-offset-2 hover:text-atelier-bright [overflow-wrap:anywhere]"
         >
           {match[2]}
         </a>,
       );
     } else if (match[4] !== undefined) {
       nodes.push(
-        <code key={key++} className="font-mono text-[0.85em] bg-black/5 dark:bg-white/10 rounded px-1 py-0.5">
+        <code key={key++} className="font-mono text-[0.85em] bg-black/5 dark:bg-white/10 rounded px-1 py-0.5 [overflow-wrap:anywhere]">
           {match[4]}
         </code>,
       );
@@ -76,6 +76,7 @@ function renderInline(text: string): React.ReactNode[] {
 
 const ORDERED_ITEM = /^\s*\d+\.\s+/;
 const UNORDERED_ITEM = /^\s*[-*]\s+/;
+const FENCE = /^\s*`{3,}/;
 
 function MarkdownMessage({ text }: { text: string }) {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
@@ -86,6 +87,29 @@ function MarkdownMessage({ text }: { text: string }) {
   while (i < lines.length) {
     if (!lines[i].trim()) {
       i++;
+      continue;
+    }
+
+    if (FENCE.test(lines[i])) {
+      const codeLines: string[] = [];
+      // Drop the opening fence and an optional language tag; keep any code the
+      // model crammed onto the same line as the fence.
+      const firstLine = lines[i].replace(FENCE, '').replace(/^[a-zA-Z0-9_+-]*\s?/, '');
+      if (firstLine.trim()) codeLines.push(firstLine);
+      i++;
+      while (i < lines.length && !FENCE.test(lines[i])) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++;
+      blocks.push(
+        <pre
+          key={key++}
+          className="font-mono text-xs bg-black/5 dark:bg-white/10 rounded-md p-2 whitespace-pre-wrap [overflow-wrap:anywhere]"
+        >
+          {codeLines.join('\n')}
+        </pre>,
+      );
       continue;
     }
 
@@ -126,7 +150,7 @@ function MarkdownMessage({ text }: { text: string }) {
     blocks.push(<p key={key++}>{renderInline(paragraph.join(' '))}</p>);
   }
 
-  return <div className="space-y-2">{blocks}</div>;
+  return <div className="space-y-2 [overflow-wrap:anywhere]">{blocks}</div>;
 }
 
 export function AskAtelierWidget() {
@@ -323,9 +347,9 @@ export function AskAtelierWidget() {
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                    className={`max-w-[85%] min-w-0 overflow-hidden rounded-lg px-3 py-2 text-sm leading-relaxed ${
                       msg.role === 'user'
-                        ? 'bg-atelier text-white whitespace-pre-wrap'
+                        ? 'bg-atelier text-white whitespace-pre-wrap [overflow-wrap:anywhere]'
                         : msg.isError
                         ? 'bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 font-mono text-xs'
                         : 'bg-gray-100 dark:bg-black-light text-gray-900 dark:text-white'

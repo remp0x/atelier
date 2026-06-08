@@ -11,10 +11,11 @@ import {
   adaptViemWallet,
   MAINNET_RELAY_API,
   type ProgressData,
+  type AdaptedWallet,
 } from '@relayprotocol/relay-sdk';
 import { configureDynamicChains } from '@relayprotocol/relay-sdk/chain-utils';
 import { adaptSolanaWallet } from '@relayprotocol/relay-svm-wallet-adapter';
-import { useWallets } from '@privy-io/react-auth';
+import { useWallets, useSendTransaction } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { USDC_MINT } from '@/lib/solana-pay';
 import { USDC_BASE_ADDRESS } from '@/lib/base-server';
@@ -74,6 +75,7 @@ export function useBridgeUsdc(): { bridgeUsdc: (params: BridgeUsdcParams) => Pro
   const { wallets: evmWallets } = useWallets();
   const { wallets: solWallets } = useSolanaWallets();
   const { signAndSendTransaction: solSignAndSend } = useSignAndSendTransaction();
+  const { sendTransaction: evmSendTransaction } = useSendTransaction();
 
   const bridgeUsdc = useCallback(
     async ({ fromChain, toChain, amountUsd, tradeType = 'EXACT_INPUT', onProgress }: BridgeUsdcParams): Promise<BridgeUsdcResult> => {
@@ -99,11 +101,29 @@ export function useBridgeUsdc(): { bridgeUsdc: (params: BridgeUsdcParams) => Pro
         });
       };
 
-      const buildBaseWallet = async () => {
+      const buildBaseWallet = async (): Promise<AdaptedWallet> => {
         if (!evmEmbedded || !evmAddress) throw new Error('Embedded Base wallet not available');
         const provider = await evmEmbedded.getEthereumProvider();
         const walletClient = createWalletClient({ account: evmAddress, chain: base, transport: custom(provider) });
-        return adaptViemWallet(walletClient, { disableCapabilitiesCheck: true });
+        const adapted = adaptViemWallet(walletClient, { disableCapabilitiesCheck: true });
+        return {
+          ...adapted,
+          // Privy embedded EOAs hold no ETH, so a raw send fails with
+          // "insufficient funds for gas". Route Base sends through Privy's
+          // gas-sponsored sendTransaction -- same path as checkout.
+          handleSendTransactionStep: async (_chainId, item) => {
+            const { hash } = await evmSendTransaction(
+              {
+                to: item.data.to,
+                data: item.data.data,
+                value: item.data.value ? BigInt(item.data.value) : BigInt(0),
+                chainId: base.id,
+              },
+              { address: evmAddress, sponsor: true },
+            );
+            return hash;
+          },
+        };
       };
 
       const originWallet = fromChain === 'solana' ? buildSolanaWallet() : await buildBaseWallet();
@@ -138,7 +158,7 @@ export function useBridgeUsdc(): { bridgeUsdc: (params: BridgeUsdcParams) => Pro
 
       return { destinationTxHash };
     },
-    [evmWallets, solWallets, solSignAndSend],
+    [evmWallets, solWallets, solSignAndSend, evmSendTransaction],
   );
 
   return { bridgeUsdc };

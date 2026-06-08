@@ -309,7 +309,17 @@ function BridgeCard({
     setBusy(true);
     try {
       trackWalletBridgeStarted({ fromChain, toChain, value: amountNum });
-      await bridgeUsdc({ fromChain, toChain, amountUsd: amountNum, tradeType: 'EXACT_INPUT' });
+      await bridgeUsdc({
+        fromChain,
+        toChain,
+        amountUsd: amountNum,
+        tradeType: 'EXACT_INPUT',
+        onProgress: (data) => {
+          const step = data.currentStep;
+          const label = step?.description || step?.action;
+          if (label) setStatus(label);
+        },
+      });
       trackWalletBridgeCompleted({ fromChain, toChain, value: amountNum });
       setStatus(`Moved $${amountNum.toFixed(2)} USDC to ${toChain === 'base' ? 'Base' : 'Solana'}.`);
       setAmount('');

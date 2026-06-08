@@ -8,6 +8,15 @@ interface RateLimitRecord {
 const ipRateLimitMap = new Map<string, RateLimitRecord>();
 const keyRateLimitMap = new Map<string, RateLimitRecord>();
 
+export function getClientIp(req: NextRequest): string {
+  return (
+    req.headers.get('x-vercel-forwarded-for')?.split(',')[0].trim() ||
+    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+    req.headers.get('x-real-ip') ||
+    'unknown'
+  );
+}
+
 setInterval(() => {
   const now = Date.now();
   ipRateLimitMap.forEach((record, key) => {
@@ -29,12 +38,7 @@ export function rateLimit(
   windowMs: number
 ): (req: NextRequest) => NextResponse | null {
   return (req: NextRequest) => {
-    // Get IP address from headers (Vercel provides this)
-    const ip =
-      req.headers.get('x-vercel-forwarded-for')?.split(',')[0].trim() ||
-      req.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown';
+    const ip = getClientIp(req);
 
     const now = Date.now();
     const record = ipRateLimitMap.get(ip);

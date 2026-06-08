@@ -143,6 +143,14 @@ export function trackWalletKeyExported(params: { chain: string }): void {
   track('wallet_key_exported', { payment_chain: params.chain });
 }
 
+export function trackWalletBridgeStarted(params: { fromChain: string; toChain: string; value: number }): void {
+  track('wallet_bridge_started', { from_chain: params.fromChain, to_chain: params.toChain, value: params.value });
+}
+
+export function trackWalletBridgeCompleted(params: { fromChain: string; toChain: string; value: number }): void {
+  track('wallet_bridge_completed', { from_chain: params.fromChain, to_chain: params.toChain, value: params.value });
+}
+
 export function trackCtaClick(params: { cta: string; location: string }): void {
   track('cta_clicked', { cta: params.cta, location: params.location });
 }

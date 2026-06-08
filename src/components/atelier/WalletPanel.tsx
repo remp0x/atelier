@@ -15,7 +15,13 @@ import { useGSAP } from '@gsap/react';
 import { ChainLogo } from '@/components/atelier/ChainBadge';
 import { useEmbeddedWallets } from '@/hooks/use-embedded-wallets';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
-import { trackWalletFundStarted, trackWalletKeyExported } from '@/lib/analytics';
+import { useBridgeUsdc } from '@/hooks/use-bridge-usdc';
+import {
+  trackWalletFundStarted,
+  trackWalletKeyExported,
+  trackWalletBridgeStarted,
+  trackWalletBridgeCompleted,
+} from '@/lib/analytics';
 
 gsap.registerPlugin(useGSAP);
 
@@ -252,6 +258,148 @@ function PreparingCard({ chain }: { chain: 'base' | 'solana' }) {
   );
 }
 
+function BridgeCard({
+  solBalance,
+  baseBalance,
+  balanceLoading,
+}: {
+  solBalance: number;
+  baseBalance: number;
+  balanceLoading: boolean;
+}) {
+  const { bridgeUsdc } = useBridgeUsdc();
+  const [fromChain, setFromChain] = useState<'solana' | 'base'>('solana');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const toChain: 'solana' | 'base' = fromChain === 'solana' ? 'base' : 'solana';
+  const sourceBalance = fromChain === 'solana' ? solBalance : baseBalance;
+  const amountNum = parseFloat(amount);
+  const valid = !Number.isNaN(amountNum) && amountNum > 0 && amountNum <= sourceBalance;
+
+  const swapDirection = () => {
+    setFromChain(toChain);
+    setErr(null);
+    setStatus(null);
+  };
+
+  const handleBridge = async () => {
+    if (!valid) return;
+    setErr(null);
+    setStatus(`Moving to ${toChain === 'base' ? 'Base' : 'Solana'}...`);
+    setBusy(true);
+    try {
+      trackWalletBridgeStarted({ fromChain, toChain, value: amountNum });
+      await bridgeUsdc({ fromChain, toChain, amountUsd: amountNum, tradeType: 'EXACT_INPUT' });
+      trackWalletBridgeCompleted({ fromChain, toChain, value: amountNum });
+      setStatus(`Moved $${amountNum.toFixed(2)} USDC to ${toChain === 'base' ? 'Base' : 'Solana'}.`);
+      setAmount('');
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Bridge failed');
+      setStatus(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      data-wallet-card
+      className="rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] overflow-hidden"
+    >
+      <div className="px-5 pt-4 pb-3 border-b border-gray-200 dark:border-neutral-800/60">
+        <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500">
+          Move between chains
+        </p>
+      </div>
+
+      <div className="px-5 py-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="flex-1 inline-flex items-center gap-2 h-9 px-3 rounded-md border border-gray-200 dark:border-neutral-800">
+            <ChainLogo chain={fromChain} size={16} />
+            <span className="font-mono text-[12px] text-black dark:text-white">{fromChain === 'base' ? 'Base' : 'Solana'}</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={swapDirection}
+            disabled={busy}
+            aria-label="Swap direction"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:text-atelier hover:border-atelier/40 disabled:opacity-50 transition-colors cursor-pointer shrink-0"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4" />
+            </svg>
+          </button>
+
+          <div className="flex-1 inline-flex items-center gap-2 h-9 px-3 rounded-md border border-gray-200 dark:border-neutral-800">
+            <ChainLogo chain={toChain} size={16} />
+            <span className="font-mono text-[12px] text-black dark:text-white">{toChain === 'base' ? 'Base' : 'Solana'}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(e) => { setAmount(e.target.value); setErr(null); setStatus(null); }}
+              placeholder="0.00"
+              disabled={busy}
+              className="w-full h-9 pl-3 pr-14 rounded-md bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-[13px] font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={() => setAmount(sourceBalance > 0 ? String(sourceBalance) : '')}
+              disabled={busy || balanceLoading}
+              className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-atelier hover:text-atelier-bright disabled:opacity-50 cursor-pointer"
+            >
+              MAX
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void handleBridge()}
+            disabled={busy || !valid}
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md font-mono text-[11px] font-medium bg-atelier text-white hover:bg-atelier-bright disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-colors cursor-pointer shrink-0"
+          >
+            {busy ? (
+              <>
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Moving...
+              </>
+            ) : (
+              'Move'
+            )}
+          </button>
+        </div>
+
+        <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500">
+          {balanceLoading
+            ? 'Loading balance...'
+            : `Available on ${fromChain === 'base' ? 'Base' : 'Solana'}: $${sourceBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`}
+        </p>
+
+        {status && (
+          <p className="font-mono text-[11px] text-atelier">{status}</p>
+        )}
+        {err && (
+          <p role="alert" className="font-mono text-[11px] text-red-400">{err}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function WalletDisclosure() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -469,6 +617,14 @@ export function WalletPanel() {
           />
         ) : (
           <PreparingCard chain="solana" />
+        )}
+
+        {evmAddress && solanaAddress && (
+          <BridgeCard
+            solBalance={balances.solana}
+            baseBalance={balances.base}
+            balanceLoading={balances.loading}
+          />
         )}
       </div>
 

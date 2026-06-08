@@ -12,6 +12,7 @@ import {
   MAINNET_RELAY_API,
   type ProgressData,
 } from '@relayprotocol/relay-sdk';
+import { configureDynamicChains } from '@relayprotocol/relay-sdk/chain-utils';
 import { adaptSolanaWallet } from '@relayprotocol/relay-svm-wallet-adapter';
 import { useWallets } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
@@ -42,12 +43,19 @@ export interface BridgeUsdcResult {
   destinationTxHash: string | null;
 }
 
-let relayClientReady = false;
+let relayReady: Promise<void> | null = null;
 
-function ensureRelayClient(): void {
-  if (relayClientReady) return;
-  createClient({ baseApiUrl: MAINNET_RELAY_API, source: 'atelierai.xyz' });
-  relayClientReady = true;
+function ensureRelayClient(): Promise<void> {
+  if (!relayReady) {
+    createClient({ baseApiUrl: MAINNET_RELAY_API, source: 'atelierai.xyz' });
+    relayReady = configureDynamicChains()
+      .then(() => undefined)
+      .catch((e) => {
+        relayReady = null;
+        throw e;
+      });
+  }
+  return relayReady;
 }
 
 function usdcBaseUnits(amountUsd: number): string {
@@ -70,7 +78,7 @@ export function useBridgeUsdc(): { bridgeUsdc: (params: BridgeUsdcParams) => Pro
   const bridgeUsdc = useCallback(
     async ({ fromChain, toChain, amountUsd, tradeType = 'EXACT_INPUT', onProgress }: BridgeUsdcParams): Promise<BridgeUsdcResult> => {
       if (fromChain === toChain) throw new Error('Source and destination chains must differ');
-      ensureRelayClient();
+      await ensureRelayClient();
 
       const evmEmbedded = evmWallets.find((w) => w.walletClientType === 'privy') ?? null;
       const solEmbedded = solWallets.find((w) => w.address) ?? null;

@@ -27,13 +27,14 @@ import {
 import { createWalletClient, custom, encodeFunctionData, erc20Abi, parseUnits } from 'viem';
 import { base } from 'viem/chains';
 import bs58 from 'bs58';
-import { signWalletAuth } from '@/lib/solana-auth-client';
+import { signWalletAuth, type WalletAuthPayload } from '@/lib/solana-auth-client';
 import { signEvmWalletAuth } from '@/lib/evm-auth-client';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { useBridgeUsdc } from '@/hooks/use-bridge-usdc';
 import { clientUpload } from '@/lib/client-upload';
 import { readReferralCookie } from './ReferralCapture';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
-import { trackBeginCheckout, trackPurchase } from '@/lib/analytics';
+import { trackBeginCheckout, trackPurchase, trackWalletBridgeStarted, trackWalletBridgeCompleted } from '@/lib/analytics';
 import type { Service } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'select-wallet' | 'confirmation';
@@ -210,6 +211,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const solEmbedded = solanaWallets.find((w) => w.address) ?? null;
 
   const usdcBalances = useUsdcBalances();
+  const { bridgeUsdc } = useBridgeUsdc();
 
   const solFundResolveRef = useRef<(() => void) | null>(null) as MutableRefObject<(() => void) | null>;
   const evmFundResolveRef = useRef<(() => void) | null>(null) as MutableRefObject<(() => void) | null>;
@@ -464,7 +466,127 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     return sig;
   }, [solEmbedded, signAndSendTransaction]);
 
-  const executePaymentForChain = useCallback(async (chain: PayChain) => {
+  const signAuthForChain = useCallback(async (chain: PayChain): Promise<WalletAuthPayload> => {
+    if (chain === 'base') {
+      if (!evmEmbedded || !embeddedEvmAddress) {
+        throw new Error('Embedded Base wallet not available. Sign in with Privy to continue.');
+      }
+      const provider = await evmEmbedded.getEthereumProvider();
+      const evmWalletClient = createWalletClient({
+        account: embeddedEvmAddress as `0x${string}`,
+        chain: base,
+        transport: custom(provider),
+      });
+      return signEvmWalletAuth({
+        address: embeddedEvmAddress as `0x${string}`,
+        signMessage: (message: string) =>
+          evmWalletClient.signMessage({ account: embeddedEvmAddress as `0x${string}`, message }),
+      });
+    }
+    if (!embeddedSolanaAddress || !solEmbedded) {
+      throw new Error('Embedded Solana wallet not available. Sign in with Privy to continue.');
+    }
+    const solSignable = {
+      publicKey: { toBase58: () => embeddedSolanaAddress },
+      signMessage: async (msg: Uint8Array) => {
+        const out = await solSignMessage({ message: msg, wallet: solEmbedded });
+        return out.signature;
+      },
+    };
+    return signWalletAuth(solSignable);
+  }, [evmEmbedded, embeddedEvmAddress, embeddedSolanaAddress, solEmbedded, solSignMessage]);
+
+  const settleOrder = useCallback(async (
+    chain: PayChain,
+    payerAddress: string,
+    treasury: string,
+    authPayload: WalletAuthPayload,
+    paymentMethodLabel: string,
+  ): Promise<void> => {
+    setLoadingMsg('Creating order...');
+    const referralPartner = readReferralCookie();
+    const createRes = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...authPayload,
+        service_id: service.id,
+        brief,
+        reference_urls: validUrls.length > 0 ? validUrls : undefined,
+        reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
+        client_wallet: payerAddress,
+        payment_chain: chain,
+        ...(referralPartner ? { referral_partner: referralPartner } : {}),
+      }),
+    });
+    const createJson = await createRes.json();
+    if (!createJson.success) throw new Error(createJson.error);
+
+    const newOrderId = createJson.data.id;
+
+    setLoadingMsg('Sending payment...');
+    let txSig: string;
+    if (chain === 'base') {
+      if (!evmEmbedded || !embeddedEvmAddress) throw new Error('Base embedded wallet not available');
+      const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+      const transferData = encodeFunctionData({
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [treasury as `0x${string}`, parseUnits(total.toFixed(6), 6)],
+      });
+      const { hash } = await privySendTransaction(
+        { to: USDC_BASE, data: transferData, chainId: 8453, value: 0 },
+        { address: embeddedEvmAddress, sponsor: true },
+      );
+      txSig = hash;
+    } else {
+      txSig = await buildAndSignSolanaUsdcTransfer(payerAddress, treasury, total);
+    }
+
+    setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
+    const patchRes = await fetch(`/api/orders/${newOrderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...authPayload,
+        action: 'pay',
+        payment_method: chain === 'base' ? 'usdc-base' : 'usdc-sol',
+        payment_chain: chain,
+        escrow_tx_hash: txSig,
+      }),
+    });
+    const patchJson = await patchRes.json();
+    if (!patchJson.success) throw new Error(patchJson.error);
+
+    trackPurchase({
+      transactionId: txSig,
+      serviceId: service.id,
+      serviceTitle: service.title,
+      category: service.category,
+      value: total,
+      priceType: service.price_type,
+      chain,
+      paymentMethod: paymentMethodLabel,
+      isSubscription,
+    });
+
+    setOrderId(newOrderId);
+    setStep('confirmation');
+  }, [
+    service,
+    brief,
+    validUrls,
+    referenceImages,
+    total,
+    evmEmbedded,
+    embeddedEvmAddress,
+    privySendTransaction,
+    buildAndSignSolanaUsdcTransfer,
+    isWorkspace,
+    isSubscription,
+  ]);
+
+  const executePaymentForChain = useCallback(async (chain: PayChain, skipBalanceCheck = false) => {
     const treasury = getTreasuryForChain(chain);
     if (!treasury) {
       setError(`Treasury not configured for ${chain === 'base' ? 'Base' : 'Solana'}`);
@@ -480,7 +602,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     }
 
     const currentBalance = chain === 'base' ? usdcBalances.base : usdcBalances.solana;
-    if (!usdcBalances.loading && currentBalance < total) {
+    if (!skipBalanceCheck && !usdcBalances.loading && currentBalance < total) {
       setNeedsFunding(true);
       setPendingChain(chain);
       setLoading(false);
@@ -493,153 +615,46 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
     try {
       setLoadingMsg('Signing wallet...');
-      let authPayload;
-      if (chain === 'base') {
-        if (!evmEmbedded || !embeddedEvmAddress) {
-          setError('Embedded Base wallet not available. Sign in with Privy to continue.');
-          setLoading(false);
-          return;
-        }
-        const provider = await evmEmbedded.getEthereumProvider();
-        const evmWalletClient = createWalletClient({
-          account: embeddedEvmAddress as `0x${string}`,
-          chain: base,
-          transport: custom(provider),
-        });
-        authPayload = await signEvmWalletAuth({
-          address: embeddedEvmAddress as `0x${string}`,
-          signMessage: (message: string) =>
-            evmWalletClient.signMessage({ account: embeddedEvmAddress as `0x${string}`, message }),
-        });
-      } else {
-        if (!embeddedSolanaAddress || !solEmbedded) {
-          setError('Embedded Solana wallet not available. Sign in with Privy to continue.');
-          setLoading(false);
-          return;
-        }
-        const solSignable = {
-          publicKey: { toBase58: () => embeddedSolanaAddress },
-          signMessage: async (msg: Uint8Array) => {
-            const out = await solSignMessage({ message: msg, wallet: solEmbedded });
-            return out.signature;
-          },
-        };
-        authPayload = await signWalletAuth(solSignable);
-      }
-
-      setLoadingMsg('Creating order...');
-      const referralPartner = readReferralCookie();
-      const createRes = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...authPayload,
-          service_id: service.id,
-          brief,
-          reference_urls: validUrls.length > 0 ? validUrls : undefined,
-          reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
-          client_wallet: payerAddress,
-          payment_chain: chain,
-          ...(referralPartner ? { referral_partner: referralPartner } : {}),
-        }),
-      });
-      const createJson = await createRes.json();
-      if (!createJson.success) throw new Error(createJson.error);
-
-      const newOrderId = createJson.data.id;
-
-      setLoadingMsg('Sending payment...');
-      let txSig: string;
-
-      if (chain === 'base') {
-        if (!evmEmbedded || !embeddedEvmAddress) throw new Error('Base embedded wallet not available');
-        const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-        const transferData = encodeFunctionData({
-          abi: erc20Abi,
-          functionName: 'transfer',
-          args: [treasury as `0x${string}`, parseUnits(total.toFixed(6), 6)],
-        });
-        const { hash } = await privySendTransaction(
-          { to: USDC_BASE, data: transferData, chainId: 8453, value: 0 },
-          { address: embeddedEvmAddress, sponsor: true },
-        );
-        txSig = hash;
-      } else {
-        txSig = await buildAndSignSolanaUsdcTransfer(payerAddress, treasury, total);
-      }
-
-      setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
-      const patchRes = await fetch(`/api/orders/${newOrderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...authPayload,
-          action: 'pay',
-          payment_method: chain === 'base' ? 'usdc-base' : 'usdc-sol',
-          payment_chain: chain,
-          escrow_tx_hash: txSig,
-        }),
-      });
-      const patchJson = await patchRes.json();
-      if (!patchJson.success) throw new Error(patchJson.error);
-
-      trackPurchase({
-        transactionId: txSig,
-        serviceId: service.id,
-        serviceTitle: service.title,
-        category: service.category,
-        value: total,
-        priceType: service.price_type,
-        chain,
-        paymentMethod: chain === 'base' ? 'usdc-base' : 'usdc-sol',
-        isSubscription,
-      });
-
-      setOrderId(newOrderId);
-      setStep('confirmation');
+      const authPayload = await signAuthForChain(chain);
+      await settleOrder(chain, payerAddress, treasury, authPayload, chain === 'base' ? 'usdc-base' : 'usdc-sol');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment failed');
     } finally {
       setLoading(false);
     }
-  }, [
-    embeddedSolanaAddress,
-    embeddedEvmAddress,
-    evmEmbedded,
-    usdcBalances,
-    service,
-    brief,
-    validUrls,
-    referenceImages,
-    total,
-    solSignMessage,
-    buildAndSignSolanaUsdcTransfer,
-    privySendTransaction,
-    isWorkspace,
-    isSubscription,
-  ]);
+  }, [embeddedSolanaAddress, embeddedEvmAddress, usdcBalances, total, signAuthForChain, settleOrder]);
 
-  const executeCardPayment = useCallback(async () => {
-    const treasury = getTreasuryForChain('solana');
+  const executeCardPaymentForChain = useCallback(async (chain: PayChain) => {
+    const treasury = getTreasuryForChain(chain);
     if (!treasury) {
-      setError('Treasury not configured for Solana');
+      setError(`Treasury not configured for ${chain === 'base' ? 'Base' : 'Solana'}`);
       return;
     }
-    if (!embeddedSolanaAddress) {
-      setError('Embedded Solana wallet not available');
+    const payerAddress = chain === 'base' ? embeddedEvmAddress : embeddedSolanaAddress;
+    if (!payerAddress) {
+      setError(`Embedded ${chain === 'base' ? 'Base' : 'Solana'} wallet not available`);
       return;
     }
+
     setLoading(true);
     setError(null);
     try {
       setLoadingMsg('Opening payment...');
       try {
         await new Promise<void>((resolve) => {
-          solFundResolveRef.current = resolve;
-          void fundSolanaWallet({
-            address: embeddedSolanaAddress,
-            options: { chain: 'solana:mainnet', amount: total.toFixed(2), asset: 'USDC' },
-          });
+          if (chain === 'base') {
+            evmFundResolveRef.current = resolve;
+            void fundEvmWallet({
+              address: payerAddress as `0x${string}`,
+              options: { chain: base, amount: total.toFixed(2), asset: 'USDC', defaultFundingMethod: 'card' },
+            });
+          } else {
+            solFundResolveRef.current = resolve;
+            void fundSolanaWallet({
+              address: payerAddress,
+              options: { chain: 'solana:mainnet', amount: total.toFixed(2), asset: 'USDC', defaultFundingMethod: 'card' },
+            });
+          }
         });
       } catch {
         setLoading(false);
@@ -647,90 +662,31 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       }
 
       setLoadingMsg('Signing wallet...');
-      if (!embeddedSolanaAddress || !solEmbedded) {
-        throw new Error('Embedded Solana wallet not available. Sign in with Privy to continue.');
-      }
-      const solSignable = {
-        publicKey: { toBase58: () => embeddedSolanaAddress },
-        signMessage: async (msg: Uint8Array) => {
-          const out = await solSignMessage({ message: msg, wallet: solEmbedded });
-          return out.signature;
-        },
-      };
-      const auth = await signWalletAuth(solSignable);
-
-      setLoadingMsg('Creating order...');
-      const referralPartner = readReferralCookie();
-      const createRes = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...auth,
-          service_id: service.id,
-          brief,
-          reference_urls: validUrls.length > 0 ? validUrls : undefined,
-          reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
-          client_wallet: embeddedSolanaAddress,
-          payment_chain: 'solana',
-          ...(referralPartner ? { referral_partner: referralPartner } : {}),
-        }),
-      });
-      const createJson = await createRes.json();
-      if (!createJson.success) throw new Error(createJson.error);
-
-      const newOrderId = createJson.data.id;
-
-      setLoadingMsg('Sending payment...');
-      const txSig = await buildAndSignSolanaUsdcTransfer(embeddedSolanaAddress, treasury, total);
-
-      setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
-      const patchRes = await fetch(`/api/orders/${newOrderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...auth,
-          action: 'pay',
-          payment_method: 'usdc-sol',
-          payment_chain: 'solana',
-          escrow_tx_hash: txSig,
-        }),
-      });
-      const patchJson = await patchRes.json();
-      if (!patchJson.success) throw new Error(patchJson.error);
-
-      trackPurchase({
-        transactionId: txSig,
-        serviceId: service.id,
-        serviceTitle: service.title,
-        category: service.category,
-        value: total,
-        priceType: service.price_type,
-        chain: 'solana',
-        paymentMethod: 'card',
-        isSubscription,
-      });
-
-      setOrderId(newOrderId);
-      setStep('confirmation');
+      const authPayload = await signAuthForChain(chain);
+      await settleOrder(chain, payerAddress, treasury, authPayload, 'card');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment failed');
     } finally {
       setLoading(false);
     }
-  }, [
-    embeddedSolanaAddress,
-    solEmbedded,
-    total,
-    fundSolanaWallet,
-    solSignMessage,
-    buildAndSignSolanaUsdcTransfer,
-    service,
-    brief,
-    validUrls,
-    referenceImages,
-    isWorkspace,
-    isSubscription,
-  ]);
+  }, [embeddedEvmAddress, embeddedSolanaAddress, total, fundEvmWallet, fundSolanaWallet, signAuthForChain, settleOrder]);
+
+  const bridgeAndRetry = useCallback(async (toChain: PayChain) => {
+    const fromChain: PayChain = toChain === 'base' ? 'solana' : 'base';
+    setNeedsFunding(false);
+    setLoading(true);
+    setError(null);
+    try {
+      setLoadingMsg(`Bridging from ${fromChain === 'base' ? 'Base' : 'Solana'}...`);
+      trackWalletBridgeStarted({ fromChain, toChain, value: total });
+      await bridgeUsdc({ fromChain, toChain, amountUsd: total, tradeType: 'EXACT_OUTPUT' });
+      trackWalletBridgeCompleted({ fromChain, toChain, value: total });
+      await executePaymentForChain(toChain, true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bridge failed');
+      setLoading(false);
+    }
+  }, [bridgeUsdc, total, executePaymentForChain]);
 
   const handleSelectChain = useCallback((chain: PayChain) => {
     setPayChain(chain);
@@ -742,13 +698,12 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
   const handleReviewPay = useCallback(() => {
     if (payMethod === 'card') {
-      setPayChain('solana');
-      setActiveChain('solana');
-      void executeCardPayment();
+      setActiveChain(payChain);
+      void executeCardPaymentForChain(payChain);
       return;
     }
     setStep('select-wallet');
-  }, [payMethod, setActiveChain, executeCardPayment]);
+  }, [payMethod, payChain, setActiveChain, executeCardPaymentForChain]);
 
   if (!open) return null;
 
@@ -1134,6 +1089,28 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </div>
               </div>
 
+              {payMethod === 'card' && (
+                <div>
+                  <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Receive on</p>
+                  <div className="flex gap-2">
+                    {(['solana', 'base'] as const).map((chain) => (
+                      <button
+                        key={chain}
+                        onClick={() => setPayChain(chain)}
+                        className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2 rounded border text-xs font-mono transition-all duration-200 cursor-pointer ${
+                          payChain === chain
+                            ? 'border-atelier text-atelier bg-atelier/5'
+                            : 'border-gray-200 dark:border-neutral-800 text-gray-400 dark:text-neutral-500 hover:border-atelier/40'
+                        }`}
+                      >
+                        <Image src={chain === 'base' ? '/base.svg' : '/solana.svg'} alt={chain} width={14} height={14} className="h-3.5 w-3.5 object-contain" />
+                        {chain === 'base' ? 'Base' : 'Solana'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <p className="text-sm text-red-400 font-mono">{error}</p>
               )}
@@ -1179,22 +1156,36 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </p>
               </div>
 
-              {needsFunding && pendingChain && (
-                <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
-                  <p className="text-xs font-mono text-amber-400 mb-2">
-                    Insufficient USDC balance on {pendingChain === 'base' ? 'Base' : 'Solana'}.
-                    Need ${total.toFixed(2)}, have ${balanceForChain(pendingChain).toFixed(2)}.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => void fundAndRetry(pendingChain)}
-                    className="w-full py-2 rounded border border-amber-500/50 text-amber-400 text-xs font-mono hover:bg-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? 'Opening funding...' : `Add funds to continue`}
-                  </button>
-                </div>
-              )}
+              {needsFunding && pendingChain && (() => {
+                const otherChain: PayChain = pendingChain === 'base' ? 'solana' : 'base';
+                const canBridge = !usdcBalances.loading && balanceForChain(otherChain) >= total;
+                return (
+                  <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 space-y-2">
+                    <p className="text-xs font-mono text-amber-400">
+                      Insufficient USDC balance on {pendingChain === 'base' ? 'Base' : 'Solana'}.
+                      Need ${total.toFixed(2)}, have ${balanceForChain(pendingChain).toFixed(2)}.
+                    </p>
+                    {canBridge && (
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => void bridgeAndRetry(pendingChain)}
+                        className="w-full py-2 rounded border border-atelier/50 text-atelier text-xs font-mono hover:bg-atelier/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loading ? 'Working...' : `Bridge $${total.toFixed(2)} from ${otherChain === 'base' ? 'Base' : 'Solana'}`}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => void fundAndRetry(pendingChain)}
+                      className="w-full py-2 rounded border border-amber-500/50 text-amber-400 text-xs font-mono hover:bg-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {loading ? 'Opening funding...' : `Add funds with card`}
+                    </button>
+                  </div>
+                );
+              })()}
 
               <div className="space-y-2">
                 {(['solana', 'base'] as const).map((chain) => {

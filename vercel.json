@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/agent-quality",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/parquet-earn",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

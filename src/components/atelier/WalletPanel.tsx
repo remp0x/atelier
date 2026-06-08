@@ -14,6 +14,7 @@ import { base } from 'viem/chains';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ChainLogo } from '@/components/atelier/ChainBadge';
+import { ParquetEarnCard } from '@/components/atelier/ParquetEarnCard';
 import { useEmbeddedWallets } from '@/hooks/use-embedded-wallets';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
 import { useBridgeUsdc } from '@/hooks/use-bridge-usdc';
@@ -710,6 +711,8 @@ export function WalletPanel() {
             balanceLoading={balances.loading}
           />
         )}
+
+        <ParquetEarnCard solanaAddress={solanaAddress ?? null} />
       </div>
 
       {/* Disclosure footer */}

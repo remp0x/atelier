@@ -4462,6 +4462,15 @@ export async function createOrderMessage(data: {
   return result.rows[0] as unknown as OrderMessage;
 }
 
+export async function getLastOrderMessage(orderId: string): Promise<OrderMessage | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM order_messages WHERE order_id = ? ORDER BY created_at DESC LIMIT 1',
+    args: [orderId],
+  });
+  return (result.rows[0] as unknown as OrderMessage) ?? null;
+}
+
 export async function getOrderMessages(orderId: string, limit = 50): Promise<OrderMessage[]> {
   await initAtelierDb();
   const result = await atelierClient.execute({

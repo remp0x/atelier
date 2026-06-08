@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import Image from 'next/image';
 import { useExportWallet as useExportEvmWallet, useCreateWallet } from '@privy-io/react-auth';
 import { useFundWallet as useEvmFundWallet } from '@privy-io/react-auth';
 import {
@@ -289,7 +290,16 @@ function BridgeCard({
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (dismissTimer.current) clearTimeout(dismissTimer.current);
+    },
+    [],
+  );
 
   const toChain: 'solana' | 'base' = fromChain === 'solana' ? 'base' : 'solana';
   const sourceBalance = fromChain === 'solana' ? solBalance : baseBalance;
@@ -300,12 +310,15 @@ function BridgeCard({
     setFromChain(toChain);
     setErr(null);
     setStatus(null);
+    setDone(false);
   };
 
   const handleBridge = async () => {
     if (!valid) return;
+    if (dismissTimer.current) clearTimeout(dismissTimer.current);
     setErr(null);
-    setStatus(`Moving to ${toChain === 'base' ? 'Base' : 'Solana'}...`);
+    setDone(false);
+    setStatus(`Preparing transfer to ${toChain === 'base' ? 'Base' : 'Solana'}`);
     setBusy(true);
     try {
       trackWalletBridgeStarted({ fromChain, toChain, value: amountNum });
@@ -321,8 +334,13 @@ function BridgeCard({
         },
       });
       trackWalletBridgeCompleted({ fromChain, toChain, value: amountNum });
-      setStatus(`Moved $${amountNum.toFixed(2)} USDC to ${toChain === 'base' ? 'Base' : 'Solana'}.`);
       setAmount('');
+      setStatus(`Sent $${amountNum.toFixed(2)} to ${toChain === 'base' ? 'Base' : 'Solana'}`);
+      setDone(true);
+      dismissTimer.current = setTimeout(() => {
+        setStatus(null);
+        setDone(false);
+      }, 3500);
     } catch (e) {
       console.error('[bridge] failed', e);
       setErr(bridgeErrorMessage(e));
@@ -368,27 +386,50 @@ function BridgeCard({
           </div>
         </div>
 
+        <div className="flex items-center justify-end gap-2 min-h-[22px]">
+          {balanceLoading ? (
+            <div className="h-3.5 w-24 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
+          ) : (
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px]">
+              <span className="uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600">Balance</span>
+              <Image
+                src="/usdc.svg"
+                alt="USDC"
+                width={13}
+                height={13}
+                className="object-contain shrink-0"
+                style={{ width: 13, height: 13 }}
+              />
+              <span className="tabular-nums text-black dark:text-white">
+                {sourceBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setAmount(sourceBalance > 0 ? String(sourceBalance) : '')}
+            disabled={busy || balanceLoading || sourceBalance <= 0}
+            className="font-mono text-[10px] font-medium text-atelier hover:text-atelier-bright px-1.5 py-0.5 rounded border border-atelier/30 hover:border-atelier/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          >
+            MAX
+          </button>
+        </div>
+
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[13px] text-gray-400 dark:text-neutral-600">$</span>
             <input
               type="number"
               inputMode="decimal"
               min="0"
               step="0.01"
               value={amount}
-              onChange={(e) => { setAmount(e.target.value); setErr(null); setStatus(null); }}
+              onChange={(e) => { setAmount(e.target.value); setErr(null); setStatus(null); setDone(false); }}
               placeholder="0.00"
               disabled={busy}
-              className="w-full h-9 pl-3 pr-14 rounded-md bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-[13px] font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier disabled:opacity-50"
+              aria-label={`Amount to move to ${toChain === 'base' ? 'Base' : 'Solana'}`}
+              className="w-full h-9 pl-6 pr-3 rounded-md bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-[13px] font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier disabled:opacity-50"
             />
-            <button
-              type="button"
-              onClick={() => setAmount(sourceBalance > 0 ? String(sourceBalance) : '')}
-              disabled={busy || balanceLoading}
-              className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] text-atelier hover:text-atelier-bright disabled:opacity-50 cursor-pointer"
-            >
-              MAX
-            </button>
           </div>
 
           <button
@@ -403,7 +444,7 @@ function BridgeCard({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Moving...
+                Moving
               </>
             ) : (
               'Move'
@@ -411,17 +452,33 @@ function BridgeCard({
           </button>
         </div>
 
-        <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500">
-          {balanceLoading
-            ? 'Loading balance...'
-            : `Available on ${fromChain === 'base' ? 'Base' : 'Solana'}: $${sourceBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDC`}
-        </p>
-
-        {status && (
-          <p className="font-mono text-[11px] text-atelier">{status}</p>
-        )}
-        {err && (
-          <p role="alert" className="font-mono text-[11px] text-red-400">{err}</p>
+        {(busy || status || err) && (
+          <div
+            role={err ? 'alert' : 'status'}
+            className={`flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] leading-tight transition-colors ${
+              err
+                ? 'bg-red-500/10 text-red-500 dark:text-red-400'
+                : done
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-atelier/10 text-atelier'
+            }`}
+          >
+            {err ? (
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+            ) : done ? (
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            )}
+            <span className="truncate">{err ?? status}</span>
+          </div>
         )}
       </div>
     </div>

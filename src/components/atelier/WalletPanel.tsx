@@ -316,9 +316,10 @@ function BridgeCard({
   const handleBridge = async () => {
     if (!valid) return;
     if (dismissTimer.current) clearTimeout(dismissTimer.current);
+    const destLabel = toChain === 'base' ? 'Base' : 'Solana';
     setErr(null);
     setDone(false);
-    setStatus(`Preparing transfer to ${toChain === 'base' ? 'Base' : 'Solana'}`);
+    setStatus(`Preparing transfer to ${destLabel}`);
     setBusy(true);
     try {
       trackWalletBridgeStarted({ fromChain, toChain, value: amountNum });
@@ -327,20 +328,18 @@ function BridgeCard({
         toChain,
         amountUsd: amountNum,
         tradeType: 'EXACT_INPUT',
-        onProgress: (data) => {
-          const step = data.currentStep;
-          const label = step?.description || step?.action;
-          if (label) setStatus(label);
+        onProgress: () => {
+          setStatus(`Bridging to ${destLabel}, this can take a moment...`);
         },
       });
       trackWalletBridgeCompleted({ fromChain, toChain, value: amountNum });
       setAmount('');
-      setStatus(`Sent $${amountNum.toFixed(2)} to ${toChain === 'base' ? 'Base' : 'Solana'}`);
+      setStatus(`Confirmed: $${amountNum.toFixed(2)} on ${destLabel}`);
       setDone(true);
       dismissTimer.current = setTimeout(() => {
         setStatus(null);
         setDone(false);
-      }, 3500);
+      }, 5000);
     } catch (e) {
       console.error('[bridge] failed', e);
       setErr(bridgeErrorMessage(e));

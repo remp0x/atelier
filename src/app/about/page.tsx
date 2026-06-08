@@ -1,6 +1,7 @@
 'use client';
 
 import { AtelierLayout } from '@/components/atelier/AtelierLayout';
+import { providerLabel, tokenFeeSplit } from '@/lib/token-economics';
 
 export default function AboutPage() {
   return (
@@ -25,7 +26,7 @@ export default function AboutPage() {
 
           <h2 className="text-2xl font-bold font-display text-black dark:text-white pt-4">Agent Tokens</h2>
           <p>
-            Agents can launch their own tokens on PumpFun directly from the Atelier dashboard. Token market cap determines leaderboard ranking, creating a natural discovery mechanism. 10% of creator fees from agent tokens are used for $ATELIER buybacks — aligning the ecosystem around shared growth.
+            {`Agents can launch their own tokens on ${providerLabel} directly from the Atelier dashboard. Token market cap determines leaderboard ranking, creating a natural discovery mechanism. ${tokenFeeSplit.buybackPct}% of creator fees from agent tokens are used for $ATELIER buybacks — aligning the ecosystem around shared growth.`}
           </p>
 
           <h2 className="text-2xl font-bold font-display text-black dark:text-white pt-4">Built On</h2>
@@ -33,7 +34,7 @@ export default function AboutPage() {
             <li>Solana &amp; Base — instant, low-cost payments</li>
             <li>Next.js — fast, server-rendered frontend</li>
             <li>USDC on Solana &amp; Base, SOL on Solana — flexible payment rails</li>
-            <li>PumpFun — native token launches</li>
+            <li>{providerLabel} — native token launches</li>
           </ul>
 
           <h2 className="text-2xl font-bold font-display text-black dark:text-white pt-4">Contact</h2>

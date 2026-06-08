@@ -343,6 +343,8 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN llm_quality_score REAL'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN duplicate_of TEXT'); } catch (_e) { }
   try { await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_duplicate_of ON atelier_agents(duplicate_of)'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN registration_ip TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_registration_ip ON atelier_agents(registration_ip)'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN moderation_status TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN moderation_reason TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN review_summary TEXT'); } catch (_e) { }
@@ -1897,7 +1899,7 @@ export interface AtelierAgent {
   token_name: string | null;
   token_symbol: string | null;
   token_image_url: string | null;
-  token_mode: 'pumpfun' | 'byot' | null;
+  token_mode: 'pumpfun' | 'clawpump' | 'byot' | null;
   token_creator_wallet: string | null;
   token_tx_hash: string | null;
   token_created_at: string | null;
@@ -1913,6 +1915,7 @@ export interface AtelierAgent {
   privy_user_id: string | null;
   user_id: string | null;
   webhook_secret: string | null;
+  registration_ip: string | null;
   created_at: string;
 }
 
@@ -2125,7 +2128,7 @@ export interface AgentTokenInfo {
   token_name: string | null;
   token_symbol: string | null;
   token_image_url: string | null;
-  token_mode: 'pumpfun' | 'byot' | null;
+  token_mode: 'pumpfun' | 'clawpump' | 'byot' | null;
   token_creator_wallet: string | null;
   token_tx_hash: string | null;
   token_created_at: string | null;
@@ -2160,7 +2163,7 @@ export async function ensureAtelierAgent(coreAgent: {
   token_name: string | null;
   token_symbol: string | null;
   token_image_url: string | null;
-  token_mode: 'pumpfun' | 'byot' | null;
+  token_mode: 'pumpfun' | 'clawpump' | 'byot' | null;
   token_creator_wallet: string | null;
   token_tx_hash: string | null;
   token_created_at: string | null;
@@ -2547,6 +2550,7 @@ export async function registerAtelierAgent(data: {
   user_id?: string;
   privy_user_id?: string;
   registration_tx?: string;
+  registration_ip?: string;
 }): Promise<{ agent_id: string; api_key: string; slug: string; webhook_secret: string | null }> {
   await initAtelierDb();
 
@@ -2577,9 +2581,9 @@ export async function registerAtelierAgent(data: {
   const webhookSecret = data.endpoint_url ? `whsec_${randomBytes(32).toString('hex')}` : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_username, ai_models, webhook_secret, user_id, privy_user_id, registration_tx)
-          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, data.twitter_username || null, aiModels, webhookSecret, data.user_id || null, data.privy_user_id || null, data.registration_tx || null],
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_username, ai_models, webhook_secret, user_id, privy_user_id, registration_tx, registration_ip)
+          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, data.twitter_username || null, aiModels, webhookSecret, data.user_id || null, data.privy_user_id || null, data.registration_tx || null, data.registration_ip || null],
   });
 
   return { agent_id: id, api_key: apiKey, slug, webhook_secret: webhookSecret };
@@ -4252,7 +4256,7 @@ export async function updateAgentToken(
     token_name: string;
     token_symbol: string;
     token_image_url?: string;
-    token_mode: 'pumpfun' | 'byot';
+    token_mode: 'pumpfun' | 'clawpump' | 'byot';
     token_creator_wallet: string;
     token_tx_hash?: string;
   }
@@ -4462,6 +4466,15 @@ export async function createOrderMessage(data: {
   return result.rows[0] as unknown as OrderMessage;
 }
 
+export async function getLastOrderMessage(orderId: string): Promise<OrderMessage | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT * FROM order_messages WHERE order_id = ? ORDER BY created_at DESC LIMIT 1',
+    args: [orderId],
+  });
+  return (result.rows[0] as unknown as OrderMessage) ?? null;
+}
+
 export async function getOrderMessages(orderId: string, limit = 50): Promise<OrderMessage[]> {
   await initAtelierDb();
   const result = await atelierClient.execute({
@@ -4515,7 +4528,7 @@ export interface MetricsData {
   totalOrders: number;
   ordersByStatus: Record<string, number>;
   totalAgents: number;
-  agentsWithTokens: { total: number; pumpfun: number; byot: number };
+  agentsWithTokens: { total: number; pumpfun: number; clawpump: number; byot: number };
   servicesByCategory: Record<string, number>;
   servicesByProvider: Record<string, number>;
   servicesByModel: Record<string, number>;
@@ -4556,6 +4569,7 @@ export async function getMetricsData(): Promise<MetricsData> {
       `SELECT
         SUM(CASE WHEN token_mint IS NOT NULL THEN 1 ELSE 0 END) as total,
         SUM(CASE WHEN token_mint IS NOT NULL AND token_mode = 'pumpfun' THEN 1 ELSE 0 END) as pumpfun,
+        SUM(CASE WHEN token_mint IS NOT NULL AND token_mode = 'clawpump' THEN 1 ELSE 0 END) as clawpump,
         SUM(CASE WHEN token_mint IS NOT NULL AND token_mode = 'byot' THEN 1 ELSE 0 END) as byot
       FROM atelier_agents WHERE active = 1`
     ),
@@ -4614,10 +4628,11 @@ export async function getMetricsData(): Promise<MetricsData> {
     count: Number(row.count),
   }));
 
-  let tokenTotal = 0, tokenPumpfun = 0, tokenByot = 0;
+  let tokenTotal = 0, tokenPumpfun = 0, tokenClawpump = 0, tokenByot = 0;
   if (tokensResult.rows[0]) {
     tokenTotal = Number(tokensResult.rows[0].total);
     tokenPumpfun = Number(tokensResult.rows[0].pumpfun);
+    tokenClawpump = Number(tokensResult.rows[0].clawpump);
     tokenByot = Number(tokensResult.rows[0].byot);
   }
 
@@ -4628,7 +4643,7 @@ export async function getMetricsData(): Promise<MetricsData> {
     totalOrders: Number(totalOrdersResult.rows[0].count),
     ordersByStatus,
     totalAgents: Number(totalAgentsResult.rows[0].count),
-    agentsWithTokens: { total: tokenTotal, pumpfun: tokenPumpfun, byot: tokenByot },
+    agentsWithTokens: { total: tokenTotal, pumpfun: tokenPumpfun, clawpump: tokenClawpump, byot: tokenByot },
     servicesByCategory,
     servicesByProvider,
     servicesByModel,

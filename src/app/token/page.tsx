@@ -9,6 +9,7 @@ import { atelierHref } from '@/lib/atelier-paths';
 import { formatMcap, formatPrice } from '@/lib/format';
 import type { MarketData } from '@/app/api/market/route';
 import type { AtelierAgentListItem } from '@/lib/atelier-db';
+import { providerLabel, tokenFeeSplit, tokenFeeSlices, tokenFeeBarTitle } from '@/lib/token-economics';
 
 const ATELIER_MINT = '7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump';
 
@@ -22,7 +23,7 @@ interface MetricsSnapshot {
   totalAgents: number;
   totalRevenue: number;
   creatorFeeSol: number;
-  agentsWithTokens: { total: number; pumpfun: number; byot: number };
+  agentsWithTokens: { total: number; pumpfun: number; clawpump: number; byot: number };
   solPrice?: number;
 }
 
@@ -35,7 +36,7 @@ const MECHANICS = [
   {
     step: '02',
     title: 'Creator Fee Buybacks',
-    desc: '10% of creator fees from agent tokens launched via PumpFun go to $ATELIER buybacks.',
+    desc: `${tokenFeeSplit.buybackPct}% of creator fees from agent tokens launched via ${providerLabel} go to $ATELIER buybacks.`,
   },
   {
     step: '03',
@@ -54,14 +55,9 @@ const FEE_SLICES = [
   { label: 'Platform', pct: 10, color: 'bg-atelier-bright', desc: 'Protocol revenue & operations' },
 ];
 
-const TOKEN_FEE_SLICES = [
-  { label: 'Agent Creator', pct: 90, color: 'bg-atelier', desc: 'Creator keeps 90% of PumpFun fees' },
-  { label: '$ATELIER Buyback', pct: 10, color: 'bg-orange', desc: '10% of creator fees go to buybacks' },
-];
-
 const ROADMAP = [
   { label: 'Marketplace Fees', desc: '10% platform fee on every order and subscription', live: true },
-  { label: 'Creator Fee Buybacks', desc: '10% of PumpFun creator fees go to $ATELIER buybacks', live: true },
+  { label: 'Creator Fee Buybacks', desc: `${tokenFeeSplit.buybackPct}% of ${providerLabel} creator fees go to $ATELIER buybacks`, live: true },
   { label: 'Subscriptions', desc: 'Recurring revenue from weekly/monthly plans', live: true },
   { label: 'Agent Staking', desc: 'Stake $ATELIER for featured placement and priority search', live: false },
   { label: 'Premium Access', desc: 'Token-gated tiers with higher limits and priority queue', live: false },
@@ -340,7 +336,7 @@ export default function TokenPage() {
               <FeeBar slices={FEE_SLICES} title="Marketplace Orders" />
             </div>
             <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
-              <FeeBar slices={TOKEN_FEE_SLICES} title="Agent Token Fees (PumpFun)" />
+              <FeeBar slices={tokenFeeSlices} title={tokenFeeBarTitle} />
             </div>
           </div>
         </section>
@@ -357,7 +353,7 @@ export default function TokenPage() {
                 sub={metrics.solPrice ? `~ ${formatUsd(metrics.creatorFeeSol * metrics.solPrice)}` : 'token trading'}
               />
               <StatCard label="Total Orders" value={String(metrics.totalOrders)} />
-              <StatCard label="Tokens Launched" value={String(metrics.agentsWithTokens.total)} sub={`${metrics.agentsWithTokens.pumpfun} PumpFun · ${metrics.agentsWithTokens.byot} BYOT`} />
+              <StatCard label="Tokens Launched" value={String(metrics.agentsWithTokens.total)} sub={`${metrics.agentsWithTokens.pumpfun} PumpFun · ${metrics.agentsWithTokens.clawpump} ClawPump · ${metrics.agentsWithTokens.byot} BYOT`} />
             </div>
           </section>
         )}

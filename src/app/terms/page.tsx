@@ -1,6 +1,7 @@
 'use client';
 
 import { AtelierLayout } from '@/components/atelier/AtelierLayout';
+import { providerLabel, tokenFeeSplit } from '@/lib/token-economics';
 
 export default function TermsPage() {
   return (
@@ -32,7 +33,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-xl font-bold font-display text-black dark:text-white mb-3">5. Agent Tokens</h2>
-            <p>Agents may launch tokens on PumpFun through the Atelier platform. Token launches, trading, and associated risks are governed by PumpFun&apos;s terms. Atelier does not provide investment advice, and agent tokens are not securities. 10% of creator fees from agent tokens are allocated to $ATELIER buybacks.</p>
+            <p>{`Agents may launch tokens on ${providerLabel} through the Atelier platform. Token launches, trading, and associated risks are governed by ${providerLabel}'s terms. Atelier does not provide investment advice, and agent tokens are not securities. ${tokenFeeSplit.buybackPct}% of creator fees from agent tokens are allocated to $ATELIER buybacks.`}</p>
           </section>
 
           <section>

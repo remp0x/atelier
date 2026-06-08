@@ -7,13 +7,15 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import { PUMP_SDK } from '@pump-fun/pump-sdk';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, getPayoutWallet } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
 import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
+import { TOKEN_LAUNCH_PROVIDER } from '@/lib/token-economics';
+import { launchTokenOnClawpump, ClawpumpError } from '@/lib/clawpump-client';
 
 export const maxDuration = 300;
 
@@ -142,55 +144,101 @@ export async function POST(
 
     const imageBlob = new Blob([imageBuffer], { type: matchedType });
 
-    console.log(`[token-launch] Uploading metadata to IPFS for agent ${agentId}`);
-    const { metadataUri } = await uploadToPumpFunIpfs(imageBlob, tokenName, symbol, description);
+    let mintAddress: string;
+    let txSignature: string;
+    let tokenMode: 'pumpfun' | 'clawpump';
+    let creatorWallet: string;
 
-    const connection = getServerConnection();
-    const atelierKeypair = getAtelierKeypair();
-    const mintKeypair = Keypair.generate();
-    const mint = mintKeypair.publicKey;
+    if (TOKEN_LAUNCH_PROVIDER === 'clawpump') {
+      // ClawPump is the on-chain deployer; the agent's own Solana wallet is creator-of-record
+      // and receives the 65%. The 65% must land on a Solana wallet, so reject Base payouts.
+      const wallet = getPayoutWallet(agent);
+      if (!wallet || agent.payout_chain === 'base') {
+        return NextResponse.json(
+          { success: false, error: 'ClawPump launches require a Solana payout wallet on this agent' },
+          { status: 400 },
+        );
+      }
 
-    console.log(`[token-launch] Creating V2 instruction, mint=${mint.toBase58()}`);
-    const instruction = await PUMP_SDK.createV2Instruction({
-      mint,
-      name: tokenName,
-      symbol,
-      uri: metadataUri,
-      creator: ATELIER_PUBKEY,
-      user: ATELIER_PUBKEY,
-      mayhemMode: false,
-    });
+      const lockAcquired = await markTokenLaunchAttempted(agentId);
+      if (!lockAcquired) {
+        return NextResponse.json(
+          { success: false, error: 'A token launch is already in progress or was attempted for this agent.' },
+          { status: 409 },
+        );
+      }
 
-    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+      console.log(`[token-launch] Launching via ClawPump for agent ${agentId}, wallet=${wallet}`);
+      // A failed call may still have minted — same risk posture as sendRawTransaction below.
+      broadcasted = true;
+      const result = await launchTokenOnClawpump({
+        name: tokenName,
+        symbol,
+        description,
+        imageBlob,
+        imageContentType: matchedType,
+        agentId,
+        agentName: agent.name,
+        walletAddress: wallet,
+      });
 
-    const messageV0 = new TransactionMessage({
-      payerKey: ATELIER_PUBKEY,
-      recentBlockhash: blockhash,
-      instructions: [instruction],
-    }).compileToV0Message();
+      mintAddress = result.mintAddress;
+      txSignature = result.txHash;
+      tokenMode = 'clawpump';
+      creatorWallet = wallet;
+    } else {
+      console.log(`[token-launch] Uploading metadata to IPFS for agent ${agentId}`);
+      const { metadataUri } = await uploadToPumpFunIpfs(imageBlob, tokenName, symbol, description);
 
-    const transaction = new VersionedTransaction(messageV0);
-    transaction.sign([atelierKeypair, mintKeypair]);
+      const connection = getServerConnection();
+      const atelierKeypair = getAtelierKeypair();
+      const mintKeypair = Keypair.generate();
+      const mint = mintKeypair.publicKey;
 
-    const lockAcquired = await markTokenLaunchAttempted(agentId);
-    if (!lockAcquired) {
-      return NextResponse.json(
-        { success: false, error: 'A token launch is already in progress or was attempted for this agent.' },
-        { status: 409 },
-      );
+      console.log(`[token-launch] Creating V2 instruction, mint=${mint.toBase58()}`);
+      const instruction = await PUMP_SDK.createV2Instruction({
+        mint,
+        name: tokenName,
+        symbol,
+        uri: metadataUri,
+        creator: ATELIER_PUBKEY,
+        user: ATELIER_PUBKEY,
+        mayhemMode: false,
+      });
+
+      const { blockhash } = await connection.getLatestBlockhash('confirmed');
+
+      const messageV0 = new TransactionMessage({
+        payerKey: ATELIER_PUBKEY,
+        recentBlockhash: blockhash,
+        instructions: [instruction],
+      }).compileToV0Message();
+
+      const transaction = new VersionedTransaction(messageV0);
+      transaction.sign([atelierKeypair, mintKeypair]);
+
+      const lockAcquired = await markTokenLaunchAttempted(agentId);
+      if (!lockAcquired) {
+        return NextResponse.json(
+          { success: false, error: 'A token launch is already in progress or was attempted for this agent.' },
+          { status: 409 },
+        );
+      }
+
+      console.log(`[token-launch] Sending transaction`);
+      txSignature = await connection.sendRawTransaction(transaction.serialize(), {
+        skipPreflight: false,
+        maxRetries: 3,
+      });
+      broadcasted = true;
+
+      console.log(`[token-launch] Polling confirmation for ${txSignature}`);
+      await pollTransactionConfirmation(connection, txSignature, 60_000);
+
+      mintAddress = mint.toBase58();
+      tokenMode = 'pumpfun';
+      creatorWallet = ATELIER_PUBKEY.toBase58();
     }
-
-    console.log(`[token-launch] Sending transaction`);
-    const txSignature = await connection.sendRawTransaction(transaction.serialize(), {
-      skipPreflight: false,
-      maxRetries: 3,
-    });
-    broadcasted = true;
-
-    console.log(`[token-launch] Polling confirmation for ${txSignature}`);
-    await pollTransactionConfirmation(connection, txSignature, 60_000);
-
-    const mintAddress = mint.toBase58();
 
     console.log(`[token-launch] Confirmed. Saving mint=${mintAddress} to DB`);
     const updated = await updateAgentToken(agentId, {
@@ -198,8 +246,8 @@ export async function POST(
       token_name: tokenName,
       token_symbol: symbol,
       token_image_url: agent.avatar_url,
-      token_mode: 'pumpfun',
-      token_creator_wallet: ATELIER_PUBKEY.toBase58(),
+      token_mode: tokenMode,
+      token_creator_wallet: creatorWallet,
       token_tx_hash: txSignature,
     });
 
@@ -226,6 +274,12 @@ export async function POST(
       });
     }
 
+    if (error instanceof ClawpumpError) {
+      return NextResponse.json(
+        { success: false, error: message },
+        { status: error.status },
+      );
+    }
     if (message.includes('PumpFun IPFS upload failed')) {
       return NextResponse.json(
         { success: false, error: message },

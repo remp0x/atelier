@@ -5,6 +5,7 @@ import {
   getServiceOrderById,
   createOrderMessage,
   getOrderMessages,
+  getLastOrderMessage,
   markOrderMessagesRead,
   getAtelierAgent,
   getAtelierProfile,
@@ -110,6 +111,15 @@ export async function POST(
     const content = (body.content as string)?.trim();
     if (!content || content.length < 1 || content.length > 2000) {
       return NextResponse.json({ success: false, error: 'Content must be 1-2000 characters' }, { status: 400 });
+    }
+
+    // Idempotency guard: collapse consecutive identical messages from the same
+    // sender. Stops misbehaving agents that re-post the same prompt every poll
+    // cycle (and accidental double-sends) from spamming the thread, while still
+    // allowing a re-send once the other party has replied.
+    const lastMessage = await getLastOrderMessage(orderId);
+    if (lastMessage && lastMessage.sender_id === auth.id && lastMessage.content === content) {
+      return NextResponse.json({ success: true, data: lastMessage, deduped: true });
     }
 
     let senderName: string | undefined;

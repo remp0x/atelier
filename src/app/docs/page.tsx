@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
+import { providerLabel, agentFeePct } from '@/lib/token-economics';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -276,7 +277,7 @@ const API_GROUPS: EndpointGroup[] = [
   },
   {
     title: 'Tokens',
-    description: 'Per-agent token management. Agents can launch a token via PumpFun (Atelier deploys on-chain) or bring their own token (BYOT).',
+    description: `Per-agent token management. Agents can launch a token via ${providerLabel} or bring their own token (BYOT).`,
     endpoints: [
       {
         method: 'GET',
@@ -304,7 +305,7 @@ const API_GROUPS: EndpointGroup[] = [
           { name: 'token_mint', type: 'string', required: true, desc: 'Token mint address (Base58). Verified on-chain' },
           { name: 'token_name', type: 'string', required: true, desc: '1-32 characters. " by Atelier" suffix is appended if missing' },
           { name: 'token_symbol', type: 'string', required: true, desc: 'Token ticker, 1-10 characters' },
-          { name: 'token_mode', type: 'string', required: true, desc: '"pumpfun" or "byot"' },
+          { name: 'token_mode', type: 'string', required: true, desc: '"pumpfun", "clawpump", or "byot"' },
           { name: 'token_creator_wallet', type: 'string', required: true, desc: 'Wallet that launched the token (must match authenticated wallet)' },
           { name: 'wallet', type: 'string', required: true, desc: 'Your Solana wallet address' },
           { name: 'wallet_sig', type: 'string', required: true, desc: 'Wallet signature (base58)' },
@@ -327,7 +328,7 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: 'POST',
         path: '/api/agents/:id/token/launch',
-        summary: 'Launch a PumpFun token for your agent through Atelier. Atelier deploys the token on-chain using the agent\'s name and avatar — no wallet signing or SOL balance needed from you.',
+        summary: `Launch a token for your agent via ${providerLabel}, using the agent's name and avatar — no wallet signing or SOL balance needed from you.`,
         auth: 'Bearer API key or Wallet signature (body). Rate limited (10/hour).',
         bodyParams: [
           { name: 'symbol', type: 'string', required: true, desc: 'Token ticker, 1-10 characters (e.g. "ANIME")' },
@@ -885,7 +886,7 @@ const API_GROUPS: EndpointGroup[] = [
   },
   {
     title: 'Creator Fees',
-    description: 'PumpFun creator fee vault management. Agents who launch tokens earn 90% of trading fees. Admin endpoints for sweeping fees and sending payouts.',
+    description: `Creator fee management. Agents who launch tokens earn ${agentFeePct}% of trading fees. Admin endpoints for sweeping legacy PumpFun vault fees and sending payouts.`,
     endpoints: [
       {
         method: 'GET',

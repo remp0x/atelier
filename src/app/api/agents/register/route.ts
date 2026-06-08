@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrationTxUsed, setAgentModeration, type ServiceCategory } from '@/lib/atelier-db';
 import { moderateListing } from '@/lib/pod';
-import { rateLimiters } from '@/lib/rateLimit';
+import { rateLimiters, getClientIp } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
 import { createSAIDAgent } from '@/lib/said';
 import { readPrivyAccessToken, verifyPrivyAccessToken, PrivyAuthError } from '@/lib/privy-auth';
@@ -111,7 +111,7 @@ function registrationResponse(
   }, { status: 201 });
 }
 
-async function registerViaPrivy(body: Record<string, unknown>, token: string): Promise<NextResponse> {
+async function registerViaPrivy(body: Record<string, unknown>, token: string, clientIp: string): Promise<NextResponse> {
   let privyUserId: string;
   let twitterUsername: string | null;
   try {
@@ -132,6 +132,7 @@ async function registerViaPrivy(body: Record<string, unknown>, token: string): P
     user_id: privyUserId,
     privy_user_id: privyUserId,
     twitter_username: twitterUsername ?? undefined,
+    registration_ip: clientIp,
   });
 
   kickoffSAID(result.agent_id);
@@ -139,7 +140,7 @@ async function registerViaPrivy(body: Record<string, unknown>, token: string): P
   return registrationResponse(result, { twitter_username: twitterUsername, marketable: true });
 }
 
-async function registerViaWallet(request: NextRequest, body: Record<string, unknown>): Promise<NextResponse> {
+async function registerViaWallet(request: NextRequest, body: Record<string, unknown>, clientIp: string): Promise<NextResponse> {
   const owner_wallet = typeof body.owner_wallet === 'string' ? body.owner_wallet : '';
   if (!BASE58_REGEX.test(owner_wallet)) {
     return NextResponse.json({ success: false, error: 'owner_wallet must be a valid base58 Solana address' }, { status: 400 });
@@ -156,7 +157,7 @@ async function registerViaWallet(request: NextRequest, body: Record<string, unkn
   const parsed = parseCommonFields(body);
   if ('error' in parsed) return parsed.error;
 
-  const result = await registerAtelierAgent({ ...parsed.fields, owner_wallet: verifiedWallet });
+  const result = await registerAtelierAgent({ ...parsed.fields, owner_wallet: verifiedWallet, registration_ip: clientIp });
   kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: null, marketable: true });
@@ -172,7 +173,7 @@ function registration402Challenge(chain: PaymentChain): Response {
   return buildPaymentRequiredResponse(requirements);
 }
 
-async function registerViaX402(body: Record<string, unknown>, txRef: string, chainHint: PaymentChain | null): Promise<NextResponse> {
+async function registerViaX402(body: Record<string, unknown>, txRef: string, chainHint: PaymentChain | null, clientIp: string): Promise<NextResponse> {
   if (await isRegistrationTxUsed(txRef)) {
     return NextResponse.json({ success: false, error: 'This payment was already used to register an agent' }, { status: 409 });
   }
@@ -189,17 +190,18 @@ async function registerViaX402(body: Record<string, unknown>, txRef: string, cha
     ...parsed.fields,
     owner_wallet: verification.payerWallet,
     registration_tx: txRef,
+    registration_ip: clientIp,
   });
   kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: null, marketable: true });
 }
 
-async function registerBare(body: Record<string, unknown>): Promise<NextResponse> {
+async function registerBare(body: Record<string, unknown>, clientIp: string): Promise<NextResponse> {
   const parsed = parseCommonFields(body);
   if ('error' in parsed) return parsed.error;
 
-  const result = await registerAtelierAgent({ ...parsed.fields });
+  const result = await registerAtelierAgent({ ...parsed.fields, registration_ip: clientIp });
   kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, {
@@ -215,11 +217,12 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+    const clientIp = getClientIp(request);
 
     const regTx = parseX402Header(request.headers.get('X-PAYMENT'));
     const regNet = networkToChain(request.headers.get('X-Payment-Network'));
     if (regTx) {
-      return await registerViaX402(body, regTx, regNet);
+      return await registerViaX402(body, regTx, regNet, clientIp);
     }
 
     const wantsPay = regNet !== null
@@ -231,14 +234,14 @@ export async function POST(request: NextRequest) {
 
     const privyToken = readPrivyAccessToken(request, body);
     if (privyToken) {
-      return await registerViaPrivy(body, privyToken);
+      return await registerViaPrivy(body, privyToken, clientIp);
     }
 
     if (typeof body.owner_wallet === 'string' && (body.wallet_sig || body.wallet_sig_ts)) {
-      return await registerViaWallet(request, body);
+      return await registerViaWallet(request, body, clientIp);
     }
 
-    return await registerBare(body);
+    return await registerBare(body, clientIp);
   } catch (error) {
     if (error instanceof DuplicateAgentError) {
       const existing = error.existingAgent;

@@ -343,6 +343,8 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN llm_quality_score REAL'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN duplicate_of TEXT'); } catch (_e) { }
   try { await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_duplicate_of ON atelier_agents(duplicate_of)'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN registration_ip TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_registration_ip ON atelier_agents(registration_ip)'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN moderation_status TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN moderation_reason TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE services ADD COLUMN review_summary TEXT'); } catch (_e) { }
@@ -1913,6 +1915,7 @@ export interface AtelierAgent {
   privy_user_id: string | null;
   user_id: string | null;
   webhook_secret: string | null;
+  registration_ip: string | null;
   created_at: string;
 }
 
@@ -2547,6 +2550,7 @@ export async function registerAtelierAgent(data: {
   user_id?: string;
   privy_user_id?: string;
   registration_tx?: string;
+  registration_ip?: string;
 }): Promise<{ agent_id: string; api_key: string; slug: string; webhook_secret: string | null }> {
   await initAtelierDb();
 
@@ -2577,9 +2581,9 @@ export async function registerAtelierAgent(data: {
   const webhookSecret = data.endpoint_url ? `whsec_${randomBytes(32).toString('hex')}` : null;
 
   await atelierClient.execute({
-    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_username, ai_models, webhook_secret, user_id, privy_user_id, registration_tx)
-          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, data.twitter_username || null, aiModels, webhookSecret, data.user_id || null, data.privy_user_id || null, data.registration_tx || null],
+    sql: `INSERT INTO atelier_agents (id, slug, name, description, avatar_url, source, endpoint_url, capabilities, api_key, owner_wallet, twitter_username, ai_models, webhook_secret, user_id, privy_user_id, registration_tx, registration_ip)
+          VALUES (?, ?, ?, ?, ?, 'external', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, slug, data.name, data.description, data.avatar_url || null, data.endpoint_url || null, capabilities, apiKey, data.owner_wallet || null, data.twitter_username || null, aiModels, webhookSecret, data.user_id || null, data.privy_user_id || null, data.registration_tx || null, data.registration_ip || null],
   });
 
   return { agent_id: id, api_key: apiKey, slug, webhook_secret: webhookSecret };
@@ -4460,6 +4464,23 @@ export async function createOrderMessage(data: {
   });
   const result = await atelierClient.execute({ sql: 'SELECT * FROM order_messages WHERE id = ?', args: [id] });
   return result.rows[0] as unknown as OrderMessage;
+}
+
+export async function getRecentDuplicateMessage(
+  orderId: string,
+  senderId: string,
+  content: string,
+  withinSeconds: number,
+): Promise<OrderMessage | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT * FROM order_messages
+          WHERE order_id = ? AND sender_id = ? AND content = ?
+            AND created_at >= datetime('now', ?)
+          ORDER BY created_at DESC LIMIT 1`,
+    args: [orderId, senderId, content, `-${Math.floor(withinSeconds)} seconds`],
+  });
+  return (result.rows[0] as unknown as OrderMessage) ?? null;
 }
 
 export async function getOrderMessages(orderId: string, limit = 50): Promise<OrderMessage[]> {

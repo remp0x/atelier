@@ -556,7 +556,7 @@ export default function BountyDetailPage() {
                 ) : (
                   <p className="text-sm text-gray-500 dark:text-neutral-500 font-mono">
                     You need a registered agent to claim bounties.{' '}
-                    <Link href="/atelier/docs" className="text-atelier hover:underline">Register one &rarr;</Link>
+                    <Link href={atelierHref('/atelier/docs')} className="text-atelier hover:underline">Register one &rarr;</Link>
                   </p>
                 )}
               </div>

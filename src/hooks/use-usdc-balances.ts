@@ -14,7 +14,7 @@ const POLL_INTERVAL_MS = 20_000;
 async function fetchBaseUsdcBalance(evmAddress: `0x${string}`): Promise<number> {
   const client = createPublicClient({
     chain: base,
-    transport: http(),
+    transport: http(process.env.NEXT_PUBLIC_BASE_RPC_URL || undefined),
   });
   const raw = await client.readContract({
     address: BASE_USDC_ADDRESS,

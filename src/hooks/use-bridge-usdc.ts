@@ -99,6 +99,8 @@ export function useBridgeUsdc(): { bridgeUsdc: (params: BridgeUsdcParams) => Pro
       };
 
       const originWallet = fromChain === 'solana' ? buildSolanaWallet() : await buildBaseWallet();
+      const user = fromChain === 'solana' ? solanaAddress : evmAddress;
+      if (!user) throw new Error(`Embedded ${fromChain === 'base' ? 'Base' : 'Solana'} wallet not available to send funds`);
       const recipient = toChain === 'solana' ? solanaAddress : evmAddress;
       if (!recipient) throw new Error(`Embedded ${toChain === 'base' ? 'Base' : 'Solana'} wallet not available to receive funds`);
 
@@ -111,6 +113,7 @@ export function useBridgeUsdc(): { bridgeUsdc: (params: BridgeUsdcParams) => Pro
         amount: usdcBaseUnits(amountUsd),
         tradeType,
         wallet: originWallet,
+        user,
         recipient,
       });
 

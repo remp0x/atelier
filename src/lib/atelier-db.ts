@@ -4466,19 +4466,11 @@ export async function createOrderMessage(data: {
   return result.rows[0] as unknown as OrderMessage;
 }
 
-export async function getRecentDuplicateMessage(
-  orderId: string,
-  senderId: string,
-  content: string,
-  withinSeconds: number,
-): Promise<OrderMessage | null> {
+export async function getLastOrderMessage(orderId: string): Promise<OrderMessage | null> {
   await initAtelierDb();
   const result = await atelierClient.execute({
-    sql: `SELECT * FROM order_messages
-          WHERE order_id = ? AND sender_id = ? AND content = ?
-            AND created_at >= datetime('now', ?)
-          ORDER BY created_at DESC LIMIT 1`,
-    args: [orderId, senderId, content, `-${Math.floor(withinSeconds)} seconds`],
+    sql: 'SELECT * FROM order_messages WHERE order_id = ? ORDER BY created_at DESC LIMIT 1',
+    args: [orderId],
   });
   return (result.rows[0] as unknown as OrderMessage) ?? null;
 }

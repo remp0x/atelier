@@ -292,6 +292,7 @@ function DownloadButton({ url, name }: { url: string; name?: string }) {
 }
 
 function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: string | null }) {
+  const [imgFailed, setImgFailed] = useState(false);
   if (!url) return null;
 
   if (mediaType === 'video') {
@@ -303,7 +304,7 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
     );
   }
 
-  if (mediaType === 'link') {
+  if (mediaType === 'link' || imgFailed) {
     const hostname = (() => { try { return new URL(url).hostname; } catch { return url; } })();
     return (
       <div className="mt-2 p-4 rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/50 max-w-md">
@@ -343,9 +344,36 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
 
   return (
     <div className="group relative max-w-md mt-2">
-      <img src={url} alt="Deliverable" className="w-full rounded-lg border border-neutral-200 dark:border-neutral-800" />
+      <img src={url} alt="Deliverable" className="w-full rounded-lg border border-neutral-200 dark:border-neutral-800" onError={() => setImgFailed(true)} />
       <div className="absolute top-2 right-2"><DownloadButton url={url} name="deliverable" /></div>
     </div>
+  );
+}
+
+function DeliverableThumb({ url, mediaType, alt }: { url: string; mediaType: string | null; alt?: string }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (mediaType === 'video') {
+    return <video src={url} controls playsInline className="w-full aspect-square object-cover" />;
+  }
+
+  if ((mediaType === 'image' || !mediaType) && !imgFailed) {
+    return <img src={url} alt={alt || 'Deliverable'} className="w-full aspect-square object-cover" onError={() => setImgFailed(true)} />;
+  }
+
+  const hostname = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-3 hover:bg-neutral-900/40 transition-colors"
+    >
+      <svg className="w-6 h-6 text-atelier-bright" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
+      </svg>
+      <span className="text-atelier-bright text-xs font-mono text-center break-all underline underline-offset-2">{hostname}</span>
+    </a>
   );
 }
 
@@ -477,29 +505,7 @@ function DeliverablesGallery({ deliverables }: { deliverables: OrderDeliverable[
             key={d.id}
             className="group relative rounded-lg border border-neutral-800 overflow-hidden bg-black"
           >
-            {d.deliverable_media_type === 'video' ? (
-              <video
-                src={d.deliverable_url!}
-                controls
-                playsInline
-                className="w-full aspect-square object-cover"
-              />
-            ) : d.deliverable_media_type === 'image' || !d.deliverable_media_type ? (
-              <img
-                src={d.deliverable_url!}
-                alt="Deliverable"
-                className="w-full aspect-square object-cover"
-              />
-            ) : (
-              <div className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-3">
-                <svg className="w-6 h-6 text-atelier-bright" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
-                </svg>
-                <a href={d.deliverable_url!} target="_blank" rel="noopener noreferrer" className="text-atelier-bright hover:text-atelier-bright text-xs font-mono text-center break-all underline underline-offset-2">
-                  {d.deliverable_media_type}
-                </a>
-              </div>
-            )}
+            <DeliverableThumb url={d.deliverable_url!} mediaType={d.deliverable_media_type} />
             <div className="absolute top-2 right-2">
               <DownloadButton url={d.deliverable_url!} name="deliverable" />
             </div>
@@ -759,29 +765,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
               >
                 {d.status === 'completed' && d.deliverable_url ? (
                   <>
-                    {d.deliverable_media_type === 'video' ? (
-                      <video
-                        src={d.deliverable_url}
-                        controls
-                        playsInline
-                        className="w-full aspect-square object-cover"
-                      />
-                    ) : d.deliverable_media_type === 'image' || !d.deliverable_media_type ? (
-                      <img
-                        src={d.deliverable_url}
-                        alt={d.prompt}
-                        className="w-full aspect-square object-cover"
-                      />
-                    ) : (
-                      <div className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-3">
-                        <svg className="w-6 h-6 text-atelier-bright" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
-                        </svg>
-                        <a href={d.deliverable_url} target="_blank" rel="noopener noreferrer" className="text-atelier-bright hover:text-atelier-bright text-xs font-mono text-center break-all underline underline-offset-2">
-                          {d.deliverable_media_type}
-                        </a>
-                      </div>
-                    )}
+                    <DeliverableThumb url={d.deliverable_url} mediaType={d.deliverable_media_type} alt={d.prompt} />
                     <div className="absolute top-2 right-2">
                       <DownloadButton url={d.deliverable_url} name={d.prompt?.slice(0, 40) || 'deliverable'} />
                     </div>

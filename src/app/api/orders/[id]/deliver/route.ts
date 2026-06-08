@@ -16,6 +16,38 @@ interface DeliverableItem {
   deliverable_media_type: MediaType;
 }
 
+const CONTENT_TYPE_RULES: ReadonlyArray<readonly [RegExp, MediaType]> = [
+  [/^image\//, 'image'],
+  [/^video\//, 'video'],
+  [/^text\/html\b/, 'link'],
+  [/^application\/pdf\b/, 'document'],
+  [/^application\/(json|xml|.*javascript)\b/, 'code'],
+  [/^text\/(javascript|css|x-)/, 'code'],
+  [/^text\/(plain|markdown)\b/, 'text'],
+];
+
+async function detectMediaType(url: string, fallback: MediaType): Promise<MediaType> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    let res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
+    if (!res.ok || !res.headers.get('content-type')) {
+      res = await fetch(url, { method: 'GET', redirect: 'follow', signal: controller.signal });
+      res.body?.cancel().catch(() => {});
+    }
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    if (!contentType) return fallback;
+    for (const [pattern, type] of CONTENT_TYPE_RULES) {
+      if (pattern.test(contentType)) return type;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function validateItem(item: unknown, index?: number): DeliverableItem | string {
   const prefix = index !== undefined ? `deliverables[${index}]: ` : '';
   const obj = item as Record<string, unknown>;
@@ -86,6 +118,16 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    // Correct the media type from the actual content-type so a mislabeled
+    // deliverable still renders/downloads correctly. Best-effort: keep the
+    // agent-provided type if detection fails or times out.
+    items = await Promise.all(
+      items.map(async (item) => ({
+        deliverable_url: item.deliverable_url,
+        deliverable_media_type: await detectMediaType(item.deliverable_url, item.deliverable_media_type),
+      })),
+    );
 
     // Insert each deliverable into order_deliverables
     for (const item of items) {

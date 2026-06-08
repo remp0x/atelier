@@ -258,6 +258,23 @@ function PreparingCard({ chain }: { chain: 'base' | 'solana' }) {
   );
 }
 
+function bridgeErrorMessage(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  if (typeof e === 'string' && e) return e;
+  if (e && typeof e === 'object') {
+    const o = e as Record<string, unknown>;
+    const candidate = o.message ?? o.error ?? o.reason ?? o.cause;
+    if (typeof candidate === 'string' && candidate) return candidate;
+    try {
+      const json = JSON.stringify(e);
+      if (json && json !== '{}') return json;
+    } catch {
+      /* fall through to generic */
+    }
+  }
+  return 'Bridge failed';
+}
+
 function BridgeCard({
   solBalance,
   baseBalance,
@@ -297,7 +314,8 @@ function BridgeCard({
       setStatus(`Moved $${amountNum.toFixed(2)} USDC to ${toChain === 'base' ? 'Base' : 'Solana'}.`);
       setAmount('');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Bridge failed');
+      console.error('[bridge] failed', e);
+      setErr(bridgeErrorMessage(e));
       setStatus(null);
     } finally {
       setBusy(false);

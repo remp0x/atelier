@@ -22,6 +22,7 @@ import {
 import {
   getOrCreateVault,
   getPosition,
+  claimIncomingDepositTx,
   recordDeposit,
   recordWithdrawal,
   recordWithdrawalSettled,
@@ -230,6 +231,20 @@ export async function depositFromTransfer(params: {
 }): Promise<DepositResult> {
   const conn = getServerConnection();
   const sender = await verifyIncomingUsdc(conn, params.incomingTxHash, params.amountUsdc);
+
+  // Replay guard: an incoming transfer signature may be deployed at most once.
+  // Claimed atomically before any treasury funds move, so concurrent or repeated
+  // submissions of the same signature cannot double-deploy or double-mint shares.
+  const claimed = await claimIncomingDepositTx({
+    incomingTxHash: params.incomingTxHash,
+    ownerKind: params.ownerKind,
+    ownerId: params.ownerId,
+    amountUsdc: params.amountUsdc,
+  });
+  if (!claimed) {
+    throw new Error('This deposit transfer has already been processed');
+  }
+
   try {
     return await deployTreasuryDeposit(params);
   } catch (err) {

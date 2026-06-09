@@ -18,7 +18,7 @@ import { adaptSolanaWallet } from '@relayprotocol/relay-svm-wallet-adapter';
 import { useWallets, useSendTransaction } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { USDC_MINT } from '@/lib/solana-pay';
-import { USDC_BASE_ADDRESS } from '@/lib/base-server';
+import { USDC_BASE_ADDRESS } from '@/lib/base-constants';
 
 const SOLANA_RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 const USDC_DECIMALS = 6;

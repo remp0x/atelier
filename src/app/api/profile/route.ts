@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAtelierProfile, upsertAtelierProfile } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
+import { rateLimiters } from '@/lib/rateLimit';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const wallet = req.nextUrl.searchParams.get('wallet');
@@ -12,10 +13,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const profile = await getAtelierProfile(wallet);
-  return NextResponse.json({ success: true, data: profile });
+  if (!profile) {
+    return NextResponse.json({ success: true, data: null });
+  }
+  // Public endpoint: never expose the internal Privy user id linkage.
+  const { user_id: _userId, ...publicProfile } = profile;
+  return NextResponse.json({ success: true, data: publicProfile });
 }
 
 export async function PUT(req: NextRequest): Promise<NextResponse> {
+  const limited = rateLimiters.auth(req);
+  if (limited) return limited;
+
   try {
     const body = await req.json();
     const { display_name, bio, avatar_url, twitter_handle } = body;

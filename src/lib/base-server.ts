@@ -1,3 +1,4 @@
+import 'server-only';
 import {
   createPublicClient,
   createWalletClient,
@@ -13,38 +14,9 @@ import { base } from 'viem/chains';
 
 export type BasePublicClient = PublicClient<HttpTransport, typeof base>;
 
-export const USDC_BASE_ADDRESS: `0x${string}` = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-export const USDC_BASE_DECIMALS = 6;
-export const BASE_CHAIN_ID = 8453;
-
-export const ERC20_USDC_ABI = [
-  {
-    type: 'function',
-    name: 'transfer',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'to', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ type: 'bool' }],
-  },
-  {
-    type: 'function',
-    name: 'balanceOf',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'event',
-    name: 'Transfer',
-    inputs: [
-      { name: 'from', type: 'address', indexed: true },
-      { name: 'to', type: 'address', indexed: true },
-      { name: 'value', type: 'uint256', indexed: false },
-    ],
-  },
-] as const;
+// Re-exported for server callers that import these from base-server. Client code
+// must import them from '@/lib/base-constants' instead -- this module is server-only.
+export { USDC_BASE_ADDRESS, USDC_BASE_DECIMALS, BASE_CHAIN_ID, ERC20_USDC_ABI } from './base-constants';
 
 export function getBaseRpcUrl(): string {
   return process.env.BASE_RPC_URL || process.env.NEXT_PUBLIC_BASE_RPC_URL || 'https://mainnet.base.org';

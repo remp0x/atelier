@@ -6,7 +6,7 @@ export function isEarnPublic(): boolean {
   return process.env.NEXT_PUBLIC_EARN_PUBLIC === 'true' || process.env.EARN_PUBLIC === 'true';
 }
 
-const EARN_ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ATELIER_ADMIN_EMAILS || 'rempxbt@gmail.com')
+const EARN_ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ATELIER_ADMIN_EMAILS || '')
   .split(',')
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);

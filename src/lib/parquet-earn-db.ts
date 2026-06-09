@@ -126,6 +126,19 @@ export async function initParquetEarnDb(): Promise<void> {
     )
   `);
 
+  // Idempotency ledger for push-model deposits: an incoming USDC transfer
+  // signature may back at most one deposit. The PRIMARY KEY makes the claim
+  // atomic, so a replayed incoming_tx_hash can never deploy treasury funds twice.
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS parquet_earn_consumed_deposits (
+      incoming_tx_hash TEXT PRIMARY KEY,
+      owner_kind TEXT,
+      owner_id TEXT,
+      amount_usdc INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   await atelierClient.execute(
     'CREATE INDEX IF NOT EXISTS idx_earn_pos_owner ON parquet_earn_positions(owner_kind, owner_id)',
   );
@@ -287,6 +300,26 @@ async function withVaultLock<T>(
     }
   }
   throw new Error(`vault ${vaultId} write contended after ${MAX_WRITE_ATTEMPTS} attempts`);
+}
+
+// Atomically claims an incoming deposit transfer signature. Returns true if this
+// is the first time the signature is seen (caller may proceed to deploy), false
+// if it was already consumed (replay -- caller must abort). The claim survives a
+// later deploy failure/refund: a consumed transfer is never reusable.
+export async function claimIncomingDepositTx(params: {
+  incomingTxHash: string;
+  ownerKind: EarnOwnerKind;
+  ownerId: string;
+  amountUsdc: bigint;
+}): Promise<boolean> {
+  await initParquetEarnDb();
+  const result = await atelierClient.execute({
+    sql: `INSERT INTO parquet_earn_consumed_deposits (incoming_tx_hash, owner_kind, owner_id, amount_usdc)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(incoming_tx_hash) DO NOTHING`,
+    args: [params.incomingTxHash, params.ownerKind, params.ownerId, params.amountUsdc.toString()],
+  });
+  return Number(result.rowsAffected) > 0;
 }
 
 // Records a confirmed deposit: mints shares for the depositor and grows the

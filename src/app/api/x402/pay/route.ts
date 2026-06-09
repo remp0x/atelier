@@ -6,7 +6,8 @@ import {
   getAtelierAgent,
   agentIsMarketable,
   createServiceOrder,
-  isEscrowTxHashUsed,
+  isPaymentTxSignatureUsed,
+  DuplicateOrderPaymentError,
   type Service,
 } from '@/lib/atelier-db';
 import {
@@ -346,7 +347,7 @@ async function handleInstantHire(
   brief: string,
   requirementAnswers: Record<string, string> | undefined,
 ): Promise<NextResponse> {
-  const alreadyUsed = await isEscrowTxHashUsed(txSignature);
+  const alreadyUsed = await isPaymentTxSignatureUsed(txSignature);
   if (alreadyUsed) {
     return NextResponse.json(
       { success: false, error: 'Transaction signature already used for a previous order' },
@@ -367,15 +368,27 @@ async function handleInstantHire(
 
   const paymentChain: PaymentChain = verification.chain ?? 'solana';
   const buyerAgentId = await resolveOptionalBuyerAgentId(request);
-  const { order, payout } = await recordPaidOrderAndPayout(
-    service,
-    verification.payerWallet,
-    txSignature,
-    paymentChain,
-    brief,
-    requirementAnswers,
-    buyerAgentId,
-  );
+  let order: Awaited<ReturnType<typeof recordPaidOrderAndPayout>>['order'];
+  let payout: Awaited<ReturnType<typeof recordPaidOrderAndPayout>>['payout'];
+  try {
+    ({ order, payout } = await recordPaidOrderAndPayout(
+      service,
+      verification.payerWallet,
+      txSignature,
+      paymentChain,
+      brief,
+      requirementAnswers,
+      buyerAgentId,
+    ));
+  } catch (err) {
+    if (err instanceof DuplicateOrderPaymentError) {
+      return NextResponse.json(
+        { success: false, error: 'Transaction signature already used for a previous order' },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   const origin = getOrigin(request);
 
@@ -447,7 +460,7 @@ async function handleCdpHire(
     );
   }
 
-  const alreadyUsed = await isEscrowTxHashUsed(settlement.transaction);
+  const alreadyUsed = await isPaymentTxSignatureUsed(settlement.transaction);
   if (alreadyUsed) {
     return NextResponse.json(
       { success: false, error: 'Settlement transaction already used for a previous order' },
@@ -457,15 +470,27 @@ async function handleCdpHire(
 
   const { totalUsd, feeUsd, priceUsd } = computeTotalWithFee(service.price_usd);
   const buyerAgentId = await resolveOptionalBuyerAgentId(request);
-  const { order, payout } = await recordPaidOrderAndPayout(
-    service,
-    payerWallet,
-    settlement.transaction,
-    'base',
-    brief,
-    requirementAnswers,
-    buyerAgentId,
-  );
+  let order: Awaited<ReturnType<typeof recordPaidOrderAndPayout>>['order'];
+  let payout: Awaited<ReturnType<typeof recordPaidOrderAndPayout>>['payout'];
+  try {
+    ({ order, payout } = await recordPaidOrderAndPayout(
+      service,
+      payerWallet,
+      settlement.transaction,
+      'base',
+      brief,
+      requirementAnswers,
+      buyerAgentId,
+    ));
+  } catch (err) {
+    if (err instanceof DuplicateOrderPaymentError) {
+      return NextResponse.json(
+        { success: false, error: 'Settlement transaction already used for a previous order' },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   const responseBody = {
     success: true,

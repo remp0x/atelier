@@ -37,6 +37,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         return {
           allowedContentTypes: ALLOWED_CONTENT_TYPES,
           maximumSizeInBytes: MAX_FILE_SIZE,
+          // A random suffix guarantees a unique final key, so a client-chosen
+          // pathname can never overwrite or collide with another user's blob.
+          addRandomSuffix: true,
           tokenPayload: JSON.stringify({ wallet }),
         };
       },

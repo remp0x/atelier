@@ -9,60 +9,6 @@ import { DepositPanel } from './DepositPanel';
 
 type PanelView = 'overview' | 'deposit' | 'withdraw';
 
-interface PositionRowProps {
-  position: Position;
-  poolTotal: number;
-  onWithdraw: (position: Position) => void;
-}
-
-function PositionRow({ position, poolTotal, onWithdraw }: PositionRowProps) {
-  const principal = parseFloat(position.principal_usd);
-  const value = position.value_usd !== null ? parseFloat(position.value_usd) : null;
-  const pnl = value !== null ? value - principal : null;
-  const pnlPositive = pnl !== null && pnl >= 0;
-  const poolShare = value !== null && poolTotal > 0 ? (value / poolTotal) * 100 : null;
-
-  return (
-    <div className="flex items-center justify-between gap-3 py-3 border-b border-gray-100 dark:border-neutral-800/60 last:border-0">
-      <div className="flex-1 min-w-0">
-        <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-gray-400 dark:text-neutral-500 truncate">
-          {position.pool_market}
-        </p>
-        <div className="flex items-baseline gap-2 mt-0.5">
-          <span className="font-mono text-[16px] font-semibold text-black dark:text-white tabular-nums">
-            ${value !== null ? formatUsd(value) : formatUsd(principal)}
-          </span>
-          {pnl !== null && (
-            <span className={`font-mono text-[12px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-              {pnlPositive ? '+' : ''}{formatUsd(pnl)}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums">
-            Deposited ${formatUsd(principal)}
-          </p>
-          {poolShare !== null && (
-            <>
-              <span className="text-gray-300 dark:text-neutral-700 text-[10px]">·</span>
-              <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums">
-                {poolShare.toFixed(2)}% of pool
-              </p>
-            </>
-          )}
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => onWithdraw(position)}
-        className="inline-flex items-center gap-1 h-8 px-3 rounded-lg font-mono text-[11px] border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400 hover:border-atelier/40 hover:text-atelier transition-colors cursor-pointer shrink-0 min-w-[44px]"
-      >
-        Withdraw
-      </button>
-    </div>
-  );
-}
-
 interface WithdrawFlowProps {
   position: Position;
   solanaAddress: string;
@@ -234,18 +180,29 @@ export function PoolPanel({ pool, market, positions, positionsLoading, solanaAdd
   const availableUsd = microToUsd(pool.available_usdc_micro);
   const reservedUsd = microToUsd(pool.reserved_usdc_micro);
 
-  const aggregateValue = positions.reduce<number | null>((acc, pos) => {
+  // The panel is scoped to one pool: only this market's live position belongs here.
+  const marketPositions = positions.filter((p) => p.pool_market === market && p.shares !== '0');
+  const hasPosition = marketPositions.length > 0;
+
+  const positionValue = marketPositions.reduce<number | null>((acc, pos) => {
     if (pos.value_usd === null) return acc;
     return (acc ?? 0) + parseFloat(pos.value_usd);
   }, null);
-  const aggregatePrincipal = positions.reduce((acc, pos) => acc + parseFloat(pos.principal_usd), 0);
-  const aggregatePnl = aggregateValue !== null ? aggregateValue - aggregatePrincipal : null;
-  const pnlPositive = aggregatePnl !== null && aggregatePnl >= 0;
+  const positionPrincipal = marketPositions.reduce((acc, pos) => acc + parseFloat(pos.principal_usd), 0);
+  const positionPnl = positionValue !== null ? positionValue - positionPrincipal : null;
+  const pnlPositive = positionPnl !== null && positionPnl >= 0;
+  const poolShare = positionValue !== null && totalUsd > 0 ? (positionValue / totalUsd) * 100 : null;
 
-  const openWithdraw = useCallback((position: Position) => {
-    setWithdrawTarget(position);
+  const openWithdraw = useCallback(() => {
+    setWithdrawTarget({
+      vault_id: marketPositions[0]?.vault_id ?? market,
+      pool_market: market,
+      shares: marketPositions[0]?.shares ?? '0',
+      principal_usd: positionPrincipal.toFixed(2),
+      value_usd: positionValue !== null ? positionValue.toFixed(2) : null,
+    });
     setView('withdraw');
-  }, []);
+  }, [marketPositions, market, positionPrincipal, positionValue]);
 
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] overflow-hidden">
@@ -307,34 +264,43 @@ export function PoolPanel({ pool, market, positions, positionsLoading, solanaAdd
               <div className="h-3 w-20 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
               <div className="h-7 w-28 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
             </div>
-          ) : positions.length > 0 ? (
-            <div>
-              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500 mb-2">
-                Your position
-              </p>
-              <div className="flex items-baseline gap-2 mb-0.5">
-                <span className="font-mono text-[26px] font-semibold text-black dark:text-white tabular-nums leading-none">
-                  ${aggregateValue !== null ? formatUsd(aggregateValue) : formatUsd(aggregatePrincipal)}
-                </span>
-                {aggregatePnl !== null && (
-                  <span className={`font-mono text-[13px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                    {pnlPositive ? '+' : ''}{formatUsd(aggregatePnl)}
+          ) : hasPosition ? (
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500 mb-2">
+                  Your position
+                </p>
+                <div className="flex items-baseline gap-2 mb-0.5">
+                  <span className="font-mono text-[26px] font-semibold text-black dark:text-white tabular-nums leading-none">
+                    ${positionValue !== null ? formatUsd(positionValue) : formatUsd(positionPrincipal)}
                   </span>
-                )}
+                  {positionPnl !== null && (
+                    <span className={`font-mono text-[13px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                      {pnlPositive ? '+' : ''}{formatUsd(positionPnl)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums">
+                    Deposited ${formatUsd(positionPrincipal)}
+                  </p>
+                  {poolShare !== null && (
+                    <>
+                      <span className="text-gray-300 dark:text-neutral-700 text-[10px]">·</span>
+                      <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums">
+                        {poolShare.toFixed(2)}% of pool
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
-              <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums mb-3">
-                Deposited ${formatUsd(aggregatePrincipal)}
-              </p>
-              <div className="border-t border-gray-100 dark:border-neutral-800/60">
-                {positions.map((pos) => (
-                  <PositionRow
-                    key={pos.vault_id}
-                    position={pos}
-                    poolTotal={totalUsd}
-                    onWithdraw={openWithdraw}
-                  />
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={openWithdraw}
+                className="inline-flex items-center gap-1 h-8 px-3 rounded-lg font-mono text-[11px] border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400 hover:border-atelier/40 hover:text-atelier transition-colors cursor-pointer shrink-0 min-w-[44px]"
+              >
+                Withdraw
+              </button>
             </div>
           ) : (
             <div className="rounded-lg border border-gray-100 dark:border-neutral-800/60 bg-gray-50 dark:bg-black/40 px-4 py-4">

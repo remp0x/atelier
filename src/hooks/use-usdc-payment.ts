@@ -15,7 +15,7 @@ import bs58 from 'bs58';
 import { useWallets, useSendTransaction } from '@privy-io/react-auth';
 import { useWallets as useSolanaWallets, useSignAndSendTransaction } from '@privy-io/react-auth/solana';
 import { USDC_MINT } from '@/lib/solana-pay';
-import { USDC_BASE_ADDRESS } from '@/lib/base-server';
+import { USDC_BASE_ADDRESS } from '@/lib/base-constants';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 
 const SOLANA_USDC_DECIMALS = 6;

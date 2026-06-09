@@ -118,6 +118,11 @@ export const rateLimiters = {
   // 10 verification attempts per hour per IP
   verification: rateLimit(10, 60 * 60 * 1000),
 
+  // 60 auth/signature-verification attempts per 10 min per IP (session creation,
+  // profile writes) -- bounds credential probing and CPU/DB abuse on the
+  // ed25519/EIP-191 verification path.
+  auth: rateLimit(60, 10 * 60 * 1000),
+
   // 5 posts per hour per IP (first layer)
   posts: rateLimit(5, 60 * 60 * 1000),
 

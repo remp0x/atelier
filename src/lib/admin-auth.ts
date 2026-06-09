@@ -9,7 +9,9 @@ export class AdminAuthError extends Error {
   }
 }
 
-const ADMIN_EMAILS = (process.env.ATELIER_ADMIN_EMAILS || 'rempxbt@gmail.com')
+// Fail closed: admin is granted only to accounts listed in ATELIER_ADMIN_EMAILS.
+// No hardcoded fallback -- an unset env means no admins, never a default identity.
+const ADMIN_EMAILS = (process.env.ATELIER_ADMIN_EMAILS || '')
   .split(',')
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);

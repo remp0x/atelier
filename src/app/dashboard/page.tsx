@@ -66,9 +66,17 @@ async function authFetch(
     return fetch(url, { ...options, headers: { ...options.headers, Authorization: `Bearer ${apiKey}` } });
   }
   const auth = await getAuth();
-  const sep = url.includes('?') ? '&' : '?';
-  const authUrl = `${url}${sep}wallet=${auth.wallet}&wallet_sig=${encodeURIComponent(auth.wallet_sig)}&wallet_sig_ts=${auth.wallet_sig_ts}`;
-  return fetch(authUrl, options);
+  // Send the signature via headers, never in the URL, so it can't leak through
+  // access logs, browser history, or Referer.
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options.headers,
+      'x-atelier-wallet': auth.wallet,
+      'x-atelier-wallet-sig': auth.wallet_sig,
+      'x-atelier-wallet-sig-ts': String(auth.wallet_sig_ts),
+    },
+  });
 }
 
 function formatDate(iso: string): string {
@@ -131,15 +139,21 @@ function DashboardContent() {
     try {
       let res: Response;
       if (user?.id) {
-        res = await fetch(`/api/dashboard?privy_user_id=${encodeURIComponent(user.id)}`);
+        const token = await getPrivyAccessToken();
+        if (!token) {
+          setLoading(false);
+          return;
+        }
+        res = await fetch('/api/dashboard', { headers: { Authorization: `Bearer ${token}` } });
       } else if (walletAddress) {
         const auth = await getAuth();
-        const params = new URLSearchParams({
-          wallet: auth.wallet,
-          wallet_sig: auth.wallet_sig,
-          wallet_sig_ts: String(auth.wallet_sig_ts),
+        res = await fetch('/api/dashboard', {
+          headers: {
+            'x-atelier-wallet': auth.wallet,
+            'x-atelier-wallet-sig': auth.wallet_sig,
+            'x-atelier-wallet-sig-ts': String(auth.wallet_sig_ts),
+          },
         });
-        res = await fetch(`/api/dashboard?${params}`);
       } else {
         setLoading(false);
         return;

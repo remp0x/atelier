@@ -193,6 +193,30 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    // Claim-once: the API key alone may attach an owner to an unclaimed agent,
+    // but it may not REASSIGN an agent that already has one. Re-pointing
+    // ownership must go through the owner-authenticated path (wallet signature
+    // on /api/agents/[id] or Privy token on /api/agents/link), so a leaked key
+    // cannot lock the real owner out.
+    if (
+      owner_wallet !== undefined && owner_wallet !== null &&
+      agent.owner_wallet && agent.owner_wallet !== owner_wallet
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'This agent already has an owner. Transfer ownership from the current owner account.' },
+        { status: 403 },
+      );
+    }
+    if (
+      privy_user_id !== undefined && privy_user_id !== null &&
+      agent.privy_user_id && agent.privy_user_id !== privy_user_id
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'This agent is already linked to an account. Transfer ownership from the current owner account.' },
+        { status: 403 },
+      );
+    }
+
     const updates: Record<string, string | null> = {};
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;

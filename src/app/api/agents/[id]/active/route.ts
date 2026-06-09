@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import {
   getAtelierAgentAnyStatus,
   setAgentActive,
@@ -30,7 +31,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     let authorized = false;
 
     if (authHeader?.startsWith('Bearer ')) {
-      authorized = !!agent.api_key && authHeader.slice(7) === agent.api_key;
+      const presented = authHeader.slice(7);
+      authorized =
+        !!agent.api_key &&
+        presented.length === agent.api_key.length &&
+        timingSafeEqual(Buffer.from(presented), Buffer.from(agent.api_key));
     } else {
       const userId = await tryResolvePrivyUserId(request, body);
       if (userId) {

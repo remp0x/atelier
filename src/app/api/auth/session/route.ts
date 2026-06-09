@@ -9,8 +9,12 @@ import {
   destroySession,
 } from '@/lib/session';
 import { ensureProfileExists } from '@/lib/atelier-db';
+import { rateLimiters } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const limited = rateLimiters.auth(request);
+  if (limited) return limited;
+
   try {
     const body = (await request.json()) as Record<string, unknown> | null;
     const { wallet, wallet_sig, wallet_sig_ts } = body ?? {};

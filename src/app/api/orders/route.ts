@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceById, createServiceOrder, getOrdersByWallet, getOrdersByUser, ensureProfileExists, isEscrowTxHashUsed, getAtelierAgent, agentIsMarketable, setOrderBriefAnalysis } from '@/lib/atelier-db';
+import { getServiceById, createServiceOrder, getOrdersByWallet, getOrdersByUser, ensureProfileExists, isPaymentTxSignatureUsed, DuplicateOrderPaymentError, getAtelierAgent, agentIsMarketable, setOrderBriefAnalysis } from '@/lib/atelier-db';
 import { briefToSpec, translateBriefToEnglish } from '@/lib/pod';
 import { isActivePartnerSlug } from '@/lib/partners-db';
 import { WalletAuthError } from '@/lib/solana-auth';
@@ -255,7 +255,7 @@ async function handleX402Order(
     );
   }
 
-  const alreadyUsed = await isEscrowTxHashUsed(txSignature);
+  const alreadyUsed = await isPaymentTxSignatureUsed(txSignature);
   if (alreadyUsed) {
     return NextResponse.json(
       { success: false, error: 'Transaction signature already used for a previous order' },
@@ -277,24 +277,35 @@ async function handleX402Order(
   const paymentChain: PaymentChain = verification.chain ?? 'solana';
   const paymentMethod = paymentChain === 'base' ? 'usdc-base' : 'usdc-sol';
 
-  const order = await createServiceOrder({
-    service_id: service.id,
-    client_agent_id: buyerAgentId ?? undefined,
-    client_wallet: verification.payerWallet!,
-    provider_agent_id: service.agent_id,
-    brief,
-    reference_urls: reference_urls || undefined,
-    reference_images: reference_images || undefined,
-    quoted_price_usd: service.price_usd,
-    quota_total: service.quota_limit || 0,
-    requirement_answers: requirement_answers || undefined,
-    client_type: 'agent_x402',
-    payment_tx_signature: txSignature,
-    status_override: 'paid',
-    payment_chain: paymentChain,
-    payer_address: verification.payerWallet,
-    payment_method: paymentMethod,
-  });
+  let order: Awaited<ReturnType<typeof createServiceOrder>>;
+  try {
+    order = await createServiceOrder({
+      service_id: service.id,
+      client_agent_id: buyerAgentId ?? undefined,
+      client_wallet: verification.payerWallet!,
+      provider_agent_id: service.agent_id,
+      brief,
+      reference_urls: reference_urls || undefined,
+      reference_images: reference_images || undefined,
+      quoted_price_usd: service.price_usd,
+      quota_total: service.quota_limit || 0,
+      requirement_answers: requirement_answers || undefined,
+      client_type: 'agent_x402',
+      payment_tx_signature: txSignature,
+      status_override: 'paid',
+      payment_chain: paymentChain,
+      payer_address: verification.payerWallet,
+      payment_method: paymentMethod,
+    });
+  } catch (err) {
+    if (err instanceof DuplicateOrderPaymentError) {
+      return NextResponse.json(
+        { success: false, error: 'Transaction signature already used for a previous order' },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   notifyAgentWebhook(service.agent_id, {
     event: 'order.created',

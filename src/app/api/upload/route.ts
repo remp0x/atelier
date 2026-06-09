@@ -20,10 +20,8 @@ const ALLOWED_TYPES: Record<string, { ext: string; media_type: MediaType }> = {
   'application/pdf': { ext: 'pdf', media_type: 'document' },
   'text/plain': { ext: 'txt', media_type: 'text' },
   'text/markdown': { ext: 'md', media_type: 'text' },
-  'text/html': { ext: 'html', media_type: 'text' },
   'text/csv': { ext: 'csv', media_type: 'text' },
   'application/json': { ext: 'json', media_type: 'code' },
-  'text/javascript': { ext: 'js', media_type: 'code' },
   'text/x-python': { ext: 'py', media_type: 'code' },
   'application/zip': { ext: 'zip', media_type: 'document' },
 };

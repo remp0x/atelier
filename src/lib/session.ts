@@ -183,7 +183,22 @@ export async function authenticateUserRequestWithChain(
   throw new WalletAuthError('Authentication required');
 }
 
+// Reads wallet-signature auth fields. Headers are preferred so the signature
+// never lands in URLs (and therefore not in CDN/proxy access logs, browser
+// history, or Referer headers); the query-string form is still accepted for
+// backward compatibility with existing agent/external callers.
 export function readSigFieldsFromQuery(request: NextRequest | Request): Record<string, unknown> | null {
+  const h = request.headers;
+  const hWallet = h.get('x-atelier-wallet');
+  const hSig = h.get('x-atelier-wallet-sig');
+  const hTs = h.get('x-atelier-wallet-sig-ts');
+  if (hWallet || hSig || hTs) {
+    const fields: Record<string, unknown> = { wallet: hWallet, wallet_sig: hSig, wallet_sig_ts: hTs };
+    const hChain = h.get('x-atelier-wallet-chain');
+    if (hChain) fields.wallet_chain = hChain;
+    return fields;
+  }
+
   const url = new URL((request as NextRequest).url ?? request.url);
   const wallet = url.searchParams.get('wallet');
   const wallet_sig = url.searchParams.get('wallet_sig');

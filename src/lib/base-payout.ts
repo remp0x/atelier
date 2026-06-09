@@ -1,3 +1,4 @@
+import 'server-only';
 import { isAddress, type Hash } from 'viem';
 import {
   getAtelierBaseAccount,

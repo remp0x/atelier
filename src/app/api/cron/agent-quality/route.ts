@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { getAgentsMissingQualityScore, setAgentQualityScore } from '@/lib/atelier-db';
 import { scoreAgentQuality } from '@/lib/pod';
 
@@ -12,7 +13,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: false, error: 'CRON_SECRET not configured' }, { status: 500 });
   }
   const authHeader = request.headers.get('authorization') || '';
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  const expected = `Bearer ${cronSecret}`;
+  if (authHeader.length !== expected.length || !timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected))) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 

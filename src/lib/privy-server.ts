@@ -1,3 +1,4 @@
+import 'server-only';
 import { PrivyClient } from '@privy-io/node';
 
 let _client: PrivyClient | null = null;

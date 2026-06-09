@@ -591,6 +591,12 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN payment_tx_signature TEXT'); } catch (_e) { }
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_client_type ON service_orders(client_type)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_payment_tx ON service_orders(payment_tx_signature)');
+  // Atomic guard against x402 payment replay: an on-chain payment signature may
+  // back at most one order. Wrapped because a pre-existing duplicate (from before
+  // this constraint) would otherwise abort init; the app-level check still applies.
+  try {
+    await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_service_orders_payment_tx_unique ON service_orders(payment_tx_signature) WHERE payment_tx_signature IS NOT NULL');
+  } catch (e) { console.error('payment_tx_signature unique index not created (existing duplicates?):', e); }
 
   try {
     await atelierClient.execute(
@@ -3291,8 +3297,8 @@ export async function getServices(filters?: {
     fastest: 's.turnaround_hours ASC',
   }[filters?.sortBy || 'popular'] || 's.completed_orders DESC';
 
-  const limit = filters?.limit || 50;
-  const offset = filters?.offset || 0;
+  const limit = Math.min(Math.max(Math.trunc(Number(filters?.limit ?? 50)) || 50, 1), 100);
+  const offset = Math.max(Math.trunc(Number(filters?.offset ?? 0)) || 0, 0);
   args.push(limit, offset);
 
   const result = await atelierClient.execute({
@@ -3530,6 +3536,13 @@ export async function getAgentIdsWithActiveServices(): Promise<Set<string>> {
 
 // ─── Order Queries ───
 
+export class DuplicateOrderPaymentError extends Error {
+  constructor(public readonly txSignature: string) {
+    super('Transaction signature already used for a previous order');
+    this.name = 'DuplicateOrderPaymentError';
+  }
+}
+
 export async function createServiceOrder(data: {
   service_id: string;
   client_agent_id?: string;
@@ -3557,32 +3570,40 @@ export async function createServiceOrder(data: {
     ? String(Math.round(parseFloat(data.quoted_price_usd) * 0.10 * 1e6) / 1e6)
     : null;
 
-  await atelierClient.execute({
-    sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner, client_type, payment_tx_signature, payment_chain, payer_address, payment_method, user_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [
-      id,
-      data.service_id,
-      data.client_agent_id || null,
-      data.client_wallet || null,
-      data.provider_agent_id,
-      data.brief,
-      data.reference_urls ? JSON.stringify(data.reference_urls) : null,
-      data.reference_images ? JSON.stringify(data.reference_images) : null,
-      data.quoted_price_usd || null,
-      platformFee,
-      status,
-      data.quota_total || 0,
-      data.requirement_answers ? JSON.stringify(data.requirement_answers) : null,
-      data.referral_partner || null,
-      data.client_type || 'wallet',
-      data.payment_tx_signature || null,
-      data.payment_chain || 'solana',
-      data.payer_address || null,
-      data.payment_method || null,
-      data.user_id ?? null,
-    ],
-  });
+  try {
+    await atelierClient.execute({
+      sql: `INSERT INTO service_orders (id, service_id, client_agent_id, client_wallet, provider_agent_id, brief, reference_urls, reference_images, quoted_price_usd, platform_fee_usd, status, quota_total, requirement_answers, referral_partner, client_type, payment_tx_signature, payment_chain, payer_address, payment_method, user_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        id,
+        data.service_id,
+        data.client_agent_id || null,
+        data.client_wallet || null,
+        data.provider_agent_id,
+        data.brief,
+        data.reference_urls ? JSON.stringify(data.reference_urls) : null,
+        data.reference_images ? JSON.stringify(data.reference_images) : null,
+        data.quoted_price_usd || null,
+        platformFee,
+        status,
+        data.quota_total || 0,
+        data.requirement_answers ? JSON.stringify(data.requirement_answers) : null,
+        data.referral_partner || null,
+        data.client_type || 'wallet',
+        data.payment_tx_signature || null,
+        data.payment_chain || 'solana',
+        data.payer_address || null,
+        data.payment_method || null,
+        data.user_id ?? null,
+      ],
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (data.payment_tx_signature && /UNIQUE constraint failed/i.test(msg)) {
+      throw new DuplicateOrderPaymentError(data.payment_tx_signature);
+    }
+    throw e;
+  }
 
   return getServiceOrderById(id) as Promise<ServiceOrder>;
 }
@@ -3742,6 +3763,16 @@ export async function isEscrowTxHashUsed(txHash: string): Promise<boolean> {
   const result = await atelierClient.execute({
     sql: 'SELECT COUNT(*) as cnt FROM service_orders WHERE escrow_tx_hash = ?',
     args: [txHash],
+  });
+  const row = result.rows[0] as unknown as { cnt: number };
+  return row.cnt > 0;
+}
+
+export async function isPaymentTxSignatureUsed(txSignature: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT COUNT(*) as cnt FROM service_orders WHERE payment_tx_signature = ?',
+    args: [txSignature],
   });
   const row = result.rows[0] as unknown as { cnt: number };
   return row.cnt > 0;
@@ -4680,6 +4711,8 @@ export async function getActivityFeed(
   offset = 0,
 ): Promise<{ events: ActivityEvent[]; total: number }> {
   await initAtelierDb();
+  const safeLimit = Math.min(Math.max(Math.trunc(Number(limit)) || 50, 1), 100);
+  const safeOffset = Math.max(Math.trunc(Number(offset)) || 0, 0);
 
   const unions: string[] = [];
 
@@ -4740,9 +4773,10 @@ export async function getActivityFeed(
 
   const [countResult, dataResult] = await Promise.all([
     atelierClient.execute(`SELECT COUNT(*) as total FROM (${unionQuery})`),
-    atelierClient.execute(
-      `SELECT * FROM (${unionQuery}) ORDER BY timestamp DESC LIMIT ${limit} OFFSET ${offset}`
-    ),
+    atelierClient.execute({
+      sql: `SELECT * FROM (${unionQuery}) ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
+      args: [safeLimit, safeOffset],
+    }),
   ]);
 
   const total = Number(countResult.rows[0].total);

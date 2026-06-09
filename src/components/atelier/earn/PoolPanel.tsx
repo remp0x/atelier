@@ -215,9 +215,10 @@ interface PoolPanelProps {
   balanceLoading: boolean;
   authenticated: boolean;
   login: () => void;
+  onPoolRefresh: () => Promise<void>;
 }
 
-export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, balanceLoading, authenticated, login }: PoolPanelProps) {
+export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, balanceLoading, authenticated, login, onPoolRefresh }: PoolPanelProps) {
   const [view, setView] = useState<PanelView>('overview');
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(authenticated);
@@ -240,6 +241,10 @@ export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, bal
       setPositionsLoading(false);
     }
   }, [authenticated]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchPositions(), onPoolRefresh()]);
+  }, [fetchPositions, onPoolRefresh]);
 
   useEffect(() => {
     void fetchPositions();
@@ -425,7 +430,7 @@ export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, bal
             solanaBalance={solanaBalance}
             baseBalance={baseBalance}
             balanceLoading={balanceLoading}
-            onDepositSuccess={fetchPositions}
+            onDepositSuccess={refreshAll}
             onCancel={() => setView('overview')}
           />
         </div>
@@ -437,7 +442,7 @@ export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, bal
           <WithdrawFlow
             position={withdrawTarget}
             solanaAddress={solanaAddress}
-            onSuccess={fetchPositions}
+            onSuccess={refreshAll}
             onCancel={() => { setView('overview'); setWithdrawTarget(null); }}
           />
         </div>

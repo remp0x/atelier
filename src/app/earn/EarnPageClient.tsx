@@ -88,6 +88,7 @@ export function EarnPageClient() {
             balanceLoading={balances.loading}
             authenticated={authenticated}
             login={login}
+            onPoolRefresh={fetchPool}
           />
         ) : selectedMarketId !== 'intc-usdc' ? (
           <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-8 text-center">

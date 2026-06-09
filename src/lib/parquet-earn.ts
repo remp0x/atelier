@@ -1,10 +1,10 @@
-import { Connection, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import { Connection, PublicKey, TransactionInstruction, Transaction, VersionedTransaction } from '@solana/web3.js';
 import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountIdempotentInstruction,
   getMint,
 } from '@solana/spl-token';
-import { Program, AnchorProvider, Wallet, type Idl } from '@coral-xyz/anchor';
+import { Program, AnchorProvider, type Idl } from '@coral-xyz/anchor';
 import {
   PoolClient,
   addLiquidity,
@@ -97,7 +97,16 @@ function getPoolClient(): PoolClient {
   if (cachedPoolClient) return cachedPoolClient;
   const cfg = getParquetEarnConfig();
   const connection = getServerConnection();
-  const wallet = new Wallet(getEarnTreasuryKeypair());
+  // anchor's Wallet export is not a usable constructor in the Vercel runtime, so
+  // build the provider wallet directly. Instruction building never signs through
+  // it -- the flow layer signs with the treasury keypair via sendAndConfirmServerTx
+  // -- so the sign methods are pass-throughs.
+  const treasury = getEarnTreasuryKeypair();
+  const wallet = {
+    publicKey: treasury.publicKey,
+    signTransaction: async <T extends Transaction | VersionedTransaction>(tx: T): Promise<T> => tx,
+    signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> => txs,
+  };
   const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
   // The bundled IDL carries the deployed address; override with our configured
   // program ID so the same code works across deployments.

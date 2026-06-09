@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
     const limited = earnRateLimit(`earn:${caller.ownerId}`);
     if (limited) return limited;
 
-    const positions = await listPositionsByOwner(caller.ownerKind, caller.ownerId);
+    const positions = (await listPositionsByOwner(caller.ownerKind, caller.ownerId))
+      .filter((p) => p.shares > BigInt(0));
     const configured = isParquetEarnConfigured();
 
     const data = await Promise.all(

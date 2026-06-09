@@ -29,15 +29,18 @@ import { getEarnTreasuryKeypair, getEarnTreasuryPubkey } from './parquet-earn-tr
 const MAINNET_POOL_PROGRAM_ID = 'Acme8JzWrvVqGJz7nTKVsLYisN6MtP83nrs4fVAeXJsN';
 const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
-// Markets users can deposit into: the current (252-byte) pools that owe the
-// payout queue nothing. Excludes dead 240-byte pools (gld) and stressed pools
-// that owe the queue more than they hold (qqq, tsla). Override with
-// PARQUET_EARN_MARKETS (comma list). Re-scan the pool program for new markets.
+// Markets users can deposit into. Must be DEPOSITABLE right now: 252-byte,
+// zero queue debt, and NOT carrying a stranded balance (program error 6031
+// StrandedPoolBalance blocks the first deposit into a pool that holds USDC with
+// 0 LP supply until it's swept to insurance). Excludes: dead 240-byte (gld),
+// stressed (qqq, tsla), and currently-stranded (amzn, googl, mrvl, mstr, nvda --
+// have USDC but 0 LP). Re-scan the pool program to refresh; override via
+// PARQUET_EARN_MARKETS.
 const DEFAULT_ENABLED_MARKETS = [
-  'aapl-usdc', 'amd-usdc', 'amzn-usdc', 'asml-usdc', 'avgo-usdc', 'baba-usdc', 'coin-usdc',
-  'cost-usdc', 'crcl-usdc', 'crwv-usdc', 'dell-usdc', 'googl-usdc', 'hood-usdc', 'ibm-usdc',
-  'intc-usdc', 'lly-usdc', 'meta-usdc', 'mrvl-usdc', 'msft-usdc', 'mstr-usdc', 'mu-usdc',
-  'nflx-usdc', 'nvda-usdc', 'orcl-usdc', 'pltr-usdc', 'rivn-usdc', 'sndk-usdc', 'spy-usdc', 'tsm-usdc',
+  'aapl-usdc', 'amd-usdc', 'asml-usdc', 'avgo-usdc', 'baba-usdc', 'coin-usdc', 'cost-usdc',
+  'crcl-usdc', 'crwv-usdc', 'dell-usdc', 'hood-usdc', 'ibm-usdc', 'intc-usdc', 'lly-usdc',
+  'meta-usdc', 'msft-usdc', 'mu-usdc', 'nflx-usdc', 'orcl-usdc', 'pltr-usdc', 'rivn-usdc',
+  'sndk-usdc', 'spy-usdc', 'tsm-usdc',
 ];
 
 const ZERO = BigInt(0);

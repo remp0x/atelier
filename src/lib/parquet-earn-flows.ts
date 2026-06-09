@@ -100,21 +100,25 @@ async function fetchParsedWithRetry(conn: Connection, sig: string) {
 
 // Verifies that `txSignature` credited at least `expectedRaw` micro-USDC to the
 // Earn treasury. Matches on the token-balance entry by owner+mint, version-agnostic.
+// Verifies the incoming transfer credited the treasury and returns the SENDER's
+// address (the USDC account that decreased) so a failed deploy can auto-refund.
 async function verifyIncomingUsdc(
   conn: Connection,
   txSignature: string,
   expectedRaw: bigint,
-): Promise<void> {
+): Promise<string | null> {
   const tx = await fetchParsedWithRetry(conn, txSignature);
   if (!tx) throw new Error('deposit transfer not found on-chain after polling');
   if (tx.meta?.err) throw new Error('deposit transfer failed on-chain');
 
   const treasury = getEarnTreasuryPubkey().toBase58();
   const usdc = USDC_MINT.toBase58();
-  const match = (b: { owner?: string; mint: string }) => b.owner === treasury && b.mint === usdc;
+  const pres = tx.meta?.preTokenBalances ?? [];
+  const posts = tx.meta?.postTokenBalances ?? [];
 
-  const pre = (tx.meta?.preTokenBalances ?? []).find(match);
-  const post = (tx.meta?.postTokenBalances ?? []).find(match);
+  const match = (b: { owner?: string; mint: string }) => b.owner === treasury && b.mint === usdc;
+  const pre = pres.find(match);
+  const post = posts.find(match);
   const delta = BigInt(post?.uiTokenAmount.amount ?? '0') - BigInt(pre?.uiTokenAmount.amount ?? '0');
 
   if (delta < expectedRaw) {
@@ -122,6 +126,16 @@ async function verifyIncomingUsdc(
       `deposit transfer credited ${delta} micro-USDC to treasury, expected >= ${expectedRaw}`,
     );
   }
+
+  // Sender = the non-treasury USDC account whose balance decreased.
+  let sender: string | null = null;
+  for (const p of pres) {
+    if (p.mint !== usdc || !p.owner || p.owner === treasury) continue;
+    const after = posts.find((q) => q.accountIndex === p.accountIndex);
+    const dec = BigInt(p.uiTokenAmount.amount) - BigInt(after?.uiTokenAmount.amount ?? '0');
+    if (dec > BigInt(0)) { sender = p.owner; break; }
+  }
+  return sender;
 }
 
 async function sendTreasuryUsdc(
@@ -215,8 +229,24 @@ export async function depositFromTransfer(params: {
   slippageBps?: number;
 }): Promise<DepositResult> {
   const conn = getServerConnection();
-  await verifyIncomingUsdc(conn, params.incomingTxHash, params.amountUsdc);
-  return deployTreasuryDeposit(params);
+  const sender = await verifyIncomingUsdc(conn, params.incomingTxHash, params.amountUsdc);
+  try {
+    return await deployTreasuryDeposit(params);
+  } catch (err) {
+    // Funds already reached the treasury (push model). If the deploy fails (e.g.
+    // a stranded/paused pool), refund the sender so USDC never strands.
+    const reason = err instanceof Error ? err.message : String(err);
+    if (!sender) {
+      throw new Error(`Deposit failed; sender unknown, funds held in treasury -- contact support. Reason: ${reason}`);
+    }
+    let refundTx: string;
+    try {
+      refundTx = await sendTreasuryUsdc(conn, sender, params.amountUsdc);
+    } catch {
+      throw new Error(`Deposit failed and auto-refund failed -- funds held in treasury, contact support. Reason: ${reason}`);
+    }
+    throw new Error(`Deposit could not be completed; your USDC was refunded (tx ${refundTx}). Reason: ${reason}`);
+  }
 }
 
 // Auto-pull deposit (agent's Privy server wallet -> treasury -> pool). NOT yet

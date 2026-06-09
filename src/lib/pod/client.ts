@@ -18,8 +18,15 @@
 
 const POD_PROXY_BASE = process.env.POD_BASE_URL || 'https://api.usepod.ai/proxy';
 const POD_TOKEN = process.env.POD_TOKEN;
+// claude-fable-5 is in Pod's catalog and works for light use, but as of
+// 2026-06-09 it 503s under real load (0/5 on the support bot). Keep the reliable
+// default; flip POD_MODEL=claude-fable-5 once Pod's upstream capacity is stable.
 const POD_DEFAULT_MODEL = process.env.POD_MODEL || 'gpt-4o-mini';
 const POD_TIMEOUT_MS = Number(process.env.POD_TIMEOUT_MS || '25000');
+// Pod routes to a marketplace of upstreams and can return a transient 503
+// "provider temporarily unavailable" under load. Retry a couple of times before
+// giving up so an intermittently-busy model doesn't fail-open on every blip.
+const POD_RETRY_503 = Number(process.env.POD_RETRY_503 || '2');
 const POD_TTS_MODEL = process.env.POD_TTS_MODEL || 'tts-1';
 const POD_TTS_VOICE = process.env.POD_TTS_VOICE || 'shimmer';
 const POD_TTS_TIMEOUT_MS = Number(process.env.POD_TTS_TIMEOUT_MS || '20000');
@@ -74,41 +81,52 @@ interface PodChatCompletion {
 async function podChat(messages: PodChatMessage[], options: PodChatOptions = {}): Promise<string | null> {
   if (!isPodConfigured()) return null;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? POD_TIMEOUT_MS);
+  const body = JSON.stringify({
+    model: options.model ?? POD_DEFAULT_MODEL,
+    messages,
+    temperature: options.temperature ?? 0,
+    max_tokens: options.maxTokens ?? 512,
+  });
 
-  try {
-    const res = await fetch(`${POD_PROXY_BASE}/${POD_TOKEN}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer placeholder',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: options.model ?? POD_DEFAULT_MODEL,
-        messages,
-        temperature: options.temperature ?? 0,
-        max_tokens: options.maxTokens ?? 512,
-      }),
-      signal: controller.signal,
-    });
+  for (let attempt = 0; attempt <= POD_RETRY_503; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? POD_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${POD_PROXY_BASE}/${POD_TOKEN}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer placeholder', 'Content-Type': 'application/json' },
+        body,
+        signal: controller.signal,
+      });
 
-    recordBalance(res.headers.get('X-Balance-Remaining'));
+      recordBalance(res.headers.get('X-Balance-Remaining'));
 
-    if (!res.ok) {
-      console.error(`Pod inference error (${res.status}):`, await res.text().catch(() => ''));
+      // Transient capacity error: back off briefly and retry.
+      if (res.status === 503 && attempt < POD_RETRY_503) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        continue;
+      }
+
+      if (!res.ok) {
+        console.error(`Pod inference error (${res.status}):`, await res.text().catch(() => ''));
+        return null;
+      }
+
+      const json = (await res.json()) as PodChatCompletion;
+      const content = json.choices?.[0]?.message?.content;
+      return typeof content === 'string' && content.length > 0 ? content.trim() : null;
+    } catch (err) {
+      if (attempt < POD_RETRY_503) {
+        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+        continue;
+      }
+      console.error('Pod inference request failed:', err);
       return null;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const json = (await res.json()) as PodChatCompletion;
-    const content = json.choices?.[0]?.message?.content;
-    return typeof content === 'string' ? content.trim() : null;
-  } catch (err) {
-    console.error('Pod inference request failed:', err);
-    return null;
-  } finally {
-    clearTimeout(timeout);
   }
+  return null;
 }
 
 /**

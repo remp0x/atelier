@@ -171,8 +171,11 @@ export function EarnSection() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] gap-10 lg:gap-14 items-center">
 
           <div data-earn-copy>
-            <p className="font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier mb-3">
-              ATELIER EARN · PRIVATE BETA
+            <p className="font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier mb-3 flex items-center gap-2">
+              ATELIER EARN
+              <span className="inline-flex items-center h-4 px-1.5 rounded border border-atelier/40 bg-atelier/5 font-mono text-[9px] font-semibold tracking-[0.14em] text-atelier">
+                BETA
+              </span>
             </p>
             <h2
               className="font-display font-extrabold tracking-[-0.02em] leading-[1.08] mb-4"
@@ -208,7 +211,7 @@ export function EarnSection() {
               href="/earn"
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded bg-atelier text-white font-mono text-[12px] font-medium tracking-wide cursor-pointer transition-all duration-150 hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
-              Join the waitlist →
+              Explore Earn →
             </Link>
 
           </div>

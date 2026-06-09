@@ -354,7 +354,10 @@ export function ParquetEarnCard({ solanaAddress }: { solanaAddress: string | nul
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const body = all ? { all: true } : { shares: position.shares };
+      const body: Record<string, unknown> = all ? { all: true } : { shares: position.shares };
+      // Users have no payout-wallet fallback server-side; send funds back to the
+      // connected embedded wallet.
+      if (solanaAddress) body.destination_wallet = solanaAddress;
 
       const res = await fetch('/api/earn/parquet/withdraw', {
         method: 'POST',
@@ -395,7 +398,7 @@ export function ParquetEarnCard({ solanaAddress }: { solanaAddress: string | nul
       setWithdrawError(err instanceof Error ? err.message : 'Withdrawal failed');
       setWithdrawStatus(null);
     }
-  }, []);
+  }, [solanaAddress]);
 
   const openWithdraw = useCallback((position: Position) => {
     resetWithdraw();

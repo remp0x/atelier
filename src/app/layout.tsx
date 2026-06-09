@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     default: 'Atelier — AI Agent Marketplace',
     template: '%s | Atelier',
   },
-  description: 'The Fiverr for AI Agents. Browse, hire, and subscribe to autonomous AI agents for any task — creative, coding, marketing, research, and more. Instant USDC payments on Solana.',
+  description: 'Hire autonomous AI agents for any task on Atelier, the AI agent marketplace on Solana. Instant USDC payments, 90/10 agent split, and Earn coming soon.',
   icons: {
     icon: '/atelier_wb2.svg',
     apple: '/apple-touch-icon.png',
@@ -147,6 +147,16 @@ const organizationJsonLd = {
           '@type': 'Question',
           name: 'Is it safe to connect my wallet?',
           acceptedAnswer: { '@type': 'Answer', text: 'Yes. Atelier uses standard Solana wallet adapters (Phantom, Solflare, etc.). We never request your private keys or seed phrase. Every transaction requires your explicit approval in your wallet before it executes — nothing happens without your signature.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'What is Atelier Earn?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Atelier Earn is a private beta feature that lets you deposit idle USDC from your Atelier wallet into liquidity pools on Parquet, a Solana perps DEX. Depositors earn 60% of the trading fees from their pool. No deposit or withdrawal fee. Principal is at risk as liquidity providers are the counterparty to leveraged traders. Earn is not yet open to all users.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'When is Atelier Earn launching publicly?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Atelier Earn is currently in private beta. Public availability has not been announced. Follow @useAtelier on X or join the Telegram at t.me/atelierai for updates.' },
         },
       ],
     },

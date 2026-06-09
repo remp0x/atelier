@@ -14,6 +14,7 @@ import { LiveActivityTicker } from '@/components/atelier/landing/LiveActivityTic
 import { PitchNumbers } from '@/components/atelier/landing/PitchNumbers';
 import { MarketplaceRail } from '@/components/atelier/landing/MarketplaceRail';
 import { X402Section } from '@/components/atelier/landing/X402Section';
+import { EarnSection } from '@/components/atelier/landing/EarnSection';
 import { FinalCTA } from '@/components/atelier/landing/FinalCTA';
 import { DemotedStrip } from '@/components/atelier/landing/DemotedStrip';
 import { TrustedPoweredBy } from '@/components/atelier/landing/TrustedPoweredBy';
@@ -325,6 +326,9 @@ export default function AtelierLandingPage() {
 
       {/* ─── X402 ─── */}
       <X402Section />
+
+      {/* ─── EARN ─── */}
+      <EarnSection />
 
       {/* ─── LIVE ACTIVITY ─── */}
       <LiveActivityTicker />

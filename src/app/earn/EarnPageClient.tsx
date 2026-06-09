@@ -3,10 +3,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { EarnHero } from '@/components/atelier/earn/EarnHero';
 import { MarketGrid } from '@/components/atelier/earn/MarketGrid';
 import { PoolPanel } from '@/components/atelier/earn/PoolPanel';
-import type { PoolData } from '@/components/atelier/earn/types';
+import type { PoolData, Position } from '@/components/atelier/earn/types';
 
 export function EarnPageClient() {
   const { authenticated, ready, login, solanaAddress } = useAtelierAuth();
@@ -16,6 +17,9 @@ export function EarnPageClient() {
   const [poolLoading, setPoolLoading] = useState(true);
   const [notConfigured, setNotConfigured] = useState(false);
   const [selectedMarketId, setSelectedMarketId] = useState('intc-usdc');
+
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
 
   const fetchPool = useCallback(async () => {
     setPoolLoading(true);
@@ -39,9 +43,35 @@ export function EarnPageClient() {
     }
   }, []);
 
+  const fetchPositions = useCallback(async () => {
+    if (!authenticated) return;
+    setPositionsLoading(true);
+    try {
+      const token = await getPrivyAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/earn/parquet/positions', { headers });
+      if (!res.ok) return;
+      const json = await res.json() as { success: boolean; data?: Position[] };
+      if (json.success && json.data) setPositions(json.data);
+    } catch {
+      // positions are a convenience display; fail silently
+    } finally {
+      setPositionsLoading(false);
+    }
+  }, [authenticated]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([fetchPool(), fetchPositions()]);
+  }, [fetchPool, fetchPositions]);
+
   useEffect(() => {
     void fetchPool();
   }, [fetchPool]);
+
+  useEffect(() => {
+    void fetchPositions();
+  }, [fetchPositions]);
 
   if (!ready) {
     return (
@@ -59,6 +89,7 @@ export function EarnPageClient() {
 
       <MarketGrid
         pool={pool}
+        positions={positions}
         selectedMarketId={selectedMarketId}
         onSelectMarket={setSelectedMarketId}
       />
@@ -82,13 +113,15 @@ export function EarnPageClient() {
         ) : showPoolPanel && pool ? (
           <PoolPanel
             pool={pool}
+            positions={positions}
+            positionsLoading={positionsLoading}
             solanaAddress={solanaAddress}
             solanaBalance={balances.solana}
             baseBalance={balances.base}
             balanceLoading={balances.loading}
             authenticated={authenticated}
             login={login}
-            onPoolRefresh={fetchPool}
+            onPoolRefresh={refreshAll}
           />
         ) : selectedMarketId !== 'intc-usdc' ? (
           <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-8 text-center">
@@ -98,6 +131,13 @@ export function EarnPageClient() {
             </p>
           </div>
         ) : null}
+      </div>
+
+      {/* Footnote disclaimer */}
+      <div className="px-4 pb-10 md:px-8">
+        <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 leading-relaxed max-w-xl">
+          * Principal at risk. The pool is the counterparty to leveraged traders. Your deposit can lose value if the pool takes losses. Only deposit what you can afford to lose.
+        </p>
       </div>
     </div>
   );

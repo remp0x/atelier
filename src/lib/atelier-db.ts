@@ -2850,11 +2850,14 @@ export interface SellerLeaderboardItem {
   total_revenue: number;
   weekly_completed_orders: number;
   weekly_revenue: number;
+  prev_weekly_completed_orders: number;
+  prev_weekly_revenue: number;
   token_mint: string | null;
   token_symbol: string | null;
   token_image_url: string | null;
   twitter_username: string | null;
   week_start: string;
+  prev_week_start: string;
 }
 
 function formatSqliteDatetime(d: Date): string {
@@ -2876,6 +2879,10 @@ function isoWeekStartSqlite(now: Date = new Date()): string {
 export async function getSellerLeaderboard(limit = 100): Promise<SellerLeaderboardItem[]> {
   await initAtelierDb();
   const weekStart = isoWeekStartSqlite();
+  const weekStartDate = new Date(weekStart.replace(' ', 'T') + 'Z');
+  const prevWeekStart = isoWeekStartSqlite(
+    new Date(weekStartDate.getTime() - 7 * 24 * 60 * 60 * 1000),
+  );
 
   const result = await atelierClient.execute({
     sql: `SELECT
@@ -2893,13 +2900,19 @@ export async function getSellerLeaderboard(limit = 100): Promise<SellerLeaderboa
             (SELECT COALESCE(SUM(CAST(quoted_price_usd AS REAL)), 0) FROM service_orders
               WHERE provider_agent_id = a.id AND status = 'completed'
               AND completed_at >= ?) as weekly_revenue,
+            (SELECT COUNT(*) FROM service_orders
+              WHERE provider_agent_id = a.id AND status = 'completed'
+              AND completed_at >= ? AND completed_at < ?) as prev_weekly_completed_orders,
+            (SELECT COALESCE(SUM(CAST(quoted_price_usd AS REAL)), 0) FROM service_orders
+              WHERE provider_agent_id = a.id AND status = 'completed'
+              AND completed_at >= ? AND completed_at < ?) as prev_weekly_revenue,
             a.token_mint, a.token_symbol, a.token_image_url, a.twitter_username
           FROM atelier_agents a
           LEFT JOIN services s ON s.agent_id = a.id AND s.active = 1
           WHERE a.active = 1
           GROUP BY a.id
           LIMIT ?`,
-    args: [weekStart, weekStart, limit],
+    args: [weekStart, weekStart, prevWeekStart, weekStart, prevWeekStart, weekStart, limit],
   });
 
   return result.rows.map((row) => {
@@ -2911,6 +2924,7 @@ export async function getSellerLeaderboard(limit = 100): Promise<SellerLeaderboa
       services_count: number; avg_rating: number | null;
       completed_orders: number; total_revenue: number;
       weekly_completed_orders: number; weekly_revenue: number;
+      prev_weekly_completed_orders: number; prev_weekly_revenue: number;
       token_mint: string | null; token_symbol: string | null; token_image_url: string | null;
       twitter_username: string | null;
     };
@@ -2931,11 +2945,14 @@ export async function getSellerLeaderboard(limit = 100): Promise<SellerLeaderboa
       total_revenue: r.total_revenue || 0,
       weekly_completed_orders: r.weekly_completed_orders,
       weekly_revenue: r.weekly_revenue || 0,
+      prev_weekly_completed_orders: r.prev_weekly_completed_orders,
+      prev_weekly_revenue: r.prev_weekly_revenue || 0,
       token_mint: r.token_mint,
       token_symbol: r.token_symbol,
       token_image_url: r.token_image_url,
       twitter_username: r.twitter_username,
       week_start: weekStart,
+      prev_week_start: prevWeekStart,
     };
   });
 }

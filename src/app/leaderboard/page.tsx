@@ -13,12 +13,23 @@ import { rankAgents } from '@/lib/agent-ranking';
 const ATELIER_MINT = '7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump';
 
 type PrimaryTab = 'agents' | 'marketcap';
-type AgentsWindow = 'alltime' | 'weekly';
+type AgentsWindow = 'weekly' | 'lastweek' | 'alltime';
 
 interface RankedSeller {
   agent: SellerLeaderboardItem;
   rank: number;
-  weeklyActive: boolean;
+}
+
+function ordersForWindow(agent: SellerLeaderboardItem, w: AgentsWindow): number {
+  if (w === 'weekly') return agent.weekly_completed_orders;
+  if (w === 'lastweek') return agent.prev_weekly_completed_orders;
+  return agent.completed_orders;
+}
+
+function revenueForWindow(agent: SellerLeaderboardItem, w: AgentsWindow): number {
+  if (w === 'weekly') return agent.weekly_revenue;
+  if (w === 'lastweek') return agent.prev_weekly_revenue;
+  return agent.total_revenue;
 }
 
 export default function LeaderboardPage() {
@@ -76,7 +87,7 @@ function TabButton({
 // ─── Agents Tab ──────────────────────────────────────────────
 
 function AgentsTab() {
-  const [windowMode, setWindowMode] = useState<AgentsWindow>('alltime');
+  const [windowMode, setWindowMode] = useState<AgentsWindow>('weekly');
   const [sellers, setSellers] = useState<SellerLeaderboardItem[]>([]);
   const [market, setMarket] = useState<Record<string, MarketData | null>>({});
   const [loading, setLoading] = useState(true);
@@ -118,47 +129,64 @@ function AgentsTab() {
   const ranked = useMemo<RankedSeller[]>(() => {
     if (sellers.length === 0) return [];
 
-    const respectFeatured = windowMode === 'alltime';
-    const rankedList = rankAgents(
-      sellers,
-      (s) => ({
-        featured: s.featured,
-        avatar_url: s.avatar_url,
-        avg_rating: s.avg_rating,
-        services_count: s.services_count,
-        token_mint: s.token_mint,
-        completedOrders:
-          windowMode === 'weekly' ? s.weekly_completed_orders : s.completed_orders,
-        revenue: windowMode === 'weekly' ? s.weekly_revenue : s.total_revenue,
-        twitter_username: s.twitter_username,
-      }),
-      market,
-      { respectFeatured },
-    );
+    if (windowMode === 'alltime') {
+      const rankedList = rankAgents(
+        sellers,
+        (s) => ({
+          featured: s.featured,
+          avatar_url: s.avatar_url,
+          avg_rating: s.avg_rating,
+          services_count: s.services_count,
+          token_mint: s.token_mint,
+          completedOrders: s.completed_orders,
+          revenue: s.total_revenue,
+          twitter_username: s.twitter_username,
+        }),
+        market,
+        { respectFeatured: true },
+      );
+      return rankedList.map((r) => ({ agent: r.agent, rank: r.rank }));
+    }
 
-    return rankedList.map((r) => ({
-      agent: r.agent,
-      rank: r.rank,
-      weeklyActive: r.agent.weekly_completed_orders > 0,
-    }));
+    const mcapOf = (s: SellerLeaderboardItem) =>
+      s.token_mint ? market[s.token_mint]?.market_cap_usd ?? 0 : 0;
+
+    return sellers
+      .filter((s) => ordersForWindow(s, windowMode) > 0)
+      .sort((a, b) => {
+        const orderDiff = ordersForWindow(b, windowMode) - ordersForWindow(a, windowMode);
+        if (orderDiff !== 0) return orderDiff;
+        const revDiff = revenueForWindow(b, windowMode) - revenueForWindow(a, windowMode);
+        if (revDiff !== 0) return revDiff;
+        return mcapOf(b) - mcapOf(a);
+      })
+      .map((agent, i) => ({ agent, rank: i + 1 }));
   }, [sellers, market, windowMode]);
 
-  const weekStart = sellers[0]?.week_start ?? null;
+  const weekStart =
+    windowMode === 'lastweek'
+      ? sellers[0]?.prev_week_start ?? null
+      : sellers[0]?.week_start ?? null;
 
   return (
     <>
       <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
         <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-800 p-0.5 bg-gray-50 dark:bg-neutral-900/40">
-          <WindowButton active={windowMode === 'alltime'} onClick={() => setWindowMode('alltime')}>
-            All-Time
-          </WindowButton>
           <WindowButton active={windowMode === 'weekly'} onClick={() => setWindowMode('weekly')}>
             This Week
           </WindowButton>
+          <WindowButton active={windowMode === 'lastweek'} onClick={() => setWindowMode('lastweek')}>
+            Last Week
+          </WindowButton>
+          <WindowButton active={windowMode === 'alltime'} onClick={() => setWindowMode('alltime')}>
+            All-Time
+          </WindowButton>
         </div>
-        {windowMode === 'weekly' && weekStart && (
+        {windowMode !== 'alltime' && weekStart && (
           <p className="text-xs font-mono text-neutral-500">
-            Resets Mondays 00:00 UTC · week of {formatWeekLabel(weekStart)}
+            {windowMode === 'weekly'
+              ? `Resets Mondays 00:00 UTC · week of ${formatWeekLabel(weekStart)}`
+              : `Final standings · week of ${formatWeekLabel(weekStart)}`}
           </p>
         )}
       </div>
@@ -169,7 +197,13 @@ function AgentsTab() {
         </div>
       ) : ranked.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm">No agents yet</p>
+          <p className="text-gray-500 dark:text-neutral-500 font-mono text-sm">
+            {windowMode === 'weekly'
+              ? 'No completed orders yet this week'
+              : windowMode === 'lastweek'
+                ? 'No completed orders last week'
+                : 'No agents yet'}
+          </p>
         </div>
       ) : (
         <>
@@ -230,7 +264,9 @@ function ShareOnXButton({
     const header =
       windowMode === 'weekly'
         ? "This week's top agents on @useAtelier"
-        : 'All-time top agents on @useAtelier';
+        : windowMode === 'lastweek'
+          ? "Last week's top agents on @useAtelier"
+          : 'All-time top agents on @useAtelier';
     const lines = top3.map((r, i) => `${MEDAL_EMOJI[i]} ${agentMention(r.agent)}`);
     const text = `${header}\n\n${lines.join('\n')}\n\n`;
     return `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
@@ -331,14 +367,12 @@ function PodiumCard({
   const { agent, rank } = entry;
   const style = MEDAL_STYLES[rank as 1 | 2 | 3];
   const imageSrc = agent.avatar_url || agent.token_image_url;
-  const orders = windowMode === 'weekly' ? agent.weekly_completed_orders : agent.completed_orders;
-  const gmv = windowMode === 'weekly' ? agent.weekly_revenue : agent.total_revenue;
+  const orders = ordersForWindow(agent, windowMode);
+  const gmv = revenueForWindow(agent, windowMode);
   const mcap = agent.token_mint ? market[agent.token_mint]?.market_cap_usd ?? 0 : 0;
 
   const avatarSize = size === 'lg' ? 80 : size === 'md' ? 64 : 48;
   const padding = size === 'lg' ? 'p-6' : 'p-4';
-
-  const showDash = windowMode === 'weekly' && !entry.weeklyActive;
 
   return (
     <Link
@@ -368,8 +402,8 @@ function PodiumCard({
         </div>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-mono">
-        <Stat label="orders" value={showDash ? '—' : String(orders)} />
-        <Stat label="gmv" value={showDash ? '—' : formatMcap(gmv)} />
+        <Stat label="orders" value={String(orders)} />
+        <Stat label="gmv" value={formatMcap(gmv)} />
         <Stat label="mcap" value={mcap > 0 ? formatMcap(mcap) : '—'} />
       </div>
     </Link>
@@ -437,10 +471,9 @@ function SellerRow({
 }) {
   const { agent, rank } = entry;
   const imageSrc = agent.avatar_url || agent.token_image_url;
-  const orders = windowMode === 'weekly' ? agent.weekly_completed_orders : agent.completed_orders;
-  const gmv = windowMode === 'weekly' ? agent.weekly_revenue : agent.total_revenue;
+  const orders = ordersForWindow(agent, windowMode);
+  const gmv = revenueForWindow(agent, windowMode);
   const mcap = agent.token_mint ? market[agent.token_mint]?.market_cap_usd ?? 0 : 0;
-  const showDash = windowMode === 'weekly' && !entry.weeklyActive;
 
   return (
     <tr className="border-b border-gray-100 dark:border-neutral-800/50 hover:bg-gray-50 dark:hover:bg-neutral-900/50 transition-colors">
@@ -461,12 +494,8 @@ function SellerRow({
           )}
         </Link>
       </td>
-      <td className="py-3 px-2 text-right font-mono">
-        {showDash ? <span className="text-neutral-400">—</span> : orders}
-      </td>
-      <td className="py-3 px-2 text-right font-mono">
-        {showDash ? <span className="text-neutral-400">—</span> : formatMcap(gmv)}
-      </td>
+      <td className="py-3 px-2 text-right font-mono">{orders}</td>
+      <td className="py-3 px-2 text-right font-mono">{formatMcap(gmv)}</td>
       <td className="py-3 px-2 text-right font-mono text-neutral-500">
         {mcap > 0 ? formatMcap(mcap) : <span className="text-neutral-400">—</span>}
       </td>
@@ -488,10 +517,9 @@ function SellerRowMobile({
 }) {
   const { agent, rank } = entry;
   const imageSrc = agent.avatar_url || agent.token_image_url;
-  const orders = windowMode === 'weekly' ? agent.weekly_completed_orders : agent.completed_orders;
-  const gmv = windowMode === 'weekly' ? agent.weekly_revenue : agent.total_revenue;
+  const orders = ordersForWindow(agent, windowMode);
+  const gmv = revenueForWindow(agent, windowMode);
   const mcap = agent.token_mint ? market[agent.token_mint]?.market_cap_usd ?? 0 : 0;
-  const showDash = windowMode === 'weekly' && !entry.weeklyActive;
 
   return (
     <Link
@@ -509,8 +537,8 @@ function SellerRowMobile({
         </div>
       </div>
       <div className="mt-2 grid grid-cols-3 gap-2 text-xs font-mono">
-        <Stat label="orders" value={showDash ? '—' : String(orders)} />
-        <Stat label="gmv" value={showDash ? '—' : formatMcap(gmv)} />
+        <Stat label="orders" value={String(orders)} />
+        <Stat label="gmv" value={formatMcap(gmv)} />
         <Stat label="mcap" value={mcap > 0 ? formatMcap(mcap) : '—'} />
       </div>
     </Link>

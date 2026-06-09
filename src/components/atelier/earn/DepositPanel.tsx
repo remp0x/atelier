@@ -32,6 +32,7 @@ const STEP_ORDER: DepositStep[] = ['signing', 'confirming', 'submitting', 'done'
 
 interface DepositPanelProps {
   pool: PoolData;
+  market: string;
   solanaAddress: string;
   solanaBalance: number;
   baseBalance: number;
@@ -42,6 +43,7 @@ interface DepositPanelProps {
 
 export function DepositPanel({
   pool,
+  market,
   solanaAddress,
   solanaBalance,
   baseBalance,
@@ -158,7 +160,7 @@ export function DepositPanel({
       const res = await fetch('/api/earn/parquet/deposit', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ amount_usd: amountNum.toFixed(6), incoming_tx_hash: sig }),
+        body: JSON.stringify({ amount_usd: amountNum.toFixed(6), incoming_tx_hash: sig, market }),
       });
 
       const json = await res.json() as {

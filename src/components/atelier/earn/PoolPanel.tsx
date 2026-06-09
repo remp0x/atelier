@@ -88,7 +88,7 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const body: Record<string, unknown> = { all: true };
+      const body: Record<string, unknown> = { all: true, market: position.pool_market };
       if (solanaAddress) body.destination_wallet = solanaAddress;
 
       const res = await fetch('/api/earn/parquet/withdraw', {
@@ -209,6 +209,7 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
 
 interface PoolPanelProps {
   pool: PoolData;
+  market: string;
   positions: Position[];
   positionsLoading: boolean;
   solanaAddress: string | null;
@@ -220,7 +221,7 @@ interface PoolPanelProps {
   onPoolRefresh: () => Promise<void>;
 }
 
-export function PoolPanel({ pool, positions, positionsLoading, solanaAddress, solanaBalance, baseBalance, balanceLoading, authenticated, login, onPoolRefresh }: PoolPanelProps) {
+export function PoolPanel({ pool, market, positions, positionsLoading, solanaAddress, solanaBalance, baseBalance, balanceLoading, authenticated, login, onPoolRefresh }: PoolPanelProps) {
   const [view, setView] = useState<PanelView>('overview');
   const [withdrawTarget, setWithdrawTarget] = useState<Position | null>(null);
 
@@ -404,6 +405,7 @@ export function PoolPanel({ pool, positions, positionsLoading, solanaAddress, so
         <div className="px-5 py-5">
           <DepositPanel
             pool={pool}
+            market={market}
             solanaAddress={solanaAddress}
             solanaBalance={solanaBalance}
             baseBalance={baseBalance}

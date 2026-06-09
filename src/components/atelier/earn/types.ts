@@ -25,29 +25,28 @@ export interface MarketDefinition {
   id: string;
   ticker: string;
   subtitle: string;
-  enabled: boolean;
 }
 
 export const MARKETS: MarketDefinition[] = [
-  { id: 'intc-usdc', ticker: 'INTC', subtitle: 'US Equity / ETF', enabled: true },
-  { id: 'spy-usdc',  ticker: 'SPY',  subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'tsla-usdc', ticker: 'TSLA', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'nvda-usdc', ticker: 'NVDA', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'aapl-usdc', ticker: 'AAPL', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'amzn-usdc', ticker: 'AMZN', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'mstr-usdc', ticker: 'MSTR', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'googl-usdc',ticker: 'GOOGL',subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'msft-usdc', ticker: 'MSFT', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'meta-usdc', ticker: 'META', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'coin-usdc', ticker: 'COIN', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'hood-usdc', ticker: 'HOOD', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'amd-usdc',  ticker: 'AMD',  subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'mu-usdc',   ticker: 'MU',   subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'crcl-usdc', ticker: 'CRCL', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'gld-usdc',  ticker: 'GLD',  subtitle: 'Commodity / ETF', enabled: false },
-  { id: 'qqq-usdc',  ticker: 'QQQ',  subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'pltr-usdc', ticker: 'PLTR', subtitle: 'US Equity / ETF', enabled: false },
-  { id: 'sndk-usdc', ticker: 'SNDK', subtitle: 'US Equity / ETF', enabled: false },
+  { id: 'intc-usdc',  ticker: 'INTC',  subtitle: 'US Equity / ETF' },
+  { id: 'spy-usdc',   ticker: 'SPY',   subtitle: 'US Equity / ETF' },
+  { id: 'tsla-usdc',  ticker: 'TSLA',  subtitle: 'US Equity / ETF' },
+  { id: 'nvda-usdc',  ticker: 'NVDA',  subtitle: 'US Equity / ETF' },
+  { id: 'aapl-usdc',  ticker: 'AAPL',  subtitle: 'US Equity / ETF' },
+  { id: 'amzn-usdc',  ticker: 'AMZN',  subtitle: 'US Equity / ETF' },
+  { id: 'mstr-usdc',  ticker: 'MSTR',  subtitle: 'US Equity / ETF' },
+  { id: 'googl-usdc', ticker: 'GOOGL', subtitle: 'US Equity / ETF' },
+  { id: 'msft-usdc',  ticker: 'MSFT',  subtitle: 'US Equity / ETF' },
+  { id: 'meta-usdc',  ticker: 'META',  subtitle: 'US Equity / ETF' },
+  { id: 'coin-usdc',  ticker: 'COIN',  subtitle: 'US Equity / ETF' },
+  { id: 'hood-usdc',  ticker: 'HOOD',  subtitle: 'US Equity / ETF' },
+  { id: 'amd-usdc',   ticker: 'AMD',   subtitle: 'US Equity / ETF' },
+  { id: 'mu-usdc',    ticker: 'MU',    subtitle: 'US Equity / ETF' },
+  { id: 'crcl-usdc',  ticker: 'CRCL',  subtitle: 'US Equity / ETF' },
+  { id: 'gld-usdc',   ticker: 'GLD',   subtitle: 'Commodity / ETF' },
+  { id: 'qqq-usdc',   ticker: 'QQQ',   subtitle: 'US Equity / ETF' },
+  { id: 'pltr-usdc',  ticker: 'PLTR',  subtitle: 'US Equity / ETF' },
+  { id: 'sndk-usdc',  ticker: 'SNDK',  subtitle: 'US Equity / ETF' },
 ];
 
 export function microToUsd(micro: string): number {

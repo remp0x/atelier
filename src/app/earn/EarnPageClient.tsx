@@ -13,6 +13,7 @@ import type { PoolData, Position } from '@/components/atelier/earn/types';
 interface MarketsResponse {
   treasury_wallet: string | null;
   enabled: string[];
+  markets?: PoolData[];
 }
 
 export function EarnPageClient() {
@@ -46,6 +47,11 @@ export function EarnPageClient() {
         setSelectedMarketId((prev) => {
           if (prev && json.data!.enabled.includes(prev)) return prev;
           return json.data!.enabled[0] ?? '';
+        });
+        setPoolsByMarket((prev) => {
+          const next = { ...prev };
+          for (const p of json.data!.markets ?? []) next[p.market] = p;
+          return next;
         });
       } else {
         setNotConfigured(true);

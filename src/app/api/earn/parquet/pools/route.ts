@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
         available_usdc_micro: available.toString(),
         lp_supply: health.lpSupply.toString(),
         stressed: health.queueTotalOwed > BigInt(0),
+        depositable: health.lpSupply > BigInt(0) || health.totalUsdc === BigInt(0),
       },
     });
   } catch (error) {

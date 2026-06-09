@@ -19,6 +19,7 @@ interface MarketCardProps {
 function MarketCard({ marketId, ticker, pool, selected, depositedValue, layout, onSelect }: MarketCardProps) {
   const tvl = pool ? formatUsd(microToUsd(pool.total_usdc_micro)) : null;
   const stressed = pool?.stressed ?? false;
+  const initializing = pool !== null && pool.depositable === false;
 
   if (layout === 'list') {
     return (
@@ -40,6 +41,11 @@ function MarketCard({ marketId, ticker, pool, selected, depositedValue, layout, 
             <span className="inline-flex h-4 px-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 font-mono text-[9px] text-amber-500 items-center gap-1">
               <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
               Stress
+            </span>
+          )}
+          {initializing && (
+            <span className="inline-flex h-4 px-1.5 rounded-full bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 font-mono text-[9px] text-gray-400 dark:text-neutral-500 items-center">
+              initializing
             </span>
           )}
           {tvl !== null ? (
@@ -75,6 +81,11 @@ function MarketCard({ marketId, ticker, pool, selected, depositedValue, layout, 
             <span className="inline-flex h-4 px-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 font-mono text-[9px] text-amber-500 items-center gap-1">
               <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
               Stress
+            </span>
+          )}
+          {initializing && (
+            <span className="inline-flex h-4 px-1.5 rounded-full bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 font-mono text-[9px] text-gray-400 dark:text-neutral-500 items-center">
+              initializing
             </span>
           )}
           {depositedValue !== null && (

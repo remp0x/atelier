@@ -60,34 +60,34 @@ function EarnVisual() {
 
       <div className="pt-12 pb-6 px-5 flex flex-col gap-2.5">
         <div className="mb-1">
-          <div className="font-mono text-[10px] text-neutral-500 uppercase tracking-[0.12em] mb-2.5">Markets</div>
+          <div className="font-mono text-[10px] text-gray-500 dark:text-neutral-500 uppercase tracking-[0.12em] mb-2.5">Markets</div>
           <div className="flex flex-wrap gap-1.5">
             {['NVDA', 'TSLA', 'SPY', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'COIN'].map((ticker) => (
               <span
                 key={ticker}
-                className="font-mono text-[11px] font-semibold text-neutral-300 border border-neutral-700 rounded px-2 py-0.5 bg-neutral-900/60 cursor-default"
+                className="font-mono text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 border border-gray-200 dark:border-neutral-700 rounded px-2 py-0.5 bg-white/70 dark:bg-neutral-900/60 cursor-default"
               >
                 {ticker}
               </span>
             ))}
-            <span className="font-mono text-[11px] text-neutral-500 border border-neutral-800 rounded px-2 py-0.5 bg-neutral-900/30 cursor-default">
+            <span className="font-mono text-[11px] text-gray-500 dark:text-neutral-500 border border-gray-200 dark:border-neutral-800 rounded px-2 py-0.5 bg-white/50 dark:bg-neutral-900/30 cursor-default">
               +16 more
             </span>
           </div>
         </div>
 
-        <div className="mt-3 pt-3.5 border-t border-neutral-800 flex items-center justify-between">
+        <div className="mt-3 pt-3.5 border-t border-gray-200 dark:border-neutral-800 flex items-center justify-between">
           <div>
-            <div className="font-mono text-[10px] text-neutral-500 uppercase tracking-[0.12em] mb-0.5">LP fee share</div>
+            <div className="font-mono text-[10px] text-gray-500 dark:text-neutral-500 uppercase tracking-[0.12em] mb-0.5">LP fee share</div>
             <div className="font-mono text-[18px] font-bold text-atelier">60%</div>
           </div>
           <div>
-            <div className="font-mono text-[10px] text-neutral-500 uppercase tracking-[0.12em] mb-0.5 text-right">Withdrawal fee</div>
-            <div className="font-mono text-[18px] font-bold text-white">$0</div>
+            <div className="font-mono text-[10px] text-gray-500 dark:text-neutral-500 uppercase tracking-[0.12em] mb-0.5 text-right">Withdrawal fee</div>
+            <div className="font-mono text-[18px] font-bold text-black dark:text-white">$0</div>
           </div>
           <div>
-            <div className="font-mono text-[10px] text-neutral-500 uppercase tracking-[0.12em] mb-0.5 text-right">Lock-up</div>
-            <div className="font-mono text-[18px] font-bold text-white">None</div>
+            <div className="font-mono text-[10px] text-gray-500 dark:text-neutral-500 uppercase tracking-[0.12em] mb-0.5 text-right">Lock-up</div>
+            <div className="font-mono text-[18px] font-bold text-black dark:text-white">None</div>
           </div>
         </div>
       </div>

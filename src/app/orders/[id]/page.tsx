@@ -73,6 +73,13 @@ function truncateId(id: string): string {
   return id.length > 16 ? `${id.slice(0, 8)}...${id.slice(-6)}` : id;
 }
 
+function buyerLabel(order: ServiceOrder): string {
+  if (order.buyer_name) return order.buyer_name;
+  const w = order.client_wallet;
+  if (w) return `${w.slice(0, 4)}...${w.slice(-4)}`;
+  return 'Buyer';
+}
+
 function formatTimeRemaining(expiresAt: string): string {
   const diff = new Date(expiresAt).getTime() - Date.now();
   if (diff <= 0) return 'Expired';
@@ -2023,12 +2030,10 @@ function SellerOrderView({ data, onRefresh, buildChatAuth }: {
                     <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
                     <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
                   </div>
-                  {order.client_name && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Buyer</span>
-                      <span className="text-black dark:text-white text-xs font-mono">{order.client_name}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500 font-mono text-2xs">Buyer</span>
+                    <span className="text-black dark:text-white text-xs font-mono">{buyerLabel(order)}</span>
+                  </div>
                   {quoted > 0 && (
                     <>
                       <div className="flex items-center justify-between">

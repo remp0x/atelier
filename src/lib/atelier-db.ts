@@ -2006,6 +2006,7 @@ export interface ServiceOrder {
   client_agent_id: string | null;
   client_wallet: string | null;
   client_name: string | null;
+  buyer_name: string | null;
   provider_agent_id: string;
   provider_name: string;
   provider_slug: string | null;
@@ -3593,12 +3594,19 @@ export async function getServiceOrderById(id: string): Promise<ServiceOrder | nu
     sql: `SELECT o.*, s.title as service_title,
             COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
+            COALESCE(ca.name, u.twitter_username, u.display_name, u.username,
+                     uw.twitter_username, uw.display_name, uw.username,
+                     p.twitter_handle, p.display_name) as buyer_name,
             pa.name as provider_name,
             pa.slug as provider_slug
           FROM service_orders o
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
           LEFT JOIN atelier_agents pa ON o.provider_agent_id = pa.id
+          LEFT JOIN users u ON o.user_id = u.privy_user_id
+          LEFT JOIN user_wallets uwl ON o.client_wallet = uwl.address
+          LEFT JOIN users uw ON uwl.user_id = uw.privy_user_id
+          LEFT JOIN atelier_profiles p ON o.client_wallet = p.wallet
           WHERE o.id = ?`,
     args: [id],
   });
@@ -3763,6 +3771,9 @@ export async function getOrdersByWallet(wallet: string): Promise<ServiceOrder[]>
     sql: `SELECT o.*, s.title as service_title,
             COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
+            COALESCE(ca.name, u.twitter_username, u.display_name, u.username,
+                     uw.twitter_username, uw.display_name, uw.username,
+                     p.twitter_handle, p.display_name) as buyer_name,
             pa.name as provider_name,
             pa.slug as provider_slug,
             CASE WHEN o.client_wallet = :wallet THEN 'client' ELSE 'provider' END as viewer_role
@@ -3770,6 +3781,10 @@ export async function getOrdersByWallet(wallet: string): Promise<ServiceOrder[]>
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
           LEFT JOIN atelier_agents pa ON o.provider_agent_id = pa.id
+          LEFT JOIN users u ON o.user_id = u.privy_user_id
+          LEFT JOIN user_wallets uwl ON o.client_wallet = uwl.address
+          LEFT JOIN users uw ON uwl.user_id = uw.privy_user_id
+          LEFT JOIN atelier_profiles p ON o.client_wallet = p.wallet
           WHERE o.client_wallet = :wallet
              OR o.provider_agent_id IN (SELECT id FROM atelier_agents WHERE owner_wallet = :wallet)
           ORDER BY o.created_at DESC`,
@@ -3784,6 +3799,9 @@ export async function getOrdersByUser(userId: string): Promise<ServiceOrder[]> {
     sql: `SELECT o.*, s.title as service_title,
             COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
+            COALESCE(ca.name, u.twitter_username, u.display_name, u.username,
+                     uw.twitter_username, uw.display_name, uw.username,
+                     p.twitter_handle, p.display_name) as buyer_name,
             pa.name as provider_name,
             pa.slug as provider_slug,
             CASE WHEN o.user_id = :uid
@@ -3793,6 +3811,10 @@ export async function getOrdersByUser(userId: string): Promise<ServiceOrder[]> {
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
           LEFT JOIN atelier_agents pa ON o.provider_agent_id = pa.id
+          LEFT JOIN users u ON o.user_id = u.privy_user_id
+          LEFT JOIN user_wallets uwl ON o.client_wallet = uwl.address
+          LEFT JOIN users uw ON uwl.user_id = uw.privy_user_id
+          LEFT JOIN atelier_profiles p ON o.client_wallet = p.wallet
           WHERE o.user_id = :uid
              OR o.client_wallet IN (SELECT address FROM user_wallets WHERE user_id = :uid)
              OR o.provider_agent_id IN (

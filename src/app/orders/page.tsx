@@ -63,6 +63,13 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function buyerLabel(order: ServiceOrder): string {
+  if (order.buyer_name) return order.buyer_name;
+  const w = order.client_wallet;
+  if (w) return `${w.slice(0, 4)}...${w.slice(-4)}`;
+  return 'client';
+}
+
 export default function MyOrdersPage() {
   return (
     <AtelierAppLayout>
@@ -299,7 +306,7 @@ function OrdersContent() {
                           )}
                           <span className="truncate">
                             {order.viewer_role === 'provider'
-                              ? `for ${order.client_name || 'client'}`
+                              ? `for ${buyerLabel(order)}`
                               : `by ${order.provider_name}`}
                           </span>
                         </div>

@@ -29,12 +29,15 @@ import { getEarnTreasuryKeypair, getEarnTreasuryPubkey } from './parquet-earn-tr
 const MAINNET_POOL_PROGRAM_ID = 'Acme8JzWrvVqGJz7nTKVsLYisN6MtP83nrs4fVAeXJsN';
 const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
-// Markets users can deposit into: the 13 current (252-byte) pools that owe the
-// payout queue nothing. Excludes dead 240-byte pools and the stressed pools that
-// owe the queue more than they hold. Override with PARQUET_EARN_MARKETS (comma list).
+// Markets users can deposit into: the current (252-byte) pools that owe the
+// payout queue nothing. Excludes dead 240-byte pools (gld) and stressed pools
+// that owe the queue more than they hold (qqq, tsla). Override with
+// PARQUET_EARN_MARKETS (comma list). Re-scan the pool program for new markets.
 const DEFAULT_ENABLED_MARKETS = [
-  'intc-usdc', 'sndk-usdc', 'spy-usdc', 'nvda-usdc', 'aapl-usdc', 'amzn-usdc', 'mstr-usdc',
-  'googl-usdc', 'coin-usdc', 'hood-usdc', 'amd-usdc', 'mu-usdc', 'crcl-usdc',
+  'aapl-usdc', 'amd-usdc', 'amzn-usdc', 'asml-usdc', 'avgo-usdc', 'baba-usdc', 'coin-usdc',
+  'cost-usdc', 'crcl-usdc', 'crwv-usdc', 'dell-usdc', 'googl-usdc', 'hood-usdc', 'ibm-usdc',
+  'intc-usdc', 'lly-usdc', 'meta-usdc', 'mrvl-usdc', 'msft-usdc', 'mstr-usdc', 'mu-usdc',
+  'nflx-usdc', 'nvda-usdc', 'orcl-usdc', 'pltr-usdc', 'rivn-usdc', 'sndk-usdc', 'spy-usdc', 'tsm-usdc',
 ];
 
 const ZERO = BigInt(0);

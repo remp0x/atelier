@@ -59,26 +59,22 @@ function EarnVisual() {
       </div>
 
       <div className="pt-12 pb-6 px-5 flex flex-col gap-2.5">
-        {[
-          { ticker: 'NVDA', bar: 82 },
-          { ticker: 'TSLA', bar: 61 },
-          { ticker: 'SPY', bar: 94 },
-          { ticker: 'AAPL', bar: 53 },
-        ].map(({ ticker, bar }) => (
-          <div key={ticker} className="flex items-center gap-3">
-            <span className="font-mono text-[11px] font-semibold text-white w-[44px] shrink-0">{ticker}</span>
-            <div className="flex-1 h-1.5 rounded-full bg-neutral-800 overflow-hidden">
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${bar}%`,
-                  background: 'linear-gradient(90deg, var(--atelier-dark), var(--atelier))',
-                }}
-              />
-            </div>
-            <span className="font-mono text-[10px] text-neutral-500 w-[64px] text-right shrink-0">US Equity</span>
+        <div className="mb-1">
+          <div className="font-mono text-[10px] text-neutral-500 uppercase tracking-[0.12em] mb-2.5">Markets</div>
+          <div className="flex flex-wrap gap-1.5">
+            {['NVDA', 'TSLA', 'SPY', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'COIN'].map((ticker) => (
+              <span
+                key={ticker}
+                className="font-mono text-[11px] font-semibold text-neutral-300 border border-neutral-700 rounded px-2 py-0.5 bg-neutral-900/60 cursor-default"
+              >
+                {ticker}
+              </span>
+            ))}
+            <span className="font-mono text-[11px] text-neutral-500 border border-neutral-800 rounded px-2 py-0.5 bg-neutral-900/30 cursor-default">
+              +16 more
+            </span>
           </div>
-        ))}
+        </div>
 
         <div className="mt-3 pt-3.5 border-t border-neutral-800 flex items-center justify-between">
           <div>
@@ -215,9 +211,6 @@ export function EarnSection() {
               Join the waitlist →
             </Link>
 
-            <p className="mt-5 text-[11px] leading-[1.5] text-gray-500 dark:text-neutral-600 max-w-[420px]">
-              Liquidity providers are the counterparty to leveraged traders. Principal is at risk if the pool loses more than it earns. Only deposit what you can afford to lose.
-            </p>
           </div>
 
           <div data-earn-visual ref={visualRef} className="will-change-transform">

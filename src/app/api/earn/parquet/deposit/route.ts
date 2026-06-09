@@ -2,8 +2,10 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthError } from '@/lib/atelier-auth';
+import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
 import { resolveEarnCaller, earnRateLimit, parseUsdToMicro, microToUsdString } from '@/lib/earn-auth';
 import { isParquetEarnConfigured, isMarketEnabled, getDefaultMarket } from '@/lib/parquet-earn';
+import { isEarnPublic } from '@/lib/earn-access';
 import { depositFromTransfer } from '@/lib/parquet-earn-flows';
 
 // Deposit into a Parquet Earn pool. The caller first sends USDC to the Earn
@@ -17,6 +19,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
+    // Earn is admin-only while battle-testing (flip with EARN_PUBLIC=true).
+    if (!isEarnPublic()) await requirePrivyAdmin(request, body);
     const caller = await resolveEarnCaller(request, body);
     const limited = earnRateLimit(`earn:${caller.ownerId}`);
     if (limited) return limited;
@@ -59,6 +63,9 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof AdminAuthError) {
+      return NextResponse.json({ success: false, error: error.message }, { status: error.status });
+    }
     if (error instanceof AuthError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.statusCode });
     }

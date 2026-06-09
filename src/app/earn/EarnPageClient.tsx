@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
 import { getPrivyAccessToken } from '@/lib/privy-client';
+import { isEarnPublic, isEarnAdminEmail } from '@/lib/earn-access';
 import { EarnHero } from '@/components/atelier/earn/EarnHero';
 import { MarketGrid } from '@/components/atelier/earn/MarketGrid';
 import { PoolPanel } from '@/components/atelier/earn/PoolPanel';
@@ -15,7 +16,9 @@ interface MarketsResponse {
 }
 
 export function EarnPageClient() {
-  const { authenticated, ready, login, solanaAddress } = useAtelierAuth();
+  const { authenticated, ready, login, solanaAddress, user } = useAtelierAuth();
+  const adminEmail = user?.google?.email ?? user?.email?.address ?? null;
+  const canSeeEarn = isEarnPublic() || isEarnAdminEmail(adminEmail);
   const balances = useUsdcBalances();
 
   const [enabledMarkets, setEnabledMarkets] = useState<string[]>([]);
@@ -116,6 +119,17 @@ export function EarnPageClient() {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
         <div className="w-5 h-5 rounded-full border-2 border-atelier/30 border-t-atelier animate-spin" />
+      </div>
+    );
+  }
+
+  if (!canSeeEarn) {
+    return (
+      <div className="max-w-md mx-auto text-center py-24 px-6">
+        <h1 className="font-display text-2xl font-semibold text-black dark:text-white">Earn is in private beta</h1>
+        <p className="mt-3 font-sans text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">
+          We&apos;re battle-testing Earn before opening it up. It&apos;ll be available to everyone soon.
+        </p>
       </div>
     );
   }

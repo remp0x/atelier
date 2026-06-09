@@ -18,10 +18,11 @@
 
 const POD_PROXY_BASE = process.env.POD_BASE_URL || 'https://api.usepod.ai/proxy';
 const POD_TOKEN = process.env.POD_TOKEN;
-// claude-fable-5 is in Pod's catalog and works for light use, but as of
-// 2026-06-09 it 503s under real load (0/5 on the support bot). Keep the reliable
-// default; flip POD_MODEL=claude-fable-5 once Pod's upstream capacity is stable.
-const POD_DEFAULT_MODEL = process.env.POD_MODEL || 'gpt-4o-mini';
+// Primary model: claude-fable-5. Pod can 503 it under load, so podChat retries
+// and then falls back to POD_FALLBACK_MODEL so users never see a failure while
+// the marketplace still serves the primary whenever it's available.
+const POD_DEFAULT_MODEL = process.env.POD_MODEL || 'claude-fable-5';
+const POD_FALLBACK_MODEL = process.env.POD_FALLBACK_MODEL || 'gpt-4o-mini';
 const POD_TIMEOUT_MS = Number(process.env.POD_TIMEOUT_MS || '25000');
 // Pod routes to a marketplace of upstreams and can return a transient 503
 // "provider temporarily unavailable" under load. Retry a couple of times before
@@ -78,53 +79,64 @@ interface PodChatCompletion {
   choices?: Array<{ message?: { content?: string } }>;
 }
 
+interface ChatAttempt {
+  content: string | null;
+  transient: boolean;
+}
+
+async function attemptChat(model: string, messages: PodChatMessage[], options: PodChatOptions): Promise<ChatAttempt> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? POD_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${POD_PROXY_BASE}/${POD_TOKEN}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer placeholder', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: options.temperature ?? 0,
+        max_tokens: options.maxTokens ?? 512,
+      }),
+      signal: controller.signal,
+    });
+
+    recordBalance(res.headers.get('X-Balance-Remaining'));
+
+    if (res.status === 503) return { content: null, transient: true };
+    if (!res.ok) {
+      console.error(`Pod inference error (${res.status}):`, await res.text().catch(() => ''));
+      return { content: null, transient: false };
+    }
+
+    const json = (await res.json()) as PodChatCompletion;
+    const content = json.choices?.[0]?.message?.content;
+    return { content: typeof content === 'string' && content.length > 0 ? content.trim() : null, transient: false };
+  } catch (err) {
+    console.error('Pod inference request failed:', err);
+    return { content: null, transient: true };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function podChat(messages: PodChatMessage[], options: PodChatOptions = {}): Promise<string | null> {
   if (!isPodConfigured()) return null;
 
-  const body = JSON.stringify({
-    model: options.model ?? POD_DEFAULT_MODEL,
-    messages,
-    temperature: options.temperature ?? 0,
-    max_tokens: options.maxTokens ?? 512,
-  });
-
+  const primary = options.model ?? POD_DEFAULT_MODEL;
+  let lastTransient = false;
   for (let attempt = 0; attempt <= POD_RETRY_503; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? POD_TIMEOUT_MS);
-    try {
-      const res = await fetch(`${POD_PROXY_BASE}/${POD_TOKEN}/v1/chat/completions`, {
-        method: 'POST',
-        headers: { Authorization: 'Bearer placeholder', 'Content-Type': 'application/json' },
-        body,
-        signal: controller.signal,
-      });
+    const result = await attemptChat(primary, messages, options);
+    if (result.content !== null) return result.content;
+    lastTransient = result.transient;
+    if (!result.transient) return null;
+    if (attempt < POD_RETRY_503) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+  }
 
-      recordBalance(res.headers.get('X-Balance-Remaining'));
-
-      // Transient capacity error: back off briefly and retry.
-      if (res.status === 503 && attempt < POD_RETRY_503) {
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-        continue;
-      }
-
-      if (!res.ok) {
-        console.error(`Pod inference error (${res.status}):`, await res.text().catch(() => ''));
-        return null;
-      }
-
-      const json = (await res.json()) as PodChatCompletion;
-      const content = json.choices?.[0]?.message?.content;
-      return typeof content === 'string' && content.length > 0 ? content.trim() : null;
-    } catch (err) {
-      if (attempt < POD_RETRY_503) {
-        await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
-        continue;
-      }
-      console.error('Pod inference request failed:', err);
-      return null;
-    } finally {
-      clearTimeout(timeout);
-    }
+  // Primary kept failing transiently (Pod capacity). Fall back once to a
+  // reliable model so the user still gets an answer.
+  if (lastTransient && POD_FALLBACK_MODEL && POD_FALLBACK_MODEL !== primary) {
+    const fallback = await attemptChat(POD_FALLBACK_MODEL, messages, options);
+    if (fallback.content !== null) return fallback.content;
   }
   return null;
 }

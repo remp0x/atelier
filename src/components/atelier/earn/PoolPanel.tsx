@@ -209,19 +209,22 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
 
 interface PoolPanelProps {
   pool: PoolData;
-  solanaAddress: string;
+  solanaAddress: string | null;
   solanaBalance: number;
   baseBalance: number;
   balanceLoading: boolean;
+  authenticated: boolean;
+  login: () => void;
 }
 
-export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, balanceLoading }: PoolPanelProps) {
+export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, balanceLoading, authenticated, login }: PoolPanelProps) {
   const [view, setView] = useState<PanelView>('overview');
   const [positions, setPositions] = useState<Position[]>([]);
-  const [positionsLoading, setPositionsLoading] = useState(true);
+  const [positionsLoading, setPositionsLoading] = useState(authenticated);
   const [withdrawTarget, setWithdrawTarget] = useState<Position | null>(null);
 
   const fetchPositions = useCallback(async () => {
+    if (!authenticated) return;
     setPositionsLoading(true);
     try {
       const token = await getPrivyAccessToken();
@@ -236,7 +239,7 @@ export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, bal
     } finally {
       setPositionsLoading(false);
     }
-  }, []);
+  }, [authenticated]);
 
   useEffect(() => {
     void fetchPositions();
@@ -314,7 +317,7 @@ export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, bal
       {view === 'overview' && (
         <div className="px-5 py-5 space-y-5">
           {/* Your position */}
-          {positionsLoading ? (
+          {!authenticated ? null : positionsLoading ? (
             <div className="space-y-2">
               <div className="h-3 w-20 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
               <div className="h-7 w-28 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
@@ -387,21 +390,34 @@ export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, bal
           </div>
 
           {/* Deposit CTA */}
-          <button
-            type="button"
-            onClick={() => setView('deposit')}
-            className="inline-flex items-center gap-2 h-11 px-5 rounded-lg font-mono text-[12px] font-medium bg-atelier text-white hover:bg-atelier-bright focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-colors cursor-pointer min-w-[44px]"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Deposit USDC
-          </button>
+          {authenticated ? (
+            <button
+              type="button"
+              onClick={() => setView('deposit')}
+              className="inline-flex items-center gap-2 h-11 px-5 rounded-lg font-mono text-[12px] font-medium bg-atelier text-white hover:bg-atelier-bright focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-colors cursor-pointer min-w-[44px]"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Deposit USDC
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={login}
+              className="inline-flex items-center gap-2 h-11 px-5 rounded-lg font-mono text-[12px] font-medium border border-atelier/40 text-atelier hover:bg-atelier hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-all duration-150 cursor-pointer min-w-[44px]"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+              </svg>
+              Sign in to deposit
+            </button>
+          )}
         </div>
       )}
 
       {/* Deposit flow */}
-      {view === 'deposit' && (
+      {view === 'deposit' && authenticated && solanaAddress && (
         <div className="px-5 py-5">
           <DepositPanel
             pool={pool}
@@ -416,7 +432,7 @@ export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, bal
       )}
 
       {/* Withdraw flow */}
-      {view === 'withdraw' && withdrawTarget && (
+      {view === 'withdraw' && authenticated && solanaAddress && withdrawTarget && (
         <div className="px-5 py-5">
           <WithdrawFlow
             position={withdrawTarget}

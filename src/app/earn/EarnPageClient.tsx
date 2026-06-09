@@ -8,27 +8,6 @@ import { MarketGrid } from '@/components/atelier/earn/MarketGrid';
 import { PoolPanel } from '@/components/atelier/earn/PoolPanel';
 import type { PoolData } from '@/components/atelier/earn/types';
 
-function LoginPrompt({ onLogin }: { onLogin: () => void }) {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] px-4 text-center gap-4">
-      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-atelier">EARN</p>
-      <h1 className="font-display font-bold text-xl tracking-[-0.02em] text-black dark:text-white">
-        Sign in to access Earn
-      </h1>
-      <p className="text-[13px] text-gray-500 dark:text-neutral-400 max-w-xs">
-        Deposit USDC into Parquet liquidity pools and earn trading fee revenue.
-      </p>
-      <button
-        type="button"
-        onClick={onLogin}
-        className="h-10 px-5 rounded-lg font-mono text-xs font-semibold text-white bg-gradient-to-br from-[#7a2808] via-[#9a2906] to-[#c93a0a] hover:from-[#9a2906] hover:via-[#c93a0a] hover:to-[#fa4c14] transition-all cursor-pointer"
-      >
-        Sign In
-      </button>
-    </div>
-  );
-}
-
 export function EarnPageClient() {
   const { authenticated, ready, login, solanaAddress } = useAtelierAuth();
   const balances = useUsdcBalances();
@@ -72,11 +51,7 @@ export function EarnPageClient() {
     );
   }
 
-  if (!authenticated) {
-    return <LoginPrompt onLogin={login} />;
-  }
-
-  const showPoolPanel = !notConfigured && selectedMarketId === 'intc-usdc' && authenticated && solanaAddress;
+  const showPoolPanel = !notConfigured && selectedMarketId === 'intc-usdc';
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -111,6 +86,8 @@ export function EarnPageClient() {
             solanaBalance={balances.solana}
             baseBalance={balances.base}
             balanceLoading={balances.loading}
+            authenticated={authenticated}
+            login={login}
           />
         ) : selectedMarketId !== 'intc-usdc' ? (
           <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-8 text-center">

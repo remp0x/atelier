@@ -68,20 +68,6 @@ export function EarnHero() {
         Park your USDC in a Parquet perpetuals liquidity pool. You become the counterparty to leveraged traders and collect a share of every fee they pay. Withdraw your principal and accumulated fees at any time.
       </motion.p>
 
-      <motion.div
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.18 }}
-        className="flex items-start gap-2 mb-6 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 max-w-xl"
-      >
-        <svg className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
-        </svg>
-        <p className="font-mono text-[11px] text-amber-600 dark:text-amber-400 leading-snug">
-          <strong>Principal at risk.</strong> The pool is the counterparty to leveraged traders. Your deposit can lose value if the pool takes losses. Only deposit what you can afford to lose.
-        </p>
-      </motion.div>
-
       {/* 3-step flow */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl">
         {STEPS.map((step, i) => (
@@ -100,7 +86,7 @@ export function EarnHero() {
               </div>
             )}
             <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-atelier/10 border border-atelier/20 text-atelier shrink-0">
+              <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-atelier/10 border border-atelier/20 text-atelier shrink-0">
                 {step.icon}
               </span>
               <span className="font-mono text-[10px] text-gray-400 dark:text-neutral-600">{step.n}</span>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import type { PoolData, Position, WithdrawStep } from './types';
 import { microToUsd, formatUsd } from './types';
@@ -209,6 +209,8 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
 
 interface PoolPanelProps {
   pool: PoolData;
+  positions: Position[];
+  positionsLoading: boolean;
   solanaAddress: string | null;
   solanaBalance: number;
   baseBalance: number;
@@ -218,37 +220,13 @@ interface PoolPanelProps {
   onPoolRefresh: () => Promise<void>;
 }
 
-export function PoolPanel({ pool, solanaAddress, solanaBalance, baseBalance, balanceLoading, authenticated, login, onPoolRefresh }: PoolPanelProps) {
+export function PoolPanel({ pool, positions, positionsLoading, solanaAddress, solanaBalance, baseBalance, balanceLoading, authenticated, login, onPoolRefresh }: PoolPanelProps) {
   const [view, setView] = useState<PanelView>('overview');
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [positionsLoading, setPositionsLoading] = useState(authenticated);
   const [withdrawTarget, setWithdrawTarget] = useState<Position | null>(null);
 
-  const fetchPositions = useCallback(async () => {
-    if (!authenticated) return;
-    setPositionsLoading(true);
-    try {
-      const token = await getPrivyAccessToken();
-      const headers: Record<string, string> = {};
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch('/api/earn/parquet/positions', { headers });
-      if (!res.ok) return;
-      const json = await res.json() as { success: boolean; data?: Position[] };
-      if (json.success && json.data) setPositions(json.data);
-    } catch {
-      // positions are a convenience display; fail silently
-    } finally {
-      setPositionsLoading(false);
-    }
-  }, [authenticated]);
-
   const refreshAll = useCallback(async () => {
-    await Promise.all([fetchPositions(), onPoolRefresh()]);
-  }, [fetchPositions, onPoolRefresh]);
-
-  useEffect(() => {
-    void fetchPositions();
-  }, [fetchPositions]);
+    await onPoolRefresh();
+  }, [onPoolRefresh]);
 
   const totalUsd = microToUsd(pool.total_usdc_micro);
   const availableUsd = microToUsd(pool.available_usdc_micro);

@@ -1,16 +1,17 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { MARKETS, type MarketDefinition, type PoolData, formatUsd, microToUsd } from './types';
+import { MARKETS, type MarketDefinition, type PoolData, type Position, formatUsd, microToUsd } from './types';
 
 interface MarketCardProps {
   market: MarketDefinition;
   pool: PoolData | null;
   selected: boolean;
+  depositedValue: number | null;
   onSelect: (id: string) => void;
 }
 
-function MarketCard({ market, pool, selected, onSelect }: MarketCardProps) {
+function MarketCard({ market, pool, selected, depositedValue, onSelect }: MarketCardProps) {
   const tvl = pool ? formatUsd(microToUsd(pool.total_usdc_micro)) : null;
   const stressed = pool?.stressed ?? false;
 
@@ -25,9 +26,17 @@ function MarketCard({ market, pool, selected, onSelect }: MarketCardProps) {
             <p className="font-mono font-semibold text-[15px] text-black dark:text-white">{market.ticker}</p>
             <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600">{market.subtitle}</p>
           </div>
-          <span className="inline-flex h-4 px-1.5 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 font-mono text-[9px] text-gray-400 dark:text-neutral-600 items-center shrink-0">
-            Soon
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            <span className="inline-flex h-4 px-1.5 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 font-mono text-[9px] text-gray-400 dark:text-neutral-600 items-center shrink-0">
+              Soon
+            </span>
+            {depositedValue !== null && (
+              <span className="inline-flex items-center gap-1 h-4 px-1.5 rounded-full bg-atelier/10 border border-atelier/25 font-mono text-[9px] text-atelier items-center shrink-0">
+                <span className="w-1 h-1 rounded-full bg-atelier shrink-0" />
+                ${formatUsd(depositedValue)}
+              </span>
+            )}
+          </div>
         </div>
         <div className="h-4 w-16 rounded bg-gray-200 dark:bg-neutral-800/40" />
       </div>
@@ -59,6 +68,12 @@ function MarketCard({ market, pool, selected, onSelect }: MarketCardProps) {
               Stress
             </span>
           )}
+          {depositedValue !== null && (
+            <span className="inline-flex items-center gap-1 h-4 px-1.5 rounded-full bg-atelier/10 border border-atelier/25 font-mono text-[9px] text-atelier shrink-0">
+              <span className="w-1 h-1 rounded-full bg-atelier shrink-0" />
+              ${formatUsd(depositedValue)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -84,11 +99,18 @@ function MarketCard({ market, pool, selected, onSelect }: MarketCardProps) {
 
 interface MarketGridProps {
   pool: PoolData | null;
+  positions: Position[];
   selectedMarketId: string;
   onSelectMarket: (id: string) => void;
 }
 
-export function MarketGrid({ pool, selectedMarketId, onSelectMarket }: MarketGridProps) {
+export function MarketGrid({ pool, positions, selectedMarketId, onSelectMarket }: MarketGridProps) {
+  const depositedByMarket = positions.reduce<Record<string, number>>((acc, pos) => {
+    const value = pos.value_usd !== null ? parseFloat(pos.value_usd) : parseFloat(pos.principal_usd);
+    acc[pos.pool_market] = (acc[pos.pool_market] ?? 0) + value;
+    return acc;
+  }, {});
+
   return (
     <div className="px-4 py-6 md:px-8 border-b border-gray-200 dark:border-neutral-800/60">
       <div className="flex items-baseline justify-between mb-4">
@@ -109,6 +131,7 @@ export function MarketGrid({ pool, selectedMarketId, onSelectMarket }: MarketGri
               market={market}
               pool={market.id === 'intc-usdc' ? pool : null}
               selected={selectedMarketId === market.id}
+              depositedValue={depositedByMarket[market.id] ?? null}
               onSelect={onSelectMarket}
             />
           </motion.div>

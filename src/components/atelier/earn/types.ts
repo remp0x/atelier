@@ -21,33 +21,9 @@ export type DepositStep = 'idle' | 'signing' | 'confirming' | 'submitting' | 'do
 
 export type WithdrawStep = 'idle' | 'submitting' | 'done';
 
-export interface MarketDefinition {
-  id: string;
-  ticker: string;
-  subtitle: string;
+export function marketTicker(marketId: string): string {
+  return marketId.replace(/-usdc$/i, '').toUpperCase();
 }
-
-export const MARKETS: MarketDefinition[] = [
-  { id: 'intc-usdc',  ticker: 'INTC',  subtitle: 'US Equity / ETF' },
-  { id: 'spy-usdc',   ticker: 'SPY',   subtitle: 'US Equity / ETF' },
-  { id: 'tsla-usdc',  ticker: 'TSLA',  subtitle: 'US Equity / ETF' },
-  { id: 'nvda-usdc',  ticker: 'NVDA',  subtitle: 'US Equity / ETF' },
-  { id: 'aapl-usdc',  ticker: 'AAPL',  subtitle: 'US Equity / ETF' },
-  { id: 'amzn-usdc',  ticker: 'AMZN',  subtitle: 'US Equity / ETF' },
-  { id: 'mstr-usdc',  ticker: 'MSTR',  subtitle: 'US Equity / ETF' },
-  { id: 'googl-usdc', ticker: 'GOOGL', subtitle: 'US Equity / ETF' },
-  { id: 'msft-usdc',  ticker: 'MSFT',  subtitle: 'US Equity / ETF' },
-  { id: 'meta-usdc',  ticker: 'META',  subtitle: 'US Equity / ETF' },
-  { id: 'coin-usdc',  ticker: 'COIN',  subtitle: 'US Equity / ETF' },
-  { id: 'hood-usdc',  ticker: 'HOOD',  subtitle: 'US Equity / ETF' },
-  { id: 'amd-usdc',   ticker: 'AMD',   subtitle: 'US Equity / ETF' },
-  { id: 'mu-usdc',    ticker: 'MU',    subtitle: 'US Equity / ETF' },
-  { id: 'crcl-usdc',  ticker: 'CRCL',  subtitle: 'US Equity / ETF' },
-  { id: 'gld-usdc',   ticker: 'GLD',   subtitle: 'Commodity / ETF' },
-  { id: 'qqq-usdc',   ticker: 'QQQ',   subtitle: 'US Equity / ETF' },
-  { id: 'pltr-usdc',  ticker: 'PLTR',  subtitle: 'US Equity / ETF' },
-  { id: 'sndk-usdc',  ticker: 'SNDK',  subtitle: 'US Equity / ETF' },
-];
 
 export function microToUsd(micro: string): number {
   return Number(micro) / 1e6;

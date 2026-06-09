@@ -2,73 +2,29 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { MARKETS, type MarketDefinition, type PoolData, type Position, formatUsd, microToUsd } from './types';
+import { marketTicker, type PoolData, type Position, formatUsd, microToUsd } from './types';
 
 type GridLayout = 'grid' | 'list';
 
 interface MarketCardProps {
-  market: MarketDefinition;
+  marketId: string;
+  ticker: string;
   pool: PoolData | null;
-  enabled: boolean;
   selected: boolean;
   depositedValue: number | null;
   layout: GridLayout;
   onSelect: (id: string) => void;
 }
 
-function MarketCard({ market, pool, enabled, selected, depositedValue, layout, onSelect }: MarketCardProps) {
+function MarketCard({ marketId, ticker, pool, selected, depositedValue, layout, onSelect }: MarketCardProps) {
   const tvl = pool ? formatUsd(microToUsd(pool.total_usdc_micro)) : null;
   const stressed = pool?.stressed ?? false;
-
-  if (!enabled) {
-    if (layout === 'list') {
-      return (
-        <div
-          aria-disabled="true"
-          className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg border border-gray-100 dark:border-neutral-800/40 bg-gray-50/30 dark:bg-black/20 cursor-not-allowed opacity-40 select-none"
-        >
-          <div className="flex items-center gap-3">
-            <p className="font-mono font-semibold text-[13px] text-black dark:text-white w-14">{market.ticker}</p>
-            <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600">{market.subtitle}</p>
-          </div>
-          <span className="inline-flex h-4 px-1.5 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 font-mono text-[9px] text-gray-400 dark:text-neutral-600 items-center shrink-0">
-            Soon
-          </span>
-        </div>
-      );
-    }
-
-    return (
-      <div
-        aria-disabled="true"
-        className="relative rounded-xl border border-gray-100 dark:border-neutral-800/40 bg-gray-50/30 dark:bg-black/20 px-4 py-4 cursor-not-allowed opacity-40 select-none"
-      >
-        <div className="flex items-start justify-between mb-2">
-          <div>
-            <p className="font-mono font-semibold text-[15px] text-black dark:text-white">{market.ticker}</p>
-            <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600">{market.subtitle}</p>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <span className="inline-flex h-4 px-1.5 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 font-mono text-[9px] text-gray-400 dark:text-neutral-600 items-center shrink-0">
-              Soon
-            </span>
-            {depositedValue !== null && (
-              <span className="font-mono text-[9px] text-atelier shrink-0 tabular-nums">
-                ${formatUsd(depositedValue)}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="h-4 w-16 rounded bg-gray-200 dark:bg-neutral-800/40" />
-      </div>
-    );
-  }
 
   if (layout === 'list') {
     return (
       <button
         type="button"
-        onClick={() => onSelect(market.id)}
+        onClick={() => onSelect(marketId)}
         className={`flex items-center justify-between gap-3 w-full px-4 py-2.5 rounded-lg border text-left transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 min-h-[44px] ${
           selected
             ? 'border-atelier/50 bg-atelier/5 dark:bg-atelier/5'
@@ -76,8 +32,8 @@ function MarketCard({ market, pool, enabled, selected, depositedValue, layout, o
         }`}
       >
         <div className="flex items-center gap-3">
-          <p className="font-mono font-semibold text-[13px] text-black dark:text-white w-14">{market.ticker}</p>
-          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500">{market.subtitle}</p>
+          <p className="font-mono font-semibold text-[13px] text-black dark:text-white w-14">{ticker}</p>
+          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500">US Equity</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {stressed && (
@@ -102,7 +58,7 @@ function MarketCard({ market, pool, enabled, selected, depositedValue, layout, o
   return (
     <button
       type="button"
-      onClick={() => onSelect(market.id)}
+      onClick={() => onSelect(marketId)}
       className={`relative rounded-xl border px-4 py-4 text-left w-full transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 min-h-[44px] ${
         selected
           ? 'border-atelier/50 bg-atelier/5 dark:bg-atelier/5 shadow-[0_0_0_1px_rgb(250_76_20/0.15)]'
@@ -111,8 +67,8 @@ function MarketCard({ market, pool, enabled, selected, depositedValue, layout, o
     >
       <div className="flex items-start justify-between mb-2">
         <div>
-          <p className="font-mono font-semibold text-[15px] text-black dark:text-white">{market.ticker}</p>
-          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500">{market.subtitle}</p>
+          <p className="font-mono font-semibold text-[15px] text-black dark:text-white">{ticker}</p>
+          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500">US Equity</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           {stressed && (
@@ -157,6 +113,13 @@ export function MarketGrid({ poolsByMarket, positions, enabledMarkets, selectedM
     acc[pos.pool_market] = (acc[pos.pool_market] ?? 0) + value;
     return acc;
   }, {});
+
+  const sortedMarkets = [...enabledMarkets].sort((a, b) => {
+    const aDeposited = depositedByMarket[a] ?? 0;
+    const bDeposited = depositedByMarket[b] ?? 0;
+    if (aDeposited !== bDeposited) return bDeposited - aDeposited;
+    return a.localeCompare(b);
+  });
 
   return (
     <div className="px-4 py-6 md:px-8 border-b border-gray-200 dark:border-neutral-800/60">
@@ -204,20 +167,20 @@ export function MarketGrid({ poolsByMarket, positions, enabledMarkets, selectedM
 
       {layout === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
-          {MARKETS.map((market, i) => (
+          {sortedMarkets.map((marketId, i) => (
             <motion.div
-              key={market.id}
+              key={marketId}
               initial={{ opacity: 0, y: 12 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-40px' }}
               transition={{ duration: 0.3, delay: i * 0.03 }}
             >
               <MarketCard
-                market={market}
-                pool={poolsByMarket[market.id] ?? null}
-                enabled={enabledMarkets.includes(market.id)}
-                selected={selectedMarketId === market.id}
-                depositedValue={depositedByMarket[market.id] ?? null}
+                marketId={marketId}
+                ticker={marketTicker(marketId)}
+                pool={poolsByMarket[marketId] ?? null}
+                selected={selectedMarketId === marketId}
+                depositedValue={depositedByMarket[marketId] ?? null}
                 layout="grid"
                 onSelect={onSelectMarket}
               />
@@ -226,20 +189,20 @@ export function MarketGrid({ poolsByMarket, positions, enabledMarkets, selectedM
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
-          {MARKETS.map((market, i) => (
+          {sortedMarkets.map((marketId, i) => (
             <motion.div
-              key={market.id}
+              key={marketId}
               initial={{ opacity: 0, x: -8 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true, margin: '-40px' }}
               transition={{ duration: 0.25, delay: i * 0.02 }}
             >
               <MarketCard
-                market={market}
-                pool={poolsByMarket[market.id] ?? null}
-                enabled={enabledMarkets.includes(market.id)}
-                selected={selectedMarketId === market.id}
-                depositedValue={depositedByMarket[market.id] ?? null}
+                marketId={marketId}
+                ticker={marketTicker(marketId)}
+                pool={poolsByMarket[marketId] ?? null}
+                selected={selectedMarketId === marketId}
+                depositedValue={depositedByMarket[marketId] ?? null}
                 layout="list"
                 onSelect={onSelectMarket}
               />

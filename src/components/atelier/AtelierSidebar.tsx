@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { atelierHref } from '@/lib/atelier-paths';
-import { isEarnPublic, isEarnAdminEmail } from '@/lib/earn-access';
 import { SignInButton } from './SignInButton';
 
 interface NavItem {
@@ -156,9 +155,7 @@ export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const pathname = usePathname();
-  const { authenticated, login, atelierUser, user } = useAtelierAuth();
-  const canSeeEarn = isEarnPublic() || isEarnAdminEmail(user?.google?.email ?? user?.email?.address ?? null);
-  const visibleDiscoverNavItems = discoverNavItems.filter((item) => item.href !== '/earn' || canSeeEarn);
+  const { authenticated, atelierUser } = useAtelierAuth();
 
   useEffect(() => {
     const saved = localStorage.getItem('atelier_sidebar_expanded');
@@ -265,7 +262,7 @@ export function AtelierSidebar() {
               </span>
             )}
           </div>
-          {visibleDiscoverNavItems.map((item) => renderNavLink(item))}
+          {discoverNavItems.map((item) => renderNavLink(item))}
 
           {/* Platform — collapsed into a subdued toggle when sidebar is expanded */}
           {expanded ? (

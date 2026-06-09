@@ -227,3 +227,45 @@ export async function valueLpInUsdc(
   if (health.lpSupply <= ZERO) return ZERO;
   return (lpAmount * health.totalUsdc) / health.lpSupply;
 }
+
+// SPL mint `supply` is a u64 LE at offset 36 of the account data.
+function readMintSupply(data: Uint8Array): bigint {
+  return Buffer.from(data).readBigUInt64LE(36);
+}
+
+// Reads health for ALL enabled markets in two batched RPC calls (pool states +
+// LP mints), so the grid can show every pool's stats at once instead of one
+// fetch per click. Markets that fail to decode are omitted.
+export async function readEnabledPoolHealths(
+  connection?: Connection,
+): Promise<Map<string, ParquetPoolHealth>> {
+  const conn = connection ?? getServerConnection();
+  const markets = getEnabledMarkets();
+  const program = poolProgramId();
+  const poolStatePdas = markets.map((m) => poolStatePDA(marketIdFromString(m), program)[0]);
+  const lpMintPdas = markets.map((m) => lpMintPDA(marketIdFromString(m), program)[0]);
+
+  const [poolInfos, mintInfos] = await Promise.all([
+    conn.getMultipleAccountsInfo(poolStatePdas),
+    conn.getMultipleAccountsInfo(lpMintPdas),
+  ]);
+
+  const out = new Map<string, ParquetPoolHealth>();
+  markets.forEach((m, i) => {
+    const pInfo = poolInfos[i];
+    if (!pInfo) return;
+    try {
+      const ps = decodePoolState(pInfo.data);
+      const mInfo = mintInfos[i];
+      out.set(m, {
+        totalUsdc: BigInt(ps.totalUsdc.toString()),
+        reservedUsdc: BigInt(ps.reservedUsdc.toString()),
+        queueTotalOwed: BigInt(ps.queueTotalOwed.toString()),
+        lpSupply: mInfo ? readMintSupply(mInfo.data) : ZERO,
+      });
+    } catch {
+      // undecodable pool (e.g. a stale layout) -- omit it
+    }
+  });
+  return out;
+}

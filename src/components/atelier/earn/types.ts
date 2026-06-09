@@ -7,6 +7,9 @@ export interface PoolData {
   available_usdc_micro: string;
   lp_supply: string;
   stressed: boolean;
+  // Deposits are blocked by the program (err 6031) when a pool holds USDC with 0
+  // LP supply (stranded). depositable = lp_supply > 0 OR total_usdc == 0.
+  depositable: boolean;
 }
 
 export interface Position {

@@ -7,18 +7,18 @@ import { getPrivyAccessToken } from '@/lib/privy-client';
 import { isEarnPublic, isEarnAdminEmail } from '@/lib/earn-access';
 import { EarnHero } from '@/components/atelier/earn/EarnHero';
 import { MarketGrid } from '@/components/atelier/earn/MarketGrid';
-import { PoolPanel } from '@/components/atelier/earn/PoolPanel';
 import type { PoolData, Position } from '@/components/atelier/earn/types';
 
 interface MarketsResponse {
   treasury_wallet: string | null;
   enabled: string[];
+  markets?: PoolData[];
 }
 
 export function EarnPageClient() {
   const { authenticated, ready, login, solanaAddress, user } = useAtelierAuth();
   const adminEmail = user?.google?.email ?? user?.email?.address ?? null;
-  const canSeeEarn = isEarnPublic() || isEarnAdminEmail(adminEmail);
+  const canDeposit = isEarnPublic() || isEarnAdminEmail(adminEmail);
   const balances = useUsdcBalances();
 
   const [enabledMarkets, setEnabledMarkets] = useState<string[]>([]);
@@ -26,8 +26,6 @@ export function EarnPageClient() {
   const [notConfigured, setNotConfigured] = useState(false);
 
   const [poolsByMarket, setPoolsByMarket] = useState<Record<string, PoolData>>({});
-  const [poolLoading, setPoolLoading] = useState(false);
-  const [selectedMarketId, setSelectedMarketId] = useState<string>('');
 
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
@@ -44,9 +42,10 @@ export function EarnPageClient() {
       if (json.success && json.data) {
         setNotConfigured(false);
         setEnabledMarkets(json.data.enabled);
-        setSelectedMarketId((prev) => {
-          if (prev && json.data!.enabled.includes(prev)) return prev;
-          return json.data!.enabled[0] ?? '';
+        setPoolsByMarket((prev) => {
+          const next = { ...prev };
+          for (const p of json.data!.markets ?? []) next[p.market] = p;
+          return next;
         });
       } else {
         setNotConfigured(true);
@@ -60,7 +59,6 @@ export function EarnPageClient() {
 
   const fetchPool = useCallback(async (marketId: string) => {
     if (!marketId) return;
-    setPoolLoading(true);
     try {
       const res = await fetch(`/api/earn/parquet/pools?market=${encodeURIComponent(marketId)}`);
       if (res.status === 503) return;
@@ -70,8 +68,6 @@ export function EarnPageClient() {
       }
     } catch {
       // non-fatal: pool stats remain stale
-    } finally {
-      setPoolLoading(false);
     }
   }, []);
 
@@ -93,27 +89,17 @@ export function EarnPageClient() {
     }
   }, [authenticated]);
 
-  const refreshAll = useCallback(async () => {
-    await Promise.all([fetchPool(selectedMarketId), fetchPositions()]);
-  }, [fetchPool, fetchPositions, selectedMarketId]);
+  const refreshAll = useCallback(async (market: string) => {
+    await Promise.all([fetchPool(market), fetchPositions()]);
+  }, [fetchPool, fetchPositions]);
 
   useEffect(() => {
     void fetchMarkets();
   }, [fetchMarkets]);
 
   useEffect(() => {
-    if (selectedMarketId && enabledMarkets.includes(selectedMarketId)) {
-      void fetchPool(selectedMarketId);
-    }
-  }, [selectedMarketId, enabledMarkets, fetchPool]);
-
-  useEffect(() => {
     void fetchPositions();
   }, [fetchPositions]);
-
-  const handleSelectMarket = useCallback((id: string) => {
-    setSelectedMarketId(id);
-  }, []);
 
   if (!ready) {
     return (
@@ -123,19 +109,42 @@ export function EarnPageClient() {
     );
   }
 
-  if (!canSeeEarn) {
+  if (notConfigured) {
     return (
-      <div className="max-w-md mx-auto text-center py-24 px-6">
-        <h1 className="font-display text-2xl font-semibold text-black dark:text-white">Earn is in private beta</h1>
-        <p className="mt-3 font-sans text-sm text-gray-500 dark:text-neutral-400 leading-relaxed">
-          We&apos;re battle-testing Earn before opening it up. It&apos;ll be available to everyone soon.
-        </p>
+      <div className="max-w-5xl mx-auto">
+        <EarnHero />
+        <div className="px-4 py-6 md:px-8">
+          <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-8 text-center">
+            <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-500">
+              Parquet Earn — coming soon
+            </p>
+          </div>
+        </div>
+        <div className="px-4 pb-10 md:px-8">
+          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 leading-relaxed max-w-xl">
+            * Principal at risk. The pool is the counterparty to leveraged traders. Your deposit can lose value if the pool takes losses. Only deposit what you can afford to lose.
+          </p>
+        </div>
       </div>
     );
   }
 
-  const selectedPool = poolsByMarket[selectedMarketId] ?? null;
-  const isSelectedEnabled = enabledMarkets.includes(selectedMarketId);
+  if (marketsLoading) {
+    return (
+      <div className="max-w-5xl mx-auto">
+        <EarnHero />
+        <div className="px-4 py-6 md:px-8">
+          <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-8">
+            <div className="space-y-3">
+              <div className="h-4 w-32 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
+              <div className="h-8 w-24 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
+              <div className="h-3 w-40 rounded bg-gray-100 dark:bg-neutral-800/60 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -144,49 +153,18 @@ export function EarnPageClient() {
       <MarketGrid
         poolsByMarket={poolsByMarket}
         positions={positions}
+        positionsLoading={positionsLoading}
         enabledMarkets={enabledMarkets}
-        selectedMarketId={selectedMarketId}
-        onSelectMarket={handleSelectMarket}
+        solanaAddress={solanaAddress}
+        solanaBalance={balances.solana}
+        baseBalance={balances.base}
+        balanceLoading={balances.loading}
+        authenticated={authenticated}
+        canDeposit={canDeposit}
+        login={login}
+        onPoolRefresh={refreshAll}
+        onFetchPool={fetchPool}
       />
-
-      <div className="px-4 py-6 md:px-8">
-        {notConfigured ? (
-          <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-8 text-center">
-            <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-500">
-              Parquet Earn — coming soon
-            </p>
-          </div>
-        ) : marketsLoading || (isSelectedEnabled && poolLoading && !selectedPool) ? (
-          <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-8">
-            <div className="space-y-3">
-              <div className="h-4 w-32 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
-              <div className="h-8 w-24 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
-              <div className="h-3 w-40 rounded bg-gray-100 dark:bg-neutral-800/60 animate-pulse" />
-            </div>
-          </div>
-        ) : isSelectedEnabled && selectedPool ? (
-          <PoolPanel
-            pool={selectedPool}
-            market={selectedMarketId}
-            positions={positions}
-            positionsLoading={positionsLoading}
-            solanaAddress={solanaAddress}
-            solanaBalance={balances.solana}
-            baseBalance={balances.base}
-            balanceLoading={balances.loading}
-            authenticated={authenticated}
-            login={login}
-            onPoolRefresh={refreshAll}
-          />
-        ) : selectedMarketId && !isSelectedEnabled ? (
-          <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-8 text-center">
-            <p className="font-mono text-[12px] font-medium text-black dark:text-white mb-1">Coming soon</p>
-            <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-500">
-              This market is not yet open for deposits.
-            </p>
-          </div>
-        ) : null}
-      </div>
 
       <div className="px-4 pb-10 md:px-8">
         <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 leading-relaxed max-w-xl">

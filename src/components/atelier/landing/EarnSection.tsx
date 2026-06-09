@@ -110,7 +110,6 @@ export function EarnSection() {
 
       gsap.from('[data-earn-copy] > *', {
         y: 24,
-        autoAlpha: 0,
         duration: 0.7,
         stagger: 0.08,
         ease: 'power3.out',
@@ -123,7 +122,6 @@ export function EarnSection() {
 
       gsap.from('[data-earn-visual]', {
         y: 40,
-        autoAlpha: 0,
         duration: 0.9,
         ease: 'power3.out',
         scrollTrigger: {

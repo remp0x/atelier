@@ -2,13 +2,13 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
-import { isParquetEarnConfigured, getParquetEarnConfig, readPoolHealth } from '@/lib/parquet-earn';
+import { isParquetEarnConfigured, isMarketEnabled, getDefaultMarket, getParquetEarnConfig, readPoolHealth } from '@/lib/parquet-earn';
 import { getEarnTreasuryPubkey } from '@/lib/parquet-earn-treasury';
 
 const poolsRateLimit = rateLimit(60, 60 * 1000);
 
-// Public read of the configured Earn pool: depth, the FIFO-queue obligation
-// (the stress/drawdown signal), and available liquidity for instant withdrawal.
+// Public read of an Earn pool (?market=, defaults to the configured market):
+// depth, the FIFO-queue obligation (stress signal), and available liquidity.
 export async function GET(request: NextRequest) {
   const limited = poolsRateLimit(request);
   if (limited) return limited;
@@ -17,9 +17,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Parquet Earn is not configured' }, { status: 503 });
   }
 
+  const marketParam = new URL(request.url).searchParams.get('market');
+  if (marketParam && !isMarketEnabled(marketParam)) {
+    return NextResponse.json({ success: false, error: `market "${marketParam}" is not enabled for Earn` }, { status: 400 });
+  }
+  const market = marketParam || getDefaultMarket();
+
   try {
-    const cfg = getParquetEarnConfig();
-    const health = await readPoolHealth();
+    const cfg = getParquetEarnConfig(market);
+    const health = await readPoolHealth(market);
     const owed = health.reservedUsdc + health.queueTotalOwed;
     const available = health.totalUsdc > owed ? health.totalUsdc - owed : BigInt(0);
 

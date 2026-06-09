@@ -17,7 +17,6 @@ import {
   buildTreasuryWithdrawInstructions,
   readTreasuryLpBalance,
   readPoolHealth,
-  getTreasuryTokenAccounts,
   type ParquetPoolHealth,
 } from './parquet-earn';
 import {
@@ -39,17 +38,24 @@ const DEFAULT_SLIPPAGE_BPS = 100;
 const TX_POLL_ATTEMPTS = 8;
 const TX_POLL_INTERVAL_MS = 2_500;
 
-async function earnVault(): Promise<EarnVault> {
-  const cfg = getParquetEarnConfig();
+// The treasury's USDC associated token account is the same across all markets
+// (one USDC mint), so it is derived directly rather than per-market.
+function treasuryUsdcAta(): PublicKey {
+  return getAssociatedTokenAddressSync(USDC_MINT, getEarnTreasuryPubkey());
+}
+
+async function earnVault(market: string): Promise<EarnVault> {
+  const cfg = getParquetEarnConfig(market);
   return getOrCreateVault(cfg.marketLabel, getEarnTreasuryPubkey().toBase58());
 }
 
-// The caller's position in the configured Earn vault, plus the vault itself.
+// The caller's position in a given market's Earn vault, plus the vault itself.
 export async function getOwnerEarnPosition(
+  market: string,
   ownerKind: EarnOwnerKind,
   ownerId: string,
 ): Promise<{ vault: EarnVault; position: EarnPosition | null }> {
-  const vault = await earnVault();
+  const vault = await earnVault(market);
   const position = await getPosition(vault.id, ownerKind, ownerId);
   return { vault, position };
 }
@@ -93,8 +99,7 @@ async function fetchParsedWithRetry(conn: Connection, sig: string) {
 }
 
 // Verifies that `txSignature` credited at least `expectedRaw` micro-USDC to the
-// Earn treasury. Matches on the token-balance entry by owner+mint, which is
-// version-agnostic (no account-key index mapping needed).
+// Earn treasury. Matches on the token-balance entry by owner+mint, version-agnostic.
 async function verifyIncomingUsdc(
   conn: Connection,
   txSignature: string,
@@ -126,7 +131,7 @@ async function sendTreasuryUsdc(
 ): Promise<string> {
   const treasury = getEarnTreasuryKeypair();
   const dest = new PublicKey(destinationWallet);
-  const { usdc: fromAta } = getTreasuryTokenAccounts();
+  const fromAta = treasuryUsdcAta();
   const toAta = getAssociatedTokenAddressSync(USDC_MINT, dest, true);
 
   const instructions = [];
@@ -158,37 +163,36 @@ export interface DepositResult {
   position: EarnPosition;
 }
 
-// Deploys USDC that is ALREADY in the treasury into the Parquet pool, mints the
+// Deploys USDC that is ALREADY in the treasury into `market`'s pool, mints the
 // depositor's shares from the exact LP minted (measured as the treasury LP
-// balance delta), and records it atomically. Assumes the funds arrived in the
-// treasury already -- see depositFromTransfer / the auto-pull seam below for how
-// they get there.
+// balance delta for that market), and records it atomically.
 export async function deployTreasuryDeposit(params: {
+  market: string;
   ownerKind: EarnOwnerKind;
   ownerId: string;
   amountUsdc: bigint;
   slippageBps?: number;
 }): Promise<DepositResult> {
-  const { ownerKind, ownerId, amountUsdc } = params;
+  const { market, ownerKind, ownerId, amountUsdc } = params;
   const slippageBps = params.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
   if (amountUsdc <= ZERO) throw new Error('amountUsdc must be positive');
 
   const conn = getServerConnection();
   const treasury = getEarnTreasuryKeypair();
-  const health = await readPoolHealth(conn);
+  const health = await readPoolHealth(market, conn);
   const minLpOut = computeMinLpOut(amountUsdc, health, slippageBps);
 
-  const lpBefore = await readTreasuryLpBalance(conn);
-  const ixs = await buildTreasuryDepositInstructions(amountUsdc, minLpOut);
+  const lpBefore = await readTreasuryLpBalance(market, conn);
+  const ixs = await buildTreasuryDepositInstructions(market, amountUsdc, minLpOut);
   const txHash = await sendAndConfirmServerTx(conn, ixs, treasury);
-  const lpAfter = await readTreasuryLpBalance(conn);
+  const lpAfter = await readTreasuryLpBalance(market, conn);
 
   const lpMinted = lpAfter - lpBefore;
   if (lpMinted <= ZERO) {
     throw new Error(`deposit ${txHash} produced no LP (before=${lpBefore} after=${lpAfter})`);
   }
 
-  const vault = await earnVault();
+  const vault = await earnVault(market);
   const { position, sharesMinted } = await recordDeposit({
     vaultId: vault.id,
     ownerKind,
@@ -200,10 +204,10 @@ export async function deployTreasuryDeposit(params: {
   return { txHash, lpMinted, sharesMinted, position };
 }
 
-// Deposit where the depositor pushed USDC to the treasury themselves (a human
-// signing client-side, or an agent that already transferred). Verifies the
-// incoming transfer, then deploys + accounts.
+// Deposit where the depositor pushed USDC to the treasury themselves. Verifies
+// the incoming transfer, then deploys + accounts into `market`.
 export async function depositFromTransfer(params: {
+  market: string;
   ownerKind: EarnOwnerKind;
   ownerId: string;
   amountUsdc: bigint;
@@ -215,12 +219,11 @@ export async function depositFromTransfer(params: {
   return deployTreasuryDeposit(params);
 }
 
-// Auto-pull deposit: Atelier moves USDC from a headless agent's Privy server
-// wallet into the treasury, then deploys. This is the only "agent does nothing"
-// path and it is NOT yet implementable: signing an outbound Solana transfer from
-// a Privy server wallet requires createSolanaKitSigner (@solana/kit / web3.js
-// 2.0), which the repo does not use. Pending that integration.
+// Auto-pull deposit (agent's Privy server wallet -> treasury -> pool). NOT yet
+// implementable: outbound Solana signing from a Privy server wallet needs
+// createSolanaKitSigner (@solana/kit / web3.js 2.0), which the repo does not use.
 export async function initiateManagedAgentDeposit(_params: {
+  market: string;
   agentId: string;
   privySolanaWalletId: string;
   agentWalletAddress: string;
@@ -236,28 +239,26 @@ export type WithdrawResult =
   | { status: 'settled'; received: bigint; txHash: string; movementId: string }
   | { status: 'queued'; queueEntry: string; movementId: string };
 
-// Burns `shares`, redeems the proportional LP from the pool, and forwards the
-// resulting USDC to `destinationWallet`. If the pool is drawn down and Parquet
-// returns no immediate USDC, the redemption becomes a FIFO queue claim: we
-// detect that as a zero treasury USDC delta and record the withdrawal as queued
-// for the cron to settle. (Exact queue/settlement mechanics pending Parquet
-// confirmation -- open question.)
+// Burns `shares` in `market`, redeems the proportional LP, and forwards the USDC
+// to `destinationWallet`. If the pool returns no immediate USDC (drawn down), the
+// redemption becomes a FIFO queue claim recorded for the cron to settle.
 export async function withdrawForOwner(params: {
+  market: string;
   ownerKind: EarnOwnerKind;
   ownerId: string;
   shares: bigint;
   destinationWallet: string;
   slippageBps?: number;
 }): Promise<WithdrawResult> {
-  const { ownerKind, ownerId, shares, destinationWallet } = params;
+  const { market, ownerKind, ownerId, shares, destinationWallet } = params;
   const slippageBps = params.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
   if (shares <= ZERO) throw new Error('shares must be positive');
 
-  const cfg = getParquetEarnConfig();
+  const cfg = getParquetEarnConfig(market);
   const conn = getServerConnection();
   const treasury = getEarnTreasuryKeypair();
 
-  const vault = await earnVault();
+  const vault = await earnVault(market);
   const position = await getPosition(vault.id, ownerKind, ownerId);
   if (!position || position.shares < shares) {
     throw new Error('withdrawal shares exceed position balance');
@@ -266,14 +267,14 @@ export async function withdrawForOwner(params: {
   const lpToRedeem = computeLpForShares(vault, shares);
   if (lpToRedeem <= ZERO) throw new Error('shares redeem to zero LP');
 
-  const health = await readPoolHealth(conn);
+  const health = await readPoolHealth(market, conn);
   const minOut = computeMinOut(lpToRedeem, health, slippageBps);
-  const { usdc: treasuryUsdcAta } = getTreasuryTokenAccounts();
+  const usdcAta = treasuryUsdcAta();
 
-  const usdcBefore = await readSplBalance(conn, treasuryUsdcAta);
-  const ixs = await buildTreasuryWithdrawInstructions(lpToRedeem, minOut);
+  const usdcBefore = await readSplBalance(conn, usdcAta);
+  const ixs = await buildTreasuryWithdrawInstructions(market, lpToRedeem, minOut);
   await sendAndConfirmServerTx(conn, ixs, treasury);
-  const usdcAfter = await readSplBalance(conn, treasuryUsdcAta);
+  const usdcAfter = await readSplBalance(conn, usdcAta);
   const received = usdcAfter - usdcBefore;
 
   if (received > ZERO) {
@@ -291,8 +292,6 @@ export async function withdrawForOwner(params: {
   }
 
   const [queueClaims] = userQueueClaimsPDA(cfg.marketId, getEarnTreasuryPubkey(), cfg.poolProgramId);
-  // Record the owed estimate (amountUsdc) and destination (note) so the
-  // maintenance cron can settle this claim once liquidity reaches the treasury.
   const owedEstimate = health.lpSupply > ZERO
     ? (lpToRedeem * health.totalUsdc) / health.lpSupply
     : ZERO;
@@ -309,41 +308,36 @@ export async function withdrawForOwner(params: {
   return { status: 'queued', queueEntry: queueClaims.toBase58(), movementId };
 }
 
-// Compares the ledger's recorded LP holdings against the treasury's actual
-// on-chain LP balance. Drift means a deposit/withdrawal failed to record or LP
-// moved out of band -- surface it, never auto-correct (that would paper over a
-// bug in a custodial ledger).
-export async function reconcileEarnVault(): Promise<{
+// Compares the ledger's recorded LP holdings for `market` against the treasury's
+// actual on-chain LP balance. Drift means a deposit/withdrawal failed to record
+// -- surface it, never auto-correct.
+export async function reconcileEarnVault(market: string): Promise<{
+  market: string;
   dbLpTokens: bigint;
   onchainLpTokens: bigint;
   drift: bigint;
 }> {
   const conn = getServerConnection();
-  const vault = await earnVault();
-  const onchain = await readTreasuryLpBalance(conn);
+  const vault = await earnVault(market);
+  const onchain = await readTreasuryLpBalance(market, conn);
   return {
+    market,
     dbLpTokens: vault.totalLpTokens,
     onchainLpTokens: onchain,
     drift: onchain - vault.totalLpTokens,
   };
 }
 
-// Settles queued withdrawals FIFO from whatever USDC has reached the treasury
-// (from the pool's queue payouts or fresh deposits), forwarding each owed amount
-// to its recorded destination. The active on-chain queue crank (pool harvestIx)
-// needs the exact PayoutQueueEntry accounts to pass as remainingAccounts, which
-// is pending Parquet's queue-mechanics confirmation -- until then this drains
-// passively from available treasury balance.
-export async function settleQueuedEarnWithdrawals(): Promise<{
+// Settles `market`'s queued withdrawals FIFO from treasury USDC.
+export async function settleQueuedEarnWithdrawals(market: string): Promise<{
   settled: number;
   paidMicroUsdc: bigint;
   remaining: number;
 }> {
   const conn = getServerConnection();
-  const vault = await earnVault();
+  const vault = await earnVault(market);
   const queued = await listQueuedWithdrawals(vault.id);
-  const { usdc: treasuryUsdcAta } = getTreasuryTokenAccounts();
-  let available = await readSplBalance(conn, treasuryUsdcAta);
+  let available = await readSplBalance(conn, treasuryUsdcAta());
 
   let settled = 0;
   let paid = ZERO;

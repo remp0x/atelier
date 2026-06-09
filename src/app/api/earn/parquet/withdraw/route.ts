@@ -8,7 +8,7 @@ import {
   parseSharesArg,
   validateSolanaAddress,
 } from '@/lib/earn-auth';
-import { isParquetEarnConfigured } from '@/lib/parquet-earn';
+import { isParquetEarnConfigured, isMarketEnabled, getDefaultMarket } from '@/lib/parquet-earn';
 import { withdrawForOwner, getOwnerEarnPosition } from '@/lib/parquet-earn-flows';
 
 // Withdraw from the Parquet Earn pool by burning vault shares. Pass `shares`
@@ -25,7 +25,12 @@ export async function POST(request: NextRequest) {
     const limited = earnRateLimit(`earn:${caller.ownerId}`);
     if (limited) return limited;
 
-    const { position } = await getOwnerEarnPosition(caller.ownerKind, caller.ownerId);
+    const market = typeof body.market === 'string' && body.market.trim() ? body.market.trim() : getDefaultMarket();
+    if (!isMarketEnabled(market)) {
+      return NextResponse.json({ success: false, error: `market "${market}" is not enabled for Earn` }, { status: 400 });
+    }
+
+    const { position } = await getOwnerEarnPosition(market, caller.ownerKind, caller.ownerId);
     if (!position || position.shares <= BigInt(0)) {
       return NextResponse.json({ success: false, error: 'No active Earn position' }, { status: 400 });
     }
@@ -54,6 +59,7 @@ export async function POST(request: NextRequest) {
     const slippageBps = typeof body.slippage_bps === 'number' ? body.slippage_bps : undefined;
 
     const result = await withdrawForOwner({
+      market,
       ownerKind: caller.ownerKind,
       ownerId: caller.ownerId,
       shares,

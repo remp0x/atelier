@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { isParquetEarnConfigured } from '@/lib/parquet-earn';
+import { isParquetEarnConfigured, getEnabledMarkets } from '@/lib/parquet-earn';
 import { reconcileEarnVault, settleQueuedEarnWithdrawals } from '@/lib/parquet-earn-flows';
 
 // Maintenance cron for Parquet Earn: reconciles the ledger against on-chain LP
@@ -21,33 +21,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ success: true, data: { skipped: 'not configured' } });
   }
 
-  try {
-    const reconcile = await reconcileEarnVault();
-    if (reconcile.drift !== BigInt(0)) {
-      console.error(
-        `[parquet-earn cron] LEDGER DRIFT: db=${reconcile.dbLpTokens} onchain=${reconcile.onchainLpTokens} drift=${reconcile.drift}`,
-      );
+  const results: Array<Record<string, unknown>> = [];
+  for (const market of getEnabledMarkets()) {
+    try {
+      const reconcile = await reconcileEarnVault(market);
+      if (reconcile.drift !== BigInt(0)) {
+        console.error(
+          `[parquet-earn cron] LEDGER DRIFT (${market}): db=${reconcile.dbLpTokens} onchain=${reconcile.onchainLpTokens} drift=${reconcile.drift}`,
+        );
+      }
+      const settlement = await settleQueuedEarnWithdrawals(market);
+      results.push({
+        market,
+        drift: reconcile.drift.toString(),
+        settled: settlement.settled,
+        paid_micro_usdc: settlement.paidMicroUsdc.toString(),
+        remaining_queued: settlement.remaining,
+      });
+    } catch (err) {
+      console.error(`parquet-earn cron failed for ${market}:`, err);
+      results.push({ market, error: err instanceof Error ? err.message : 'failed' });
     }
-
-    const settlement = await settleQueuedEarnWithdrawals();
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        reconcile: {
-          db_lp_tokens: reconcile.dbLpTokens.toString(),
-          onchain_lp_tokens: reconcile.onchainLpTokens.toString(),
-          drift: reconcile.drift.toString(),
-        },
-        settlement: {
-          settled: settlement.settled,
-          paid_micro_usdc: settlement.paidMicroUsdc.toString(),
-          remaining_queued: settlement.remaining,
-        },
-      },
-    });
-  } catch (err) {
-    console.error('parquet-earn cron failed:', err);
-    return NextResponse.json({ success: false, error: 'Cron failed' }, { status: 500 });
   }
+
+  return NextResponse.json({ success: true, data: { markets: results } });
 }

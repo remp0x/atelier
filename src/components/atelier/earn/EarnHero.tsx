@@ -45,9 +45,6 @@ export function EarnHero() {
         className="flex items-center gap-2 mb-3"
       >
         <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-atelier">Parquet x Atelier</span>
-        <span className="inline-flex h-4 px-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 font-mono text-[9px] text-emerald-500 items-center">
-          Live
-        </span>
       </motion.div>
 
       <motion.h1

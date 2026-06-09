@@ -18,21 +18,26 @@ import poolIdl from '@parqxchange/sdk/idl/pool_program.json';
 import { getServerConnection } from './solana-server';
 import { getEarnTreasuryKeypair, getEarnTreasuryPubkey } from './parquet-earn-treasury';
 
-// On-chain adapter for Parquet liquidity pools. Everything here is real and
-// signs/derives against Parquet's program, but it is gated by config: until the
-// program IDs and market are set in env (PENDING from the Parquet team), every
-// entry point throws a clear "not configured" error so no fund-moving code can
-// run against a placeholder. The flow layer checks isParquetEarnConfigured()
-// first.
-//
-// Pool accounts (poolState, usdcVault, vaultAuthority, lpMint) are PDAs derived
-// from the marketId + pool program ID, so config is minimal.
+// On-chain adapter for Parquet liquidity pools. Multi-market: every entry point
+// takes a `market` (e.g. "intc-usdc") and resolves its pool accounts as PDAs of
+// the marketId + pool program ID. Deposits are restricted to an allowlist of
+// enabled markets; everything is gated by config so no fund-moving code runs
+// against a placeholder.
 
 // Public, verified mainnet constants (docs.parquet.exchange/network/contracts;
-// PDA derivation confirmed against live on-chain pools). Env-overridable for
-// devnet/other deployments.
+// PDA derivation confirmed against live on-chain pools). Env-overridable.
 const MAINNET_POOL_PROGRAM_ID = 'Acme8JzWrvVqGJz7nTKVsLYisN6MtP83nrs4fVAeXJsN';
 const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+
+// Markets users can deposit into: the 13 current (252-byte) pools that owe the
+// payout queue nothing. Excludes dead 240-byte pools and the stressed pools that
+// owe the queue more than they hold. Override with PARQUET_EARN_MARKETS (comma list).
+const DEFAULT_ENABLED_MARKETS = [
+  'intc-usdc', 'sndk-usdc', 'spy-usdc', 'nvda-usdc', 'aapl-usdc', 'amzn-usdc', 'mstr-usdc',
+  'googl-usdc', 'coin-usdc', 'hood-usdc', 'amd-usdc', 'mu-usdc', 'crcl-usdc',
+];
+
+const ZERO = BigInt(0);
 
 export interface ParquetEarnConfig {
   poolProgramId: PublicKey;
@@ -48,59 +53,66 @@ export interface ParquetPoolHealth {
   lpSupply: bigint;
 }
 
-function readMarketId(): { marketId: Uint8Array; label: string } | null {
-  const hex = process.env.PARQUET_EARN_MARKET_ID_HEX;
-  if (hex) {
-    const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-    if (clean.length !== 64) {
-      throw new Error('PARQUET_EARN_MARKET_ID_HEX must be 32 bytes (64 hex chars)');
-    }
-    return { marketId: Uint8Array.from(Buffer.from(clean, 'hex')), label: hex };
-  }
-  const label = process.env.PARQUET_EARN_MARKET;
-  if (label) return { marketId: marketIdFromString(label), label };
-  return null;
+function poolProgramId(): PublicKey {
+  return new PublicKey(process.env.PARQUET_POOL_PROGRAM_ID || MAINNET_POOL_PROGRAM_ID);
 }
 
-// The market is the enable switch: program ID and USDC mint default to verified
-// mainnet constants, so setting a market turns Earn on for this deployment.
-// (Fund movement additionally requires PARQUET_EARN_TREASURY_KEY.)
+function usdcMint(): PublicKey {
+  return new PublicKey(process.env.PARQUET_USDC_MINT || MAINNET_USDC_MINT);
+}
+
+// Earn is enabled for this deployment when PARQUET_EARN_MARKET is set (the switch).
 export function isParquetEarnConfigured(): boolean {
   return Boolean(process.env.PARQUET_EARN_MARKET || process.env.PARQUET_EARN_MARKET_ID_HEX);
 }
 
-let cachedConfig: ParquetEarnConfig | null = null;
-
-export function getParquetEarnConfig(): ParquetEarnConfig {
-  if (cachedConfig) return cachedConfig;
-
-  const programId = process.env.PARQUET_POOL_PROGRAM_ID || MAINNET_POOL_PROGRAM_ID;
-  const usdcMint = process.env.PARQUET_USDC_MINT || MAINNET_USDC_MINT;
-  const market = readMarketId();
-
-  if (!market) {
-    throw new Error('Parquet Earn not configured -- set PARQUET_EARN_MARKET (e.g. spy-usdc)');
-  }
-
-  cachedConfig = {
-    poolProgramId: new PublicKey(programId),
-    usdcMint: new PublicKey(usdcMint),
-    marketId: market.marketId,
-    marketLabel: market.label,
-  };
-  return cachedConfig;
+// The markets users can deposit into. Empty when Earn is off.
+export function getEnabledMarkets(): string[] {
+  if (!isParquetEarnConfigured()) return [];
+  const env = process.env.PARQUET_EARN_MARKETS;
+  const list = env ? env.split(',').map((s) => s.trim()).filter(Boolean) : [...DEFAULT_ENABLED_MARKETS];
+  const def = process.env.PARQUET_EARN_MARKET;
+  if (def && !list.includes(def)) list.unshift(def);
+  return list;
 }
 
+export function isMarketEnabled(market: string): boolean {
+  return getEnabledMarkets().includes(market);
+}
+
+export function getDefaultMarket(): string {
+  const def = process.env.PARQUET_EARN_MARKET;
+  if (def) return def;
+  const enabled = getEnabledMarkets();
+  if (enabled.length === 0) throw new Error('Parquet Earn not configured -- set PARQUET_EARN_MARKET');
+  return enabled[0];
+}
+
+export function getParquetEarnConfig(market?: string): ParquetEarnConfig {
+  // Legacy hex marketId via env (only when no explicit market is requested).
+  if (!market && process.env.PARQUET_EARN_MARKET_ID_HEX) {
+    const hex = process.env.PARQUET_EARN_MARKET_ID_HEX;
+    const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
+    if (clean.length !== 64) throw new Error('PARQUET_EARN_MARKET_ID_HEX must be 32 bytes (64 hex chars)');
+    return { poolProgramId: poolProgramId(), usdcMint: usdcMint(), marketId: Uint8Array.from(Buffer.from(clean, 'hex')), marketLabel: hex };
+  }
+  const label = market ?? getDefaultMarket();
+  if (!isMarketEnabled(label)) {
+    throw new Error(`market "${label}" is not enabled for Earn`);
+  }
+  return { poolProgramId: poolProgramId(), usdcMint: usdcMint(), marketId: marketIdFromString(label), marketLabel: label };
+}
+
+// The pool program client is market-agnostic (the marketId is passed per call),
+// so it is built once from the global program ID.
 let cachedPoolClient: PoolClient | null = null;
 
 function getPoolClient(): PoolClient {
   if (cachedPoolClient) return cachedPoolClient;
-  const cfg = getParquetEarnConfig();
   const connection = getServerConnection();
   // anchor's Wallet export is not a usable constructor in the Vercel runtime, so
   // build the provider wallet directly. Instruction building never signs through
-  // it -- the flow layer signs with the treasury keypair via sendAndConfirmServerTx
-  // -- so the sign methods are pass-throughs.
+  // it -- the flow layer signs with the treasury keypair via sendAndConfirmServerTx.
   const treasury = getEarnTreasuryKeypair();
   const wallet = {
     publicKey: treasury.publicKey,
@@ -108,9 +120,7 @@ function getPoolClient(): PoolClient {
     signAllTransactions: async <T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> => txs,
   };
   const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-  // The bundled IDL carries the deployed address; override with our configured
-  // program ID so the same code works across deployments.
-  const idl = { ...(poolIdl as Idl), address: cfg.poolProgramId.toBase58() };
+  const idl = { ...(poolIdl as Idl), address: poolProgramId().toBase58() };
   const program = new Program(idl as Idl, provider);
   cachedPoolClient = new PoolClient(program);
   return cachedPoolClient;
@@ -121,9 +131,9 @@ function lpMintFor(cfg: ParquetEarnConfig): PublicKey {
   return lpMint;
 }
 
-// Treasury's USDC and LP associated token accounts for the configured market.
-export function getTreasuryTokenAccounts(): { usdc: PublicKey; lp: PublicKey } {
-  const cfg = getParquetEarnConfig();
+// Treasury's USDC and LP associated token accounts for a market.
+export function getTreasuryTokenAccounts(market?: string): { usdc: PublicKey; lp: PublicKey } {
+  const cfg = getParquetEarnConfig(market);
   const treasury = getEarnTreasuryPubkey();
   return {
     usdc: getAssociatedTokenAddressSync(cfg.usdcMint, treasury),
@@ -131,15 +141,15 @@ export function getTreasuryTokenAccounts(): { usdc: PublicKey; lp: PublicKey } {
   };
 }
 
-// Deposit `amountUsdc` (micro-USDC) from the treasury into the pool. Prepends an
-// idempotent create for the treasury LP ATA so the very first deposit works.
+// Deposit `amountUsdc` (micro-USDC) from the treasury into `market`'s pool.
 export async function buildTreasuryDepositInstructions(
+  market: string,
   amountUsdc: bigint,
   minLpOut: bigint,
 ): Promise<TransactionInstruction[]> {
-  const cfg = getParquetEarnConfig();
+  const cfg = getParquetEarnConfig(market);
   const treasury = getEarnTreasuryPubkey();
-  const { usdc: userUsdc, lp: userLp } = getTreasuryTokenAccounts();
+  const { usdc: userUsdc, lp: userLp } = getTreasuryTokenAccounts(market);
 
   const ensureLpAta = createAssociatedTokenAccountIdempotentInstruction(
     treasury,
@@ -157,14 +167,15 @@ export async function buildTreasuryDepositInstructions(
   return [ensureLpAta, ...liquidityIxs];
 }
 
-// Withdraw `lpAmount` LP tokens from the pool back into treasury USDC.
+// Withdraw `lpAmount` LP tokens from `market`'s pool back into treasury USDC.
 export async function buildTreasuryWithdrawInstructions(
+  market: string,
   lpAmount: bigint,
   minOut: bigint,
 ): Promise<TransactionInstruction[]> {
-  const cfg = getParquetEarnConfig();
+  const cfg = getParquetEarnConfig(market);
   const treasury = getEarnTreasuryPubkey();
-  const { usdc: userUsdc, lp: userLp } = getTreasuryTokenAccounts();
+  const { usdc: userUsdc, lp: userLp } = getTreasuryTokenAccounts(market);
 
   return removeLiquidity(
     { poolClient: getPoolClient(), poolProgramId: cfg.poolProgramId, marketId: cfg.marketId },
@@ -173,16 +184,16 @@ export async function buildTreasuryWithdrawInstructions(
   );
 }
 
-export async function readTreasuryLpBalance(connection?: Connection): Promise<bigint> {
+export async function readTreasuryLpBalance(market: string, connection?: Connection): Promise<bigint> {
   const conn = connection ?? getServerConnection();
-  const { lp } = getTreasuryTokenAccounts();
+  const { lp } = getTreasuryTokenAccounts(market);
   const info = await conn.getTokenAccountBalance(lp).catch(() => null);
-  if (!info?.value?.amount) return BigInt(0);
+  if (!info?.value?.amount) return ZERO;
   return BigInt(info.value.amount);
 }
 
-export async function readPoolHealth(connection?: Connection): Promise<ParquetPoolHealth> {
-  const cfg = getParquetEarnConfig();
+export async function readPoolHealth(market?: string, connection?: Connection): Promise<ParquetPoolHealth> {
+  const cfg = getParquetEarnConfig(market);
   const conn = connection ?? getServerConnection();
   const [poolState] = poolStatePDA(cfg.marketId, cfg.poolProgramId);
 
@@ -199,15 +210,14 @@ export async function readPoolHealth(connection?: Connection): Promise<ParquetPo
   };
 }
 
-// USDC value of `lpAmount` LP tokens at the pool's current ratio. Used only to
-// display position value -- it does not affect share accounting, which is
-// LP-denominated.
+// USDC value of `lpAmount` LP tokens in `market` at the pool's current ratio.
 export async function valueLpInUsdc(
+  market: string,
   lpAmount: bigint,
   connection?: Connection,
 ): Promise<bigint> {
-  if (lpAmount <= BigInt(0)) return BigInt(0);
-  const health = await readPoolHealth(connection);
-  if (health.lpSupply <= BigInt(0)) return BigInt(0);
+  if (lpAmount <= ZERO) return ZERO;
+  const health = await readPoolHealth(market, connection);
+  if (health.lpSupply <= ZERO) return ZERO;
   return (lpAmount * health.totalUsdc) / health.lpSupply;
 }

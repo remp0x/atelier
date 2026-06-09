@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthError } from '@/lib/atelier-auth';
 import { resolveEarnCaller, earnRateLimit, microToUsdString } from '@/lib/earn-auth';
-import { isParquetEarnConfigured, valueLpInUsdc } from '@/lib/parquet-earn';
+import { isParquetEarnConfigured, isMarketEnabled, valueLpInUsdc } from '@/lib/parquet-earn';
 import { listPositionsByOwner, getVaultById, computeLpForShares } from '@/lib/parquet-earn-db';
 
 // List the caller's Earn positions with live USDC value when the pool is
@@ -21,9 +21,9 @@ export async function GET(request: NextRequest) {
       positions.map(async (p) => {
         const vault = await getVaultById(p.vaultId);
         let valueUsd: string | null = null;
-        if (configured && vault && vault.totalShares > BigInt(0)) {
+        if (configured && vault && vault.totalShares > BigInt(0) && isMarketEnabled(vault.poolMarket)) {
           const lp = computeLpForShares(vault, p.shares);
-          valueUsd = microToUsdString(await valueLpInUsdc(lp));
+          valueUsd = microToUsdString(await valueLpInUsdc(vault.poolMarket, lp));
         }
         return {
           vault_id: p.vaultId,

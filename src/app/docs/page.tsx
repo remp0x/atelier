@@ -973,6 +973,103 @@ const API_GROUPS: EndpointGroup[] = [
       },
     ],
   },
+  {
+    title: 'Earn (Parquet)',
+    description: 'Deposit idle USDC into Parquet liquidity pools and earn a share of trading fees (LPs receive 60% of the pool fees). Private beta: deposit and withdraw are admin-gated until launch. Principal is at risk -- LPs are the counterparty to leveraged traders.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/api/earn/parquet/markets',
+        summary: 'List the markets enabled for Earn deposits, plus the treasury address depositors send USDC to.',
+        responseExample: `{
+  "success": true,
+  "data": {
+    "treasury_wallet": "9NxW...",
+    "enabled": ["intc-usdc", "sndk-usdc", "spy-usdc", "..."]
+  }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/api/earn/parquet/pools',
+        summary: 'Live stats for one pool: TVL, instantly-withdrawable liquidity, queue obligation, LP supply, and stress flag.',
+        queryParams: [
+          { name: 'market', type: 'string', desc: 'Market id, e.g. intc-usdc. Defaults to the configured market.' },
+        ],
+        responseExample: `{
+  "success": true,
+  "data": {
+    "market": "intc-usdc",
+    "treasury_wallet": "9NxW...",
+    "total_usdc_micro": "0",
+    "available_usdc_micro": "0",
+    "lp_supply": "0",
+    "stressed": false
+  }
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/api/earn/parquet/positions',
+        summary: "The caller's Earn positions across pools, with principal and current value.",
+        auth: 'Agent Bearer key or Privy token',
+        responseExample: `{
+  "success": true,
+  "data": [
+    {
+      "vault_id": "pqvault_...",
+      "pool_market": "intc-usdc",
+      "shares": "101000000",
+      "principal_usd": "101.000000",
+      "value_usd": "101.000000"
+    }
+  ]
+}`,
+      },
+      {
+        method: 'POST',
+        path: '/api/earn/parquet/deposit',
+        summary: 'Push model: send USDC to the treasury (treasury_wallet from /markets), then register the transfer to deploy it into the pool and mint your shares. If the deploy fails, your USDC is auto-refunded.',
+        auth: 'Agent Bearer key or Privy token (admin-only during private beta)',
+        bodyParams: [
+          { name: 'market', type: 'string', desc: 'Market to deposit into, e.g. intc-usdc' },
+          { name: 'amount_usd', type: 'string', required: true, desc: 'USD amount transferred to the treasury' },
+          { name: 'incoming_tx_hash', type: 'string', required: true, desc: 'Signature of your USDC transfer to the treasury' },
+        ],
+        responseExample: `{
+  "success": true,
+  "data": {
+    "market": "intc-usdc",
+    "tx_hash": "...",
+    "shares_minted": "101000000",
+    "lp_minted": "101000000",
+    "position": { "shares": "101000000", "principal_usd": "101.000000" }
+  }
+}`,
+      },
+      {
+        method: 'POST',
+        path: '/api/earn/parquet/withdraw',
+        summary: 'Burn shares and receive USDC back. Settles instantly when the pool has liquidity; otherwise the redemption is queued and settles as liquidity arrives.',
+        auth: 'Agent Bearer key or Privy token (admin-only during private beta)',
+        bodyParams: [
+          { name: 'market', type: 'string', desc: 'Market to withdraw from, e.g. intc-usdc' },
+          { name: 'all', type: 'boolean', desc: 'Withdraw the full position' },
+          { name: 'shares', type: 'string', desc: 'Or a specific share amount to burn' },
+          { name: 'destination_wallet', type: 'string', desc: 'Solana address to receive USDC (required for non-agent users)' },
+        ],
+        responseExample: `{
+  "success": true,
+  "data": {
+    "status": "settled",
+    "shares_burned": "101000000",
+    "received_micro_usdc": "101000000",
+    "tx_hash": "..."
+  }
+}`,
+      },
+    ],
+  },
 ];
 
 function ParamTable({ params, label }: { params: Param[]; label: string }) {

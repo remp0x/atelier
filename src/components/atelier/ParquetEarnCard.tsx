@@ -76,24 +76,28 @@ function PositionRow({ position, onWithdraw, busy }: PositionRowProps) {
         <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-gray-400 dark:text-neutral-500 truncate">
           {position.pool_market}
         </p>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="font-mono text-[13px] text-black dark:text-white tabular-nums">
-            ${formatUsd(principal)}
-          </span>
+        {/* Current value is the primary number; principal + PnL are context */}
+        <div className="flex items-baseline gap-2 mt-0.5">
+          {value !== null ? (
+            <span className="font-mono text-[14px] font-medium text-black dark:text-white tabular-nums">
+              ${formatUsd(value)}
+            </span>
+          ) : (
+            <span className="font-mono text-[14px] font-medium text-black dark:text-white tabular-nums">
+              ${formatUsd(principal)}
+            </span>
+          )}
           {pnl !== null && (
             <span
               className={`font-mono text-[11px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}
             >
-              {pnlPositive ? '+' : ''}
-              {formatUsd(pnl)}
+              {pnlPositive ? '+' : ''}{formatUsd(pnl)}
             </span>
           )}
         </div>
-        {value !== null && (
-          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums mt-0.5">
-            Current: ${formatUsd(value)}
-          </p>
-        )}
+        <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums mt-0.5">
+          Deposited ${formatUsd(principal)}
+        </p>
       </div>
       <button
         type="button"
@@ -434,6 +438,26 @@ export function ParquetEarnCard({ solanaAddress }: { solanaAddress: string | nul
   const amountNum = parseFloat(depositAmount);
   const depositValid = !Number.isNaN(amountNum) && amountNum > 0;
 
+  const hasPositions = !positionsLoading && positions.length > 0;
+
+  const aggregateValue = positions.reduce<number | null>((acc, pos) => {
+    if (pos.value_usd === null) return acc;
+    return (acc ?? 0) + parseFloat(pos.value_usd);
+  }, null);
+
+  const aggregatePrincipal = positions.reduce(
+    (acc, pos) => acc + parseFloat(pos.principal_usd),
+    0,
+  );
+
+  const aggregatePnl = aggregateValue !== null ? aggregateValue - aggregatePrincipal : null;
+  const aggregatePnlPositive = aggregatePnl !== null && aggregatePnl >= 0;
+
+  const poolSharePct =
+    aggregateValue !== null && totalUsd > 0
+      ? (aggregateValue / totalUsd) * 100
+      : null;
+
   return (
     <div
       data-wallet-card
@@ -487,34 +511,6 @@ export function ParquetEarnCard({ solanaAddress }: { solanaAddress: string | nul
         </div>
       </div>
 
-      {/* Pool stats -- always visible */}
-      {poolLoading ? (
-        <div className="px-5 py-3 flex items-center gap-3">
-          <div className="h-3 w-24 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
-          <div className="h-3 w-20 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
-        </div>
-      ) : pool ? (
-        <div className="px-5 py-3 flex items-center gap-4 border-b border-gray-100 dark:border-neutral-800/40">
-          <div>
-            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600">
-              Pool size
-            </p>
-            <p className="font-mono text-[13px] tabular-nums text-black dark:text-white">
-              ${formatUsd(totalUsd)}
-            </p>
-          </div>
-          <div className="w-px h-6 bg-gray-200 dark:bg-neutral-800" />
-          <div>
-            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600">
-              Available
-            </p>
-            <p className={`font-mono text-[13px] tabular-nums ${pool.stressed ? 'text-amber-500' : 'text-black dark:text-white'}`}>
-              ${formatUsd(availableUsd)}
-            </p>
-          </div>
-        </div>
-      ) : null}
-
       {/* Stressed warning */}
       {pool?.stressed && view === 'overview' && (
         <div className="mx-5 mt-3 flex items-start gap-2 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2">
@@ -530,22 +526,47 @@ export function ParquetEarnCard({ solanaAddress }: { solanaAddress: string | nul
       {/* Overview: positions + actions */}
       {view === 'overview' && (
         <div className="px-5 py-4 space-y-4">
-          {/* Positions */}
-          <div>
-            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500 mb-2">
-              Your positions
-            </p>
-            {positionsLoading ? (
-              <div className="space-y-2">
-                <div className="h-3 w-40 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
-                <div className="h-3 w-32 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
+
+          {/* Position hero -- shown when user has at least one position */}
+          {positionsLoading ? (
+            <div className="space-y-2">
+              <div className="h-3 w-40 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
+              <div className="h-3 w-32 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
+            </div>
+          ) : hasPositions ? (
+            <div>
+              {/* Aggregate position summary */}
+              <div className="mb-3 pb-3 border-b border-gray-100 dark:border-neutral-800/60">
+                <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500 mb-1">
+                  Your balance
+                </p>
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono text-[22px] font-semibold text-black dark:text-white tabular-nums leading-none">
+                    ${aggregateValue !== null ? formatUsd(aggregateValue) : formatUsd(aggregatePrincipal)}
+                  </span>
+                  {aggregatePnl !== null && (
+                    <span className={`font-mono text-[12px] tabular-nums ${aggregatePnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                      {aggregatePnlPositive ? '+' : ''}{formatUsd(aggregatePnl)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mt-1">
+                  <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums">
+                    Deposited ${formatUsd(aggregatePrincipal)}
+                  </p>
+                  {poolSharePct !== null && (
+                    <>
+                      <span className="text-gray-300 dark:text-neutral-700">·</span>
+                      <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums">
+                        {poolSharePct.toFixed(2)}% of pool
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
-            ) : positions.length === 0 ? (
-              <p className="font-mono text-[12px] text-gray-400 dark:text-neutral-600">
-                No active positions. Deposit to start earning.
-              </p>
-            ) : (
-              <div>
+
+              {/* Per-position rows */}
+              <div className="mb-3">
                 {positions.map((pos) => (
                   <PositionRow
                     key={pos.vault_id}
@@ -555,8 +576,49 @@ export function ParquetEarnCard({ solanaAddress }: { solanaAddress: string | nul
                   />
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            /* No-position state: CTA is primary, pool stats are secondary context */
+            <div className="rounded-lg border border-gray-100 dark:border-neutral-800/60 bg-gray-50 dark:bg-black/40 px-4 py-4">
+              <p className="font-mono text-[11px] font-medium text-black dark:text-white mb-0.5">
+                Deposit to start earning
+              </p>
+              <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 leading-snug">
+                Deposit USDC into the Parquet pool and earn a share of trading fees.
+              </p>
+            </div>
+          )}
+
+          {/* Pool context -- secondary, clearly labeled as pool-wide numbers */}
+          {!poolLoading && pool && (
+            <div className="rounded-md border border-gray-100 dark:border-neutral-800/40 bg-gray-50/50 dark:bg-black/20 px-3 py-2.5">
+              <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400 dark:text-neutral-600 mb-2">
+                Pool
+              </p>
+              <div className="flex items-center gap-4">
+                <div>
+                  <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600">
+                    Pool TVL
+                  </p>
+                  <p className="font-mono text-[12px] tabular-nums text-black dark:text-white">
+                    ${formatUsd(totalUsd)}
+                  </p>
+                </div>
+                <div className="w-px h-5 bg-gray-200 dark:bg-neutral-800" />
+                <div>
+                  <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600">
+                    Free liquidity
+                  </p>
+                  <p className={`font-mono text-[12px] tabular-nums ${pool.stressed ? 'text-amber-500' : 'text-black dark:text-white'}`}>
+                    ${formatUsd(availableUsd)}
+                  </p>
+                </div>
+              </div>
+              <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-700 mt-1.5 leading-snug">
+                These figures describe the pool, not your balance.
+              </p>
+            </div>
+          )}
 
           {/* Deposit button */}
           <button
@@ -616,7 +678,7 @@ export function ParquetEarnCard({ solanaAddress }: { solanaAddress: string | nul
             </div>
 
             <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 mt-1.5">
-              Solana USDC. Available liquidity: <span className="tabular-nums">${formatUsd(availableUsd)}</span>
+              Solana USDC. Pool free liquidity: <span className="tabular-nums">${formatUsd(availableUsd)}</span>
             </p>
           </div>
 

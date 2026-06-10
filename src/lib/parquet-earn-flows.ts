@@ -11,6 +11,7 @@ import { userQueueClaimsPDA } from '@parqxchange/sdk';
 import { USDC_MINT } from './solana-pay';
 import { getServerConnection, sendAndConfirmServerTx } from './solana-server';
 import { getEarnTreasuryKeypair, getEarnTreasuryPubkey } from './parquet-earn-treasury';
+import { pullAgentUsdcToTreasury, getPrivySolanaWalletAddress } from './parquet-earn-autopull';
 import {
   getParquetEarnConfig,
   buildTreasuryDepositInstructions,
@@ -264,20 +265,38 @@ export async function depositFromTransfer(params: {
   }
 }
 
-// Auto-pull deposit (agent's Privy server wallet -> treasury -> pool). NOT yet
-// implementable: outbound Solana signing from a Privy server wallet needs
-// createSolanaKitSigner (@solana/kit / web3.js 2.0), which the repo does not use.
-export async function initiateManagedAgentDeposit(_params: {
+// Auto-pull deposit: the server pulls USDC from the agent's Privy-managed Solana
+// wallet into the treasury (signed by that wallet via Privy), then runs the exact
+// same verify -> replay-guard -> deploy -> auto-refund path as a pushed deposit.
+// One API call for the agent, no client-side signing.
+export async function initiateManagedAgentDeposit(params: {
   market: string;
   agentId: string;
   privySolanaWalletId: string;
-  agentWalletAddress: string;
   amountUsdc: bigint;
   slippageBps?: number;
 }): Promise<DepositResult> {
-  throw new Error(
-    'managed agent auto-pull deposit pending Privy server-wallet Solana signing (createSolanaKitSigner / @solana/kit). Use depositFromTransfer with an agent-pushed transfer until then.',
-  );
+  if (params.amountUsdc <= ZERO) throw new Error('amountUsdc must be positive');
+  const conn = getServerConnection();
+  const agentAddress = await getPrivySolanaWalletAddress(params.privySolanaWalletId);
+
+  const pullSig = await pullAgentUsdcToTreasury({
+    privySolanaWalletId: params.privySolanaWalletId,
+    agentAddress,
+    treasuryAddress: getEarnTreasuryPubkey().toBase58(),
+    usdcMint: USDC_MINT.toBase58(),
+    rawAmount: params.amountUsdc,
+    rpcUrl: conn.rpcEndpoint,
+  });
+
+  return depositFromTransfer({
+    market: params.market,
+    ownerKind: 'agent',
+    ownerId: params.agentId,
+    amountUsdc: params.amountUsdc,
+    incomingTxHash: pullSig,
+    slippageBps: params.slippageBps,
+  });
 }
 
 export type WithdrawResult =

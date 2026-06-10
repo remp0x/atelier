@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { marketTicker, type PoolData, type Position, formatUsd, microToUsd } from './types';
+import { marketTicker, marketName, type PoolData, type Position, formatUsd, microToUsd } from './types';
 import { PoolPanel } from './PoolPanel';
 
 type GridLayout = 'grid' | 'list';
@@ -105,7 +105,7 @@ function MarketCard({ marketId, ticker, pool, expanded, positionValue, positionP
         >
           <div className="flex items-center gap-3">
             <p className="font-mono font-semibold text-[13px] text-black dark:text-white w-14">{ticker}</p>
-            <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500">US Equity</p>
+            <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500 truncate">{marketName(marketId)}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {initializing && (
@@ -211,7 +211,7 @@ function MarketCard({ marketId, ticker, pool, expanded, positionValue, positionP
       <div className="flex items-start justify-between">
         <div>
           <p className="font-mono font-semibold text-[15px] text-black dark:text-white leading-tight">{ticker}</p>
-          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500 mt-0.5">US Equity</p>
+          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500 mt-0.5 truncate">{marketName(marketId)}</p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
           {initializing && (

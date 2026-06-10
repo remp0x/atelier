@@ -14,6 +14,14 @@ const nextConfig = {
       https: false,
       zlib: false,
     };
+    // @privy-io/react-auth statically imports optional peer deps (Stripe onramp,
+    // Farcaster mini-apps) we don't use. They're peerDependenciesMeta-optional and
+    // guarded at runtime, so stub them to empty modules to keep the build green.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@stripe/crypto': false,
+      '@farcaster/mini-app-solana': false,
+    };
     config.plugins.push(
       new webpack.ProvidePlugin({
         Buffer: ['buffer', 'Buffer'],

@@ -15,6 +15,8 @@ interface MarketsResponse {
   markets?: PoolData[];
 }
 
+const AUTO_REFRESH_MS = 45_000;
+
 export function EarnPageClient() {
   const { authenticated, ready, login, solanaAddress, user } = useAtelierAuth();
   const adminEmail = user?.google?.email ?? user?.email?.address ?? null;
@@ -30,12 +32,14 @@ export function EarnPageClient() {
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
 
-  const fetchMarkets = useCallback(async () => {
-    setMarketsLoading(true);
+  // silent = background refresh: never flash loading skeletons and never flip
+  // the page into the not-configured state on a transient failure.
+  const fetchMarkets = useCallback(async (silent = false) => {
+    if (!silent) setMarketsLoading(true);
     try {
       const res = await fetch('/api/earn/parquet/markets');
       if (res.status === 503) {
-        setNotConfigured(true);
+        if (!silent) setNotConfigured(true);
         return;
       }
       const json = await res.json() as { success: boolean; data?: MarketsResponse; error?: string };
@@ -47,13 +51,13 @@ export function EarnPageClient() {
           for (const p of json.data!.markets ?? []) next[p.market] = p;
           return next;
         });
-      } else {
+      } else if (!silent) {
         setNotConfigured(true);
       }
     } catch {
-      setNotConfigured(true);
+      if (!silent) setNotConfigured(true);
     } finally {
-      setMarketsLoading(false);
+      if (!silent) setMarketsLoading(false);
     }
   }, []);
 
@@ -71,9 +75,9 @@ export function EarnPageClient() {
     }
   }, []);
 
-  const fetchPositions = useCallback(async () => {
+  const fetchPositions = useCallback(async (silent = false) => {
     if (!authenticated) return;
-    setPositionsLoading(true);
+    if (!silent) setPositionsLoading(true);
     try {
       const token = await getPrivyAccessToken();
       const headers: Record<string, string> = {};
@@ -85,7 +89,7 @@ export function EarnPageClient() {
     } catch {
       // positions are a convenience display; fail silently
     } finally {
-      setPositionsLoading(false);
+      if (!silent) setPositionsLoading(false);
     }
   }, [authenticated]);
 
@@ -100,6 +104,16 @@ export function EarnPageClient() {
   useEffect(() => {
     void fetchPositions();
   }, [fetchPositions]);
+
+  // Keep TVL, fee APR and positions breathing while the tab is open.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void fetchMarkets(true);
+      void fetchPositions(true);
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [fetchMarkets, fetchPositions]);
 
   if (!ready) {
     return (

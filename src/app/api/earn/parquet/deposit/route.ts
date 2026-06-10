@@ -5,7 +5,7 @@ import { AuthError } from '@/lib/atelier-auth';
 import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
 import { resolveEarnCaller, earnRateLimit, parseUsdToMicro, microToUsdString } from '@/lib/earn-auth';
 import { isParquetEarnConfigured, isMarketEnabled, getDefaultMarket } from '@/lib/parquet-earn';
-import { isEarnPublic } from '@/lib/earn-access';
+import { isEarnDepositsOpen } from '@/lib/earn-access';
 import { depositFromTransfer } from '@/lib/parquet-earn-flows';
 
 // Deposit into a Parquet Earn pool. The caller first sends USDC to the Earn
@@ -19,8 +19,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    // Earn is admin-only while battle-testing (flip with EARN_PUBLIC=true).
-    if (!isEarnPublic()) await requirePrivyAdmin(request, body);
+    // Deposits are admin-only until explicitly opened (EARN_DEPOSITS_OPEN=true).
+    // The page-visibility flag (EARN_PUBLIC) deliberately does NOT open deposits.
+    if (!isEarnDepositsOpen()) await requirePrivyAdmin(request, body);
     const caller = await resolveEarnCaller(request, body);
     const limited = earnRateLimit(`earn:${caller.ownerId}`);
     if (limited) return limited;

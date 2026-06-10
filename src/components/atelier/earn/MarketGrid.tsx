@@ -8,6 +8,37 @@ import { PoolPanel } from './PoolPanel';
 type GridLayout = 'grid' | 'list';
 type SortBy = 'tvl' | 'alpha';
 
+const INIT_TOOLTIP =
+  'Initializing - this pool holds USDC with no LP yet, so deposits are paused until Parquet seeds it.';
+
+function ClockIcon({ className }: { className: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function WarningTriangleIcon({ className }: { className: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+    </svg>
+  );
+}
+
+function InitializingBadge() {
+  return (
+    <span
+      className="inline-flex items-center justify-center text-gray-400 dark:text-neutral-500 cursor-help shrink-0"
+      title={INIT_TOOLTIP}
+      aria-label="Initializing: deposits are paused while the pool is seeded"
+    >
+      <ClockIcon className="w-3.5 h-3.5" />
+    </span>
+  );
+}
+
 interface PoolPanelPassthrough {
   poolsByMarket: Record<string, PoolData>;
   positions: Position[];
@@ -108,11 +139,7 @@ function MarketCard({ marketId, ticker, pool, expanded, positionValue, positionP
             <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500 truncate">{marketName(marketId)}</p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {initializing && (
-              <span className="inline-flex h-4 px-1.5 rounded-full bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 font-mono text-[9px] text-gray-500 dark:text-neutral-400 items-center">
-                initializing
-              </span>
-            )}
+            {initializing && <InitializingBadge />}
             {stressed && (
               <span className="inline-flex h-4 px-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 font-mono text-[9px] text-amber-500 items-center gap-1">
                 <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
@@ -214,11 +241,7 @@ function MarketCard({ marketId, ticker, pool, expanded, positionValue, positionP
           <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500 mt-0.5 truncate">{marketName(marketId)}</p>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
-          {initializing && (
-            <span className="inline-flex h-4 px-1.5 rounded-full bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 font-mono text-[9px] text-gray-500 dark:text-neutral-400 items-center">
-              initializing
-            </span>
-          )}
+          {initializing && <InitializingBadge />}
           {stressed && (
             <span className="inline-flex h-4 px-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 font-mono text-[9px] text-amber-500 items-center gap-1">
               <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
@@ -405,6 +428,10 @@ export function MarketGrid({
 
   const displayCount = sortedMarkets.length;
   const totalCount = enabledMarkets.length;
+
+  const visiblePools = sortedMarkets.map((m) => poolsByMarket[m]).filter(Boolean);
+  const anyInitializing = visiblePools.some((p) => !p.depositable);
+  const anyStressed = visiblePools.some((p) => p.stressed);
 
   const expandedIndex = expandedMarketId ? sortedMarkets.indexOf(expandedMarketId) : -1;
   const accordionAfterIndex = expandedIndex >= 0
@@ -593,6 +620,23 @@ export function MarketGrid({
               </motion.div>
             );
           })}
+        </div>
+      )}
+
+      {(anyInitializing || anyStressed) && (
+        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+          {anyInitializing && (
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-gray-400 dark:text-neutral-500">
+              <ClockIcon className="w-3 h-3 shrink-0" />
+              Initializing &mdash; deposits paused while Parquet seeds the pool
+            </span>
+          )}
+          {anyStressed && (
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-amber-500/90">
+              <WarningTriangleIcon className="w-3 h-3 shrink-0" />
+              Stressed &mdash; withdrawals may be queued
+            </span>
+          )}
         </div>
       )}
     </div>

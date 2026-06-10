@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { marketTicker, marketName, type PoolData, type Position, formatUsd, microToUsd } from './types';
+import { marketTicker, marketName, type PoolData, type Position, formatUsd, formatAprPct, microToUsd } from './types';
 import { PoolPanel } from './PoolPanel';
 
 type GridLayout = 'grid' | 'list';
@@ -59,33 +59,52 @@ interface PositionPreviewProps {
   positionPrincipal: number;
   hasPosition: boolean;
   tvl: number | null;
+  feeAprPct: number | null | undefined;
 }
 
-function PositionPreview({ positionValue, positionPrincipal, hasPosition, tvl }: PositionPreviewProps) {
+function FeeAprStat({ feeAprPct }: { feeAprPct: number | null | undefined }) {
+  const positive = typeof feeAprPct === 'number' && feeAprPct > 0;
+  return (
+    <div className="text-right shrink-0">
+      <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Fee APR</p>
+      <p className={`font-mono text-[13px] tabular-nums ${positive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
+        {formatAprPct(feeAprPct)}
+      </p>
+    </div>
+  );
+}
+
+function PositionPreview({ positionValue, positionPrincipal, hasPosition, tvl, feeAprPct }: PositionPreviewProps) {
   if (hasPosition) {
     const pnl = positionValue - positionPrincipal;
     const pnlPositive = pnl >= 0;
     return (
-      <div className="mt-auto pt-2">
-        <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Your position</p>
-        <div className="flex items-baseline gap-1.5">
-          <span className="font-mono text-[13px] font-medium text-black dark:text-white tabular-nums">${formatUsd(positionValue)}</span>
-          <span className={`font-mono text-[10px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-            {pnlPositive ? '+' : ''}{formatUsd(pnl)}
-          </span>
+      <div className="mt-auto pt-2 flex items-end justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Your position</p>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-mono text-[13px] font-medium text-black dark:text-white tabular-nums">${formatUsd(positionValue)}</span>
+            <span className={`font-mono text-[10px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+              {pnlPositive ? '+' : ''}{formatUsd(pnl)}
+            </span>
+          </div>
         </div>
+        <FeeAprStat feeAprPct={feeAprPct} />
       </div>
     );
   }
 
   return (
-    <div className="mt-auto pt-2">
-      <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">TVL</p>
-      {tvl !== null ? (
-        <p className="font-mono text-[13px] text-black dark:text-white tabular-nums">${formatUsd(tvl)}</p>
-      ) : (
-        <div className="h-4 w-16 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse" />
-      )}
+    <div className="mt-auto pt-2 flex items-end justify-between gap-2">
+      <div className="min-w-0">
+        <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">TVL</p>
+        {tvl !== null ? (
+          <p className="font-mono text-[13px] text-black dark:text-white tabular-nums">${formatUsd(tvl)}</p>
+        ) : (
+          <div className="h-4 w-16 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse" />
+        )}
+      </div>
+      <FeeAprStat feeAprPct={feeAprPct} />
     </div>
   );
 }
@@ -144,6 +163,11 @@ function MarketCard({ marketId, ticker, pool, expanded, positionValue, positionP
               <span className="inline-flex h-4 px-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 font-mono text-[9px] text-amber-500 items-center gap-1">
                 <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
                 Stress
+              </span>
+            )}
+            {pool !== null && (
+              <span className={`font-mono text-[10px] tabular-nums ${typeof pool.fee_apr_pct === 'number' && pool.fee_apr_pct > 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
+                {formatAprPct(pool.fee_apr_pct)} APR
               </span>
             )}
             {hasPosition ? (
@@ -262,6 +286,7 @@ function MarketCard({ marketId, ticker, pool, expanded, positionValue, positionP
         positionPrincipal={positionPrincipal ?? 0}
         hasPosition={hasPosition}
         tvl={tvl}
+        feeAprPct={pool?.fee_apr_pct}
       />
     </button>
   );

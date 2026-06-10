@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
 import { isParquetEarnConfigured, isMarketEnabled, getDefaultMarket, getParquetEarnConfig, readPoolHealth } from '@/lib/parquet-earn';
+import { fetchFeeAccrued24h, computeFeeAprPct } from '@/lib/parquet-indexer';
 import { getEarnTreasuryPubkey } from '@/lib/parquet-earn-treasury';
 
 const poolsRateLimit = rateLimit(60, 60 * 1000);
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const cfg = getParquetEarnConfig(market);
-    const health = await readPoolHealth(market);
+    const [health, feeAccrued] = await Promise.all([readPoolHealth(market), fetchFeeAccrued24h(market)]);
     const owed = health.reservedUsdc + health.queueTotalOwed;
     const available = health.totalUsdc > owed ? health.totalUsdc - owed : BigInt(0);
 
@@ -50,6 +51,7 @@ export async function GET(request: NextRequest) {
         lp_supply: health.lpSupply.toString(),
         stressed: health.queueTotalOwed > BigInt(0),
         depositable: health.lpSupply > BigInt(0) || health.totalUsdc === BigInt(0),
+        fee_apr_pct: computeFeeAprPct(feeAccrued, health.totalUsdc),
       },
     });
   } catch (error) {

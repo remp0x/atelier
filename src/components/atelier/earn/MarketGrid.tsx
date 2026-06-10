@@ -62,15 +62,14 @@ interface PositionPreviewProps {
   feeAprPct: number | null | undefined;
 }
 
-function FeeAprStat({ feeAprPct }: { feeAprPct: number | null | undefined }) {
+// One stat per line so values can never paint over each other on narrow cards.
+function FeeAprLine({ feeAprPct }: { feeAprPct: number | null | undefined }) {
   const positive = typeof feeAprPct === 'number' && feeAprPct > 0;
   return (
-    <div className="text-right shrink-0">
-      <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Fee APR</p>
-      <p className={`font-mono text-[13px] tabular-nums ${positive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
-        {formatAprPct(feeAprPct)}
-      </p>
-    </div>
+    <p className={`font-mono text-[11px] tabular-nums whitespace-nowrap ${positive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
+      {formatAprPct(feeAprPct)}{' '}
+      <span className="text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600">Fee APR</span>
+    </p>
   );
 }
 
@@ -79,32 +78,28 @@ function PositionPreview({ positionValue, positionPrincipal, hasPosition, tvl, f
     const pnl = positionValue - positionPrincipal;
     const pnlPositive = pnl >= 0;
     return (
-      <div className="mt-auto pt-2 flex items-end justify-between gap-2">
-        <div className="min-w-0">
-          <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Your position</p>
-          <div className="flex items-baseline gap-1.5">
-            <span className="font-mono text-[13px] font-medium text-black dark:text-white tabular-nums">${formatUsd(positionValue)}</span>
-            <span className={`font-mono text-[10px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-              {pnlPositive ? '+' : ''}{formatUsd(pnl)}
-            </span>
-          </div>
+      <div className="mt-auto pt-2 space-y-0.5">
+        <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 whitespace-nowrap">Your position</p>
+        <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+          <span className="font-mono text-[13px] font-medium text-black dark:text-white tabular-nums">${formatUsd(positionValue)}</span>
+          <span className={`font-mono text-[10px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+            {pnlPositive ? '+' : ''}{formatUsd(pnl)}
+          </span>
         </div>
-        <FeeAprStat feeAprPct={feeAprPct} />
+        <FeeAprLine feeAprPct={feeAprPct} />
       </div>
     );
   }
 
   return (
-    <div className="mt-auto pt-2 flex items-end justify-between gap-2">
-      <div className="min-w-0">
-        <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">TVL</p>
-        {tvl !== null ? (
-          <p className="font-mono text-[13px] text-black dark:text-white tabular-nums">${formatUsd(tvl)}</p>
-        ) : (
-          <div className="h-4 w-16 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse" />
-        )}
-      </div>
-      <FeeAprStat feeAprPct={feeAprPct} />
+    <div className="mt-auto pt-2 space-y-0.5">
+      <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 whitespace-nowrap">TVL</p>
+      {tvl !== null ? (
+        <p className="font-mono text-[13px] text-black dark:text-white tabular-nums whitespace-nowrap">${formatUsd(tvl)}</p>
+      ) : (
+        <div className="h-4 w-16 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse" />
+      )}
+      <FeeAprLine feeAprPct={feeAprPct} />
     </div>
   );
 }
@@ -253,7 +248,7 @@ function MarketCard({ marketId, ticker, pool, expanded, positionValue, positionP
       onClick={() => onToggle(marketId)}
       onKeyDown={handleKeyDown}
       aria-expanded={expanded}
-      className={`relative rounded-xl border px-3.5 py-3.5 text-left w-full h-[110px] flex flex-col transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 ${
+      className={`relative rounded-xl border px-3.5 py-3.5 text-left w-full h-[128px] flex flex-col transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 ${
         expanded
           ? 'border-atelier/60 bg-atelier/5 dark:bg-atelier/5 shadow-[0_0_0_1px_rgb(250_76_20/0.2)]'
           : 'border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] hover:border-atelier/30 hover:bg-atelier/[0.02] hover:shadow-sm'

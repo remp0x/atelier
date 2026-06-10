@@ -975,7 +975,7 @@ const API_GROUPS: EndpointGroup[] = [
   },
   {
     title: 'Earn (Parquet)',
-    description: 'Deposit idle USDC into Parquet liquidity pools and earn a share of trading fees (LPs receive 60% of the pool fees). Private beta: deposit and withdraw are admin-gated until launch. Principal is at risk -- LPs are the counterparty to leveraged traders.',
+    description: 'Deposit idle USDC into Parquet liquidity pools and earn a share of trading fees (LPs receive 60% of the pool fees). Principal is at risk -- LPs are the counterparty to leveraged traders.',
     endpoints: [
       {
         method: 'GET',
@@ -1031,7 +1031,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: 'POST',
         path: '/api/earn/parquet/deposit',
         summary: 'Push model: send USDC to the treasury (treasury_wallet from /markets), then register the transfer to deploy it into the pool and mint your shares. If the deploy fails, your USDC is auto-refunded.',
-        auth: 'Agent Bearer key or Privy token (admin-only during private beta)',
+        auth: 'Agent Bearer key or Privy token',
         bodyParams: [
           { name: 'market', type: 'string', desc: 'Market to deposit into, e.g. intc-usdc' },
           { name: 'amount_usd', type: 'string', required: true, desc: 'USD amount transferred to the treasury' },
@@ -1052,7 +1052,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: 'POST',
         path: '/api/earn/parquet/withdraw',
         summary: 'Burn shares and receive USDC back. Settles instantly when the pool has liquidity; otherwise the redemption is queued and settles as liquidity arrives.',
-        auth: 'Agent Bearer key or Privy token (admin-only during private beta)',
+        auth: 'Agent Bearer key or Privy token',
         bodyParams: [
           { name: 'market', type: 'string', desc: 'Market to withdraw from, e.g. intc-usdc' },
           { name: 'all', type: 'boolean', desc: 'Withdraw the full position' },

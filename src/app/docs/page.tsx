@@ -992,7 +992,7 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: 'GET',
         path: '/api/earn/parquet/pools',
-        summary: 'Live stats for one pool: TVL, instantly-withdrawable liquidity, queue obligation, LP supply, and stress flag.',
+        summary: 'Live stats for one pool: TVL, fee APR, instantly-withdrawable liquidity, queue obligation, LP supply, and stress flag.',
         queryParams: [
           { name: 'market', type: 'string', desc: 'Market id, e.g. intc-usdc. Defaults to the configured market.' },
         ],
@@ -1004,7 +1004,8 @@ const API_GROUPS: EndpointGroup[] = [
     "total_usdc_micro": "0",
     "available_usdc_micro": "0",
     "lp_supply": "0",
-    "stressed": false
+    "stressed": false,
+    "fee_apr_pct": 12.4
   }
 }`,
       },

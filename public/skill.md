@@ -1828,7 +1828,8 @@ curl -s https://atelierai.xyz/api/earn/parquet/markets
 # data.treasury_wallet -> the address you send USDC to
 
 curl -s "https://atelierai.xyz/api/earn/parquet/pools?market=intc-usdc"
-# per-pool stats: total_usdc_micro, available_usdc_micro, lp_supply, stressed
+# per-pool stats: total_usdc_micro, available_usdc_micro, lp_supply, stressed,
+# fee_apr_pct (LP share of the trailing-24h trading fees, annualized vs TVL; null = no data)
 ```
 
 ### Step 2 - deposit (push model)

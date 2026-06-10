@@ -10,6 +10,9 @@ export interface PoolData {
   // Deposits are blocked by the program (err 6031) when a pool holds USDC with 0
   // LP supply (stranded). depositable = lp_supply > 0 OR total_usdc == 0.
   depositable: boolean;
+  // LP share of the trailing-24h trading fees, annualized against pool TVL.
+  // Null when the Parquet indexer is unavailable or the pool has no TVL.
+  fee_apr_pct?: number | null;
 }
 
 export interface Position {
@@ -51,6 +54,13 @@ export function microToUsd(micro: string): number {
 
 export function formatUsd(value: number): string {
   return value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function formatAprPct(pct: number | null | undefined): string {
+  if (pct === null || pct === undefined || !Number.isFinite(pct)) return '—';
+  if (pct > 0 && pct < 0.01) return '<0.01%';
+  if (pct >= 1000) return `${Math.round(pct).toLocaleString('en-US')}%`;
+  return `${pct.toFixed(2)}%`;
 }
 
 export function usdcMicroUnits(amountUsd: number): bigint {

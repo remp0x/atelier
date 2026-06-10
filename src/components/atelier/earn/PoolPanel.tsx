@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import type { PoolData, Position, WithdrawStep } from './types';
-import { microToUsd, formatUsd, marketTicker, marketName } from './types';
+import { microToUsd, formatUsd, formatAprPct, marketTicker, marketName } from './types';
 import { StatusBanner } from './StatusBanner';
 import { DepositPanel } from './DepositPanel';
 
@@ -432,10 +432,16 @@ export function PoolPanel({
                 {marketTicker(market)}-USDC
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 mb-0.5">TVL</p>
                 <p className="font-mono text-[13px] tabular-nums text-black dark:text-white">${formatUsd(totalUsd)}</p>
+              </div>
+              <div>
+                <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 mb-0.5">Fee APR</p>
+                <p className={`font-mono text-[13px] tabular-nums ${typeof pool.fee_apr_pct === 'number' && pool.fee_apr_pct > 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
+                  {formatAprPct(pool.fee_apr_pct)}
+                </p>
               </div>
               <div>
                 <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 mb-0.5">Free</p>
@@ -451,7 +457,7 @@ export function PoolPanel({
             <div className="mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800/60">
               <p className="font-mono text-[10px] text-gray-500 dark:text-neutral-500 leading-snug">
                 Fee share: LPs earn <strong className="text-black dark:text-white">60%</strong> of trading fees, paid in USDC.{' '}
-                New pool — no yield history yet.
+                Fee APR annualizes the last 24h of trading fees against pool TVL.
               </p>
             </div>
           </div>

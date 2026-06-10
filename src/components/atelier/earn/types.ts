@@ -18,6 +18,10 @@ export interface Position {
   shares: string;
   principal_usd: string;
   value_usd: string | null;
+  // Who holds this position: 'you' for the signed-in owner, or an agent's name.
+  // agent_id is set when the position belongs to an agent the owner controls.
+  owned_by: string;
+  agent_id: string | null;
 }
 
 export type DepositStep = 'idle' | 'signing' | 'confirming' | 'submitting' | 'done';

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthError } from '@/lib/atelier-auth';
+import { isAgentOwnedByUser, getAtelierAgent } from '@/lib/atelier-db';
 import {
   resolveEarnCaller,
   earnRateLimit,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/earn-auth';
 import { isParquetEarnConfigured, isMarketEnabled, getDefaultMarket } from '@/lib/parquet-earn';
 import { withdrawForOwner, getOwnerEarnPosition } from '@/lib/parquet-earn-flows';
+import type { EarnOwnerKind } from '@/lib/parquet-earn-db';
 
 // Withdraw from the Parquet Earn pool by burning vault shares. Pass `shares`
 // (integer string) or `all: true`. USDC is sent to `destination_wallet`, or for
@@ -32,7 +34,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: `market "${market}" is not enabled for Earn` }, { status: 400 });
     }
 
-    const { position } = await getOwnerEarnPosition(market, caller.ownerKind, caller.ownerId);
+    // A signed-in owner may withdraw on behalf of an agent they own by passing
+    // agent_id; otherwise the caller withdraws their own position.
+    let ownerKind: EarnOwnerKind = caller.ownerKind;
+    let ownerId = caller.ownerId;
+    let fallbackDestination = caller.agent ? (caller.agent.payout_wallet || caller.agent.owner_wallet || null) : null;
+
+    const onBehalfAgentId = typeof body.agent_id === 'string' && body.agent_id.trim() ? body.agent_id.trim() : null;
+    if (onBehalfAgentId) {
+      if (caller.ownerKind !== 'user') {
+        return NextResponse.json({ success: false, error: 'agent_id is only valid for a signed-in owner' }, { status: 400 });
+      }
+      if (!(await isAgentOwnedByUser(onBehalfAgentId, caller.ownerId))) {
+        return NextResponse.json({ success: false, error: 'you do not own this agent' }, { status: 403 });
+      }
+      const agent = await getAtelierAgent(onBehalfAgentId);
+      ownerKind = 'agent';
+      ownerId = onBehalfAgentId;
+      fallbackDestination = agent?.payout_wallet || agent?.owner_wallet || null;
+    }
+
+    const { position } = await getOwnerEarnPosition(market, ownerKind, ownerId);
     if (!position || position.shares <= BigInt(0)) {
       return NextResponse.json({ success: false, error: 'No active Earn position' }, { status: 400 });
     }
@@ -48,8 +70,8 @@ export async function POST(request: NextRequest) {
     let destination: string | null = null;
     if (body.destination_wallet !== undefined && body.destination_wallet !== null) {
       destination = validateSolanaAddress(body.destination_wallet, 'destination_wallet');
-    } else if (caller.agent) {
-      destination = caller.agent.payout_wallet || caller.agent.owner_wallet || null;
+    } else {
+      destination = fallbackDestination;
     }
     if (!destination) {
       return NextResponse.json(
@@ -62,8 +84,8 @@ export async function POST(request: NextRequest) {
 
     const result = await withdrawForOwner({
       market,
-      ownerKind: caller.ownerKind,
-      ownerId: caller.ownerId,
+      ownerKind,
+      ownerId,
       shares,
       destinationWallet: destination,
       slippageBps,

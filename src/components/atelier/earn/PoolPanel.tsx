@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import type { PoolData, Position, WithdrawStep } from './types';
-import { microToUsd, formatUsd } from './types';
+import { microToUsd, formatUsd, marketTicker, marketName } from './types';
 import { StatusBanner } from './StatusBanner';
 import { DepositPanel } from './DepositPanel';
 
@@ -284,7 +285,20 @@ export function PoolPanel({
       )}
 
       {view === 'overview' && (
-        <div className={`${embedded ? '' : 'px-5 py-5'} space-y-5`}>
+        <motion.div
+          key={market}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className={`${embedded ? '' : 'px-5 py-5'} space-y-5`}
+        >
+          {embedded && (
+            <div className="flex items-baseline gap-2 pb-1 border-b border-gray-100 dark:border-neutral-800/60">
+              <span className="font-mono text-[13px] font-semibold text-black dark:text-white">{marketTicker(market)}</span>
+              <span className="font-mono text-[11px] text-gray-500 dark:text-neutral-400 truncate">{marketName(market)}</span>
+              <span className="font-mono text-[10px] text-gray-300 dark:text-neutral-600 ml-auto shrink-0">/ USDC</span>
+            </div>
+          )}
           {!authenticated ? null : positionsLoading ? (
             <div className="space-y-2">
               <div className="h-3 w-20 rounded bg-gray-200 dark:bg-neutral-800 animate-pulse" />
@@ -338,9 +352,14 @@ export function PoolPanel({
           )}
 
           <div className="rounded-lg border border-gray-100 dark:border-neutral-800/40 bg-gray-50/50 dark:bg-black/20 px-4 py-3">
-            <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400 dark:text-neutral-600 mb-3">
-              Pool stats
-            </p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400 dark:text-neutral-600">
+                Pool stats
+              </p>
+              <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-500">
+                {marketTicker(market)}-USDC
+              </p>
+            </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 mb-0.5">TVL</p>
@@ -412,7 +431,7 @@ export function PoolPanel({
               Deposits open soon
             </button>
           )}
-        </div>
+        </motion.div>
       )}
 
       {view === 'deposit' && pool.depositable && canDeposit && authenticated && solanaAddress && (

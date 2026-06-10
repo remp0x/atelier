@@ -28,6 +28,19 @@ export function marketTicker(marketId: string): string {
   return marketId.replace(/-usdc$/i, '').toUpperCase();
 }
 
+// Tokenized US equities backing each pool. SPY is an ETF; the rest are stocks.
+const COMPANY_NAMES: Record<string, string> = {
+  AAPL: 'Apple', AMD: 'AMD', ASML: 'ASML', AVGO: 'Broadcom', BABA: 'Alibaba',
+  COIN: 'Coinbase', COST: 'Costco', CRCL: 'Circle', CRWV: 'CoreWeave', DELL: 'Dell',
+  HOOD: 'Robinhood', IBM: 'IBM', INTC: 'Intel', LLY: 'Eli Lilly', META: 'Meta',
+  MSFT: 'Microsoft', MU: 'Micron', NFLX: 'Netflix', ORCL: 'Oracle', PLTR: 'Palantir',
+  RIVN: 'Rivian', SNDK: 'SanDisk', SPY: 'S&P 500 ETF', TSM: 'TSMC',
+};
+
+export function marketName(marketId: string): string {
+  return COMPANY_NAMES[marketTicker(marketId)] ?? 'US equity';
+}
+
 export function microToUsd(micro: string): number {
   return Number(micro) / 1e6;
 }

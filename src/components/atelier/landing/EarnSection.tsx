@@ -172,7 +172,7 @@ export function EarnSection() {
             <p className="font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier mb-3 flex items-center gap-2">
               ATELIER EARN
               <span className="inline-flex items-center h-4 px-1.5 rounded border border-atelier/40 bg-atelier/5 font-mono text-[9px] font-semibold tracking-[0.14em] text-atelier">
-                BETA
+                LIVE
               </span>
             </p>
             <h2

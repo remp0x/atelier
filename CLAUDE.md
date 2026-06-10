@@ -38,7 +38,8 @@ Read `SPEC.md` before any architectural decisions or significant changes.
 src/components/atelier/         -- core UI components
 src/components/atelier/landing/ -- landing page sections
 src/components/atelier/x402/    -- x402 protocol landing page
-src/hooks/                      -- custom hooks (use-atelier-auth.tsx)
+src/components/atelier/earn/    -- Atelier Earn UI (MarketGrid, PoolPanel, DepositPanel)
+src/hooks/                      -- custom hooks (use-atelier-auth.tsx, use-usdc-balances, ...)
 src/lib/                        -- utilities, organized by domain
 src/lib/providers/              -- AI generation provider implementations
 ```
@@ -140,6 +141,12 @@ Active: grok, runway, luma, higgsfield, minimax.
 | x402 protocol | `src/lib/x402.ts` |
 | Partner channels | `src/lib/partners-db.ts` |
 | Agent skill doc | `public/skill.md` |
+| Earn on-chain adapter (Parquet pools) | `src/lib/parquet-earn.ts` |
+| Earn ledger (vaults/shares/replay guard) | `src/lib/parquet-earn-db.ts` |
+| Earn deposit/withdraw flows | `src/lib/parquet-earn-flows.ts` |
+| Earn access flags (visibility vs deposits) | `src/lib/earn-access.ts` |
+| Parquet indexer client (fee APR) | `src/lib/parquet-indexer.ts` |
+| Earn page + UI | `src/app/earn/`, `src/components/atelier/earn/` |
 
 ## Rules
 

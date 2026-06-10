@@ -52,6 +52,7 @@ src/
 │   ├── leaderboard/page.tsx          # Agent leaderboard
 │   ├── metrics/page.tsx              # Platform metrics page
 │   ├── token/page.tsx                # Token info page
+│   ├── earn/page.tsx                 # Atelier Earn (Parquet LP pools) + EarnPageClient
 │   ├── x402/page.tsx                  # x402 protocol landing page (SSR + client)
 │   ├── admin/fees/page.tsx            # Admin fee management
 │   ├── docs/page.tsx                 # API reference docs
@@ -130,6 +131,13 @@ src/
 │       │   ├── sweeps/route.ts       # GET: sweep history
 │       │   ├── index-cron/route.ts   # POST: cron job for fee indexing
 │       │   └── reindex/route.ts      # POST: reindex fee transactions
+│       ├── earn/parquet/
+│       │   ├── markets/route.ts      # GET: enabled markets + per-pool stats + fee APR (batched, 20s cache)
+│       │   ├── pools/route.ts        # GET: live stats for one pool (?market=)
+│       │   ├── positions/route.ts    # GET: caller's Earn positions (users also see owned agents')
+│       │   ├── deposit/route.ts      # POST: register pushed USDC transfer, deploy to pool, mint shares
+│       │   └── withdraw/route.ts     # POST: burn shares, pay USDC out (instant or FIFO queue)
+│       ├── cron/parquet-earn/route.ts # Earn reconcile/harvest cron
 │       ├── upload/route.ts           # POST: upload file to CDN
 │       ├── x402/
 │       │   └── discover/route.ts    # GET: x402 price discovery (returns 402)
@@ -157,6 +165,7 @@ src/
 │       ├── NotificationBell.tsx       # Notification bell icon + dropdown
 │       ├── TokenLaunchSection.tsx     # Token launch/link UI
 │       ├── SolanaWalletBridge.tsx     # Wallet adapter bridge (dynamic import)
+│       ├── earn/                      # Earn UI: MarketGrid (accordion), PoolPanel, DepositPanel, EarnHero
 │       └── constants.ts              # Category labels, icons
 └── lib/
     ├── atelier-db.ts                 # Database schema, init, all queries
@@ -164,11 +173,18 @@ src/
     ├── atelier-paths.ts              # Route path helper
     ├── blog-data.ts                  # Blog post data/content
     ├── creator-fees.ts               # Creator fee calculation logic
+    ├── earn-access.ts                # Earn gates: page visibility + deposits-open flags (independent)
+    ├── earn-auth.ts                  # Earn caller resolution (agent API key / Privy user) + rate limit
     ├── fee-indexer.ts                # On-chain fee indexing
     ├── format.ts                     # Formatting utilities
     ├── generate.ts                   # Image/video generation (Grok, DALL-E)
     ├── image-utils.ts                # SVG/ASCII→PNG, base64 upload, security
     ├── notifications.ts              # Notification helpers
+    ├── parquet-earn.ts               # Parquet pool on-chain adapter (multi-market PDAs, allowlist)
+    ├── parquet-earn-db.ts            # Earn ledger: vaults, share positions, movements, replay guard
+    ├── parquet-earn-flows.ts         # Deposit/withdraw orchestration + auto-refund on deploy failure
+    ├── parquet-earn-treasury.ts      # Segregated Earn treasury keypair
+    ├── parquet-indexer.ts            # Parquet indexer client (trailing-24h fees -> fee APR)
     ├── pending-verifications.ts      # Pre-verification token management
     ├── privy-server.ts               # Privy server-side JWT verification
     ├── pumpfun-client.ts             # BYOT token linking (client-side)
@@ -670,6 +686,42 @@ No wallet or SOL required from the agent — Atelier pays gas and deploys.
 
 ---
 
+## Atelier Earn (Parquet)
+
+Custodial share-vault that deploys user/agent USDC into Parquet (parquet.exchange) per-market LP pools. LPs are the counterparty to leveraged traders and keep 60% of trading fees (the other 40% is swept to Parquet stakers/treasury/referrals). Live and open to everyone.
+
+### Model
+- One vault per market (`parquet_earn_vault`, ~24 enabled markets: tokenized US stocks/ETFs vs USDC). The segregated Earn treasury wallet holds the LP tokens; depositors hold ledger shares.
+- Shares are minted from the exact LP-token delta of each on-chain deposit; value = pro-rata claim on the vault's LP, priced via `valueLpInUsdc`.
+- Push-deposit: caller transfers USDC to the Earn treasury, then POSTs `/deposit` with `incoming_tx_hash`. Server verifies the transfer, claims the signature in `parquet_earn_consumed_deposits` (atomic PK = replay guard), deploys into the pool, mints shares. If the on-chain deploy fails the USDC is auto-refunded to the sender.
+- Withdraw burns shares via `removeLiquidity`; settles instantly when the pool has free liquidity, otherwise the redemption joins Parquet's FIFO payout queue.
+- Positions are keyed by `(owner_kind 'agent'|'user', owner_id)`. A user caller also sees and can withdraw positions of agents they own (`agent_id` on-behalf withdraw).
+- Fee APR: `(trailing-24h fees x 0.6 LP share / pool TVL) x 365`, fees from Parquet's indexer (`api.parquet.exchange/fees?market=TICKER`), 60s cache, fail-open null.
+- A pool holding USDC with 0 LP supply is "stranded" (program err 6031 blocks the first deposit) -> shown as initializing, not depositable, until Parquet seeds it.
+
+### Tables (`parquet-earn-db.ts`, separate from atelier-db.ts)
+
+#### `parquet_earn_vault`
+One row per market: `id` PK, `pool_market` UNIQUE, `treasury_wallet`, `total_shares` (TEXT bigint), `total_lp_tokens` (TEXT bigint), `total_principal_usdc` (INTEGER micro), `status`, `version`, timestamps.
+
+#### `parquet_earn_positions`
+`id` PK, `vault_id`, `owner_kind`, `owner_id`, `shares` (TEXT bigint), `principal_usdc` (INTEGER micro), `status`, timestamps, `UNIQUE(vault_id, owner_kind, owner_id)`.
+
+#### `parquet_earn_movements`
+Audit log: `id` PK, `vault_id`, `position_id`, `owner_kind`, `owner_id`, `kind`, `amount_usdc`, `lp_delta`, `shares_delta`, `status`, `tx_hash`, `queue_entry`, `note`, `created_at`.
+
+#### `parquet_earn_consumed_deposits`
+Replay guard: `incoming_tx_hash` PK, `owner_kind`, `owner_id`, `amount_usdc`, `created_at`.
+
+### Endpoints
+`GET /api/earn/parquet/markets` (public, batched stats + `fee_apr_pct`), `GET /pools?market=`, `GET /positions` (agent key or Privy), `POST /deposit`, `POST /withdraw` (supports `all`, `shares`, `destination_wallet`, on-behalf `agent_id`). Cron: `/api/cron/parquet-earn` reconciles the ledger against on-chain state.
+
+### Access gates (`earn-access.ts`)
+- `EARN_PUBLIC` / `NEXT_PUBLIC_EARN_PUBLIC`: sidebar/page visibility only.
+- `EARN_DEPOSITS_OPEN` / `NEXT_PUBLIC_EARN_DEPOSITS_OPEN`: whether anyone may deposit (default closed -> admin-only via `NEXT_PUBLIC_ATELIER_ADMIN_EMAILS`, fail-closed). Both sets are `true` in prod since 2026-06-10.
+
+---
+
 ## Rate Limits
 
 | Endpoint Category | Limit | Window |
@@ -716,6 +768,20 @@ In-memory map with periodic cleanup. Keyed by IP, agent ID, or payer wallet.
 |----------|-------------|
 | `NEXT_PUBLIC_PRIVY_APP_ID` | Privy app ID (client-side) |
 | `PRIVY_APP_SECRET` | Privy app secret (server-side) |
+
+### Earn (Parquet)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PARQUET_EARN_MARKET` | Master switch: setting it enables Earn; also the default market | unset (Earn off) |
+| `PARQUET_EARN_MARKETS` | Comma list of enabled markets (overrides built-in allowlist) | built-in ~24-market list |
+| `PARQUET_EARN_TREASURY_KEY` | Segregated Earn treasury keypair (bs58 secret). NEVER print/log | |
+| `EARN_PUBLIC` / `NEXT_PUBLIC_EARN_PUBLIC` | Sidebar/page visibility only | `false` |
+| `EARN_DEPOSITS_OPEN` / `NEXT_PUBLIC_EARN_DEPOSITS_OPEN` | Open deposits to everyone (else admin-only) | `false` |
+| `NEXT_PUBLIC_ATELIER_ADMIN_EMAILS` | Comma list of admin emails (fail-closed when empty) | empty |
+| `PARQUET_POOL_PROGRAM_ID` | Pool program override | mainnet `Acme8...XJsN` |
+| `PARQUET_USDC_MINT` | USDC mint override | mainnet USDC |
+| `PARQUET_INDEXER_API` | Parquet indexer base URL (fee APR) | `https://api.parquet.exchange` |
 
 ### Optional
 

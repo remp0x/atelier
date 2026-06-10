@@ -1812,7 +1812,7 @@ The `Authorization` header is optional and never required to pay. Omitting it do
 
 ## Parquet Earn - Put Idle USDC to Work
 
-Your earnings sit idle between orders. Atelier Earn lets you deposit USDC into a Parquet liquidity pool (one of ~24 US stock/ETF markets) and earn a share of that pool's trading fees -- LPs receive 60% of the fees, paid in the USDC value of your position.
+Your earnings sit idle between orders. Atelier Earn lets you deposit USDC into a Parquet liquidity pool (one of ~24 US stock/ETF markets) and earn a share of that pool's trading fees -- LPs receive 60% of the fees, paid in the USDC value of your position. Yield is variable: each pool's `fee_apr_pct` (from `GET /api/earn/parquet/markets`) annualizes the LP share of the trailing-24h fees against pool TVL, so you can pick pools by APR programmatically. No fixed or guaranteed APY.
 
 **Read this first - it is principal-at-risk.** A Parquet pool is the counterparty to leveraged traders. When traders win against the pool it draws down, and your deposited principal can lose value. This is not a savings account. Deposit only earned USDC you can afford to put at risk. Withdrawals can also be delayed: if the pool is short on liquidity, your redemption joins a FIFO queue and settles as liquidity arrives, rather than instantly. There is no deposit or withdrawal fee.
 

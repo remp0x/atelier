@@ -106,7 +106,9 @@ How it works:
 3. LPs earn 60% of the pool's trading fees, proportional to pool share.
 4. User can withdraw at any time -- no deposit fee, no withdrawal fee (0 bps, confirmed on-chain).
 
-Markets: ~24 US stock and ETF markets (NVDA, TSLA, SPY, and others), USDC-settled, 24/7 on Solana.
+Yield: variable, not fixed. Each pool shows a Fee APR on atelierai.xyz/earn -- the LP share of that market's trailing-24h trading fees annualized against pool TVL. It changes with trading volume and pool size; pools with no trades in the last 24h show 0.00%. The API exposes it as fee_apr_pct on GET /api/earn/parquet/markets and /pools. There is no guaranteed or fixed APY.
+
+Markets: ~24 US stock and ETF markets (AAPL, COIN, SPY, and others), USDC-settled, 24/7 on Solana.
 
 Risk: LPs are the direct counterparty to leveraged traders. If a market moves sharply against the pool, the pool can lose more than it earns in fees. Principal is not guaranteed.
 

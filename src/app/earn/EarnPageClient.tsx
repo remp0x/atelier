@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
 import { getPrivyAccessToken } from '@/lib/privy-client';
-import { isEarnPublic, isEarnAdminEmail } from '@/lib/earn-access';
+import { isEarnDepositsOpen, isEarnAdminEmail } from '@/lib/earn-access';
 import { EarnHero } from '@/components/atelier/earn/EarnHero';
 import { MarketGrid } from '@/components/atelier/earn/MarketGrid';
 import type { PoolData, Position } from '@/components/atelier/earn/types';
@@ -18,7 +18,7 @@ interface MarketsResponse {
 export function EarnPageClient() {
   const { authenticated, ready, login, solanaAddress, user } = useAtelierAuth();
   const adminEmail = user?.google?.email ?? user?.email?.address ?? null;
-  const canDeposit = isEarnPublic() || isEarnAdminEmail(adminEmail);
+  const canDeposit = isEarnDepositsOpen() || isEarnAdminEmail(adminEmail);
   const balances = useUsdcBalances();
 
   const [enabledMarkets, setEnabledMarkets] = useState<string[]>([]);

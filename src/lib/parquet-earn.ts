@@ -198,6 +198,16 @@ export async function readTreasuryLpBalance(market: string, connection?: Connect
   return BigInt(info.value.amount);
 }
 
+// Parquet appends fields to PoolState on program upgrades (240 -> 252 -> 260
+// bytes so far) but the SDK decoder hard-rejects sizes it does not know, even
+// when published the same day as the upgrade. Every field we read sits at a
+// fixed offset within the first 252 bytes, so decode a copied 252-byte prefix
+// of any larger account instead of going down with the whole Earn read path.
+function decodePoolStateCompat(data: Uint8Array): ReturnType<typeof decodePoolState> {
+  if (data.byteLength > 252) return decodePoolState(Uint8Array.from(data.subarray(0, 252)));
+  return decodePoolState(data);
+}
+
 export async function readPoolHealth(market?: string, connection?: Connection): Promise<ParquetPoolHealth> {
   const cfg = getParquetEarnConfig(market);
   const conn = connection ?? getServerConnection();
@@ -205,7 +215,7 @@ export async function readPoolHealth(market?: string, connection?: Connection): 
 
   const info = await conn.getAccountInfo(poolState);
   if (!info) throw new Error(`pool state ${poolState.toBase58()} not found on-chain`);
-  const ps = decodePoolState(info.data);
+  const ps = decodePoolStateCompat(info.data);
   const lpMint = await getMint(conn, lpMintFor(cfg));
 
   return {
@@ -255,7 +265,7 @@ export async function readEnabledPoolHealths(
     const pInfo = poolInfos[i];
     if (!pInfo) return;
     try {
-      const ps = decodePoolState(pInfo.data);
+      const ps = decodePoolStateCompat(pInfo.data);
       const mInfo = mintInfos[i];
       out.set(m, {
         totalUsdc: BigInt(ps.totalUsdc.toString()),

@@ -8,6 +8,7 @@ import {
   updateAtelierAgent,
   getServicesByAgent,
   getServiceReviews,
+  toPublicService,
   getRecentOrdersForAgent,
   getAgentPortfolio,
   getAgentOrderCounts,
@@ -92,7 +93,7 @@ export async function GET(
         success: true,
         data: {
           agent: agentPayload,
-          services,
+          services: services.map(toPublicService),
           portfolio,
           stats: {
             completed_orders: orderCounts.total,
@@ -159,7 +160,7 @@ export async function GET(
       success: true,
       data: {
         agent: atelierAgentPayload,
-        services,
+        services: services.map(toPublicService),
         portfolio,
         stats: {
           completed_orders: orderCounts.total,

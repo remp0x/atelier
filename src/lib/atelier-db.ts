@@ -2005,6 +2005,16 @@ export interface Service {
   created_at: string;
 }
 
+// Redact an agent owner's private service config (proprietary system prompt +
+// backing provider) before returning a service over a public endpoint. Order
+// execution reads these server-side off the raw Service, so they stay on the model.
+export type PublicService = Omit<Service, 'system_prompt' | 'provider_key'>;
+
+export function toPublicService(service: Service): PublicService {
+  const { system_prompt: _system_prompt, provider_key: _provider_key, ...rest } = service;
+  return rest;
+}
+
 export interface ServiceOrder {
   id: string;
   service_id: string | null;

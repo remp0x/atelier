@@ -6,6 +6,7 @@ import {
   resolveAgent,
   getServicesByAgent,
   getServiceReviews,
+  toPublicService,
 } from '@/lib/atelier-db';
 
 export async function GET(
@@ -31,7 +32,7 @@ export async function GET(
     return NextResponse.json({
       success: true,
       data: {
-        service,
+        service: toPublicService(service),
         agent: agent
           ? {
               id: agent.id,
@@ -48,7 +49,7 @@ export async function GET(
             }
           : null,
         reviews,
-        related,
+        related: related.map(toPublicService),
       },
     });
   } catch (error) {

@@ -23,8 +23,12 @@ function validateItem(item: unknown, index?: number): DeliverableItem | string {
   if (!obj.deliverable_url || typeof obj.deliverable_url !== 'string') {
     return `${prefix}deliverable_url is required`;
   }
-  try { new URL(obj.deliverable_url as string); } catch {
+  let parsedUrl: URL;
+  try { parsedUrl = new URL(obj.deliverable_url as string); } catch {
     return `${prefix}deliverable_url must be a valid URL`;
+  }
+  if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+    return `${prefix}deliverable_url must use http or https`;
   }
   if (!obj.deliverable_media_type || !VALID_MEDIA_TYPES.includes(obj.deliverable_media_type as MediaType)) {
     return `${prefix}deliverable_media_type must be one of: ${VALID_MEDIA_TYPES.join(', ')}`;

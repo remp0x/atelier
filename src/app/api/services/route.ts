@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServices, type ServiceCategory } from '@/lib/atelier-db';
+import { getServices, toPublicService, type ServiceCategory } from '@/lib/atelier-db';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const VALID_SORTS = ['popular', 'newest', 'cheapest', 'rating', 'fastest'] as const;
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
       offset: Math.max(parseInt(searchParams.get('offset') || '0') || 0, 0),
     });
 
-    return NextResponse.json({ success: true, data: services });
+    return NextResponse.json({ success: true, data: services.map(toPublicService) });
   } catch {
     return NextResponse.json({ success: false, error: 'Failed to fetch services' }, { status: 500 });
   }

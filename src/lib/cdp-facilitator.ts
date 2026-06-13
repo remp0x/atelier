@@ -225,31 +225,39 @@ export function buildCdpV2PaymentRequirements(params: {
 }
 
 /**
- * Builds the v2 HTTP 402 the buyer signs against. The same `requirements`,
- * `resource`, and `bazaar` objects are later forwarded verbatim to CDP
- * verify/settle, so the buyer's signed authorization always matches what CDP
- * validates. Emitted as JSON body and as the base64 `Payment-Required` header.
+ * Builds the buyer-facing HTTP 402 in x402 **v1** shape. The widely-used
+ * `x402-fetch` client is v1 -- its zod schema rejects CAIP-2 networks and requires
+ * `maxAmountRequired` / a string `resource` -- so the 402 a buyer signs against
+ * must be v1. The EIP-3009 authorization the buyer signs is bound to the USDC
+ * EIP-712 domain (chainId 8453), NOT the x402 envelope version, so the very same
+ * signature validates when we forward it to CDP as a v2 settle (see
+ * `buildCdpV2PaymentPayload`). Down-converted from the v2 challenge so the
+ * amount / payTo / asset / resource always match what we later send to CDP.
  */
-export function buildCdpV2402Response(params: {
+export function buildCdpV1402Response(params: {
   requirements: CdpV2PaymentRequirements;
   resource: CdpResourceInfo;
-  bazaar: CdpBazaarExtension;
   error: string;
 }): Response {
-  const serialized = JSON.stringify({
-    x402Version: 2,
-    error: params.error,
-    accepts: [params.requirements],
-    resource: params.resource,
-    extensions: { bazaar: params.bazaar },
-  });
-  return new Response(serialized, {
+  const r = params.requirements;
+  const v1Entry = {
+    scheme: r.scheme,
+    network: 'base',
+    maxAmountRequired: r.amount,
+    resource: params.resource.url,
+    description: params.resource.description,
+    mimeType: params.resource.mimeType,
+    payTo: r.payTo,
+    maxTimeoutSeconds: r.maxTimeoutSeconds,
+    asset: r.asset,
+    extra: r.extra,
+  };
+  return new Response(JSON.stringify({ x402Version: 1, error: params.error, accepts: [v1Entry] }), {
     status: 402,
     headers: {
       'Content-Type': 'application/json',
-      'Payment-Required': Buffer.from(serialized).toString('base64'),
       'X-Payment-Scheme': 'exact',
-      'X-Payment-Network': params.requirements.network,
+      'X-Payment-Network': 'base',
       'X-Payment-Asset': 'USDC',
     },
   });
@@ -284,17 +292,16 @@ export function decodeXPaymentPayload(header: string | null): Record<string, unk
   try {
     const json = Buffer.from(header.trim(), 'base64').toString('utf8');
     const parsed: unknown = JSON.parse(json);
-    // Only capture x402 v2 payloads (the CDP/Base flow): they carry `x402Version: 2`
-    // and/or `accepted`, with the EIP-3009 signature nested under `payload`. This
-    // deliberately excludes v1 `{scheme,network,payload}` envelopes so a base64-JSON
-    // payment is never diverted away from the legacy tx-signature path.
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      'payload' in parsed &&
-      ((parsed as Record<string, unknown>).x402Version === 2 || 'accepted' in parsed)
-    ) {
-      return parsed as Record<string, unknown>;
+    // Capture x402 Base payloads: v2 (`x402Version:2` / `accepted`) or v1 carrying a
+    // Base `network` -- both nest the EIP-3009 signature under `payload`. Gating on the
+    // Base network keeps v1 Solana envelopes (`network:'solana'`) on the legacy
+    // tx-signature path instead of diverting them into the CDP flow.
+    if (parsed && typeof parsed === 'object' && 'payload' in parsed) {
+      const p = parsed as Record<string, unknown>;
+      const net = typeof p.network === 'string' ? p.network.toLowerCase() : '';
+      const isV2 = p.x402Version === 2 || 'accepted' in p;
+      const isBaseV1 = net === 'base' || net.includes('eip155') || net.includes('8453');
+      if (isV2 || isBaseV1) return p;
     }
     return null;
   } catch {

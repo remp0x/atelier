@@ -16,14 +16,17 @@ take the first CDP-settled payment so the service auto-indexes.
   `buildCdpBazaarExtension` discovery declaration, and the payload codec.
   Short-circuits to a no-op when keys are absent; never throws.
 - `POST /api/x402/pay` -- when `?chain=base` and CDP is enabled, this is a real
-  x402 **v2** resource: returns a 402 (`accepts` with CAIP-2 network + `amount`, a
-  top-level `resource` ResourceInfo, and `extensions.bazaar`), accepts a base64
-  `X-PAYMENT` / `PAYMENT-SIGNATURE` payload, re-wraps it as a v2 PaymentPayload
-  carrying `resource` + `extensions.bazaar`, runs CDP `verify` + `settle`, then
-  creates the order and pays the provider. **A successful settle with the v2
-  payload + valid bazaar extension is what indexes the resource in Bazaar** (v1
-  `outputSchema` discovery is deprecated and never indexed). The Solana / legacy
-  tx-hash flow is unchanged and still works.
+  x402 resource. The buyer-facing 402 is **v1** (`maxAmountRequired`,
+  `network:'base'`, string `resource`) because the common `x402-fetch` client is
+  v1 and rejects CAIP-2 networks. It accepts the base64 `X-PAYMENT` /
+  `PAYMENT-SIGNATURE` payload, then **re-wraps the buyer's EIP-3009 signature into
+  an x402 v2 PaymentPayload** (CAIP-2 `eip155:8453`, `amount`, top-level `resource`
+  ResourceInfo, `extensions.bazaar`) and runs CDP `verify` + `settle` in v2. The
+  signature is portable across envelope versions (it is bound to the USDC EIP-712
+  domain / chainId 8453, not the x402 version). **A successful v2 settle carrying
+  `resource` + a valid bazaar extension is what indexes the resource in Bazaar**
+  (v1 `outputSchema` discovery is deprecated and never indexed). The Solana /
+  legacy tx-hash flow is unchanged and still works.
 - `GET /api/x402/bazaar` -- live Bazaar-style discovery declaration. Read-only.
 
 ## Required env vars

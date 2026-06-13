@@ -23,7 +23,7 @@ import {
 import {
   CDP_FACILITATOR_ENABLED,
   buildCdpV2PaymentRequirements,
-  buildCdpV2402Response,
+  buildCdpV1402Response,
   buildCdpBazaarExtension,
   buildCdpV2PaymentPayload,
   decodeXPaymentPayload,
@@ -153,7 +153,7 @@ export async function GET(request: NextRequest): Promise<NextResponse | Response
     if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
       const challenge = cdpChallengeForService(service, getOrigin(request));
       if (challenge) {
-        return buildCdpV2402Response({ ...challenge, error: 'X-PAYMENT header required to access this resource' });
+        return buildCdpV1402Response({ requirements: challenge.requirements, resource: challenge.resource, error: 'X-PAYMENT header required to access this resource' });
       }
     }
 
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
         const challenge = cdpChallengeForService(service, getOrigin(request));
         if (challenge) {
-          return buildCdpV2402Response({ ...challenge, error: 'X-PAYMENT header required to access this resource' });
+          return buildCdpV1402Response({ requirements: challenge.requirements, resource: challenge.resource, error: 'X-PAYMENT header required to access this resource' });
         }
       }
       const requirements = buildPaymentRequirements({

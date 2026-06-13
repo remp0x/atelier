@@ -104,7 +104,11 @@ function cdpChallengeForService(service: Service, origin: string): CdpServiceCha
   return {
     requirements: buildCdpV2PaymentRequirements({ totalUsd, payTo: treasury }),
     resource: {
-      url: `${origin}/api/x402/pay?service_id=${service.id}`,
+      // Must carry &chain=base: CDP catalogs this exact URL and validates it by
+      // fetching its 402. Without the chain param the GET defaults to Solana and
+      // returns a non-matching (Solana payTo) 402, so CDP drops the resource after
+      // accepting the bazaar extension ("processing" that never indexes).
+      url: `${origin}/api/x402/pay?service_id=${service.id}&chain=base`,
       description: `Atelier: ${service.title} (${service.id})`,
       mimeType: 'application/json',
     },

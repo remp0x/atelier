@@ -538,6 +538,7 @@ async function handleCdpHire(
       x402: {
         payment_verified: true,
         settled_via: 'cdp-facilitator',
+        cdp_extension: settlement.extensionResponses ?? null,
         payer_wallet: payerWallet,
         total_charged_usd: totalUsd,
         platform_fee_usd: feeUsd,

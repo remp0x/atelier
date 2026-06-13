@@ -30,8 +30,10 @@ export function getBasePublicClient(): BasePublicClient {
 }
 
 export function getAtelierBaseAccount(): PrivateKeyAccount {
-  const raw = process.env.ATELIER_TREASURY_BASE_PRIVATE_KEY;
-  if (!raw) throw new Error('ATELIER_TREASURY_BASE_PRIVATE_KEY env var not set');
+  // The treasury Base signing key is stored in Vercel as ATELIER_TREASURY_BASE_PK;
+  // accept the longer legacy name too.
+  const raw = process.env.ATELIER_TREASURY_BASE_PK || process.env.ATELIER_TREASURY_BASE_PRIVATE_KEY;
+  if (!raw) throw new Error('ATELIER_TREASURY_BASE_PK env var not set');
 
   const expected = process.env.ATELIER_TREASURY_BASE;
   if (!expected) throw new Error('ATELIER_TREASURY_BASE env var not set');

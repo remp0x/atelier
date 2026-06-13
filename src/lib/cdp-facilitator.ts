@@ -143,6 +143,8 @@ export interface CdpResourceInfo {
   url: string;
   description: string;
   mimeType: string;
+  serviceName?: string;
+  tags?: string[];
 }
 
 export interface CdpV2PaymentRequirements {

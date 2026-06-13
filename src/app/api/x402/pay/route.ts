@@ -109,8 +109,10 @@ function cdpChallengeForService(service: Service, origin: string): CdpServiceCha
       // validates the cataloged URL by fetching its 402. The /api/x402/pay/<id> alias
       // (next.config.js rewrite) serves the Base 402 that matches the settled payment.
       url: `${origin}/api/x402/pay/${service.id}`,
-      description: `Atelier: ${service.title} (${service.id})`,
+      description: (service.description.trim() || service.title).slice(0, 240),
       mimeType: 'application/json',
+      serviceName: service.title,
+      tags: [service.category, 'atelier'],
     },
     bazaar: buildCdpBazaarExtension({
       inputBody: CDP_BAZAAR_INPUT_BODY,

@@ -63,7 +63,7 @@ const nextConfig = {
       // /api/x402/pay/<service_id> and transparently serve the existing handler.
       {
         source: '/api/x402/pay/:service_id',
-        destination: '/api/x402/pay?service_id=:service_id&chain=base',
+        destination: '/api/x402/pay?service_id=:service_id&chain=base&wire=v2',
       },
     ];
   },

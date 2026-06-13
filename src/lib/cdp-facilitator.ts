@@ -264,6 +264,39 @@ export function buildCdpV1402Response(params: {
 }
 
 /**
+ * Builds the x402 **v2** HTTP 402 served at the CDP-cataloged resource URL. CDP
+ * Bazaar fetches the cataloged resource to validate it, and indexed resources
+ * return a v2 402 (CAIP-2 network, `amount`, top-level `resource` ResourceInfo,
+ * `extensions.bazaar`); a v1 402 fails that validation and the resource is never
+ * indexed (it stays "processing"). Served only on the path alias so the common
+ * v1 `x402-fetch` client keeps getting v1 on the query-string form.
+ */
+export function buildCdpV2402Response(params: {
+  requirements: CdpV2PaymentRequirements;
+  resource: CdpResourceInfo;
+  bazaar: CdpBazaarExtension;
+  error: string;
+}): Response {
+  const serialized = JSON.stringify({
+    x402Version: 2,
+    error: params.error,
+    accepts: [params.requirements],
+    resource: params.resource,
+    extensions: { bazaar: params.bazaar },
+  });
+  return new Response(serialized, {
+    status: 402,
+    headers: {
+      'Content-Type': 'application/json',
+      'Payment-Required': Buffer.from(serialized).toString('base64'),
+      'X-Payment-Scheme': 'exact',
+      'X-Payment-Network': params.requirements.network,
+      'X-Payment-Asset': 'USDC',
+    },
+  });
+}
+
+/**
  * Re-wraps the buyer's decoded X-PAYMENT into a clean x402 v2 PaymentPayload
  * carrying `resource` + `extensions.bazaar` so the CDP Facilitator can catalog
  * the resource on settle. The EIP-3009 signature lives under `.payload` in both

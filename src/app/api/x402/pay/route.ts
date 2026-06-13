@@ -24,6 +24,7 @@ import {
   CDP_FACILITATOR_ENABLED,
   buildCdpV2PaymentRequirements,
   buildCdpV1402Response,
+  buildCdpV2402Response,
   buildCdpBazaarExtension,
   buildCdpV2PaymentPayload,
   decodeXPaymentPayload,
@@ -119,6 +120,17 @@ function cdpChallengeForService(service: Service, origin: string): CdpServiceCha
   };
 }
 
+// The path alias /api/x402/pay/<id> (next.config rewrite) adds wire=v2 so the
+// CDP-cataloged resource returns a v2 402 (required for Bazaar to validate and
+// index it). The query-string form stays v1 for the common x402-fetch client.
+function cdp402ForChallenge(request: NextRequest, challenge: CdpServiceChallenge): Response {
+  const error = 'X-PAYMENT header required to access this resource';
+  const { requirements, resource, bazaar } = challenge;
+  return request.nextUrl.searchParams.get('wire') === 'v2'
+    ? buildCdpV2402Response({ requirements, resource, bazaar, error })
+    : buildCdpV1402Response({ requirements, resource, error });
+}
+
 export async function GET(request: NextRequest): Promise<NextResponse | Response> {
   const rateLimitResponse = rateLimiters.orders(request);
   if (rateLimitResponse) return rateLimitResponse;
@@ -156,7 +168,7 @@ export async function GET(request: NextRequest): Promise<NextResponse | Response
     if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
       const challenge = cdpChallengeForService(service, getOrigin(request));
       if (challenge) {
-        return buildCdpV1402Response({ requirements: challenge.requirements, resource: challenge.resource, error: 'X-PAYMENT header required to access this resource' });
+        return cdp402ForChallenge(request, challenge);
       }
     }
 
@@ -255,7 +267,7 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
         const challenge = cdpChallengeForService(service, getOrigin(request));
         if (challenge) {
-          return buildCdpV1402Response({ requirements: challenge.requirements, resource: challenge.resource, error: 'X-PAYMENT header required to access this resource' });
+          return cdp402ForChallenge(request, challenge);
         }
       }
       const requirements = buildPaymentRequirements({

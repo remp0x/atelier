@@ -22,13 +22,17 @@ import {
 } from '@/lib/x402';
 import {
   CDP_FACILITATOR_ENABLED,
-  buildCdpBasePaymentRequirements,
-  buildCdp402Response,
+  buildCdpV2PaymentRequirements,
+  buildCdpV2402Response,
+  buildCdpBazaarExtension,
+  buildCdpV2PaymentPayload,
   decodeXPaymentPayload,
   encodeXPaymentResponse,
   verifyViaCdpFacilitator,
   settleViaCdpFacilitator,
-  type CdpPaymentRequirements,
+  type CdpV2PaymentRequirements,
+  type CdpResourceInfo,
+  type CdpBazaarExtension,
 } from '@/lib/cdp-facilitator';
 import { settleX402ProviderPayout } from '@/lib/x402-settle';
 import { rateLimiters } from '@/lib/rateLimit';
@@ -54,13 +58,19 @@ interface InstantHireBody {
   requirements?: Record<string, string>;
 }
 
-const CDP_OUTPUT_SCHEMA: Record<string, unknown> = {
-  type: 'object',
-  properties: {
-    order_id: { type: 'string' },
-    status: { type: 'string' },
-    status_url: { type: 'string' },
-  },
+// Bazaar discovery metadata for the instant-hire resource (POST + JSON body).
+const CDP_BAZAAR_INPUT_BODY: Record<string, unknown> = {
+  brief: 'Generate a 5-second product video of a sneaker on a rotating platform',
+  requirements: {},
+};
+const CDP_BAZAAR_INPUT_PROPERTIES: Record<string, unknown> = {
+  brief: { type: 'string', description: 'What you want the agent to produce' },
+  requirements: { type: 'object', description: 'Optional answers to the service requirements' },
+};
+const CDP_BAZAAR_OUTPUT_EXAMPLE: Record<string, unknown> = {
+  order_id: 'ord_1780278669252_r2oi99c7d',
+  status: 'paid',
+  status_url: 'https://atelierai.xyz/api/orders/ord_1780278669252_r2oi99c7d',
 };
 
 function getOrigin(request: NextRequest): string {
@@ -81,17 +91,29 @@ function serviceBaseEligible(service: Service): boolean {
 
 const BASE_NOT_AVAILABLE = 'This service is not available on Base yet: the provider has not configured a Base payout wallet.';
 
-function cdpRequirementsForService(service: Service, origin: string): CdpPaymentRequirements | null {
+interface CdpServiceChallenge {
+  requirements: CdpV2PaymentRequirements;
+  resource: CdpResourceInfo;
+  bazaar: CdpBazaarExtension;
+}
+
+function cdpChallengeForService(service: Service, origin: string): CdpServiceChallenge | null {
   const treasury = process.env.ATELIER_TREASURY_BASE;
   if (!treasury) return null;
   const { totalUsd } = computeTotalWithFee(service.price_usd);
-  return buildCdpBasePaymentRequirements({
-    totalUsd,
-    payTo: treasury,
-    resource: `${origin}/api/x402/pay?service_id=${service.id}`,
-    description: `Atelier: ${service.title} (${service.id})`,
-    outputSchema: CDP_OUTPUT_SCHEMA,
-  });
+  return {
+    requirements: buildCdpV2PaymentRequirements({ totalUsd, payTo: treasury }),
+    resource: {
+      url: `${origin}/api/x402/pay?service_id=${service.id}`,
+      description: `Atelier: ${service.title} (${service.id})`,
+      mimeType: 'application/json',
+    },
+    bazaar: buildCdpBazaarExtension({
+      inputBody: CDP_BAZAAR_INPUT_BODY,
+      inputProperties: CDP_BAZAAR_INPUT_PROPERTIES,
+      outputExample: CDP_BAZAAR_OUTPUT_EXAMPLE,
+    }),
+  };
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse | Response> {
@@ -129,9 +151,9 @@ export async function GET(request: NextRequest): Promise<NextResponse | Response
     }
 
     if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
-      const cdpRequirements = cdpRequirementsForService(service, getOrigin(request));
-      if (cdpRequirements) {
-        return buildCdp402Response(cdpRequirements, 'X-PAYMENT header required to access this resource');
+      const challenge = cdpChallengeForService(service, getOrigin(request));
+      if (challenge) {
+        return buildCdpV2402Response({ ...challenge, error: 'X-PAYMENT header required to access this resource' });
       }
     }
 
@@ -206,7 +228,8 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       );
     }
 
-    const paymentHeader = request.headers.get('X-PAYMENT');
+    // v1 clients send `X-PAYMENT`; x402 v2 clients send `PAYMENT-SIGNATURE`. Accept both.
+    const paymentHeader = request.headers.get('X-PAYMENT') ?? request.headers.get('PAYMENT-SIGNATURE');
     const cdpPayload = CDP_FACILITATOR_ENABLED ? decodeXPaymentPayload(paymentHeader) : null;
     if (cdpPayload) {
       if (!serviceBaseEligible(service)) {
@@ -227,9 +250,9 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
         return NextResponse.json({ success: false, error: BASE_NOT_AVAILABLE }, { status: 400 });
       }
       if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
-        const cdpRequirements = cdpRequirementsForService(service, getOrigin(request));
-        if (cdpRequirements) {
-          return buildCdp402Response(cdpRequirements, 'X-PAYMENT header required to access this resource');
+        const challenge = cdpChallengeForService(service, getOrigin(request));
+        if (challenge) {
+          return buildCdpV2402Response({ ...challenge, error: 'X-PAYMENT header required to access this resource' });
         }
       }
       const requirements = buildPaymentRequirements({
@@ -428,15 +451,24 @@ async function handleCdpHire(
   requirementAnswers: Record<string, string> | undefined,
 ): Promise<NextResponse | Response> {
   const origin = getOrigin(request);
-  const requirements = cdpRequirementsForService(service, origin);
-  if (!requirements) {
+  const challenge = cdpChallengeForService(service, origin);
+  if (!challenge) {
     return NextResponse.json(
       { success: false, error: 'Base treasury (ATELIER_TREASURY_BASE) not configured for CDP settlement' },
       { status: 503 },
     );
   }
 
-  const verification = await verifyViaCdpFacilitator({ paymentPayload, paymentRequirements: requirements });
+  // Re-wrap the buyer's payload as a v2 PaymentPayload carrying `resource` +
+  // `extensions.bazaar` so a successful settle catalogs this resource in CDP Bazaar.
+  const v2Payload = buildCdpV2PaymentPayload({
+    buyerPayload: paymentPayload,
+    requirements: challenge.requirements,
+    resource: challenge.resource,
+    bazaar: challenge.bazaar,
+  });
+
+  const verification = await verifyViaCdpFacilitator({ paymentPayload: v2Payload, paymentRequirements: challenge.requirements });
   if (!verification.isValid) {
     return NextResponse.json(
       { success: false, error: `CDP payment verification failed: ${verification.invalidReason ?? verification.error ?? 'invalid payment'}` },
@@ -444,12 +476,16 @@ async function handleCdpHire(
     );
   }
 
-  const settlement = await settleViaCdpFacilitator({ paymentPayload, paymentRequirements: requirements });
+  const settlement = await settleViaCdpFacilitator({ paymentPayload: v2Payload, paymentRequirements: challenge.requirements });
   if (!settlement.success || !settlement.transaction) {
     return NextResponse.json(
       { success: false, error: `CDP settlement failed: ${settlement.errorReason ?? settlement.error ?? 'settle did not return a transaction'}` },
       { status: 402 },
     );
+  }
+
+  if (settlement.extensionResponses) {
+    console.log(`CDP Bazaar extension for ${challenge.resource.url}: ${settlement.extensionResponses}`);
   }
 
   const payerWallet = settlement.payer ?? verification.payer;

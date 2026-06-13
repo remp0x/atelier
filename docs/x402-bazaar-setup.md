@@ -11,14 +11,19 @@ take the first CDP-settled payment so the service auto-indexes.
 
 - `src/lib/cdp-facilitator.ts` -- CDP Facilitator client with real, dependency-free
   CDP JWT signing (`generateCdpJwt`, EdDSA or ES256 auto-detected from the secret),
-  `verifyViaCdpFacilitator`, `settleViaCdpFacilitator`, the CDP v1 PaymentRequirements
-  builder (`buildCdpBasePaymentRequirements`), and the `X-PAYMENT` payload codec.
+  `verifyViaCdpFacilitator`, `settleViaCdpFacilitator`, the **x402 v2** PaymentRequirements
+  builder (`buildCdpV2PaymentRequirements`, CAIP-2 `eip155:8453` + `amount`), the
+  `buildCdpBazaarExtension` discovery declaration, and the payload codec.
   Short-circuits to a no-op when keys are absent; never throws.
 - `POST /api/x402/pay` -- when `?chain=base` and CDP is enabled, this is a real
-  x402 resource: returns a standard 402 with CDP v1 `accepts`, accepts a base64
-  `X-PAYMENT` payload, runs CDP `verify` + `settle`, then creates the order and
-  pays the provider. A successful settle is what indexes the resource in Bazaar.
-  The Solana / legacy tx-hash flow is unchanged and still works.
+  x402 **v2** resource: returns a 402 (`accepts` with CAIP-2 network + `amount`, a
+  top-level `resource` ResourceInfo, and `extensions.bazaar`), accepts a base64
+  `X-PAYMENT` / `PAYMENT-SIGNATURE` payload, re-wraps it as a v2 PaymentPayload
+  carrying `resource` + `extensions.bazaar`, runs CDP `verify` + `settle`, then
+  creates the order and pays the provider. **A successful settle with the v2
+  payload + valid bazaar extension is what indexes the resource in Bazaar** (v1
+  `outputSchema` discovery is deprecated and never indexed). The Solana / legacy
+  tx-hash flow is unchanged and still works.
 - `GET /api/x402/bazaar` -- live Bazaar-style discovery declaration. Read-only.
 
 ## Required env vars
@@ -48,14 +53,19 @@ live and enter the Bazaar index:
 2. From a funded Base wallet, hire ONE fixed-price service with a standard x402
    client (`x402-fetch` / `x402-axios`) pointed at
    `https://atelierai.xyz/api/x402/pay?service_id=<id>` (chain=base). The client
-   will: GET -> receive the 402 with CDP v1 `accepts` -> sign the EIP-3009
-   `transferWithAuthorization` -> retry with the base64 `X-PAYMENT` header.
+   will: GET -> receive the v2 402 -> sign the EIP-3009 `transferWithAuthorization`
+   -> retry with the base64 payment header. Helper: `scripts/x402-test-pay.mjs`.
 3. The route runs CDP `verify` then `settle`. On success it returns 200 with an
    `X-PAYMENT-RESPONSE` header (base64 of `{ success, transaction, network, payer }`),
-   creates the order, and pays the provider.
-4. Within minutes of that first CDP-settled payment, the resource
-   (`/api/x402/pay?service_id=<id>`) appears in Bazaar / agentic.market
-   automatically. No manual Bazaar submission needed.
+   creates the order, and pays the provider. The CDP `EXTENSION-RESPONSES` header /
+   body `extensions` from settle is logged as `CDP Bazaar extension for <url>: ...`
+   -- it should read **`processing`** (accepted). `rejected` means the bazaar
+   extension failed schema validation and the resource will NOT be cataloged.
+4. Within ~10 minutes of that first CDP-settled v2 payment, the resource
+   (`/api/x402/pay?service_id=<id>`) appears in Bazaar / agentic.market. Confirm via
+   `GET api.cdp.coinbase.com/platform/v2/x402/discovery/merchant?payTo=<ATELIER_TREASURY_BASE>`
+   (should move off `total:0`) and `GET api.agentic.market/v1/services/search?q=atelier`.
+   No manual Bazaar submission needed.
 
 Self-test already done: the CDP JWT signing recipe (Ed25519 + ES256) is
 verified by a local crypto round-trip. The only thing that cannot be tested

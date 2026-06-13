@@ -104,11 +104,10 @@ function cdpChallengeForService(service: Service, origin: string): CdpServiceCha
   return {
     requirements: buildCdpV2PaymentRequirements({ totalUsd, payTo: treasury }),
     resource: {
-      // Must carry &chain=base: CDP catalogs this exact URL and validates it by
-      // fetching its 402. Without the chain param the GET defaults to Solana and
-      // returns a non-matching (Solana payTo) 402, so CDP drops the resource after
-      // accepting the bazaar extension ("processing" that never indexes).
-      url: `${origin}/api/x402/pay?service_id=${service.id}&chain=base`,
+      // Path-based (no query string): CDP Bazaar drops query-string resources, and it
+      // validates the cataloged URL by fetching its 402. The /api/x402/pay/<id> alias
+      // (next.config.js rewrite) serves the Base 402 that matches the settled payment.
+      url: `${origin}/api/x402/pay/${service.id}`,
       description: `Atelier: ${service.title} (${service.id})`,
       mimeType: 'application/json',
     },

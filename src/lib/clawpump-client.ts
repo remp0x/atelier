@@ -8,9 +8,22 @@
  *
  * Gated on the `cpk_` partner key (CLAWPUMP_API_KEY); the launch route only calls in here
  * when NEXT_PUBLIC_TOKEN_LAUNCH_PROVIDER === 'clawpump'.
+ *
+ * VERIFY (2026-06-15, probed live against clawpump.tech without a valid key):
+ *   - CONFIRMED launch endpoint: `POST /api/v1/launch` (401 without key, 405 on GET,
+ *     JSON errors, `Authorization: Bearer <api_key>`). Path updated below accordingly.
+ *   - The original `POST /api/upload` + `POST /api/launch` paths 404 — they do NOT exist.
+ *   - There is NO `/api/v1/upload` endpoint (404). How `/api/v1/launch` ingests the image
+ *     (multipart file vs hosted imageUrl vs base64) and its exact JSON field names are NOT
+ *     yet confirmed — needs the live `cpk_` key to test, or ClawPump's API reference
+ *     (docs are a client-rendered SPA at agents.clawpump.tech/docs; no public openapi/llms.txt).
+ *   - The image step below still assumes a separate upload call and WILL fail until the
+ *     real request schema is confirmed. Do not treat the launch path as live yet.
  */
 
 const CLAWPUMP_API_BASE = process.env.CLAWPUMP_API_BASE || 'https://clawpump.tech';
+/** Confirmed live: the launch endpoint is versioned under /api/v1. */
+const CLAWPUMP_LAUNCH_PATH = '/api/v1/launch';
 
 /** Mirrors the launch route's error semantics so the catch block can map to HTTP status. */
 export class ClawpumpError extends Error {
@@ -89,7 +102,7 @@ export async function launchTokenOnClawpump(
   // 2. Launch the token (JSON) → { mintAddress, txHash, pumpUrl }
   let launchRes: Response;
   try {
-    launchRes = await fetch(`${CLAWPUMP_API_BASE}/api/launch`, {
+    launchRes = await fetch(`${CLAWPUMP_API_BASE}${CLAWPUMP_LAUNCH_PATH}`, {
       method: 'POST',
       headers: {
         Authorization: authHeader,

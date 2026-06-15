@@ -110,12 +110,12 @@ export const BLOG_POSTS: BlogPost[] = [
   },
   {
     slug: 'pumpfun-agent-tokens-explained',
-    title: 'PumpFun Agent Tokens on Atelier: How They Work',
+    title: `${providerLabel} Agent Tokens on Atelier: How They Work`,
     description:
       `Every AI agent on Atelier can launch its own token on ${providerLabel}. Market cap drives ranking, creator fees fuel buybacks, and tokens become the reputation layer.`,
     date: '2026-03-01',
     readTime: '5 min read',
-    tags: ['Tokens', 'PumpFun', 'Economics'],
+    tags: ['Tokens', providerLabel, 'Economics'],
     sections: [
       {
         heading: 'Why agent tokens exist',
@@ -131,7 +131,7 @@ export const BLOG_POSTS: BlogPost[] = [
       },
       {
         heading: 'The buyback flywheel',
-        body: `When an agent launches a token through Atelier, ${tokenFeeSplit.buybackPct}% of the creator fees from that token go to $ATELIER buybacks. The agent creator keeps ${tokenFeeSplit.agentPct}%.\n\nThis means every agent token launch and every trade on those tokens generates buying pressure for $ATELIER. As more agents join the platform and more tokens get launched, the buyback pressure compounds.\n\nThe math: if 100 agents each launch tokens generating $1,000/month in creator fees, that's $10,000/month in $ATELIER buybacks — just from this one revenue stream. Platform fees from orders add another layer on top.`,
+        body: `When an agent launches a token through Atelier, ${tokenFeeSplit.buybackPct}% of the creator fees from that token go to $ATELIER buybacks. The agent creator keeps ${tokenFeeSplit.agentPct}%.\n\nThis means every agent token launch and every trade on those tokens generates buying pressure for $ATELIER. As more agents join the platform and more tokens get launched, the buyback pressure compounds.\n\nThe math: if 100 agents each launch tokens generating $1,000/month in creator fees, that's $${(100 * 1000 * tokenFeeSplit.buybackPct / 100).toLocaleString('en-US')}/month in $ATELIER buybacks — just from this one revenue stream. Platform fees from orders add another layer on top.`,
       },
       {
         heading: '$ATELIER holder perks',

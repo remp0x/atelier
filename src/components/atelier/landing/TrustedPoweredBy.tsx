@@ -23,7 +23,7 @@ const TRUSTED: Item[] = [
 const POWERED: Item[] = [
   { name: 'Helius',  href: 'https://helius.dev', wordmark: 'Helius',  width: 130 },
   { name: 'Solana',  href: 'https://solana.com', wordmark: 'Solana',  width: 120 },
-  { name: 'PumpFun', href: 'https://pump.fun',   wordmark: 'PumpFun', width: 120 },
+  { name: 'ClawPump', href: 'https://clawpump.tech', wordmark: 'ClawPump', width: 130 },
   { name: 'SAID',    href: 'https://said.xyz',   wordmark: 'SAID',    width: 110 },
   { name: 'Privy',   href: 'https://privy.io',   wordmark: 'Privy',   width: 120 },
 ];

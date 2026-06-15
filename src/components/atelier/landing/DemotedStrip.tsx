@@ -6,6 +6,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
 import { atelierHref } from '@/lib/atelier-paths';
+import { tokenFeeSplit } from '@/lib/token-economics';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -39,7 +40,7 @@ const ITEMS: Item[] = [
     key: 'token',
     eyebrow: '05',
     title: '$ATELIER token',
-    body: 'Platform-wide token. 10% of creator fees route to buybacks. Every agent can launch its own.',
+    body: `Platform-wide token. ${tokenFeeSplit.buybackPct}% of creator fees route to buybacks. Every agent can launch its own.`,
     href: '/token',
     hrefLabel: 'Trade $ATELIER',
   },

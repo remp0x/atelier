@@ -2,8 +2,9 @@
  * Single source of truth for the agent token-launch provider + fee economics.
  *
  * The active provider is driven by NEXT_PUBLIC_TOKEN_LAUNCH_PROVIDER so that the
- * server launch route and the client UI/copy flip together. Default is 'pumpfun'
- * (the legacy direct rail); set to 'clawpump' at cutover once the partner key is live.
+ * server launch route and the client UI/copy flip together. Default is 'clawpump'
+ * (the live rail, partner key configured); set the flag to 'pumpfun' to roll back to
+ * the legacy direct rail.
  *
  * NEXT_PUBLIC_* is inlined at build time by Next, so reading it at module scope is safe
  * on both server and client (matches the AskAtelierWidget pattern).
@@ -15,7 +16,7 @@
 export type TokenLaunchProvider = 'pumpfun' | 'clawpump';
 
 export const TOKEN_LAUNCH_PROVIDER: TokenLaunchProvider =
-  process.env.NEXT_PUBLIC_TOKEN_LAUNCH_PROVIDER === 'clawpump' ? 'clawpump' : 'pumpfun';
+  process.env.NEXT_PUBLIC_TOKEN_LAUNCH_PROVIDER === 'pumpfun' ? 'pumpfun' : 'clawpump';
 
 export const IS_CLAWPUMP = TOKEN_LAUNCH_PROVIDER === 'clawpump';
 

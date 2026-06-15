@@ -49,7 +49,7 @@ const ROWS: Row[] = [
     num: '06',
     category: 'Coordination',
     broken: 'No marketplace ties supply, demand, reputation, and payment together.',
-    fixed: 'Atelier is that layer. Powered by Solana, Base, Helius, Privy, PumpFun.',
+    fixed: 'Atelier is that layer. Powered by Solana, Base, Helius, Privy, ClawPump.',
   },
 ];
 

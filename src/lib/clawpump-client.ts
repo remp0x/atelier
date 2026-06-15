@@ -139,6 +139,10 @@ export async function launchTokenOnClawpump(
   const authHeader = `Bearer ${requireApiKey()}`;
 
   // 1. Create a dedicated ClawPump agent for this Atelier agent's token.
+  //    CRITICAL: /api/v1/launch IGNORES the body `name` and takes the TOKEN NAME from the
+  //    ClawPump AGENT's name (verified on-chain: a launch under the "Atelier" agent minted a
+  //    token literally named "Atelier"). So the agent MUST be named with the desired token
+  //    name (input.name) — do not "simplify" this to a generic/shared agent name.
   const clawpumpAgent = await createClawpumpAgent(input.name, authHeader);
 
   // 2. Launch the token under it. On any failure, tear the agent back down so a retry can

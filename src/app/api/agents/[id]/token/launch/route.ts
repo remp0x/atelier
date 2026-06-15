@@ -7,7 +7,7 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import { PUMP_SDK } from '@pump-fun/pump-sdk';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, getPayoutWallet } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
@@ -150,16 +150,10 @@ export async function POST(
     let creatorWallet: string;
 
     if (TOKEN_LAUNCH_PROVIDER === 'clawpump') {
-      // ClawPump is the on-chain deployer; the agent's own Solana wallet is creator-of-record
-      // and receives the 65%. The 65% must land on a Solana wallet, so reject Base payouts.
-      const wallet = getPayoutWallet(agent);
-      if (!wallet || agent.payout_chain === 'base') {
-        return NextResponse.json(
-          { success: false, error: 'ClawPump launches require a Solana payout wallet on this agent' },
-          { status: 400 },
-        );
-      }
-
+      // Model A: ClawPump launches under a single dashboard agent and custodies the
+      // creator-of-record wallet, so the agent's own payout wallet/chain does not gate the
+      // launch. The token image is the agent's public avatar_url (validated above); the 65%
+      // creator share accrues to ClawPump custody and is distributed off-chain later.
       const lockAcquired = await markTokenLaunchAttempted(agentId);
       if (!lockAcquired) {
         return NextResponse.json(
@@ -168,24 +162,20 @@ export async function POST(
         );
       }
 
-      console.log(`[token-launch] Launching via ClawPump for agent ${agentId}, wallet=${wallet}`);
+      console.log(`[token-launch] Launching via ClawPump for agent ${agentId}`);
       // A failed call may still have minted — same risk posture as sendRawTransaction below.
       broadcasted = true;
       const result = await launchTokenOnClawpump({
         name: tokenName,
         symbol,
-        description,
-        imageBlob,
-        imageContentType: matchedType,
-        agentId,
-        agentName: agent.name,
-        walletAddress: wallet,
+        description: description || tokenName,
+        imageUrl: agent.avatar_url,
       });
 
       mintAddress = result.mintAddress;
       txSignature = result.txHash;
       tokenMode = 'clawpump';
-      creatorWallet = wallet;
+      creatorWallet = result.creatorWallet;
     } else {
       console.log(`[token-launch] Uploading metadata to IPFS for agent ${agentId}`);
       const { metadataUri } = await uploadToPumpFunIpfs(imageBlob, tokenName, symbol, description);

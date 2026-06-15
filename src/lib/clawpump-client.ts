@@ -1,29 +1,43 @@
 /**
  * Server-side adapter for launching agent tokens via ClawPump's partner API.
  *
- * ClawPump is the on-chain deployer; the per-launch `walletAddress` (the agent's own
- * Solana payout wallet) becomes creator-of-record and receives the 65% creator-fee share.
+ * Model A (single launcher agent): every Atelier agent token is launched under ONE ClawPump
+ * dashboard agent (CLAWPUMP_AGENT_ID). ClawPump custodies that agent's wallet
+ * (CLAWPUMP_AGENT_WALLET) and it is the on-chain creator-of-record, so the 65% creator-fee
+ * share accrues to the ClawPump-custodied wallet and is distributed to individual agents
+ * off-chain (see clawpump-remittance — still BLOCKED pending partner confirmation).
+ *
  * This path does NOT touch @solana/web3.js, the Atelier keypair, or pump.fun IPFS — the
  * legacy launch route handles all of that for the 'pumpfun' provider.
  *
  * Gated on the `cpk_` partner key (CLAWPUMP_API_KEY); the launch route only calls in here
- * when NEXT_PUBLIC_TOKEN_LAUNCH_PROVIDER === 'clawpump'.
+ * when TOKEN_LAUNCH_PROVIDER === 'clawpump'.
  *
- * VERIFY (2026-06-15, probed live against clawpump.tech without a valid key):
- *   - CONFIRMED launch endpoint: `POST /api/v1/launch` (401 without key, 405 on GET,
- *     JSON errors, `Authorization: Bearer <api_key>`). Path updated below accordingly.
- *   - The original `POST /api/upload` + `POST /api/launch` paths 404 — they do NOT exist.
- *   - There is NO `/api/v1/upload` endpoint (404). How `/api/v1/launch` ingests the image
- *     (multipart file vs hosted imageUrl vs base64) and its exact JSON field names are NOT
- *     yet confirmed — needs the live `cpk_` key to test, or ClawPump's API reference
- *     (docs are a client-rendered SPA at agents.clawpump.tech/docs; no public openapi/llms.txt).
- *   - The image step below still assumes a separate upload call and WILL fail until the
- *     real request schema is confirmed. Do not treat the launch path as live yet.
+ * CONTRACT (confirmed 2026-06-15 against the live API + the documented request example):
+ *   - `POST /api/v1/launch`, auth `Authorization: Bearer <cpk_ key>`, JSON in/out.
+ *   - Body: { agentId, name, symbol, description, imageUrl }. `agentId` is a ClawPump
+ *     DASHBOARD agent UUID (NOT an Atelier agent id). `imageUrl` is any public image URL —
+ *     we pass the agent's avatar_url directly, so there is no separate upload step (the
+ *     old `/api/upload` + `/api/launch` paths returned 404 and never existed).
+ *   - ClawPump generates/custodies all agent wallets; a per-launch `walletAddress` is NOT
+ *     accepted, which is why the agent's own wallet cannot be creator-of-record (model A).
+ *   - Response carries a mint address and a tx signature (field names vary; handled below).
+ *
+ * NOTE: still untested with a real end-to-end launch (a launch mints a live token). Do one
+ * supervised test launch to confirm the response shape + per-token branding before cutover.
  */
 
 const CLAWPUMP_API_BASE = process.env.CLAWPUMP_API_BASE || 'https://clawpump.tech';
-/** Confirmed live: the launch endpoint is versioned under /api/v1. */
 const CLAWPUMP_LAUNCH_PATH = '/api/v1/launch';
+
+/**
+ * The single ClawPump dashboard agent that launches every Atelier agent token, and its
+ * ClawPump-custodied wallet (the on-chain creator-of-record). Overridable via env; defaults
+ * to the live "Atelier" agent in the ClawPump dashboard.
+ */
+const CLAWPUMP_AGENT_ID = process.env.CLAWPUMP_AGENT_ID || 'd7b2f08b-40b5-48c0-b5d2-b74b65d666ce';
+const CLAWPUMP_AGENT_WALLET =
+  process.env.CLAWPUMP_AGENT_WALLET || 'DGdcq8VurFcJ3YEcvZfX6fxvJqpkzCUXXy6xDqktqnTT';
 
 /** Mirrors the launch route's error semantics so the catch block can map to HTTP status. */
 export class ClawpumpError extends Error {
@@ -40,18 +54,16 @@ export interface ClawpumpLaunchInput {
   name: string;
   symbol: string;
   description: string;
-  imageBlob: Blob;
-  imageContentType: string;
-  agentId: string;
-  agentName: string;
-  /** The agent's Solana wallet — becomes creator-of-record and receives the 65%. */
-  walletAddress: string;
+  /** A public image URL for the token (the Atelier agent's avatar_url). */
+  imageUrl: string;
 }
 
 export interface ClawpumpLaunchResult {
   mintAddress: string;
   txHash: string;
   pumpUrl: string;
+  /** The ClawPump-custodied creator-of-record wallet, stored as token_creator_wallet. */
+  creatorWallet: string;
 }
 
 function requireApiKey(): string {
@@ -66,56 +78,21 @@ export async function launchTokenOnClawpump(
   input: ClawpumpLaunchInput,
 ): Promise<ClawpumpLaunchResult> {
   const apiKey = requireApiKey();
-  const authHeader = `Bearer ${apiKey}`;
 
-  // 1. Upload the image (multipart) → { imageUrl }
-  const uploadForm = new FormData();
-  uploadForm.append('file', input.imageBlob, `${input.symbol}.${extFor(input.imageContentType)}`);
-
-  let uploadRes: Response;
-  try {
-    uploadRes = await fetch(`${CLAWPUMP_API_BASE}/api/upload`, {
-      method: 'POST',
-      headers: { Authorization: authHeader },
-      body: uploadForm,
-      signal: AbortSignal.timeout(30_000),
-    });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'TimeoutError') {
-      throw new ClawpumpError('ClawPump upload timed out', 504);
-    }
-    throw new ClawpumpError(`ClawPump upload request failed: ${err instanceof Error ? err.message : String(err)}`, 502);
-  }
-
-  if (!uploadRes.ok) {
-    const body = await uploadRes.text().catch(() => '');
-    console.error('[clawpump] upload error:', uploadRes.status, body);
-    throw new ClawpumpError(`ClawPump upload failed: ${uploadRes.status}`, 502);
-  }
-
-  const uploadData = await uploadRes.json().catch(() => ({}));
-  const imageUrl: string | undefined = uploadData.imageUrl || uploadData.url;
-  if (!imageUrl) {
-    throw new ClawpumpError('ClawPump upload response missing imageUrl', 502);
-  }
-
-  // 2. Launch the token (JSON) → { mintAddress, txHash, pumpUrl }
   let launchRes: Response;
   try {
     launchRes = await fetch(`${CLAWPUMP_API_BASE}${CLAWPUMP_LAUNCH_PATH}`, {
       method: 'POST',
       headers: {
-        Authorization: authHeader,
+        Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        agentId: CLAWPUMP_AGENT_ID,
         name: input.name,
         symbol: input.symbol,
         description: input.description,
-        imageUrl,
-        agentId: input.agentId,
-        agentName: input.agentName,
-        walletAddress: input.walletAddress,
+        imageUrl: input.imageUrl,
       }),
       signal: AbortSignal.timeout(120_000),
     });
@@ -129,23 +106,24 @@ export async function launchTokenOnClawpump(
   if (!launchRes.ok) {
     const body = await launchRes.text().catch(() => '');
     console.error('[clawpump] launch error:', launchRes.status, body);
-    throw new ClawpumpError(`ClawPump launch failed: ${launchRes.status}`, 502);
+    // Surface ClawPump's JSON `error` message when present, else the raw status.
+    let detail = `ClawPump launch failed: ${launchRes.status}`;
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed && typeof parsed.error === 'string') detail = `ClawPump: ${parsed.error}`;
+    } catch {
+      // non-JSON body — keep the status-based message
+    }
+    throw new ClawpumpError(detail, 502);
   }
 
   const data = await launchRes.json().catch(() => ({}));
-  const mintAddress: string | undefined = data.mintAddress || data.mint;
+  const mintAddress: string | undefined = data.mintAddress || data.mint || data.tokenAddress;
   const txHash: string | undefined = data.txHash || data.tx_hash || data.signature;
   if (!mintAddress || !txHash) {
-    throw new ClawpumpError('ClawPump launch response missing mintAddress/txHash', 502);
+    throw new ClawpumpError('ClawPump launch response missing mint address / tx signature', 502);
   }
-  const pumpUrl: string = data.pumpUrl || `https://pump.fun/coin/${mintAddress}`;
+  const pumpUrl: string = data.pumpUrl || data.url || `https://pump.fun/coin/${mintAddress}`;
 
-  return { mintAddress, txHash, pumpUrl };
-}
-
-function extFor(contentType: string): string {
-  if (contentType.includes('png')) return 'png';
-  if (contentType.includes('gif')) return 'gif';
-  if (contentType.includes('webp')) return 'webp';
-  return 'jpg';
+  return { mintAddress, txHash, pumpUrl, creatorWallet: CLAWPUMP_AGENT_WALLET };
 }

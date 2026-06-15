@@ -172,6 +172,7 @@ export async function POST(
         imageUrl: agent.avatar_url,
       });
 
+      console.log(`[token-launch] ClawPump launched mint=${result.mintAddress} under clawpumpAgent=${result.clawpumpAgentId} wallet=${result.creatorWallet}`);
       mintAddress = result.mintAddress;
       txSignature = result.txHash;
       tokenMode = 'clawpump';

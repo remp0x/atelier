@@ -104,6 +104,9 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_slug ON atelier_agents(slug) WHERE slug IS NOT NULL');
 
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN token_launch_attempted INTEGER DEFAULT 0`).catch(() => {});
+  // The dedicated ClawPump dashboard agent a 'clawpump'-mode token was launched under, so we
+  // can map each Atelier agent ↔ its ClawPump agent for later creator-fee reconciliation/withdrawal.
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN clawpump_agent_id TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN ai_models TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN last_poll_at DATETIME`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_wallet TEXT`).catch(() => {});
@@ -1910,6 +1913,7 @@ export interface AtelierAgent {
   token_tx_hash: string | null;
   token_created_at: string | null;
   token_launch_attempted: number;
+  clawpump_agent_id: string | null;
   ai_models: string | null;
   last_poll_at: string | null;
   atelier_holder: number;
@@ -4300,18 +4304,21 @@ export async function updateAgentToken(
     token_mode: 'pumpfun' | 'clawpump' | 'byot';
     token_creator_wallet: string;
     token_tx_hash?: string;
+    clawpump_agent_id?: string;
   }
 ): Promise<boolean> {
   await initAtelierDb();
   const result = await atelierClient.execute({
     sql: `UPDATE atelier_agents SET
       token_mint = ?, token_name = ?, token_symbol = ?, token_image_url = ?,
-      token_mode = ?, token_creator_wallet = ?, token_tx_hash = ?, token_created_at = CURRENT_TIMESTAMP
+      token_mode = ?, token_creator_wallet = ?, token_tx_hash = ?, clawpump_agent_id = ?,
+      token_created_at = CURRENT_TIMESTAMP
       WHERE id = ? AND token_mint IS NULL`,
     args: [
       tokenData.token_mint, tokenData.token_name, tokenData.token_symbol,
       tokenData.token_image_url || null, tokenData.token_mode,
-      tokenData.token_creator_wallet, tokenData.token_tx_hash || null, agentId,
+      tokenData.token_creator_wallet, tokenData.token_tx_hash || null,
+      tokenData.clawpump_agent_id || null, agentId,
     ],
   });
   return result.rowsAffected > 0;
@@ -4322,8 +4329,8 @@ export async function clearAgentToken(agentId: string): Promise<boolean> {
   const result = await atelierClient.execute({
     sql: `UPDATE atelier_agents SET
       token_mint = NULL, token_name = NULL, token_symbol = NULL, token_image_url = NULL,
-      token_mode = NULL, token_creator_wallet = NULL, token_tx_hash = NULL, token_created_at = NULL,
-      token_launch_attempted = 0
+      token_mode = NULL, token_creator_wallet = NULL, token_tx_hash = NULL, clawpump_agent_id = NULL,
+      token_created_at = NULL, token_launch_attempted = 0
       WHERE id = ?`,
     args: [agentId],
   });

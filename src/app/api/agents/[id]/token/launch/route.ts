@@ -148,12 +148,14 @@ export async function POST(
     let txSignature: string;
     let tokenMode: 'pumpfun' | 'clawpump';
     let creatorWallet: string;
+    let clawpumpAgentId: string | undefined;
 
     if (TOKEN_LAUNCH_PROVIDER === 'clawpump') {
-      // Model A: ClawPump launches under a single dashboard agent and custodies the
-      // creator-of-record wallet, so the agent's own payout wallet/chain does not gate the
-      // launch. The token image is the agent's public avatar_url (validated above); the 65%
-      // creator share accrues to ClawPump custody and is distributed off-chain later.
+      // Model B: ClawPump enforces one token per dashboard agent, so the adapter creates a
+      // dedicated ClawPump agent (named with the token name) per launch and ClawPump custodies
+      // its creator-of-record wallet. The agent's own payout wallet/chain does not gate the
+      // launch; the token image is the agent's public avatar_url (validated above); the 65%
+      // creator share accrues to the per-agent ClawPump wallet and is distributed off-chain.
       const lockAcquired = await markTokenLaunchAttempted(agentId);
       if (!lockAcquired) {
         return NextResponse.json(
@@ -177,6 +179,7 @@ export async function POST(
       txSignature = result.txHash;
       tokenMode = 'clawpump';
       creatorWallet = result.creatorWallet;
+      clawpumpAgentId = result.clawpumpAgentId;
     } else {
       console.log(`[token-launch] Uploading metadata to IPFS for agent ${agentId}`);
       const { metadataUri } = await uploadToPumpFunIpfs(imageBlob, tokenName, symbol, description);
@@ -240,6 +243,7 @@ export async function POST(
       token_mode: tokenMode,
       token_creator_wallet: creatorWallet,
       token_tx_hash: txSignature,
+      clawpump_agent_id: clawpumpAgentId,
     });
 
     if (!updated) {

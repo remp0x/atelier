@@ -34,8 +34,8 @@ function formatMemberSince(createdAt: string): string {
 function StatChip({ label, value }: { label: string; value: string | number }): React.ReactElement {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-600">{label}</span>
-      <span className="text-lg font-mono font-bold text-white">{value}</span>
+      <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 dark:text-neutral-600">{label}</span>
+      <span className="text-lg font-mono font-bold text-black dark:text-white">{value}</span>
     </div>
   );
 }
@@ -44,14 +44,14 @@ function AgentCard({ agent }: { agent: AtelierAgent }): React.ReactElement {
   return (
     <Link
       href={atelierHref(`/atelier/agents/${agent.slug}`)}
-      className="group flex flex-col gap-3 p-4 rounded-xl bg-black/40 border border-white/5 hover:border-atelier/30 transition-colors duration-200 cursor-pointer"
+      className="group flex flex-col gap-3 p-4 rounded-xl bg-black/[0.03] dark:bg-black/40 border border-black/10 dark:border-white/5 hover:border-atelier/30 transition-colors duration-200 cursor-pointer"
     >
       <div className="flex items-start gap-3">
-        <AgentAvatar name={agent.name} seed={agent.id} src={agent.avatar_url} className="w-10 h-10 rounded-lg flex-shrink-0 border border-white/5" />
+        <AgentAvatar name={agent.name} seed={agent.id} src={agent.avatar_url} className="w-10 h-10 rounded-lg flex-shrink-0 border border-black/10 dark:border-white/5" />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-semibold font-display text-white group-hover:text-atelier transition-colors duration-200 truncate">
+            <span className="text-sm font-semibold font-display text-black dark:text-white group-hover:text-atelier transition-colors duration-200 truncate">
               {agent.name}
             </span>
             {agent.blue_check === 1 && (
@@ -68,9 +68,9 @@ function AgentCard({ agent }: { agent: AtelierAgent }): React.ReactElement {
         </div>
       </div>
 
-      <div className="flex items-center gap-4 pt-1 border-t border-white/5">
+      <div className="flex items-center gap-4 pt-1 border-t border-black/10 dark:border-white/5">
         <span className="text-xs font-mono text-neutral-500">
-          <span className="text-neutral-300 font-semibold">{agent.completed_orders}</span> orders
+          <span className="text-neutral-700 dark:text-neutral-300 font-semibold">{agent.completed_orders}</span> orders
         </span>
         {agent.avg_rating != null && (
           <span className="text-xs font-mono text-atelier font-semibold">
@@ -97,10 +97,10 @@ function ProfileHero({
   const avatarLetter = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-white/5 bg-black/40">
+    <div className="relative rounded-2xl overflow-hidden border border-black/10 dark:border-white/5 bg-black/[0.03] dark:bg-black/40">
       <div className="relative px-6 pt-6 pb-6">
         <div className="flex items-end gap-4 mb-5">
-          <div className="relative w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0 ring-2 ring-black/40 border border-white/10 bg-atelier/10">
+          <div className="relative w-24 h-24 rounded-2xl overflow-hidden flex-shrink-0 ring-2 ring-black/10 dark:ring-black/40 border border-black/10 dark:border-white/10 bg-atelier/10">
             {user.avatar_url ? (
               <Image
                 src={user.avatar_url}
@@ -117,7 +117,7 @@ function ProfileHero({
             )}
           </div>
           <div className="pb-1 min-w-0">
-            <h1 className="text-3xl font-bold font-display text-white leading-tight truncate">
+            <h1 className="text-3xl font-bold font-display text-black dark:text-white leading-tight truncate">
               {displayName}
             </h1>
             {user.username && (
@@ -141,21 +141,21 @@ function ProfileHero({
         </div>
 
         {user.bio && (
-          <p className="text-sm font-sans text-neutral-300 leading-relaxed max-w-prose mb-5">
+          <p className="text-sm font-sans text-neutral-700 dark:text-neutral-300 leading-relaxed max-w-prose mb-5">
             {user.bio}
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 py-4 border-y border-white/5 mb-5">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 py-4 border-y border-black/10 dark:border-white/5 mb-5">
           <StatChip label="Agents" value={activeAgentCount} />
-          <div className="w-px h-8 bg-white/5 hidden sm:block" />
+          <div className="w-px h-8 bg-black/10 dark:bg-white/5 hidden sm:block" />
           <StatChip label="Orders" value={ordersCount} />
-          <div className="w-px h-8 bg-white/5 hidden sm:block" />
+          <div className="w-px h-8 bg-black/10 dark:bg-white/5 hidden sm:block" />
           <StatChip label="Reviews" value={reviewsCount} />
-          <div className="w-px h-8 bg-white/5 hidden sm:block" />
+          <div className="w-px h-8 bg-black/10 dark:bg-white/5 hidden sm:block" />
           <div className="flex flex-col gap-0.5">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-600">Member since</span>
-            <span className="text-sm font-mono text-neutral-300">{formatMemberSince(user.created_at)}</span>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 dark:text-neutral-600">Member since</span>
+            <span className="text-sm font-mono text-neutral-700 dark:text-neutral-300">{formatMemberSince(user.created_at)}</span>
           </div>
         </div>
 
@@ -189,14 +189,14 @@ export default async function PublicProfilePage({ params }: ProfilePageProps): P
         />
 
         <section>
-          <h2 className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-4">
+          <h2 className="text-[10px] font-mono uppercase tracking-widest text-neutral-500 dark:text-neutral-600 mb-4">
             Agents
             {activeAgents.length > 0 && (
-              <span className="ml-2 font-mono text-neutral-700">({activeAgents.length})</span>
+              <span className="ml-2 font-mono text-neutral-400 dark:text-neutral-700">({activeAgents.length})</span>
             )}
           </h2>
           {activeAgents.length === 0 ? (
-            <p className="text-sm font-mono text-neutral-600">No agents yet.</p>
+            <p className="text-sm font-mono text-neutral-500 dark:text-neutral-600">No agents yet.</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {activeAgents.map((agent) => (

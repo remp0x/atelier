@@ -235,18 +235,18 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', stiffness: 400, damping: 40 }}
-              className="fixed inset-y-0 right-0 z-50 flex flex-col w-full sm:w-[420px] bg-[#0a0a0a] border-l border-neutral-900 shadow-2xl"
+              className="fixed inset-y-0 right-0 z-50 flex flex-col w-full sm:w-[420px] bg-white dark:bg-[#0a0a0a] border-l border-neutral-200 dark:border-neutral-900 shadow-2xl"
               role="dialog"
               aria-modal="true"
               aria-label="Edit profile"
             >
-              <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-900 flex-shrink-0">
-                <h2 className="text-base font-semibold font-display text-white">Edit Profile</h2>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 dark:border-neutral-900 flex-shrink-0">
+                <h2 className="text-base font-semibold font-display text-black dark:text-white">Edit Profile</h2>
                 <button
                   type="button"
                   onClick={onClose}
                   aria-label="Close"
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-400 hover:text-white hover:bg-white/5 transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-neutral-500 dark:text-neutral-400 hover:text-black dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -261,7 +261,7 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
                     Avatar
                   </label>
                   <div className="flex items-center gap-4">
-                    <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-neutral-800 bg-atelier/10">
+                    <div className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-neutral-300 dark:border-neutral-800 bg-atelier/10">
                       {avatarUrl ? (
                         <Image
                           src={avatarUrl}
@@ -294,7 +294,7 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploading}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono text-neutral-300 bg-white/5 hover:bg-white/10 border border-neutral-800 rounded-lg transition-colors duration-200 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono text-neutral-700 dark:text-neutral-300 bg-black/[0.04] dark:bg-white/5 hover:bg-black/[0.08] dark:hover:bg-white/10 border border-neutral-300 dark:border-neutral-800 rounded-lg transition-colors duration-200 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
@@ -323,7 +323,7 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
                     onChange={(e) => setDisplayName(e.target.value)}
                     maxLength={30}
                     placeholder="Your name"
-                    className="w-full px-3 py-2.5 rounded-lg bg-black border border-neutral-800 text-white text-sm font-sans placeholder:text-neutral-600 focus:outline-none focus:border-atelier transition-colors duration-200"
+                    className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-black border border-neutral-300 dark:border-neutral-800 text-black dark:text-white text-sm font-sans placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier transition-colors duration-200"
                   />
                   <div className="flex items-center justify-between mt-1">
                     {errors.display_name ? (
@@ -350,8 +350,8 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
                       onBlur={handleUsernameBlur}
                       maxLength={30}
                       placeholder="your_handle"
-                      className={`w-full pl-7 pr-24 py-2.5 rounded-lg bg-black border text-white text-sm font-mono placeholder:text-neutral-600 focus:outline-none transition-colors duration-200 ${
-                        errors.username ? 'border-red-500/60 focus:border-red-400' : 'border-neutral-800 focus:border-atelier'
+                      className={`w-full pl-7 pr-24 py-2.5 rounded-lg bg-white dark:bg-black border text-black dark:text-white text-sm font-mono placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none transition-colors duration-200 ${
+                        errors.username ? 'border-red-500/60 focus:border-red-400' : 'border-neutral-300 dark:border-neutral-800 focus:border-atelier'
                       }`}
                     />
                     <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -390,7 +390,7 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
                     maxLength={280}
                     rows={4}
                     placeholder="A short bio about yourself"
-                    className="w-full px-3 py-2.5 rounded-lg bg-black border border-neutral-800 text-white text-sm font-sans placeholder:text-neutral-600 focus:outline-none focus:border-atelier transition-colors duration-200 resize-none"
+                    className="w-full px-3 py-2.5 rounded-lg bg-white dark:bg-black border border-neutral-300 dark:border-neutral-800 text-black dark:text-white text-sm font-sans placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier transition-colors duration-200 resize-none"
                   />
                   <div className="flex items-center justify-between mt-1">
                     {errors.bio ? (
@@ -405,7 +405,7 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
                 </div>
               </div>
 
-              <div className="flex-shrink-0 px-5 py-4 border-t border-neutral-900 space-y-3">
+              <div className="flex-shrink-0 px-5 py-4 border-t border-neutral-200 dark:border-neutral-900 space-y-3">
                 {saveError && (
                   <p className="text-xs font-mono text-red-400 text-center">{saveError}</p>
                 )}
@@ -413,7 +413,7 @@ export function ProfileEditDrawer({ open, onClose, user }: ProfileEditDrawerProp
                   type="button"
                   onClick={handleSave}
                   disabled={saving || uploading}
-                  className="w-full py-3 rounded-lg text-sm font-semibold font-mono text-white transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  className="w-full py-3 rounded-lg text-sm font-semibold font-mono text-white transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black"
                   style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)' }}
                 >
                   {saving ? (

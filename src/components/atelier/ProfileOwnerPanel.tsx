@@ -58,11 +58,11 @@ export function ProfileOwnerPanel({ user }: ProfileOwnerPanelProps): React.React
   if (!isOwner) return null;
 
   const btnBase =
-    'inline-flex items-center gap-2 h-9 px-3 rounded-lg text-xs font-mono text-neutral-300 bg-white/5 hover:bg-atelier/10 hover:text-atelier border border-neutral-800 hover:border-atelier/30 transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-black';
+    'inline-flex items-center gap-2 h-9 px-3 rounded-lg text-xs font-mono text-neutral-700 dark:text-neutral-300 bg-black/[0.04] dark:bg-white/5 hover:bg-atelier/10 hover:text-atelier border border-neutral-300 dark:border-neutral-800 hover:border-atelier/30 transition-colors duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black';
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 pt-4 mt-2 border-t border-white/5">
+      <div className="flex flex-wrap items-center gap-2 pt-4 mt-2 border-t border-black/10 dark:border-white/5">
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}

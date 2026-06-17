@@ -9,7 +9,8 @@ import { atelierHref } from '@/lib/atelier-paths';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { AtelierAgent, Service, ServiceOrder, OrderStatus, ServiceCategory, ServicePriceType } from '@/lib/atelier-db';
-import { SUGGESTED_MAX_PRICE_USD } from '@/components/atelier/constants';
+import { SUGGESTED_MAX_PRICE_USD } from '@/components/atelier/constants'
+import { badgeLabelForMode } from '@/lib/token-economics';
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending_quote: 'Pending Quote',
@@ -55,6 +56,28 @@ const CATEGORY_LABELS: Record<ServiceCategory, string> = {
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 
 type WalletAuth = { wallet: string; wallet_sig: string; wallet_sig_ts: number };
+
+function TokenAvatar({ src, symbol }: { src: string | null; symbol: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) {
+    return (
+      <div className="w-7 h-7 rounded-full bg-atelier/10 flex items-center justify-center flex-shrink-0 text-atelier text-xs font-mono font-bold">
+        $
+      </div>
+    );
+  }
+  return (
+    <Image
+      src={src}
+      alt={symbol ?? 'token'}
+      width={28}
+      height={28}
+      className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+      unoptimized
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 async function authFetch(
   url: string,
@@ -117,6 +140,7 @@ function DashboardContent() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [showApiKey, setShowApiKey] = useState<Record<string, boolean>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [copiedToken, setCopiedToken] = useState(false);
 
   const [showEditAgent, setShowEditAgent] = useState(false);
   const [showCreateService, setShowCreateService] = useState(false);
@@ -568,6 +592,69 @@ function DashboardContent() {
                       </Link>
                     ) : (
                       <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500">Connect X on your profile to add a verified badge.</span>
+                    )}
+                  </div>
+
+                  {/* Token */}
+                  <div className="bg-white dark:bg-black/40 rounded-lg p-4 border border-gray-100 dark:border-transparent">
+                    <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500 uppercase tracking-wider block mb-2">Token</span>
+                    {agent.token_mint ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <TokenAvatar src={agent.token_image_url ?? null} symbol={agent.token_symbol ?? null} />
+                          <span className="text-sm font-mono font-bold text-atelier">${agent.token_symbol}</span>
+                          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                            agent.token_mode === 'byot'
+                              ? 'bg-atelier/10 text-atelier'
+                              : 'bg-green-500/10 text-green-600 dark:text-green-400'
+                          }`}>
+                            {badgeLabelForMode(agent.token_mode)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500">CA:</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(agent.token_mint!);
+                              setCopiedToken(true);
+                              setTimeout(() => setCopiedToken(false), 2000);
+                            }}
+                            className={`inline-flex items-center gap-1 text-xs font-mono transition-colors cursor-pointer px-1 py-0.5 rounded ${
+                              copiedToken
+                                ? 'text-emerald-500 dark:text-emerald-400'
+                                : 'text-gray-600 dark:text-neutral-300 hover:text-atelier'
+                            }`}
+                            title="Copy contract address"
+                          >
+                            {copiedToken ? (
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                            ) : (
+                              <>
+                                {`${agent.token_mint.slice(0, 8)}...${agent.token_mint.slice(-6)}`}
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" /></svg>
+                              </>
+                            )}
+                          </button>
+                          <a
+                            href={`https://pump.fun/coin/${agent.token_mint}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-auto text-[10px] font-mono text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors"
+                          >
+                            pump.fun ↗
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono text-gray-400 dark:text-neutral-500">No token yet</span>
+                        <Link
+                          href={atelierHref(`/atelier/agents/${agent.slug}`)}
+                          className="text-[10px] font-mono text-atelier hover:text-atelier-bright transition-colors"
+                        >
+                          Launch token →
+                        </Link>
+                      </div>
                     )}
                   </div>
                 </div>

@@ -2,17 +2,19 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, getAtelierAgent, getPayoutWallet, isEscrowTxHashUsed, atomicStatusTransition, incrementRevisionCount, completeBountyByOrderId } from '@/lib/atelier-db';
+import { getServiceOrderById, getReviewByOrderId, getServiceById, updateOrderStatus, getOrderDeliverables, isEscrowTxHashUsed, atomicStatusTransition, incrementRevisionCount, completeBountyByOrderId } from '@/lib/atelier-db';
 import { getProvider } from '@/lib/providers/registry';
 import { generateWithRetry } from '@/lib/providers/types';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
 import { authorizeOrderClient, authorizeOrderViewer } from '@/lib/order-auth';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
+import { isPrivyAdmin } from '@/lib/admin-auth';
 import { verifySolanaUsdcPayment, verifySolanaUsdcReceived } from '@/lib/solana-verify';
 import { verifyBaseUsdcPayment, verifyBaseUsdcReceived, extractBasePayerAddress } from '@/lib/base-verify';
 import { sendUsdcPayout } from '@/lib/solana-payout';
 import { sendBaseUsdcPayout } from '@/lib/base-payout';
+import { payOrderProvider } from '@/lib/order-payout';
 import { settlePartnerSplit } from '@/lib/partner-settlement';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { notifyBuyer, notifyProvider } from '@/lib/notifications';
@@ -111,6 +113,8 @@ export async function PATCH(
         const msg = err instanceof WalletAuthError ? err.message : 'Authentication failed';
         return NextResponse.json({ success: false, error: msg }, { status: 401 });
       }
+    } else if (await isPrivyAdmin(request, body)) {
+      wallet = order.client_wallet ?? '';
     } else {
       const authHeader = request.headers.get('authorization');
       if (authHeader?.startsWith('Bearer ')) {
@@ -249,42 +253,12 @@ export async function PATCH(
         );
       }
 
-      const quotedPrice = parseFloat(order.quoted_price_usd || '0');
-      const platformFee = parseFloat(order.platform_fee_usd || '0');
-      const payoutAmount = Math.round((quotedPrice - platformFee) * 100) / 100;
-      let payoutFailed = false;
-      let agentPaid = false;
-      if (payoutAmount > 0) {
-        try {
-          const agent = await getAtelierAgent(order.provider_agent_id);
-          if (!agent) {
-            payoutFailed = true;
-            console.error(`Payout skipped for order ${id}: agent ${order.provider_agent_id} not found`);
-          } else if (agent.payout_chain === 'base') {
-            const destination = agent.payout_address_base;
-            if (destination) {
-              const txHash = await sendBaseUsdcPayout(destination, payoutAmount);
-              await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
-              agentPaid = true;
-            } else {
-              payoutFailed = true;
-              console.error(`Payout skipped for order ${id}: agent has no Base payout address configured`);
-            }
-          } else {
-            const destination = getPayoutWallet(agent);
-            if (destination) {
-              const txHash = await sendUsdcPayout(destination, payoutAmount);
-              await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
-              agentPaid = true;
-            } else {
-              payoutFailed = true;
-              console.error(`Payout skipped for order ${id}: no destination wallet`);
-            }
-          }
-        } catch (payoutErr) {
-          payoutFailed = true;
-          console.error(`Payout failed for order ${id}:`, payoutErr);
-        }
+      const payout = await payOrderProvider(order, { finalStatus: 'completed' });
+      const payoutFailed = payout.kind === 'failed' || payout.kind === 'no_destination';
+      const agentPaid = payout.kind === 'paid';
+      if (payoutFailed) {
+        const reason = payout.kind === 'failed' ? payout.error : payout.reason;
+        console.error(`Payout failed for order ${id} on ${payout.chain}: ${reason}`);
       }
 
       if (order.bounty_id) {
@@ -293,6 +267,7 @@ export async function PATCH(
         );
       }
 
+      const platformFee = parseFloat(order.platform_fee_usd || '0');
       if (agentPaid && order.referral_partner && platformFee > 0) {
         settlePartnerSplit({
           orderId: id,

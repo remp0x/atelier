@@ -1,10 +1,13 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceOrderById, getAtelierAgent, getPayoutWallet, updateOrderStatus } from '@/lib/atelier-db';
-import { sendUsdcPayout } from '@/lib/solana-payout';
-import { sendBaseUsdcPayout } from '@/lib/base-payout';
+import { getServiceOrderById } from '@/lib/atelier-db';
+import { payOrderProvider } from '@/lib/order-payout';
 import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
+
+// States where the buyer has paid and the provider is owed: a missing payout
+// here is a failure to recover, not a normal lifecycle gap.
+const RETRYABLE_STATUSES = new Set(['paid', 'delivered', 'completed']);
 
 export async function POST(
   request: NextRequest,
@@ -24,9 +27,9 @@ export async function POST(
     return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
   }
 
-  if (order.status !== 'completed') {
+  if (!RETRYABLE_STATUSES.has(order.status)) {
     return NextResponse.json(
-      { success: false, error: `Order is in status '${order.status}', expected 'completed'` },
+      { success: false, error: `Order is in status '${order.status}', not eligible for payout` },
       { status: 400 },
     );
   }
@@ -38,56 +41,39 @@ export async function POST(
     );
   }
 
-  const quotedPrice = parseFloat(order.quoted_price_usd || '0');
-  const platformFee = parseFloat(order.platform_fee_usd || '0');
-  const payoutAmount = Math.round((quotedPrice - platformFee) * 100) / 100;
+  // Disburse in the chain the buyer actually paid (order.payment_chain), at the
+  // provider net for the order's payment model. Status is preserved -- this only
+  // settles the owed payout, it does not advance the order lifecycle.
+  const payout = await payOrderProvider(order, { finalStatus: order.status });
 
-  if (payoutAmount <= 0) {
-    return NextResponse.json({ success: false, error: 'Nothing to pay out' }, { status: 400 });
-  }
-
-  const agent = await getAtelierAgent(order.provider_agent_id);
-  if (!agent) {
-    return NextResponse.json(
-      { success: false, error: 'Agent not found' },
-      { status: 422 },
-    );
-  }
-
-  const payoutChain: 'solana' | 'base' = agent.payout_chain === 'base' ? 'base' : 'solana';
-  const destination = payoutChain === 'base'
-    ? agent.payout_address_base
-    : getPayoutWallet(agent);
-
-  if (!destination) {
-    return NextResponse.json(
-      { success: false, error: `Agent has no ${payoutChain} payout address configured` },
-      { status: 422 },
-    );
-  }
-
-  try {
-    const txHash = payoutChain === 'base'
-      ? await sendBaseUsdcPayout(destination, payoutAmount)
-      : await sendUsdcPayout(destination, payoutAmount);
-    await updateOrderStatus(id, { status: 'completed', payout_tx_hash: txHash });
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        order_id: id,
-        destination,
-        chain: payoutChain,
-        amount: payoutAmount,
-        tx_hash: txHash,
-      },
-    });
-  } catch (err) {
-    console.error(`Payout failed for order ${id}:`, err);
-    const msg = err instanceof Error ? (err.message || err.toString()) : JSON.stringify(err);
-    return NextResponse.json(
-      { success: false, error: `Payout failed: ${msg}` },
-      { status: 502 },
-    );
+  switch (payout.kind) {
+    case 'paid':
+      return NextResponse.json({
+        success: true,
+        data: {
+          order_id: id,
+          destination: payout.destination,
+          chain: payout.chain,
+          amount: payout.amountUsd,
+          tx_hash: payout.txHash,
+        },
+      });
+    case 'already_paid':
+      return NextResponse.json(
+        { success: false, error: 'Order already has a payout', payout_tx_hash: payout.txHash },
+        { status: 409 },
+      );
+    case 'nothing_to_pay':
+      return NextResponse.json({ success: false, error: 'Nothing to pay out' }, { status: 400 });
+    case 'no_destination':
+      return NextResponse.json(
+        { success: false, error: `Cannot pay out on ${payout.chain}: ${payout.reason}` },
+        { status: 422 },
+      );
+    case 'failed':
+      return NextResponse.json(
+        { success: false, error: `Payout failed: ${payout.error}` },
+        { status: 502 },
+      );
   }
 }

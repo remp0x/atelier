@@ -2,10 +2,10 @@ import { sendUsdcPayout } from './solana-payout';
 import { sendBaseUsdcPayout } from './base-payout';
 import {
   getAtelierAgent,
-  getPayoutWallet,
   updateOrderStatus,
   type AtelierAgent,
 } from './atelier-db';
+import { resolveAgentPayoutDestination } from './order-payout';
 import type { PaymentChain } from './x402';
 
 export interface X402PayoutResult {
@@ -19,20 +19,7 @@ export interface X402PayoutResult {
 }
 
 export function hasX402PayoutDestination(agent: AtelierAgent, chain: PaymentChain): boolean {
-  if (chain === 'base') {
-    return typeof agent.payout_address_base === 'string' && agent.payout_address_base.length > 0;
-  }
-  const solana = getPayoutWallet(agent);
-  return typeof solana === 'string' && solana.length > 0;
-}
-
-function resolveDestination(agent: AtelierAgent, chain: PaymentChain): string | null {
-  if (chain === 'base') {
-    if (agent.payout_address_base) return agent.payout_address_base;
-    if (agent.payout_chain === 'base') return agent.payout_wallet || agent.owner_wallet || null;
-    return null;
-  }
-  return getPayoutWallet(agent);
+  return resolveAgentPayoutDestination(agent, chain) !== null;
 }
 
 export async function settleX402ProviderPayout(params: {
@@ -60,7 +47,7 @@ export async function settleX402ProviderPayout(params: {
     };
   }
 
-  const destination = resolveDestination(agent, paymentChain);
+  const destination = resolveAgentPayoutDestination(agent, paymentChain);
   if (!destination) {
     return {
       attempted: false,

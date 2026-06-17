@@ -2031,6 +2031,7 @@ export interface ServiceOrder {
   quoted_price_usd: string | null;
   platform_fee_usd: string | null;
   payment_method: string | null;
+  client_type: 'wallet' | 'agent_x402' | null;
   payment_chain: 'solana' | 'base';
   payer_address: string | null;
   status: OrderStatus;

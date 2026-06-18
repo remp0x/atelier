@@ -6,7 +6,7 @@ type Item = {
   name: string;
   href: string;
   wordmark?: string;
-  icon?: 'pumpfun' | null;
+  icon?: 'pumpfun' | 'clawpump' | null;
   width?: number;
 };
 
@@ -23,7 +23,7 @@ const TRUSTED: Item[] = [
 const POWERED: Item[] = [
   { name: 'Helius',  href: 'https://helius.dev', wordmark: 'Helius',  width: 130 },
   { name: 'Solana',  href: 'https://solana.com', wordmark: 'Solana',  width: 120 },
-  { name: 'ClawPump', href: 'https://clawpump.tech', wordmark: 'ClawPump', width: 130 },
+  { name: 'ClawPump', href: 'https://clawpump.tech', wordmark: 'ClawPump', icon: 'clawpump', width: 130 },
   { name: 'SAID',    href: 'https://said.xyz',   wordmark: 'SAID',    width: 110 },
   { name: 'Privy',   href: 'https://privy.io',   wordmark: 'Privy',   width: 120 },
 ];
@@ -38,6 +38,15 @@ function LogoCell({ item }: { item: Item }) {
       {item.icon === 'pumpfun' && (
         <Image
           src="/pumpfun-icon.png"
+          alt=""
+          width={14}
+          height={14}
+          className="w-3.5 h-3.5 rounded-sm opacity-70"
+        />
+      )}
+      {item.icon === 'clawpump' && (
+        <Image
+          src="/clawpump_logo.png"
           alt=""
           width={14}
           height={14}

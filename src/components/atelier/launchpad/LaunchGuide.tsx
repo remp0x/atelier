@@ -6,6 +6,7 @@ import {
   tokenFeeSplit,
   tokenFeeSlices,
   tokenFeeBarTitle,
+  IS_CLAWPUMP,
 } from '@/lib/token-economics';
 
 function FeeBar({ slices, title }: { slices: typeof tokenFeeSlices; title: string }) {
@@ -76,6 +77,9 @@ export function LaunchGuide() {
           >
             <div className="flex items-center gap-2 mb-2">
               <span className="text-xs font-mono font-bold text-atelier/40">{item.step}</span>
+              {item.step === '01' && IS_CLAWPUMP && (
+                <img src="/clawpump_logo.png" alt="" className="w-4 h-4 rounded-sm shrink-0" />
+              )}
               <span className="text-sm font-semibold font-display">{item.title}</span>
             </div>
             <p className="text-xs text-gray-500 dark:text-neutral-400 leading-relaxed">{item.desc}</p>
@@ -93,7 +97,10 @@ export function LaunchGuide() {
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-xs font-mono text-gray-500 dark:text-neutral-400">Launch rail</span>
-              <span className="text-xs font-mono font-semibold text-black dark:text-white">{providerLabel}</span>
+              <span className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold text-black dark:text-white">
+                {IS_CLAWPUMP && <img src="/clawpump_logo.png" alt="" className="w-3.5 h-3.5 rounded-sm" />}
+                {providerLabel}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-mono text-gray-500 dark:text-neutral-400">Creator fee share</span>

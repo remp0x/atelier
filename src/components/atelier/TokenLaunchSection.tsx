@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { linkExistingToken } from '@/lib/pumpfun-client';
 import { getPrivyAccessToken } from '@/lib/privy-client';
-import { providerLabel, agentFeePct, badgeLabelForMode } from '@/lib/token-economics';
+import { providerLabel, agentFeePct, badgeLabelForMode, IS_CLAWPUMP } from '@/lib/token-economics';
 import Image from 'next/image';
 import type { MarketData } from '@/app/api/market/route';
 
@@ -127,9 +127,10 @@ export function TokenLaunchSection({
                   <span className="text-sm font-mono font-semibold text-atelier">mcap {formatMcap(marketData.market_cap_usd)}</span>
                 </div>
               )}
-              <span className={`px-1.5 py-0.5 rounded text-2xs font-mono ${
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-mono ${
                 token.mode === 'byot' ? 'bg-atelier/10 text-atelier' : 'bg-green-500/10 text-green-400'
               }`}>
+                {token.mode === 'clawpump' && <img src="/clawpump_logo.png" alt="" className="w-3 h-3 rounded-sm" />}
                 {badgeLabelForMode(token.mode)}
               </span>
             </div>
@@ -340,14 +341,18 @@ export function TokenLaunchSection({
           <button
             onClick={() => { setMode('pumpfun'); setName(agentName); setDescription(agentDescription || ''); setImageUrl(agentAvatarUrl); }}
             disabled={busy}
-            className="flex-1 px-3 py-2 rounded border border-green-500/30 text-green-400 text-xs font-mono transition-all duration-200 hover:bg-green-500 hover:text-black hover:border-green-500 disabled:opacity-50"
+            className="group flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-mono font-semibold text-white shadow-sm shadow-atelier/20 transition-all duration-200 hover:shadow-md hover:shadow-atelier/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+            style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)' }}
           >
+            {IS_CLAWPUMP && (
+              <img src="/clawpump_logo.png" alt="" className="w-[18px] h-[18px] rounded-sm transition-transform duration-200 group-hover:scale-110" />
+            )}
             Launch on {providerLabel}
           </button>
           <button
             onClick={() => setMode('byot')}
             disabled={busy}
-            className="flex-1 px-3 py-2 rounded border border-atelier/30 text-atelier text-xs font-mono transition-all duration-200 hover:bg-atelier/10 hover:border-atelier/50 disabled:opacity-50"
+            className="flex-1 px-4 py-2.5 rounded-lg border border-atelier/30 text-atelier text-sm font-mono font-medium transition-all duration-200 hover:bg-atelier/10 hover:border-atelier/50 disabled:opacity-50"
           >
             Link Existing Token
           </button>
@@ -447,8 +452,9 @@ export function TokenLaunchSection({
               Cancel
             </button>
           </div>
-          <p className="text-2xs text-neutral-500 font-mono">
-            Launched via {providerLabel}. You earn {agentFeePct}% of your token&apos;s creator fees.
+          <p className="text-2xs text-neutral-500 font-mono flex items-center gap-1.5">
+            {IS_CLAWPUMP && <img src="/clawpump_logo.png" alt="" className="w-3 h-3 rounded-sm shrink-0" />}
+            <span>Launched via {providerLabel}. You earn {agentFeePct}% of your token&apos;s creator fees.</span>
           </p>
         </div>
       )}

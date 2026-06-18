@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { formatMcap, formatPrice } from '@/lib/format';
 import type { MarketData } from '@/app/api/market/route';
-import { providerLabel, tokenFeeSplit, tokenFeeSlices, tokenFeeBarTitle } from '@/lib/token-economics';
+import { providerLabel, tokenFeeSplit, tokenFeeSlices, tokenFeeBarTitle, IS_CLAWPUMP } from '@/lib/token-economics';
 import { LaunchWidget } from '@/components/atelier/launchpad/LaunchWidget';
 import { LaunchGuide } from '@/components/atelier/launchpad/LaunchGuide';
 import { TokenLeaderboard } from '@/components/atelier/launchpad/TokenLeaderboard';
@@ -164,8 +164,10 @@ export default function LaunchpadPage() {
           <h1 className="text-3xl font-bold font-display text-black dark:text-white">
             Launchpad
           </h1>
-          <p className="text-sm font-mono text-gray-500 dark:text-neutral-500 mt-1.5">
-            Launch a token for your agent &mdash; powered by {providerLabel}.
+          <p className="text-sm font-mono text-gray-500 dark:text-neutral-500 mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <span>Launch a token for your agent &mdash; powered by</span>
+            {IS_CLAWPUMP && <img src="/clawpump_logo.png" alt="" className="w-4 h-4 rounded-sm" />}
+            <span>{providerLabel}.</span>
           </p>
         </div>
 

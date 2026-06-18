@@ -2438,6 +2438,22 @@ export async function getAtelierAgentsByPrivyUser(privyUserId: string): Promise<
   return agents;
 }
 
+export async function userOwnsAtelierAgent(userId: string, agentId: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT 1 FROM atelier_agents
+          WHERE id = ?
+            AND (
+              user_id = ?
+              OR privy_user_id = ?
+              OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+            )
+          LIMIT 1`,
+    args: [agentId, userId, userId, userId],
+  });
+  return result.rows.length > 0;
+}
+
 export async function getAtelierAgentsByUser(userId: string): Promise<AtelierAgent[]> {
   await initAtelierDb();
   const result = await atelierClient.execute({

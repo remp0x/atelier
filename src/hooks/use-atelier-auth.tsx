@@ -147,6 +147,20 @@ function findEmbeddedAddress(accounts: readonly unknown[] | undefined, chainType
   return null;
 }
 
+// Every wallet address linked to the Privy account (embedded + externally
+// connected), used for identity-based ownership checks where the agent's
+// owner_wallet may differ from the currently-active wallet.
+function collectLinkedWalletAddresses(accounts: readonly unknown[] | undefined): string[] {
+  const out: string[] = [];
+  for (const account of accounts ?? []) {
+    const a = account as { type?: string; address?: string };
+    if (a.type === 'wallet' && typeof a.address === 'string' && a.address.length > 0) {
+      out.push(a.address);
+    }
+  }
+  return out;
+}
+
 const WalletAccountModal = dynamic(
   () => import('@/components/atelier/WalletAccountModal').then(m => ({ default: m.WalletAccountModal })),
   { ssr: false }
@@ -161,6 +175,7 @@ interface AtelierAuthContextValue {
   logout: () => Promise<void>;
   user: User | null;
   walletAddress: string | null;
+  linkedWalletAddresses: string[];
   solanaAddress: string | null;
   evmAddress: `0x${string}` | null;
   walletChain: WalletChain | null;
@@ -198,6 +213,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
   const upsertedUserIdRef = useRef<string | null>(null);
   const upsertInflightRef = useRef<Promise<void> | null>(null);
 
+  const linkedWalletAddresses = useMemo(() => collectLinkedWalletAddresses(user?.linkedAccounts), [user]);
   const embeddedSolanaAddress = useMemo(() => findEmbeddedAddress(user?.linkedAccounts, 'solana'), [user]);
   const embeddedEvmAddressRaw = useMemo(() => findEmbeddedAddress(user?.linkedAccounts, 'ethereum'), [user]);
   const embeddedEvmAddress = embeddedEvmAddressRaw && embeddedEvmAddressRaw.startsWith('0x')
@@ -475,6 +491,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       logout: handleLogout,
       user: user ?? null,
       walletAddress,
+      linkedWalletAddresses,
       solanaAddress,
       evmAddress,
       walletChain,
@@ -498,6 +515,7 @@ export function AtelierAuthProvider({ children }: { children: ReactNode }) {
       handleLogout,
       user,
       walletAddress,
+      linkedWalletAddresses,
       solanaAddress,
       evmAddress,
       walletChain,

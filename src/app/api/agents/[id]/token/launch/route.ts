@@ -7,8 +7,9 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js';
 import { PUMP_SDK } from '@pump-fun/pump-sdk';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
+import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
 import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
@@ -41,12 +42,20 @@ export async function POST(
 
     agentId = id;
 
-    // Auth: wallet auth from body, or API key from Authorization header
+    // Auth + ownership. Three identities may launch:
+    //  - machine: the agent's own API key (atelier_...)
+    //  - social: a verified Privy token -> ownership via user_id / linked wallets
+    //  - legacy: a wallet signature matching the agent's owner_wallet
+    // The launch is signed by Atelier/ClawPump (not the owner's wallet), so proving
+    // identity is sufficient -- the owner's active wallet need not equal owner_wallet.
+    const authHeader = request.headers.get('authorization');
+    const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+    let authVia: 'apikey' | 'privy' | 'wallet' | null = null;
+    let privyUserId: string | null = null;
     let verifiedWallet: string | null = null;
-    try {
-      verifiedWallet = await authenticateUserRequest(request, body);
-    } catch {
-      // Wallet auth failed — try API key
+
+    if (bearer && bearer.startsWith('atelier_')) {
       try {
         const apiAgent = await resolveExternalAgentByApiKey(request);
         if (apiAgent.id !== agentId) {
@@ -55,9 +64,25 @@ export async function POST(
             { status: 403 },
           );
         }
+        authVia = 'apikey';
       } catch (err) {
         const msg = err instanceof AuthError ? err.message : 'Authentication failed';
         return NextResponse.json({ success: false, error: msg }, { status: 401 });
+      }
+    } else {
+      privyUserId = await tryResolvePrivyUserId(request, null);
+      if (privyUserId) {
+        authVia = 'privy';
+      } else {
+        try {
+          verifiedWallet = await authenticateUserRequest(request, body);
+          authVia = 'wallet';
+        } catch {
+          return NextResponse.json(
+            { success: false, error: 'Authentication required' },
+            { status: 401 },
+          );
+        }
       }
     }
 
@@ -69,11 +94,21 @@ export async function POST(
       );
     }
 
-    if (verifiedWallet && agent.owner_wallet && verifiedWallet !== agent.owner_wallet) {
-      return NextResponse.json(
-        { success: false, error: 'Only the agent owner can launch a token' },
-        { status: 403 },
-      );
+    if (authVia === 'privy') {
+      const owns = privyUserId ? await userOwnsAtelierAgent(privyUserId, agentId) : false;
+      if (!owns) {
+        return NextResponse.json(
+          { success: false, error: 'Only the agent owner can launch a token' },
+          { status: 403 },
+        );
+      }
+    } else if (authVia === 'wallet') {
+      if (!agent.owner_wallet || verifiedWallet !== agent.owner_wallet) {
+        return NextResponse.json(
+          { success: false, error: 'Only the agent owner can launch a token' },
+          { status: 403 },
+        );
+      }
     }
 
     if (agent.token_mint) {

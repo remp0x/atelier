@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { linkExistingToken } from '@/lib/pumpfun-client';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { providerLabel, agentFeePct, badgeLabelForMode } from '@/lib/token-economics';
 import Image from 'next/image';
 import type { MarketData } from '@/app/api/market/route';
@@ -58,6 +59,7 @@ export function TokenLaunchSection({
   token,
   ownerWallet,
   onTokenSet,
+  canManage,
 }: {
   agentId: string;
   agentName: string;
@@ -66,6 +68,7 @@ export function TokenLaunchSection({
   token: TokenInfo | null;
   ownerWallet: string | null;
   onTokenSet: () => void;
+  canManage?: boolean;
 }) {
   const { walletAddress, authenticated, getAuth } = useAtelierAuth();
 
@@ -189,7 +192,12 @@ export function TokenLaunchSection({
 
   if (!ownerWallet) return null;
 
-  if (!authenticated || !walletAddress) {
+  // Ownership for the agent may be held under the Privy identity even when the
+  // active wallet differs from owner_wallet; callers that already know ownership
+  // (dashboard/agent page) pass canManage. Fall back to a direct wallet match.
+  const isManager = canManage ?? (walletAddress === ownerWallet);
+
+  if (!authenticated) {
     if (token?.launch_attempted && !token?.mint) return null;
     return (
       <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
@@ -200,7 +208,7 @@ export function TokenLaunchSection({
     );
   }
 
-  if (walletAddress !== ownerWallet) {
+  if (!isManager) {
     return null;
   }
 
@@ -217,22 +225,28 @@ export function TokenLaunchSection({
   const busy = step !== 'idle' && step !== 'done' && step !== 'error';
 
   async function handlePumpFunLaunch() {
-    if (!walletAddress) return;
     setError(null);
 
     try {
       setStep('launching');
-      const walletAuth = await getAuth();
+
+      // Prefer the verified Privy token (works across multi-wallet users); fall
+      // back to a wallet signature for legacy wallet-only accounts.
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      const requestBody: Record<string, unknown> = { symbol, name, description };
+
+      const privyToken = await getPrivyAccessToken();
+      if (privyToken) {
+        headers.Authorization = `Bearer ${privyToken}`;
+      } else {
+        const walletAuth = await getAuth();
+        Object.assign(requestBody, walletAuth);
+      }
 
       const res = await fetch(`/api/agents/${agentId}/token/launch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...walletAuth,
-          symbol,
-          name,
-          description,
-        }),
+        headers,
+        body: JSON.stringify(requestBody),
       });
 
       const json = await res.json();

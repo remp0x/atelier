@@ -195,6 +195,7 @@ export function LaunchWidget() {
           token={null}
           ownerWallet={selectedAgent.owner_wallet}
           onTokenSet={loadAgents}
+          canManage
         />
       )}
     </div>

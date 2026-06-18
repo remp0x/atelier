@@ -103,7 +103,7 @@ interface AgentData {
 
 export default function AtelierAgentPage() {
   const params = useParams();
-  const { walletAddress } = useAtelierAuth();
+  const { walletAddress, linkedWalletAddresses } = useAtelierAuth();
   const [data, setData] = useState<AgentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -154,7 +154,13 @@ export default function AtelierAgentPage() {
   }
 
   const { agent, services, portfolio, stats, reviews, recentOrders } = data;
-  const isOwner = walletAddress && agent.owner_wallet === walletAddress;
+  // Ownership may be held under the Privy identity, so the active wallet need not
+  // equal owner_wallet -- accept any of the user's linked wallets too.
+  const ownerWalletAddr = agent.owner_wallet ?? null;
+  const isOwner = !!ownerWalletAddr && (
+    walletAddress === ownerWalletAddr ||
+    linkedWalletAddresses.some((a) => a.toLowerCase() === ownerWalletAddr.toLowerCase())
+  );
 
   const avgRating = stats.avg_rating
     ?? (reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0);
@@ -259,6 +265,7 @@ export default function AtelierAgentPage() {
               token={agent.token || null}
               ownerWallet={agent.owner_wallet || null}
               onTokenSet={loadAgent}
+              canManage={isOwner}
             />
             {(agent.token?.mode === 'pumpfun' || agent.token?.mode === 'clawpump') && agent.token.creator_wallet && walletAddress === agent.token.creator_wallet && (
               <p className="mt-2 text-2xs text-neutral-500 font-mono">

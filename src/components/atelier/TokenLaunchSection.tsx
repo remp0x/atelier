@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { linkExistingToken } from '@/lib/pumpfun-client';
 import { getPrivyAccessToken } from '@/lib/privy-client';
+import { isAtelierAdminEmail } from '@/lib/admin-client';
 import { providerLabel, agentFeePct, badgeLabelForMode, IS_CLAWPUMP } from '@/lib/token-economics';
 import Image from 'next/image';
 import type { MarketData } from '@/app/api/market/route';
@@ -70,9 +71,11 @@ export function TokenLaunchSection({
   onTokenSet: () => void;
   canManage?: boolean;
 }) {
-  const { walletAddress, authenticated, getAuth } = useAtelierAuth();
+  const { walletAddress, authenticated, getAuth, user } = useAtelierAuth();
+  const isAdmin = isAtelierAdminEmail(user?.google?.email ?? user?.email?.address ?? null);
 
   const [mode, setMode] = useState<'none' | 'pumpfun' | 'byot'>('none');
+  const [resetting, setResetting] = useState(false);
   const [step, setStep] = useState<LaunchStep>('idle');
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -112,6 +115,25 @@ export function TokenLaunchSection({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  async function handleResetLaunch() {
+    setResetting(true);
+    setError(null);
+    try {
+      const privyToken = await getPrivyAccessToken();
+      const res = await fetch(`/api/admin/agents/${agentId}/clear-token-launch`, {
+        method: 'POST',
+        headers: privyToken ? { Authorization: `Bearer ${privyToken}` } : {},
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Reset failed');
+      onTokenSet();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Reset failed');
+    } finally {
+      setResetting(false);
+    }
+  }
 
   if (token?.mint) {
     return (
@@ -216,10 +238,23 @@ export function TokenLaunchSection({
 
   if (token?.launch_attempted && !token?.mint) {
     return (
-      <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-300 dark:border-yellow-700/40">
+      <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-300 dark:border-yellow-700/40 space-y-3">
         <p className="text-sm text-yellow-700 dark:text-yellow-400 font-mono">
-          A token launch was already attempted for this agent. Please contact support to resolve.
+          A token launch was already attempted for this agent.{' '}
+          {isAdmin
+            ? 'Reset it to retry — only if no token was actually minted.'
+            : 'Please contact support to resolve.'}
         </p>
+        {error && <p className="text-xs text-red-400 font-mono">{error}</p>}
+        {isAdmin && (
+          <button
+            onClick={handleResetLaunch}
+            disabled={resetting}
+            className="px-3 py-1.5 rounded border border-yellow-400/50 text-yellow-700 dark:text-yellow-400 text-xs font-mono transition-all hover:bg-yellow-400/10 disabled:opacity-50"
+          >
+            {resetting ? 'Resetting...' : 'Reset launch attempt'}
+          </button>
+        )}
       </div>
     );
   }

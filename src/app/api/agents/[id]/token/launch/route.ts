@@ -148,7 +148,18 @@ export async function POST(
     }
 
     const tokenName = agent.name + TOKEN_NAME_SUFFIX;
-    const description = agent.description || '';
+    // Token description comes from the launch form, falling back to the agent's
+    // own description. ClawPump requires >= 20 chars; validate BEFORE taking the
+    // launch lock so a too-short description is a clean, retryable error.
+    const providedDescription = typeof body.description === 'string' ? body.description.trim() : '';
+    const description = providedDescription || (agent.description?.trim() || '');
+
+    if (TOKEN_LAUNCH_PROVIDER === 'clawpump' && description.length < 20) {
+      return NextResponse.json(
+        { success: false, error: 'Token description must be at least 20 characters.' },
+        { status: 400 },
+      );
+    }
 
     const avatarUrlCheck = await validateExternalUrlWithDNS(tokenImageUrl);
     if (!avatarUrlCheck.valid) {
@@ -206,14 +217,25 @@ export async function POST(
       }
 
       console.log(`[token-launch] Launching via ClawPump for agent ${agentId}`);
-      // A failed call may still have minted — same risk posture as sendRawTransaction below.
+      let result;
+      try {
+        result = await launchTokenOnClawpump({
+          name: tokenName,
+          symbol,
+          description,
+          imageUrl: tokenImageUrl,
+        });
+      } catch (err) {
+        // ClawPump tears down its per-launch agent on a rejected call, so those
+        // failures minted nothing and are safe to retry -- leave broadcasted false
+        // so the outer catch releases the lock. Only a non-retriable error (a 200
+        // response with no mint address) holds the lock for manual review.
+        if (err instanceof ClawpumpError && err.retriable === false) {
+          broadcasted = true;
+        }
+        throw err;
+      }
       broadcasted = true;
-      const result = await launchTokenOnClawpump({
-        name: tokenName,
-        symbol,
-        description: description || tokenName,
-        imageUrl: tokenImageUrl,
-      });
 
       console.log(`[token-launch] ClawPump launched mint=${result.mintAddress} under clawpumpAgent=${result.clawpumpAgentId} wallet=${result.creatorWallet}`);
       mintAddress = result.mintAddress;

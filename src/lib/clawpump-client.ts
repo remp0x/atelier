@@ -37,6 +37,10 @@ export class ClawpumpError extends Error {
   constructor(
     message: string,
     public readonly status: number,
+    // Whether a retry is safe. False only when a token may have minted but we
+    // couldn't read its address (the per-launch agent is left intact for review);
+    // every other failure tears the agent down and minted nothing.
+    public readonly retriable: boolean = true,
   ) {
     super(message);
     this.name = 'ClawpumpError';
@@ -181,8 +185,9 @@ export async function launchTokenOnClawpump(
   const txHash: string | undefined = data.txHash || data.tx_hash || data.signature;
   if (!mintAddress || !txHash) {
     // The token may or may not have minted; do NOT delete the agent here (deleting after a
-    // possible mint could orphan a live token). Surface the ambiguity instead.
-    throw new ClawpumpError('ClawPump launch response missing mint address / tx signature', 502);
+    // possible mint could orphan a live token). Surface the ambiguity and mark it
+    // non-retriable so the launch route holds the lock for manual review.
+    throw new ClawpumpError('ClawPump launch response missing mint address / tx signature', 502, false);
   }
   const pumpUrl: string = data.pumpUrl || data.url || `https://pump.fun/coin/${mintAddress}`;
 

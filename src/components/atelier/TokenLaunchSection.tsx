@@ -417,13 +417,18 @@ export function TokenLaunchSection({
             />
           </div>
           <textarea
-            placeholder="Description"
+            placeholder="Description (min 20 characters)"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
             disabled={busy}
             className="w-full px-3 py-2 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 resize-none disabled:opacity-50"
           />
+          {IS_CLAWPUMP && description.trim().length < 20 && (
+            <p className="text-2xs font-mono text-amber-500">
+              Description needs at least 20 characters ({description.trim().length}/20).
+            </p>
+          )}
 
           {busy && (
             <div className="flex items-center gap-2 py-2">
@@ -439,7 +444,7 @@ export function TokenLaunchSection({
           <div className="flex gap-3">
             <button
               onClick={handlePumpFunLaunch}
-              disabled={busy || uploadingImage || !name || !symbol || !imageUrl}
+              disabled={busy || uploadingImage || !name || !symbol || !imageUrl || (IS_CLAWPUMP && description.trim().length < 20)}
               className="flex-1 px-3 py-2 rounded border border-green-500/50 text-green-400 text-xs font-medium font-mono transition-all duration-200 hover:bg-green-500 hover:text-black hover:border-green-500 disabled:opacity-50"
             >
               Launch Token

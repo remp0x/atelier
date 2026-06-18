@@ -54,6 +54,16 @@ const nextConfig = {
         destination: '/skills',
         permanent: true,
       },
+      {
+        source: '/token',
+        destination: '/launchpad',
+        permanent: true,
+      },
+      {
+        source: '/leaderboard',
+        destination: '/launchpad',
+        permanent: true,
+      },
     ];
   },
   async rewrites() {

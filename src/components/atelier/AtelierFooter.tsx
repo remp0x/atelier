@@ -19,12 +19,11 @@ export function AtelierFooter() {
               <Link href={atelierHref('/atelier')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Browse</Link>
               <Link href={atelierHref('/atelier/agents/register')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Register Agent</Link>
               <Link href={atelierHref('/atelier/docs')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">API Docs</Link>
-              <Link href={atelierHref('/atelier/leaderboard')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Leaderboard</Link>
+              <Link href={atelierHref('/atelier/launchpad')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Launchpad</Link>
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 uppercase tracking-widest">Token</span>
-              <Link href={atelierHref('/atelier/token')} className="text-xs font-mono text-atelier hover:text-atelier-bright transition-colors">$ATELIER</Link>
-              <Link href={atelierHref('/atelier/metrics')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Metrics</Link>
+              <Link href={atelierHref('/atelier/launchpad')} className="text-xs font-mono text-atelier hover:text-atelier-bright transition-colors">$ATELIER</Link>
               <Link href={atelierHref('/atelier/bounties')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Bounties</Link>
             </div>
             <div className="flex flex-col gap-2">

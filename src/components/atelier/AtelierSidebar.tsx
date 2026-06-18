@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { atelierHref } from '@/lib/atelier-paths';
+import { isAtelierAdminEmail } from '@/lib/admin-client';
 import { SignInButton } from './SignInButton';
 
 interface NavItem {
@@ -54,11 +55,11 @@ const discoverNavItems: NavItem[] = [
     ),
   },
   {
-    href: '/atelier/leaderboard',
-    label: 'Leaderboard',
+    href: '/atelier/launchpad',
+    label: 'Launchpad',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-3.375c0-.621-.503-1.125-1.125-1.125h-.871M7.5 18.75v-3.375c0-.621.504-1.125 1.125-1.125h.872m5.007 0H9.497m5.007 0a7.454 7.454 0 01-.982-3.172M9.497 14.25a7.454 7.454 0 00.981-3.172M5.25 4.236c-.982.143-1.954.317-2.916.52A6.003 6.003 0 007.73 9.728M5.25 4.236V4.5c0 2.108.966 3.99 2.48 5.228M5.25 4.236V2.721C7.456 2.41 9.71 2.25 12 2.25c2.291 0 4.545.16 6.75.47v1.516M18.75 4.236c.982.143 1.954.317 2.916.52A6.003 6.003 0 0016.27 9.728M18.75 4.236V4.5c0 2.108-.966 3.99-2.48 5.228m0 0a6.023 6.023 0 01-2.77.896m0 0c-.507.058-1.023.088-1.5.088s-.993-.03-1.5-.088m0 0a6.023 6.023 0 01-2.77-.896" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
       </svg>
     ),
   },
@@ -121,41 +122,21 @@ const myStuffNavItems: NavItem[] = [
   },
 ];
 
-const platformNavItems: NavItem[] = [
-  {
-    href: '/atelier/token',
-    label: '$ATELIER',
-    icon: (
-      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/atelier/metrics',
-    label: 'Metrics',
-    icon: (
-      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-      </svg>
-    ),
-  },
-  {
-    href: '/atelier/docs',
-    label: 'Docs',
-    icon: (
-      <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-      </svg>
-    ),
-  },
-];
+const metricsNavItem: NavItem = {
+  href: '/atelier/metrics',
+  label: 'Metrics',
+  icon: (
+    <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+    </svg>
+  ),
+};
 
 export function AtelierSidebar() {
   const [expanded, setExpanded] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const pathname = usePathname();
-  const { authenticated, atelierUser } = useAtelierAuth();
+  const { authenticated, atelierUser, user } = useAtelierAuth();
+  const isAdmin = isAtelierAdminEmail(user?.google?.email ?? user?.email?.address ?? null);
 
   useEffect(() => {
     const saved = localStorage.getItem('atelier_sidebar_expanded');
@@ -168,18 +149,11 @@ export function AtelierSidebar() {
     localStorage.setItem('atelier_sidebar_expanded', String(next));
   };
 
-  const toggleMore = () => {
-    setMoreOpen((v) => !v);
-  };
-
   const isActive = (href: string) => {
     const resolved = atelierHref(href);
     if (href === '/atelier/agents') return pathname === resolved;
     return pathname.startsWith(resolved);
   };
-
-  const platformHasActive = platformNavItems.some((item) => isActive(item.href));
-  const showPlatformItems = !expanded || moreOpen || platformHasActive;
 
   const renderNavLink = (item: NavItem, opts?: { muted?: boolean }) => {
     const active = isActive(item.href);
@@ -264,40 +238,20 @@ export function AtelierSidebar() {
           </div>
           {discoverNavItems.map((item) => renderNavLink(item))}
 
-          {/* Platform — collapsed into a subdued toggle when sidebar is expanded */}
-          {expanded ? (
+          {isAdmin && (
             <>
-              <div className="pt-2">
-                <button
-                  onClick={toggleMore}
-                  aria-expanded={showPlatformItems}
-                  aria-controls="sidebar-platform-items"
-                  className="w-full flex items-center gap-3 h-8 px-3 rounded-lg transition-colors text-gray-400 dark:text-neutral-600 hover:text-gray-600 dark:hover:text-neutral-400 hover:bg-gray-100 dark:hover:bg-neutral-900 cursor-pointer"
-                >
-                  <span className="text-[10px] font-mono uppercase tracking-wider">Platform</span>
-                  <svg
-                    className={`w-3 h-3 ml-auto transition-transform duration-200 ${showPlatformItems ? 'rotate-180' : ''}`}
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                  </svg>
-                </button>
-              </div>
-              {showPlatformItems && (
-                <div id="sidebar-platform-items" className="space-y-0.5">
-                  {platformNavItems.map((item) => renderNavLink(item, { muted: true }))}
+              {expanded ? (
+                <div className="pt-2 pb-1">
+                  <span className="px-3 text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-600">
+                    Admin
+                  </span>
+                </div>
+              ) : (
+                <div className="pt-3 pb-1">
+                  <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
                 </div>
               )}
-            </>
-          ) : (
-            <>
-              <div className="pt-3 pb-1">
-                <div className="mx-2 border-t border-gray-200 dark:border-neutral-800" />
-              </div>
-              {platformNavItems.map((item) => renderNavLink(item, { muted: true }))}
+              {renderNavLink(metricsNavItem)}
             </>
           )}
         </div>

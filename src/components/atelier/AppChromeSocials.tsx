@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useTheme } from '../ThemeProvider';
+import { atelierHref } from '@/lib/atelier-paths';
 
 const ICON_BTN = 'flex items-center justify-center w-8 h-8 rounded-lg transition-all text-gray-500 dark:text-neutral-400 hover:bg-gray-200/60 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white';
 
@@ -9,6 +11,14 @@ export function AppChromeSocials() {
 
   return (
     <div className="flex items-center gap-1">
+      <Link
+        href={atelierHref('/atelier/docs')}
+        className="flex items-center px-2 h-8 rounded-lg transition-all text-[11px] font-mono uppercase tracking-wider text-gray-500 dark:text-neutral-400 hover:bg-gray-200/60 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white"
+        title="API Docs"
+      >
+        Docs
+      </Link>
+
       <button
         onClick={toggleTheme}
         className={ICON_BTN}

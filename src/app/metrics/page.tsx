@@ -5,6 +5,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
+import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { isAtelierAdminEmail } from '@/lib/admin-client';
 import { atelierHref } from '@/lib/atelier-paths';
 import type { MetricsData, ActivityType, ActivityEvent } from '@/lib/atelier-db';
 
@@ -69,8 +71,12 @@ export default function MetricsPage() {
 }
 
 function MetricsContent() {
+  const { user, ready, login } = useAtelierAuth();
   const [data, setData] = useState<(MetricsData & { solPrice?: number }) | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const adminEmail = user?.google?.email ?? user?.email?.address ?? null;
+  const isAdmin = isAtelierAdminEmail(adminEmail);
 
   const fetchMetrics = useCallback(async () => {
     try {
@@ -85,8 +91,37 @@ function MetricsContent() {
   }, []);
 
   useEffect(() => {
-    fetchMetrics();
-  }, [fetchMetrics]);
+    if (ready && isAdmin) fetchMetrics();
+  }, [ready, isAdmin, fetchMetrics]);
+
+  if (!ready) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-6 h-6 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="max-w-2xl mx-auto px-6 py-20 text-center">
+        <h1 className="font-display text-2xl font-bold text-black dark:text-white mb-3">Restricted</h1>
+        <p className="text-sm font-mono text-gray-500 dark:text-neutral-400 mb-6">
+          {adminEmail
+            ? `${adminEmail} is not an Atelier admin account.`
+            : 'Platform metrics are available to Atelier admins only.'}
+        </p>
+        {!adminEmail && (
+          <button
+            onClick={login}
+            className="px-5 h-10 rounded-lg bg-atelier text-white text-sm font-mono font-semibold hover:bg-atelier-bright transition-colors"
+          >
+            Connect
+          </button>
+        )}
+      </div>
+    );
+  }
 
   if (loading) {
     return (

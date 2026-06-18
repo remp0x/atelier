@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { linkExistingToken } from '@/lib/pumpfun-client';
 import { getPrivyAccessToken } from '@/lib/privy-client';
@@ -82,6 +82,9 @@ export function TokenLaunchSection({
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
   const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // BYOT form
   const [byotMint, setByotMint] = useState('');
@@ -222,6 +225,44 @@ export function TokenLaunchSection({
 
   const busy = step !== 'idle' && step !== 'done' && step !== 'error';
 
+  async function uploadTokenImage(file: File): Promise<string> {
+    const form = new FormData();
+    form.append('file', file);
+    const privyToken = await getPrivyAccessToken();
+    let url = '/api/profile/avatar';
+    const headers: Record<string, string> = {};
+    if (privyToken) {
+      headers.Authorization = `Bearer ${privyToken}`;
+    } else {
+      const auth = await getAuth();
+      const params = new URLSearchParams({
+        wallet: auth.wallet,
+        wallet_sig: auth.wallet_sig,
+        wallet_sig_ts: String(auth.wallet_sig_ts),
+      });
+      url = `/api/profile/avatar?${params.toString()}`;
+    }
+    const res = await fetch(url, { method: 'POST', headers, body: form });
+    const json = await res.json();
+    if (!res.ok || !json.success) throw new Error(json.error || 'Image upload failed');
+    return json.data.url as string;
+  }
+
+  async function handleImageSelect(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingImage(true);
+    setError(null);
+    try {
+      setImageUrl(await uploadTokenImage(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Image upload failed');
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
+
   async function handlePumpFunLaunch() {
     setError(null);
 
@@ -231,7 +272,7 @@ export function TokenLaunchSection({
       // Prefer the verified Privy token (works across multi-wallet users); fall
       // back to a wallet signature for legacy wallet-only accounts.
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      const requestBody: Record<string, unknown> = { symbol, name, description };
+      const requestBody: Record<string, unknown> = { symbol, name, description, image_url: imageUrl };
 
       const privyToken = await getPrivyAccessToken();
       if (privyToken) {
@@ -297,7 +338,7 @@ export function TokenLaunchSection({
       {mode === 'none' && (
         <div className="flex gap-3">
           <button
-            onClick={() => { setMode('pumpfun'); setName(agentName); setDescription(agentDescription || ''); }}
+            onClick={() => { setMode('pumpfun'); setName(agentName); setDescription(agentDescription || ''); setImageUrl(agentAvatarUrl); }}
             disabled={busy}
             className="flex-1 px-3 py-2 rounded border border-green-500/30 text-green-400 text-xs font-mono transition-all duration-200 hover:bg-green-500 hover:text-black hover:border-green-500 disabled:opacity-50"
           >
@@ -315,6 +356,37 @@ export function TokenLaunchSection({
 
       {mode === 'pumpfun' && (
         <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-lg overflow-hidden bg-atelier/10 flex items-center justify-center shrink-0 border border-gray-200 dark:border-neutral-800">
+              {imageUrl ? (
+                <Image src={imageUrl} alt="Token image" width={56} height={56} className="w-14 h-14 object-cover" unoptimized />
+              ) : (
+                <span className="text-lg font-bold font-mono text-atelier">$</span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={busy || uploadingImage}
+                className="px-3 py-1.5 rounded border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 hover:text-atelier hover:border-atelier/40 transition-all disabled:opacity-50"
+              >
+                {uploadingImage ? 'Uploading...' : imageUrl ? 'Change image' : 'Upload image'}
+              </button>
+              <p className="mt-1 text-2xs text-neutral-500 font-mono">
+                {agentAvatarUrl
+                  ? "Defaults to your agent's avatar -- upload to use a different image."
+                  : 'Upload a token image (your agent has no avatar).'}
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="hidden"
+                onChange={handleImageSelect}
+              />
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="relative">
               <input
@@ -362,7 +434,7 @@ export function TokenLaunchSection({
           <div className="flex gap-3">
             <button
               onClick={handlePumpFunLaunch}
-              disabled={busy || !name || !symbol}
+              disabled={busy || uploadingImage || !name || !symbol || !imageUrl}
               className="flex-1 px-3 py-2 rounded border border-green-500/50 text-green-400 text-xs font-medium font-mono transition-all duration-200 hover:bg-green-500 hover:text-black hover:border-green-500 disabled:opacity-50"
             >
               Launch Token

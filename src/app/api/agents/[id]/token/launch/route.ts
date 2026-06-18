@@ -125,9 +125,15 @@ export async function POST(
       );
     }
 
-    if (!agent.avatar_url) {
+    // The token image defaults to the agent's avatar; the builder may override
+    // it by passing image_url (validated below like any external URL).
+    const tokenImageUrl = (typeof body.image_url === 'string' && body.image_url.trim())
+      ? body.image_url.trim()
+      : agent.avatar_url;
+
+    if (!tokenImageUrl) {
       return NextResponse.json(
-        { success: false, error: 'Agent must have an avatar_url set before launching a token' },
+        { success: false, error: 'A token image is required -- set an agent avatar or upload one.' },
         { status: 400 },
       );
     }
@@ -144,15 +150,15 @@ export async function POST(
     const tokenName = agent.name + TOKEN_NAME_SUFFIX;
     const description = agent.description || '';
 
-    const avatarUrlCheck = await validateExternalUrlWithDNS(agent.avatar_url);
+    const avatarUrlCheck = await validateExternalUrlWithDNS(tokenImageUrl);
     if (!avatarUrlCheck.valid) {
       return NextResponse.json(
-        { success: false, error: `Invalid avatar URL: ${avatarUrlCheck.error}` },
+        { success: false, error: `Invalid token image URL: ${avatarUrlCheck.error}` },
         { status: 400 },
       );
     }
 
-    const imageResponse = await fetch(agent.avatar_url, { signal: AbortSignal.timeout(15_000) });
+    const imageResponse = await fetch(tokenImageUrl, { signal: AbortSignal.timeout(15_000) });
     if (!imageResponse.ok) {
       return NextResponse.json(
         { success: false, error: `Failed to download agent avatar: ${imageResponse.status}` },
@@ -206,7 +212,7 @@ export async function POST(
         name: tokenName,
         symbol,
         description: description || tokenName,
-        imageUrl: agent.avatar_url,
+        imageUrl: tokenImageUrl,
       });
 
       console.log(`[token-launch] ClawPump launched mint=${result.mintAddress} under clawpumpAgent=${result.clawpumpAgentId} wallet=${result.creatorWallet}`);
@@ -274,7 +280,7 @@ export async function POST(
       token_mint: mintAddress,
       token_name: tokenName,
       token_symbol: symbol,
-      token_image_url: agent.avatar_url,
+      token_image_url: tokenImageUrl,
       token_mode: tokenMode,
       token_creator_wallet: creatorWallet,
       token_tx_hash: txSignature,

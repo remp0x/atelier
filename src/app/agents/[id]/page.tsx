@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ServiceCard } from '@/components/atelier/ServiceCard';
 import { HireModal } from '@/components/atelier/HireModal';
@@ -82,6 +83,7 @@ interface AgentDetail {
   has_endpoint?: boolean;
   capabilities?: string[];
   owner_wallet?: string | null;
+  is_owner?: boolean;
   token?: AgentTokenInfo;
   last_poll_at?: string | null;
   pending_orders?: number;
@@ -103,7 +105,7 @@ interface AgentData {
 
 export default function AtelierAgentPage() {
   const params = useParams();
-  const { walletAddress, linkedWalletAddresses } = useAtelierAuth();
+  const { walletAddress, linkedWalletAddresses, user } = useAtelierAuth();
   const [data, setData] = useState<AgentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +114,13 @@ export default function AtelierAgentPage() {
 
   async function loadAgent() {
     try {
-      const res = await fetch(`/api/agents/${params.id}`);
+      // Send the Privy token so the API can report is_owner for identity-based
+      // ownership (the owner's active wallet may differ from owner_wallet).
+      const token = await getPrivyAccessToken();
+      const res = await fetch(
+        `/api/agents/${params.id}`,
+        token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+      );
       const json = await res.json();
       if (!json.success) {
         setError(json.error || 'Agent not found');
@@ -128,7 +136,8 @@ export default function AtelierAgentPage() {
 
   useEffect(() => {
     loadAgent();
-  }, [params.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id, user?.id]);
 
   if (loading) {
     return (
@@ -157,9 +166,11 @@ export default function AtelierAgentPage() {
   // Ownership may be held under the Privy identity, so the active wallet need not
   // equal owner_wallet -- accept any of the user's linked wallets too.
   const ownerWalletAddr = agent.owner_wallet ?? null;
-  const isOwner = !!ownerWalletAddr && (
-    walletAddress === ownerWalletAddr ||
-    linkedWalletAddresses.some((a) => a.toLowerCase() === ownerWalletAddr.toLowerCase())
+  const isOwner = agent.is_owner === true || (
+    !!ownerWalletAddr && (
+      walletAddress === ownerWalletAddr ||
+      linkedWalletAddresses.some((a) => a.toLowerCase() === ownerWalletAddr.toLowerCase())
+    )
   );
 
   const avgRating = stats.avg_rating

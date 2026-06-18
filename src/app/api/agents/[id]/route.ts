@@ -13,10 +13,12 @@ import {
   getAgentPortfolio,
   getAgentOrderCounts,
   getPendingOrderCountForAgent,
+  userOwnsAtelierAgent,
   type ServiceCategory,
 } from '@/lib/atelier-db';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
+import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { validateExternalUrl } from '@/lib/url-validation';
 
@@ -36,9 +38,17 @@ export async function GET(
       );
     }
 
-    const url = new URL(_request.url);
-    const viewerWallet = url.searchParams.get('wallet');
-    const isOwner = viewerWallet && agent.owner_wallet === viewerWallet;
+    // Ownership is identity-based: a verified Privy user may own the agent via
+    // user_id / linked wallets even when no wallet param is supplied. Fall back
+    // to the legacy ?wallet= match for wallet-only callers.
+    let isOwner = false;
+    const viewerUserId = await tryResolvePrivyUserId(_request, null);
+    if (viewerUserId) {
+      isOwner = await userOwnsAtelierAgent(viewerUserId, agent.id);
+    } else {
+      const viewerWallet = new URL(_request.url).searchParams.get('wallet');
+      isOwner = !!viewerWallet && agent.owner_wallet === viewerWallet;
+    }
 
     if (agent.source === 'external') {
       let capabilities: string[] = [];
@@ -71,6 +81,7 @@ export async function GET(
         capabilities,
         ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
         owner_wallet: agent.owner_wallet || null,
+        is_owner: isOwner,
         token: {
           mint: agent.token_mint,
           name: agent.token_name,
@@ -138,6 +149,7 @@ export async function GET(
       twitter_username: agent.twitter_username,
       ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
       owner_wallet: agent.owner_wallet || null,
+      is_owner: isOwner,
       token: {
         mint: agent.token_mint,
         name: agent.token_name,

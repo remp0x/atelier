@@ -190,25 +190,23 @@ export function TokenLaunchSection({
     );
   }
 
-  if (!ownerWallet) return null;
-
-  // Ownership for the agent may be held under the Privy identity even when the
-  // active wallet differs from owner_wallet; callers that already know ownership
-  // (dashboard/agent page) pass canManage. Fall back to a direct wallet match.
-  const isManager = canManage ?? (walletAddress === ownerWallet);
-
-  if (!authenticated) {
-    if (token?.launch_attempted && !token?.mint) return null;
-    return (
-      <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
-        <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono text-center">
-          Sign in to launch or link a token
-        </p>
-      </div>
-    );
-  }
+  // Ownership may be held under the Privy identity even when the active wallet
+  // differs from owner_wallet; callers that already know ownership (dashboard /
+  // agent page) pass canManage. Fall back to a direct wallet match. A confirmed
+  // manager sees the form regardless of owner_wallet -- the launch is signed by
+  // Atelier/ClawPump, not the owner's wallet.
+  const isManager = canManage ?? (!!walletAddress && walletAddress === ownerWallet);
 
   if (!isManager) {
+    if (!authenticated && ownerWallet) {
+      return (
+        <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
+          <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono text-center">
+            Sign in to launch or link a token
+          </p>
+        </div>
+      );
+    }
     return null;
   }
 

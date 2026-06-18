@@ -65,7 +65,7 @@ const CDP_BAZAAR_INPUT_BODY: Record<string, unknown> = {
   requirements: {},
 };
 const CDP_BAZAAR_INPUT_PROPERTIES: Record<string, unknown> = {
-  brief: { type: 'string', description: 'What you want the agent to produce' },
+  brief: { type: 'string', description: 'Required. What you want the agent to produce (the generation prompt).' },
   requirements: { type: 'object', description: 'Optional answers to the service requirements' },
 };
 const CDP_BAZAAR_OUTPUT_EXAMPLE: Record<string, unknown> = {
@@ -91,6 +91,8 @@ function serviceBaseEligible(service: Service): boolean {
 }
 
 const BASE_NOT_AVAILABLE = 'This service is not available on Base yet: the provider has not configured a Base payout wallet.';
+
+const BRIEF_REQUIRED = 'A brief is required to hire this agent. Describe what you want produced via a "brief" JSON body field, a ?brief= query param, or an X-Atelier-Brief header. No order was created.';
 
 interface CdpServiceChallenge {
   requirements: CdpV2PaymentRequirements;
@@ -216,11 +218,23 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       );
     }
 
-    const brief = typeof body.brief === 'string' && body.brief.length > 0 ? body.brief : 'Instant hire via x402';
+    // The brief is the work order (for a generative agent it IS the prompt). Standard
+    // x402 clients replay the paid request with only the X-PAYMENT header and drop the
+    // JSON body, so also accept the brief via query param or header -- those survive the
+    // replay. No silent fallback: a hire with no brief has nothing to generate.
+    const bodyBrief = typeof body.brief === 'string' ? body.brief : '';
+    const brief = (
+      bodyBrief ||
+      request.nextUrl.searchParams.get('brief') ||
+      request.headers.get('X-Atelier-Brief') ||
+      ''
+    ).trim();
     const requirementAnswers =
       body.requirements && typeof body.requirements === 'object' && !Array.isArray(body.requirements)
         ? body.requirements
         : undefined;
+    const hasHireInput =
+      brief.length > 0 || (!!requirementAnswers && Object.keys(requirementAnswers).length > 0);
 
     const service = await getServiceById(serviceId);
     if (!service || !service.active) {
@@ -249,6 +263,9 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
     const paymentHeader = request.headers.get('X-PAYMENT') ?? request.headers.get('PAYMENT-SIGNATURE');
     const cdpPayload = CDP_FACILITATOR_ENABLED ? decodeXPaymentPayload(paymentHeader) : null;
     if (cdpPayload) {
+      if (!hasHireInput) {
+        return NextResponse.json({ success: false, error: BRIEF_REQUIRED }, { status: 400 });
+      }
       if (!serviceBaseEligible(service)) {
         return NextResponse.json(
           { success: false, error: `${BASE_NOT_AVAILABLE} No payment was taken.` },
@@ -279,6 +296,10 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
         chain,
       });
       return buildPaymentRequiredResponse(requirements);
+    }
+
+    if (!hasHireInput) {
+      return NextResponse.json({ success: false, error: BRIEF_REQUIRED }, { status: 400 });
     }
 
     return handleInstantHire(request, service, txSignature, headerChain, brief, requirementAnswers);

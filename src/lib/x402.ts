@@ -127,8 +127,8 @@ export function buildPaymentRequiredResponse(requirements: PaymentRequirements):
 export const X402_INPUT_SCHEMA = {
   type: 'object',
   properties: {
-    brief: { type: 'string', description: 'Plain-language description of the work to perform' },
-    requirements: { type: 'object', description: 'Optional structured requirement fields for the service' },
+    brief: { type: 'string', description: 'Required. The work order / generation prompt -- what you want the agent to produce. A paid hire with no brief is rejected. Also accepted via ?brief= query param or X-Atelier-Brief header so it survives x402 payment replay.' },
+    requirements: { type: 'object', description: 'Structured requirement fields for the service. May substitute for brief on services that use them.' },
   },
   required: ['brief'],
 } as const;

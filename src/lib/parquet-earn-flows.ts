@@ -70,17 +70,23 @@ function applySlippageDown(amount: bigint, slippageBps: number): bigint {
   return (amount * (BPS - BigInt(slippageBps))) / BPS;
 }
 
+// LP is priced against pool EQUITY (total minus trader-owed escrow/reserved/
+// queue), which is what the program actually mints and redeems against. Pricing
+// off gross totalUsdc overstates LP and sets minOut above the real payout, which
+// makes withdraw_category revert on slippage.
+
 // Minimum LP to accept for a USDC deposit. Bootstrap deposits (empty pool) have
 // no ratio yet, so no floor.
 function computeMinLpOut(amountUsdc: bigint, health: ParquetPoolHealth, slippageBps: number): bigint {
-  if (health.totalUsdc <= ZERO || health.lpSupply <= ZERO) return ZERO;
-  const expectedLp = (amountUsdc * health.lpSupply) / health.totalUsdc;
+  const equity = availableLiquidity(health);
+  if (equity <= ZERO || health.lpSupply <= ZERO) return ZERO;
+  const expectedLp = (amountUsdc * health.lpSupply) / equity;
   return applySlippageDown(expectedLp, slippageBps);
 }
 
 function computeMinOut(lpAmount: bigint, health: ParquetPoolHealth, slippageBps: number): bigint {
   if (health.lpSupply <= ZERO) return ZERO;
-  const expectedUsdc = (lpAmount * health.totalUsdc) / health.lpSupply;
+  const expectedUsdc = (lpAmount * availableLiquidity(health)) / health.lpSupply;
   return applySlippageDown(expectedUsdc, slippageBps);
 }
 
@@ -296,7 +302,7 @@ export type WithdrawResult =
 const DEFERRED_WITHDRAWAL = 'pending';
 
 function expectedUsdcForLp(lp: bigint, health: ParquetPoolHealth): bigint {
-  return health.lpSupply > ZERO ? (lp * health.totalUsdc) / health.lpSupply : ZERO;
+  return health.lpSupply > ZERO ? (lp * availableLiquidity(health)) / health.lpSupply : ZERO;
 }
 
 // Burns `shares` in `market`, redeems the proportional category LP, and forwards

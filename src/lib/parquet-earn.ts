@@ -281,7 +281,12 @@ export function availableLiquidity(health: ParquetPoolHealth): bigint {
   return health.totalUsdc > owed ? health.totalUsdc - owed : ZERO;
 }
 
-// USDC NAV of `lpAmount` category-LP tokens at the pool's current ratio.
+// USDC NAV of `lpAmount` category-LP tokens. LP is backed by the pool's EQUITY
+// (`availableLiquidity` = total minus the trader-owed escrow/reserved/queue), NOT
+// gross `totalUsdc` -- the program mints and redeems LP against that equity, so
+// valuing against gross total overstates positions and is what the program pays
+// on withdraw. Verified on mainnet: full treasury LP redeems to exactly its
+// equity value.
 export async function valueLpInUsdc(
   category: string,
   lpAmount: bigint,
@@ -290,7 +295,7 @@ export async function valueLpInUsdc(
   if (lpAmount <= ZERO) return ZERO;
   const health = await readPoolHealth(category, connection);
   if (health.lpSupply <= ZERO) return ZERO;
-  return (lpAmount * health.totalUsdc) / health.lpSupply;
+  return (lpAmount * availableLiquidity(health)) / health.lpSupply;
 }
 
 // SPL mint `supply` is a u64 LE at offset 36 of the account data.

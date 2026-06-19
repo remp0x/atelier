@@ -5,8 +5,12 @@ export interface PoolData {
   reserved_usdc_micro: string;
   queue_total_owed_micro: string;
   available_usdc_micro: string;
+  // Trader collateral locked in the pool — NOT withdrawable by LPs.
+  escrowed_usdc_micro?: string;
   lp_supply: string;
   stressed: boolean;
+  // Pool paused by Parquet admin — deposits disabled, withdrawals still allowed.
+  paused?: boolean;
   // Deposits are blocked by the program (err 6031) when a pool holds USDC with 0
   // LP supply (stranded). depositable = lp_supply > 0 OR total_usdc == 0.
   depositable: boolean;
@@ -35,8 +39,25 @@ export function marketTicker(marketId: string): string {
   return marketId.replace(/-usdc$/i, '').toUpperCase();
 }
 
+interface CategoryMeta {
+  name: string;
+  subtitle: string;
+}
+
+const CATEGORY_META: Record<string, CategoryMeta> = {
+  'equity-us': { name: 'US Equities', subtitle: 'Tokenized US stocks & ETFs' },
+};
+
+export function categoryName(categoryId: string): string {
+  return CATEGORY_META[categoryId]?.name ?? categoryId.toUpperCase();
+}
+
+export function categorySubtitle(categoryId: string): string {
+  return CATEGORY_META[categoryId]?.subtitle ?? 'Liquidity pool';
+}
+
 // Tokenized US equities backing each pool. SPY is an ETF; the rest are stocks.
-const COMPANY_NAMES: Record<string, string> = {
+export const COMPANY_NAMES: Record<string, string> = {
   AAPL: 'Apple', AMD: 'AMD', ASML: 'ASML', AVGO: 'Broadcom', BABA: 'Alibaba',
   COIN: 'Coinbase', COST: 'Costco', CRCL: 'Circle', CRWV: 'CoreWeave', DELL: 'Dell',
   HOOD: 'Robinhood', IBM: 'IBM', INTC: 'Intel', LLY: 'Eli Lilly', META: 'Meta',
@@ -45,7 +66,7 @@ const COMPANY_NAMES: Record<string, string> = {
 };
 
 export function marketName(marketId: string): string {
-  return COMPANY_NAMES[marketTicker(marketId)] ?? 'US equity';
+  return COMPANY_NAMES[marketTicker(marketId)] ?? categoryName(marketId);
 }
 
 export function microToUsd(micro: string): number {

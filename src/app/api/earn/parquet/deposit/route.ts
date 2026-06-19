@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthError } from '@/lib/atelier-auth';
 import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
 import { resolveEarnCaller, earnRateLimit, parseUsdToMicro, microToUsdString } from '@/lib/earn-auth';
-import { isParquetEarnConfigured, isMarketEnabled, getDefaultMarket } from '@/lib/parquet-earn';
+import { isParquetEarnConfigured, isCategoryEnabled, getDefaultCategory } from '@/lib/parquet-earn';
 import { isEarnDepositsOpen } from '@/lib/earn-access';
 import { depositFromTransfer } from '@/lib/parquet-earn-flows';
 
@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
     const limited = earnRateLimit(`earn:${caller.ownerId}`);
     if (limited) return limited;
 
-    const market = typeof body.market === 'string' && body.market.trim() ? body.market.trim() : getDefaultMarket();
-    if (!isMarketEnabled(market)) {
+    const market = typeof body.market === 'string' && body.market.trim() ? body.market.trim() : getDefaultCategory();
+    if (!isCategoryEnabled(market)) {
       return NextResponse.json({ success: false, error: `market "${market}" is not enabled for Earn` }, { status: 400 });
     }
 

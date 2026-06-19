@@ -7,56 +7,68 @@ import {
 import { Program, AnchorProvider, type Idl } from '@coral-xyz/anchor';
 import {
   PoolClient,
-  addLiquidity,
-  removeLiquidity,
   marketIdFromString,
-  lpMintPDA,
-  poolStatePDA,
-  decodePoolState,
+  categoryPoolPDA,
+  categoryVaultPDA,
+  categoryVaultAuthorityPDA,
+  categoryLpMintPDA,
+  categoryLpDeadPDA,
+  decodeCategoryPool,
 } from '@parqxchange/sdk';
 import poolIdl from '@parqxchange/sdk/idl/pool_program.json';
 import { getServerConnection } from './solana-server';
 import { getEarnTreasuryKeypair, getEarnTreasuryPubkey } from './parquet-earn-treasury';
 
-// On-chain adapter for Parquet liquidity pools. Multi-market: every entry point
-// takes a `market` (e.g. "intc-usdc") and resolves its pool accounts as PDAs of
-// the marketId + pool program ID. Deposits are restricted to an allowlist of
-// enabled markets; everything is gated by config so no fund-moving code runs
-// against a placeholder.
+// On-chain adapter for Parquet liquidity. Parquet consolidated its per-market
+// pools into shared CATEGORY pools: every equity market (aapl, msft, ...) is now
+// backed by one unified `equity-us` CategoryPool with a single LP mint, and the
+// per-market risk (reserved/queue/OI) lives in separate MarketRisk accounts. So
+// Earn deposits into and reads from the category pool, not the dead legacy
+// per-market pools. The "market" string threaded through the DB/routes/positions
+// is now a CATEGORY id (e.g. "equity-us"); we keep the term at those layers to
+// avoid churning column names and URLs, but on-chain everything is category-keyed.
 
-// Public, verified mainnet constants (docs.parquet.exchange/network/contracts;
-// PDA derivation confirmed against live on-chain pools). Env-overridable.
+// Public, verified mainnet constants (docs.parquet.exchange/network/contracts).
+// Env-overridable.
 const MAINNET_POOL_PROGRAM_ID = 'Acme8JzWrvVqGJz7nTKVsLYisN6MtP83nrs4fVAeXJsN';
 const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
-// Markets users can deposit into. Must be DEPOSITABLE right now: 252-byte,
-// zero queue debt, and NOT carrying a stranded balance (program error 6031
-// StrandedPoolBalance blocks the first deposit into a pool that holds USDC with
-// 0 LP supply until it's swept to insurance). Excludes: dead 240-byte (gld),
-// stressed (qqq, tsla), and currently-stranded (amzn, googl, mrvl, mstr, nvda --
-// have USDC but 0 LP). Re-scan the pool program to refresh; override via
-// PARQUET_EARN_MARKETS.
-const DEFAULT_ENABLED_MARKETS = [
-  'aapl-usdc', 'amd-usdc', 'asml-usdc', 'avgo-usdc', 'baba-usdc', 'coin-usdc', 'cost-usdc',
-  'crcl-usdc', 'crwv-usdc', 'dell-usdc', 'hood-usdc', 'ibm-usdc', 'intc-usdc', 'lly-usdc',
-  'meta-usdc', 'msft-usdc', 'mu-usdc', 'nflx-usdc', 'orcl-usdc', 'pltr-usdc', 'rivn-usdc',
-  'sndk-usdc', 'spy-usdc', 'tsm-usdc',
-];
+// The only live category today. Override via PARQUET_EARN_CATEGORIES.
+const DEFAULT_ENABLED_CATEGORIES = ['equity-us'];
+
+// Constituent markets of the equity-us category, keyed by bare uppercase ticker.
+// The category pool aggregates all of these; the list is used only to sum
+// per-ticker fee accrual into a category-level APR (the indexer has no category
+// endpoint). Override via PARQUET_EARN_<CATEGORY>_TICKERS not needed today.
+const CATEGORY_TICKERS: Record<string, string[]> = {
+  'equity-us': [
+    'AAPL', 'AMD', 'ASML', 'AVGO', 'BABA', 'COIN', 'COST', 'CRCL', 'CRWV', 'DELL',
+    'HOOD', 'IBM', 'INTC', 'LLY', 'META', 'MSFT', 'MU', 'NFLX', 'ORCL', 'PLTR',
+    'RIVN', 'SNDK', 'SPY', 'TSM', 'AMZN', 'GOOGL', 'MRVL', 'MSTR', 'NVDA', 'TSLA',
+    'QQQ',
+  ],
+};
 
 const ZERO = BigInt(0);
 
 export interface ParquetEarnConfig {
   poolProgramId: PublicKey;
   usdcMint: PublicKey;
-  marketId: Uint8Array;
-  marketLabel: string;
+  categoryId: Uint8Array;
+  categoryLabel: string;
 }
 
+// Pool health, mapped from CategoryPool. `reservedUsdc`/`queueTotalOwed` are the
+// category-wide sums across its markets; `totalUsdc` is LP NAV (gross). The
+// immediately-withdrawable amount is `availableLiquidity()`, which nets out the
+// trader-owed portions that LPs cannot pull until traders close.
 export interface ParquetPoolHealth {
   totalUsdc: bigint;
+  escrowedUsdc: bigint;
   reservedUsdc: bigint;
   queueTotalOwed: bigint;
   lpSupply: bigint;
+  isPaused: boolean;
 }
 
 function poolProgramId(): PublicKey {
@@ -67,50 +79,58 @@ function usdcMint(): PublicKey {
   return new PublicKey(process.env.PARQUET_USDC_MINT || MAINNET_USDC_MINT);
 }
 
-// Earn is enabled for this deployment when PARQUET_EARN_MARKET is set (the switch).
+// Earn is enabled for this deployment when a category is configured (the switch).
+// PARQUET_EARN_MARKET is accepted as a back-compat alias for PARQUET_EARN_CATEGORY.
 export function isParquetEarnConfigured(): boolean {
-  return Boolean(process.env.PARQUET_EARN_MARKET || process.env.PARQUET_EARN_MARKET_ID_HEX);
+  return Boolean(process.env.PARQUET_EARN_CATEGORY || process.env.PARQUET_EARN_MARKET);
 }
 
-// The markets users can deposit into. Empty when Earn is off.
-export function getEnabledMarkets(): string[] {
+function configuredDefault(): string | undefined {
+  return process.env.PARQUET_EARN_CATEGORY || process.env.PARQUET_EARN_MARKET || undefined;
+}
+
+// The categories users can deposit into. Empty when Earn is off.
+export function getEnabledCategories(): string[] {
   if (!isParquetEarnConfigured()) return [];
-  const env = process.env.PARQUET_EARN_MARKETS;
-  const list = env ? env.split(',').map((s) => s.trim()).filter(Boolean) : [...DEFAULT_ENABLED_MARKETS];
-  const def = process.env.PARQUET_EARN_MARKET;
+  const env = process.env.PARQUET_EARN_CATEGORIES || process.env.PARQUET_EARN_MARKETS;
+  const list = env ? env.split(',').map((s) => s.trim()).filter(Boolean) : [...DEFAULT_ENABLED_CATEGORIES];
+  const def = configuredDefault();
   if (def && !list.includes(def)) list.unshift(def);
   return list;
 }
 
-export function isMarketEnabled(market: string): boolean {
-  return getEnabledMarkets().includes(market);
+export function isCategoryEnabled(category: string): boolean {
+  return getEnabledCategories().includes(category);
 }
 
-export function getDefaultMarket(): string {
-  const def = process.env.PARQUET_EARN_MARKET;
+export function getDefaultCategory(): string {
+  const def = configuredDefault();
   if (def) return def;
-  const enabled = getEnabledMarkets();
-  if (enabled.length === 0) throw new Error('Parquet Earn not configured -- set PARQUET_EARN_MARKET');
+  const enabled = getEnabledCategories();
+  if (enabled.length === 0) throw new Error('Parquet Earn not configured -- set PARQUET_EARN_CATEGORY');
   return enabled[0];
 }
 
-export function getParquetEarnConfig(market?: string): ParquetEarnConfig {
-  // Legacy hex marketId via env (only when no explicit market is requested).
-  if (!market && process.env.PARQUET_EARN_MARKET_ID_HEX) {
-    const hex = process.env.PARQUET_EARN_MARKET_ID_HEX;
-    const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-    if (clean.length !== 64) throw new Error('PARQUET_EARN_MARKET_ID_HEX must be 32 bytes (64 hex chars)');
-    return { poolProgramId: poolProgramId(), usdcMint: usdcMint(), marketId: Uint8Array.from(Buffer.from(clean, 'hex')), marketLabel: hex };
-  }
-  const label = market ?? getDefaultMarket();
-  if (!isMarketEnabled(label)) {
-    throw new Error(`market "${label}" is not enabled for Earn`);
-  }
-  return { poolProgramId: poolProgramId(), usdcMint: usdcMint(), marketId: marketIdFromString(label), marketLabel: label };
+// Bare uppercase tickers that make up a category, for fee aggregation.
+export function getCategoryTickers(category: string): string[] {
+  return CATEGORY_TICKERS[category] ?? [];
 }
 
-// The pool program client is market-agnostic (the marketId is passed per call),
-// so it is built once from the global program ID.
+export function getParquetEarnConfig(category?: string): ParquetEarnConfig {
+  const label = category ?? getDefaultCategory();
+  if (!isCategoryEnabled(label)) {
+    throw new Error(`category "${label}" is not enabled for Earn`);
+  }
+  return {
+    poolProgramId: poolProgramId(),
+    usdcMint: usdcMint(),
+    categoryId: marketIdFromString(label),
+    categoryLabel: label,
+  };
+}
+
+// The pool program client is category-agnostic (the categoryId is passed per
+// call via derived PDAs), so it is built once from the global program ID.
 let cachedPoolClient: PoolClient | null = null;
 
 function getPoolClient(): PoolClient {
@@ -132,14 +152,31 @@ function getPoolClient(): PoolClient {
   return cachedPoolClient;
 }
 
-function lpMintFor(cfg: ParquetEarnConfig): PublicKey {
-  const [lpMint] = lpMintPDA(cfg.marketId, cfg.poolProgramId);
-  return lpMint;
+interface CategoryAccounts {
+  categoryPool: PublicKey;
+  usdcVault: PublicKey;
+  vaultAuthority: PublicKey;
+  lpMint: PublicKey;
+  lpDead: PublicKey;
 }
 
-// Treasury's USDC and LP associated token accounts for a market.
-export function getTreasuryTokenAccounts(market?: string): { usdc: PublicKey; lp: PublicKey } {
-  const cfg = getParquetEarnConfig(market);
+function categoryAccounts(cfg: ParquetEarnConfig): CategoryAccounts {
+  return {
+    categoryPool: categoryPoolPDA(cfg.categoryId, cfg.poolProgramId)[0],
+    usdcVault: categoryVaultPDA(cfg.categoryId, cfg.poolProgramId)[0],
+    vaultAuthority: categoryVaultAuthorityPDA(cfg.categoryId, cfg.poolProgramId)[0],
+    lpMint: categoryLpMintPDA(cfg.categoryId, cfg.poolProgramId)[0],
+    lpDead: categoryLpDeadPDA(cfg.categoryId, cfg.poolProgramId)[0],
+  };
+}
+
+function lpMintFor(cfg: ParquetEarnConfig): PublicKey {
+  return categoryLpMintPDA(cfg.categoryId, cfg.poolProgramId)[0];
+}
+
+// Treasury's USDC and category-LP associated token accounts.
+export function getTreasuryTokenAccounts(category?: string): { usdc: PublicKey; lp: PublicKey } {
+  const cfg = getParquetEarnConfig(category);
   const treasury = getEarnTreasuryPubkey();
   return {
     usdc: getAssociatedTokenAddressSync(cfg.usdcMint, treasury),
@@ -147,93 +184,111 @@ export function getTreasuryTokenAccounts(market?: string): { usdc: PublicKey; lp
   };
 }
 
-// Deposit `amountUsdc` (micro-USDC) from the treasury into `market`'s pool.
+// Deposit `amountUsdc` (micro-USDC) from the treasury into `category`'s pool.
 export async function buildTreasuryDepositInstructions(
-  market: string,
+  category: string,
   amountUsdc: bigint,
   minLpOut: bigint,
 ): Promise<TransactionInstruction[]> {
-  const cfg = getParquetEarnConfig(market);
+  const cfg = getParquetEarnConfig(category);
   const treasury = getEarnTreasuryPubkey();
-  const { usdc: userUsdc, lp: userLp } = getTreasuryTokenAccounts(market);
+  const accts = categoryAccounts(cfg);
+  const { usdc: userUsdc, lp: userLp } = getTreasuryTokenAccounts(category);
 
   const ensureLpAta = createAssociatedTokenAccountIdempotentInstruction(
     treasury,
     userLp,
     treasury,
-    lpMintFor(cfg),
+    accts.lpMint,
   );
 
-  const liquidityIxs = await addLiquidity(
-    { poolClient: getPoolClient(), poolProgramId: cfg.poolProgramId, marketId: cfg.marketId },
-    { depositor: treasury, userUsdc, userLp },
-    { amountUsdc, minLpOut },
+  const depositIx = await getPoolClient().depositCategoryIx(
+    {
+      categoryPool: accts.categoryPool,
+      usdcVault: accts.usdcVault,
+      vaultAuthority: accts.vaultAuthority,
+      lpMint: accts.lpMint,
+      userLp,
+      userUsdc,
+      lpDead: accts.lpDead,
+      depositor: treasury,
+    },
+    { amount: amountUsdc, minLpOut },
   );
 
-  return [ensureLpAta, ...liquidityIxs];
+  return [ensureLpAta, depositIx];
 }
 
-// Withdraw `lpAmount` LP tokens from `market`'s pool back into treasury USDC.
+// Withdraw `lpAmount` category-LP tokens from `category`'s pool to treasury USDC.
 export async function buildTreasuryWithdrawInstructions(
-  market: string,
+  category: string,
   lpAmount: bigint,
   minOut: bigint,
 ): Promise<TransactionInstruction[]> {
-  const cfg = getParquetEarnConfig(market);
+  const cfg = getParquetEarnConfig(category);
   const treasury = getEarnTreasuryPubkey();
-  const { usdc: userUsdc, lp: userLp } = getTreasuryTokenAccounts(market);
+  const accts = categoryAccounts(cfg);
+  const { usdc: userUsdc, lp: userLp } = getTreasuryTokenAccounts(category);
 
-  return removeLiquidity(
-    { poolClient: getPoolClient(), poolProgramId: cfg.poolProgramId, marketId: cfg.marketId },
-    { withdrawer: treasury, userUsdc, userLp },
+  const withdrawIx = await getPoolClient().withdrawCategoryIx(
+    {
+      categoryPool: accts.categoryPool,
+      usdcVault: accts.usdcVault,
+      vaultAuthority: accts.vaultAuthority,
+      lpMint: accts.lpMint,
+      userLp,
+      userUsdc,
+      withdrawer: treasury,
+    },
     { lpAmount, minOut },
   );
+
+  return [withdrawIx];
 }
 
-export async function readTreasuryLpBalance(market: string, connection?: Connection): Promise<bigint> {
+export async function readTreasuryLpBalance(category: string, connection?: Connection): Promise<bigint> {
   const conn = connection ?? getServerConnection();
-  const { lp } = getTreasuryTokenAccounts(market);
+  const { lp } = getTreasuryTokenAccounts(category);
   const info = await conn.getTokenAccountBalance(lp).catch(() => null);
   if (!info?.value?.amount) return ZERO;
   return BigInt(info.value.amount);
 }
 
-// Parquet appends fields to PoolState on program upgrades (240 -> 252 -> 260
-// bytes so far) but the SDK decoder hard-rejects sizes it does not know, even
-// when published the same day as the upgrade. Every field we read sits at a
-// fixed offset within the first 252 bytes, so decode a copied 252-byte prefix
-// of any larger account instead of going down with the whole Earn read path.
-function decodePoolStateCompat(data: Uint8Array): ReturnType<typeof decodePoolState> {
-  if (data.byteLength > 252) return decodePoolState(Uint8Array.from(data.subarray(0, 252)));
-  return decodePoolState(data);
-}
-
-export async function readPoolHealth(market?: string, connection?: Connection): Promise<ParquetPoolHealth> {
-  const cfg = getParquetEarnConfig(market);
+export async function readPoolHealth(category?: string, connection?: Connection): Promise<ParquetPoolHealth> {
+  const cfg = getParquetEarnConfig(category);
   const conn = connection ?? getServerConnection();
-  const [poolState] = poolStatePDA(cfg.marketId, cfg.poolProgramId);
+  const accts = categoryAccounts(cfg);
 
-  const info = await conn.getAccountInfo(poolState);
-  if (!info) throw new Error(`pool state ${poolState.toBase58()} not found on-chain`);
-  const ps = decodePoolStateCompat(info.data);
-  const lpMint = await getMint(conn, lpMintFor(cfg));
+  const info = await conn.getAccountInfo(accts.categoryPool);
+  if (!info) throw new Error(`category pool ${accts.categoryPool.toBase58()} not found on-chain`);
+  const cp = decodeCategoryPool(info.data);
+  const lpMint = await getMint(conn, accts.lpMint);
 
   return {
-    totalUsdc: BigInt(ps.totalUsdc.toString()),
-    reservedUsdc: BigInt(ps.reservedUsdc.toString()),
-    queueTotalOwed: BigInt(ps.queueTotalOwed.toString()),
+    totalUsdc: BigInt(cp.totalUsdc.toString()),
+    escrowedUsdc: BigInt(cp.escrowedCollateralUsdc.toString()),
+    reservedUsdc: BigInt(cp.sumReservedUsdc.toString()),
+    queueTotalOwed: BigInt(cp.sumQueueOwedUsdc.toString()),
     lpSupply: lpMint.supply,
+    isPaused: cp.isPaused,
   };
 }
 
-// USDC value of `lpAmount` LP tokens in `market` at the pool's current ratio.
+// USDC immediately withdrawable by LPs: NAV minus the trader-owed portions held
+// in the pool (escrowed collateral, reserved, queued payouts).
+export function availableLiquidity(health: ParquetPoolHealth): bigint {
+  const owed = health.escrowedUsdc + health.reservedUsdc + health.queueTotalOwed;
+  return health.totalUsdc > owed ? health.totalUsdc - owed : ZERO;
+}
+
+// USDC NAV of `lpAmount` category-LP tokens at the pool's current ratio.
 export async function valueLpInUsdc(
-  market: string,
+  category: string,
   lpAmount: bigint,
   connection?: Connection,
 ): Promise<bigint> {
   if (lpAmount <= ZERO) return ZERO;
-  const health = await readPoolHealth(market, connection);
+  const health = await readPoolHealth(category, connection);
   if (health.lpSupply <= ZERO) return ZERO;
   return (lpAmount * health.totalUsdc) / health.lpSupply;
 }
@@ -243,38 +298,40 @@ function readMintSupply(data: Uint8Array): bigint {
   return Buffer.from(data).readBigUInt64LE(36);
 }
 
-// Reads health for ALL enabled markets in two batched RPC calls (pool states +
-// LP mints), so the grid can show every pool's stats at once instead of one
-// fetch per click. Markets that fail to decode are omitted.
+// Reads health for ALL enabled categories in two batched RPC calls (category
+// pools + LP mints), so the UI can show every pool's stats at once. Categories
+// that fail to decode are omitted.
 export async function readEnabledPoolHealths(
   connection?: Connection,
 ): Promise<Map<string, ParquetPoolHealth>> {
   const conn = connection ?? getServerConnection();
-  const markets = getEnabledMarkets();
+  const categories = getEnabledCategories();
   const program = poolProgramId();
-  const poolStatePdas = markets.map((m) => poolStatePDA(marketIdFromString(m), program)[0]);
-  const lpMintPdas = markets.map((m) => lpMintPDA(marketIdFromString(m), program)[0]);
+  const poolPdas = categories.map((c) => categoryPoolPDA(marketIdFromString(c), program)[0]);
+  const lpMintPdas = categories.map((c) => categoryLpMintPDA(marketIdFromString(c), program)[0]);
 
   const [poolInfos, mintInfos] = await Promise.all([
-    conn.getMultipleAccountsInfo(poolStatePdas),
+    conn.getMultipleAccountsInfo(poolPdas),
     conn.getMultipleAccountsInfo(lpMintPdas),
   ]);
 
   const out = new Map<string, ParquetPoolHealth>();
-  markets.forEach((m, i) => {
+  categories.forEach((c, i) => {
     const pInfo = poolInfos[i];
     if (!pInfo) return;
     try {
-      const ps = decodePoolStateCompat(pInfo.data);
+      const cp = decodeCategoryPool(pInfo.data);
       const mInfo = mintInfos[i];
-      out.set(m, {
-        totalUsdc: BigInt(ps.totalUsdc.toString()),
-        reservedUsdc: BigInt(ps.reservedUsdc.toString()),
-        queueTotalOwed: BigInt(ps.queueTotalOwed.toString()),
+      out.set(c, {
+        totalUsdc: BigInt(cp.totalUsdc.toString()),
+        escrowedUsdc: BigInt(cp.escrowedCollateralUsdc.toString()),
+        reservedUsdc: BigInt(cp.sumReservedUsdc.toString()),
+        queueTotalOwed: BigInt(cp.sumQueueOwedUsdc.toString()),
         lpSupply: mInfo ? readMintSupply(mInfo.data) : ZERO,
+        isPaused: cp.isPaused,
       });
     } catch {
-      // undecodable pool (e.g. a stale layout) -- omit it
+      // undecodable category pool (e.g. a stale layout) -- omit it
     }
   });
   return out;

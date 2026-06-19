@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import type { PoolData, Position, WithdrawStep } from './types';
-import { microToUsd, formatUsd, formatAprPct, marketTicker, marketName } from './types';
+import { microToUsd, formatUsd, formatAprPct, categoryName, categorySubtitle } from './types';
 import { StatusBanner } from './StatusBanner';
 import { DepositPanel } from './DepositPanel';
 
@@ -88,7 +88,7 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
           Withdrawing from
         </p>
         <p className="font-mono text-[13px] text-black dark:text-white">
-          {position.pool_market}
+          {categoryName(position.pool_market)}
           {position.agent_id && (
             <span className="text-gray-400 dark:text-neutral-500"> &middot; via {position.owned_by}</span>
           )}
@@ -324,7 +324,7 @@ export function PoolPanel({
             <div>
               <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500">Selected pool</p>
               <p className="font-display font-semibold text-[14px] text-black dark:text-white leading-tight">
-                {pool.market.toUpperCase()} <span className="font-mono font-normal text-[11px] text-gray-400 dark:text-neutral-600">/ USDC</span>
+                {categoryName(pool.market)} <span className="font-mono font-normal text-[11px] text-gray-400 dark:text-neutral-600">/ USDC</span>
               </p>
             </div>
           </div>
@@ -386,8 +386,8 @@ export function PoolPanel({
         >
           {embedded && (
             <div className="flex items-baseline gap-2 pb-1 border-b border-gray-100 dark:border-neutral-800/60">
-              <span className="font-mono text-[13px] font-semibold text-black dark:text-white">{marketTicker(market)}</span>
-              <span className="font-mono text-[11px] text-gray-500 dark:text-neutral-400 truncate">{marketName(market)}</span>
+              <span className="font-display font-semibold text-[14px] text-black dark:text-white leading-tight">{categoryName(market)}</span>
+              <span className="font-mono text-[11px] text-gray-500 dark:text-neutral-400 truncate">{categorySubtitle(market)}</span>
               <span className="font-mono text-[10px] text-gray-300 dark:text-neutral-600 ml-auto shrink-0">/ USDC</span>
             </div>
           )}
@@ -429,7 +429,7 @@ export function PoolPanel({
                 Pool stats
               </p>
               <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-500">
-                {marketTicker(market)}-USDC
+                {categoryName(market)} / USDC
               </p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

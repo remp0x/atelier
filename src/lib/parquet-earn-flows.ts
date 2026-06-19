@@ -7,7 +7,6 @@ import {
   TokenAccountNotFoundError,
   TokenInvalidAccountOwnerError,
 } from '@solana/spl-token';
-import { userQueueClaimsPDA } from '@parqxchange/sdk';
 import { USDC_MINT } from './solana-pay';
 import { getServerConnection, sendAndConfirmServerTx } from './solana-server';
 import { getEarnTreasuryKeypair, getEarnTreasuryPubkey } from './parquet-earn-treasury';
@@ -17,6 +16,7 @@ import {
   buildTreasuryWithdrawInstructions,
   readTreasuryLpBalance,
   readPoolHealth,
+  availableLiquidity,
   type ParquetPoolHealth,
 } from './parquet-earn';
 import {
@@ -45,9 +45,14 @@ function treasuryUsdcAta(): PublicKey {
   return getAssociatedTokenAddressSync(USDC_MINT, getEarnTreasuryPubkey());
 }
 
+// NOTE: the `market` param threaded through this layer (and the DB/routes) is now
+// a Parquet CATEGORY id (e.g. "equity-us") -- Parquet consolidated its per-market
+// pools into one shared category pool per asset class. The name is kept at this
+// boundary to avoid churning the vault column and route URLs; the value is a
+// category and is passed straight to the category-keyed adapter.
 async function earnVault(market: string): Promise<EarnVault> {
   const cfg = getParquetEarnConfig(market);
-  return getOrCreateVault(cfg.marketLabel, getEarnTreasuryPubkey().toBase58());
+  return getOrCreateVault(cfg.categoryLabel, getEarnTreasuryPubkey().toBase58());
 }
 
 // The caller's position in a given market's Earn vault, plus the vault itself.
@@ -284,9 +289,21 @@ export type WithdrawResult =
   | { status: 'settled'; received: bigint; txHash: string; movementId: string }
   | { status: 'queued'; queueEntry: string; movementId: string };
 
-// Burns `shares` in `market`, redeems the proportional LP, and forwards the USDC
-// to `destinationWallet`. If the pool returns no immediate USDC (drawn down), the
-// redemption becomes a FIFO queue claim recorded for the cron to settle.
+// App-level marker for a deferred withdrawal. The category pool has no on-chain
+// per-LP withdrawal queue (withdraw_category is atomic: it burns LP and pays, or
+// reverts), so when free liquidity can't cover a redemption we earmark it here
+// and let the cron redeem it once liquidity returns.
+const DEFERRED_WITHDRAWAL = 'pending';
+
+function expectedUsdcForLp(lp: bigint, health: ParquetPoolHealth): bigint {
+  return health.lpSupply > ZERO ? (lp * health.totalUsdc) / health.lpSupply : ZERO;
+}
+
+// Burns `shares` in `market`, redeems the proportional category LP, and forwards
+// the USDC to `destinationWallet`. When the pool has free liquidity, the redeem
+// settles atomically in one shot. When it doesn't (collateral escrowed / drawn
+// down), the depositor's shares and LP are earmarked in the ledger and the cron
+// redeems + pays out later via settleQueuedEarnWithdrawals.
 export async function withdrawForOwner(params: {
   market: string;
   ownerKind: EarnOwnerKind;
@@ -299,7 +316,7 @@ export async function withdrawForOwner(params: {
   const slippageBps = params.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
   if (shares <= ZERO) throw new Error('shares must be positive');
 
-  const cfg = getParquetEarnConfig(market);
+  getParquetEarnConfig(market); // validates the category is enabled
   const conn = getServerConnection();
   const treasury = getEarnTreasuryKeypair();
 
@@ -314,43 +331,61 @@ export async function withdrawForOwner(params: {
 
   const health = await readPoolHealth(market, conn);
   const minOut = computeMinOut(lpToRedeem, health, slippageBps);
-  const usdcAta = treasuryUsdcAta();
+  const expectedUsdc = expectedUsdcForLp(lpToRedeem, health);
 
-  const usdcBefore = await readSplBalance(conn, usdcAta);
-  const ixs = await buildTreasuryWithdrawInstructions(market, lpToRedeem, minOut);
-  await sendAndConfirmServerTx(conn, ixs, treasury);
-  const usdcAfter = await readSplBalance(conn, usdcAta);
-  const received = usdcAfter - usdcBefore;
+  // Attempt immediate settlement only when the pool isn't paused and free
+  // liquidity is expected to cover the redeem. withdraw_category is atomic, so a
+  // doomed attempt would just waste a reverting tx.
+  if (!health.isPaused && minOut > ZERO && availableLiquidity(health) >= minOut) {
+    const usdcAta = treasuryUsdcAta();
+    const usdcBefore = await readSplBalance(conn, usdcAta);
+    let txCleared = false;
+    try {
+      const ixs = await buildTreasuryWithdrawInstructions(market, lpToRedeem, minOut);
+      await sendAndConfirmServerTx(conn, ixs, treasury);
+      txCleared = true;
+    } catch (err) {
+      // Reverted (e.g. liquidity moved between read and send) -- fall through to
+      // the deferred path. No ledger state changed, so nothing to unwind.
+      console.warn('immediate category withdraw failed, deferring:', err instanceof Error ? err.message : err);
+    }
 
-  if (received > ZERO) {
-    const payoutTx = await sendTreasuryUsdc(conn, destinationWallet, received);
-    const { movementId } = await recordWithdrawal({
-      vaultId: vault.id,
-      ownerKind,
-      ownerId,
-      shares,
-      lpRedeemed: lpToRedeem,
-      amountUsdc: received,
-      txHash: payoutTx,
-    });
-    return { status: 'settled', received, txHash: payoutTx, movementId };
+    if (txCleared) {
+      const received = (await readSplBalance(conn, usdcAta)) - usdcBefore;
+      // A cleared withdraw must credit USDC; zero would mean LP was burned for
+      // nothing. Abort before payout rather than defer (which would double-burn).
+      if (received <= ZERO) {
+        throw new Error('category withdraw cleared no USDC -- aborting before payout');
+      }
+      const payoutTx = await sendTreasuryUsdc(conn, destinationWallet, received);
+      const { movementId } = await recordWithdrawal({
+        vaultId: vault.id,
+        ownerKind,
+        ownerId,
+        shares,
+        lpRedeemed: lpToRedeem,
+        amountUsdc: received,
+        txHash: payoutTx,
+      });
+      return { status: 'settled', received, txHash: payoutTx, movementId };
+    }
   }
 
-  const [queueClaims] = userQueueClaimsPDA(cfg.marketId, getEarnTreasuryPubkey(), cfg.poolProgramId);
-  const owedEstimate = health.lpSupply > ZERO
-    ? (lpToRedeem * health.totalUsdc) / health.lpSupply
-    : ZERO;
+  // Deferred: burn the depositor's shares and earmark their LP in the ledger. The
+  // on-chain LP stays in the treasury as backing; the cron redeems it once
+  // liquidity returns. This opens a transient ledger<on-chain LP gap that
+  // reconcileEarnVault surfaces, and closes when the cron settles.
   const { movementId } = await recordWithdrawal({
     vaultId: vault.id,
     ownerKind,
     ownerId,
     shares,
     lpRedeemed: lpToRedeem,
-    amountUsdc: owedEstimate,
-    queueEntry: queueClaims.toBase58(),
+    amountUsdc: expectedUsdc,
+    queueEntry: DEFERRED_WITHDRAWAL,
     note: destinationWallet,
   });
-  return { status: 'queued', queueEntry: queueClaims.toBase58(), movementId };
+  return { status: 'queued', queueEntry: DEFERRED_WITHDRAWAL, movementId };
 }
 
 // Compares the ledger's recorded LP holdings for `market` against the treasury's
@@ -373,32 +408,59 @@ export async function reconcileEarnVault(market: string): Promise<{
   };
 }
 
-// Settles `market`'s queued withdrawals FIFO from treasury USDC.
+// Settles `market`'s deferred withdrawals FIFO. Each carries the earmarked
+// category LP (lpDelta) and the destination (note); the cron redeems that LP via
+// withdraw_category once the pool has free liquidity, then forwards the realized
+// USDC. Paying the realized amount (not the request-time estimate) keeps the pool
+// solvent across ratio drift between request and settlement.
 export async function settleQueuedEarnWithdrawals(market: string): Promise<{
   settled: number;
   paidMicroUsdc: bigint;
   remaining: number;
 }> {
   const conn = getServerConnection();
+  const treasury = getEarnTreasuryKeypair();
   const vault = await earnVault(market);
   const queued = await listQueuedWithdrawals(vault.id);
-  let available = await readSplBalance(conn, treasuryUsdcAta());
+  if (queued.length === 0) return { settled: 0, paidMicroUsdc: ZERO, remaining: 0 };
+
+  const health = await readPoolHealth(market, conn);
+  let available = availableLiquidity(health);
 
   let settled = 0;
   let paid = ZERO;
   let remaining = 0;
 
   for (const m of queued) {
-    const owed = m.amountUsdc ?? ZERO;
+    const lp = m.lpDelta !== null && m.lpDelta < ZERO ? -m.lpDelta : ZERO;
     const destination = m.note;
-    if (owed <= ZERO || !destination || available < owed) {
+    const expectedUsdc = expectedUsdcForLp(lp, health);
+    if (lp <= ZERO || !destination || health.isPaused || expectedUsdc <= ZERO || available < expectedUsdc) {
       remaining++;
       continue;
     }
-    const txHash = await sendTreasuryUsdc(conn, destination, owed);
-    await recordWithdrawalSettled(m.id, owed, txHash);
-    available -= owed;
-    paid += owed;
+
+    const minOut = applySlippageDown(expectedUsdc, DEFAULT_SLIPPAGE_BPS);
+    const usdcAta = treasuryUsdcAta();
+    const usdcBefore = await readSplBalance(conn, usdcAta);
+    try {
+      const ixs = await buildTreasuryWithdrawInstructions(market, lp, minOut);
+      await sendAndConfirmServerTx(conn, ixs, treasury);
+    } catch (err) {
+      console.warn('queued category withdraw redeem failed:', err instanceof Error ? err.message : err);
+      remaining++;
+      continue;
+    }
+
+    const received = (await readSplBalance(conn, usdcAta)) - usdcBefore;
+    if (received <= ZERO) {
+      remaining++;
+      continue;
+    }
+    const txHash = await sendTreasuryUsdc(conn, destination, received);
+    await recordWithdrawalSettled(m.id, received, txHash);
+    available = available > received ? available - received : ZERO;
+    paid += received;
     settled++;
   }
 

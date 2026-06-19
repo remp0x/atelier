@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
-import { isParquetEarnConfigured, getEnabledMarkets, readEnabledPoolHealths } from '@/lib/parquet-earn';
-import { fetchFeeAccruals24h, computeFeeAprPct } from '@/lib/parquet-indexer';
+import { isParquetEarnConfigured, getEnabledCategories, readEnabledPoolHealths, availableLiquidity } from '@/lib/parquet-earn';
+import { fetchCategoryFeeAccruals24h, computeFeeAprPct } from '@/lib/parquet-indexer';
 import { getEarnTreasuryPubkey } from '@/lib/parquet-earn-treasury';
 
 const marketsRateLimit = rateLimit(120, 60 * 1000);
@@ -39,29 +39,30 @@ export async function GET(request: NextRequest) {
     treasuryWallet = null;
   }
 
-  const enabled = getEnabledMarkets();
+  const enabled = getEnabledCategories();
   const markets: Array<Record<string, unknown>> = [];
 
   try {
     const [healths, feeAccruals] = await Promise.all([
       readEnabledPoolHealths(),
-      fetchFeeAccruals24h(enabled),
+      fetchCategoryFeeAccruals24h(enabled),
     ]);
     for (const m of enabled) {
       const h = healths.get(m);
       if (!h) continue;
-      const owed = h.reservedUsdc + h.queueTotalOwed;
-      const available = h.totalUsdc > owed ? h.totalUsdc - owed : ZERO;
+      const available = availableLiquidity(h);
       markets.push({
         market: m,
         treasury_wallet: treasuryWallet,
         total_usdc_micro: h.totalUsdc.toString(),
+        escrowed_usdc_micro: h.escrowedUsdc.toString(),
         reserved_usdc_micro: h.reservedUsdc.toString(),
         queue_total_owed_micro: h.queueTotalOwed.toString(),
         available_usdc_micro: available.toString(),
         lp_supply: h.lpSupply.toString(),
+        paused: h.isPaused,
         stressed: h.queueTotalOwed > ZERO,
-        depositable: isDepositable(h.totalUsdc, h.lpSupply),
+        depositable: !h.isPaused && isDepositable(h.totalUsdc, h.lpSupply),
         fee_apr_pct: computeFeeAprPct(feeAccruals.get(m) ?? null, h.totalUsdc),
       });
     }

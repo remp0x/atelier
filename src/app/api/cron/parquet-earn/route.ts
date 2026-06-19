@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
-import { isParquetEarnConfigured, getEnabledMarkets } from '@/lib/parquet-earn';
+import { isParquetEarnConfigured, getEnabledCategories } from '@/lib/parquet-earn';
 import { reconcileEarnVault, settleQueuedEarnWithdrawals } from '@/lib/parquet-earn-flows';
 
 // Maintenance cron for Parquet Earn: reconciles the ledger against on-chain LP
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const results: Array<Record<string, unknown>> = [];
-  for (const market of getEnabledMarkets()) {
+  for (const market of getEnabledCategories()) {
     try {
       const reconcile = await reconcileEarnVault(market);
       if (reconcile.drift !== BigInt(0)) {

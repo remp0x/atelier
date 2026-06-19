@@ -2,8 +2,8 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
-import { isParquetEarnConfigured, isMarketEnabled, getDefaultMarket, getParquetEarnConfig, readPoolHealth } from '@/lib/parquet-earn';
-import { fetchFeeAccrued24h, computeFeeAprPct } from '@/lib/parquet-indexer';
+import { isParquetEarnConfigured, isCategoryEnabled, getDefaultCategory, getParquetEarnConfig, readPoolHealth, availableLiquidity } from '@/lib/parquet-earn';
+import { fetchCategoryFeeAccrued24h, computeFeeAprPct } from '@/lib/parquet-indexer';
 import { getEarnTreasuryPubkey } from '@/lib/parquet-earn-treasury';
 
 const poolsRateLimit = rateLimit(60, 60 * 1000);
@@ -19,16 +19,15 @@ export async function GET(request: NextRequest) {
   }
 
   const marketParam = new URL(request.url).searchParams.get('market');
-  if (marketParam && !isMarketEnabled(marketParam)) {
+  if (marketParam && !isCategoryEnabled(marketParam)) {
     return NextResponse.json({ success: false, error: `market "${marketParam}" is not enabled for Earn` }, { status: 400 });
   }
-  const market = marketParam || getDefaultMarket();
+  const market = marketParam || getDefaultCategory();
 
   try {
     const cfg = getParquetEarnConfig(market);
-    const [health, feeAccrued] = await Promise.all([readPoolHealth(market), fetchFeeAccrued24h(market)]);
-    const owed = health.reservedUsdc + health.queueTotalOwed;
-    const available = health.totalUsdc > owed ? health.totalUsdc - owed : BigInt(0);
+    const [health, feeAccrued] = await Promise.all([readPoolHealth(market), fetchCategoryFeeAccrued24h(market)]);
+    const available = availableLiquidity(health);
 
     // The address depositors push USDC to before calling /deposit. Best-effort:
     // null if the treasury key is not provisioned yet.
@@ -42,15 +41,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        market: cfg.marketLabel,
+        market: cfg.categoryLabel,
         treasury_wallet: treasuryWallet,
         total_usdc_micro: health.totalUsdc.toString(),
+        escrowed_usdc_micro: health.escrowedUsdc.toString(),
         reserved_usdc_micro: health.reservedUsdc.toString(),
         queue_total_owed_micro: health.queueTotalOwed.toString(),
         available_usdc_micro: available.toString(),
         lp_supply: health.lpSupply.toString(),
+        paused: health.isPaused,
         stressed: health.queueTotalOwed > BigInt(0),
-        depositable: health.lpSupply > BigInt(0) || health.totalUsdc === BigInt(0),
+        depositable: !health.isPaused && (health.lpSupply > BigInt(0) || health.totalUsdc === BigInt(0)),
         fee_apr_pct: computeFeeAprPct(feeAccrued, health.totalUsdc),
       },
     });

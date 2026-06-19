@@ -1,15 +1,23 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { marketTicker, marketName, type PoolData, type Position, formatUsd, formatAprPct, microToUsd } from './types';
+import {
+  categoryName,
+  categorySubtitle,
+  COMPANY_NAMES,
+  type PoolData,
+  type Position,
+  formatUsd,
+  formatAprPct,
+  microToUsd,
+} from './types';
 import { PoolPanel } from './PoolPanel';
-
-type GridLayout = 'grid' | 'list';
-type SortBy = 'tvl' | 'alpha';
 
 const INIT_TOOLTIP =
   'Initializing - this pool holds USDC with no LP yet, so deposits are paused until Parquet seeds it.';
+
+const EQUITY_TICKERS = Object.keys(COMPANY_NAMES);
 
 function ClockIcon({ className }: { className: string }) {
   return (
@@ -27,300 +35,33 @@ function WarningTriangleIcon({ className }: { className: string }) {
   );
 }
 
-function InitializingBadge() {
+function PauseIcon({ className }: { className: string }) {
   return (
-    <span
-      className="inline-flex items-center justify-center text-gray-400 dark:text-neutral-500 cursor-help shrink-0"
-      title={INIT_TOOLTIP}
-      aria-label="Initializing: deposits are paused while the pool is seeded"
-    >
-      <ClockIcon className="w-3.5 h-3.5" />
-    </span>
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+    </svg>
   );
 }
 
-interface PoolPanelPassthrough {
-  poolsByMarket: Record<string, PoolData>;
-  positions: Position[];
-  positionsLoading: boolean;
-  solanaAddress: string | null;
-  solanaBalance: number;
-  baseBalance: number;
-  balanceLoading: boolean;
-  authenticated: boolean;
-  canDeposit: boolean;
-  login: () => void;
-  onPoolRefresh: (market: string) => Promise<void>;
-  onFetchPool: (marketId: string) => Promise<void>;
-}
-
-interface PositionPreviewProps {
-  positionValue: number;
-  positionPrincipal: number;
-  hasPosition: boolean;
-  tvl: number | null;
-  feeAprPct: number | null | undefined;
-}
-
-// One stat per line so values can never paint over each other on narrow cards.
-function FeeAprLine({ feeAprPct }: { feeAprPct: number | null | undefined }) {
-  const positive = typeof feeAprPct === 'number' && feeAprPct > 0;
+function TickerBasket() {
+  const ref = useRef<HTMLDivElement>(null);
   return (
-    <p className={`font-mono text-[11px] tabular-nums whitespace-nowrap ${positive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
-      {formatAprPct(feeAprPct)}{' '}
-      <span className="text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600">Fee APR</span>
-    </p>
-  );
-}
-
-function PositionPreview({ positionValue, positionPrincipal, hasPosition, tvl, feeAprPct }: PositionPreviewProps) {
-  if (hasPosition) {
-    const pnl = positionValue - positionPrincipal;
-    const pnlPositive = pnl >= 0;
-    return (
-      <div className="mt-auto pt-2 space-y-0.5">
-        <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 whitespace-nowrap">Your position</p>
-        <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-          <span className="font-mono text-[13px] font-medium text-black dark:text-white tabular-nums">${formatUsd(positionValue)}</span>
-          <span className={`font-mono text-[10px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-            {pnlPositive ? '+' : ''}{formatUsd(pnl)}
-          </span>
-        </div>
-        <FeeAprLine feeAprPct={feeAprPct} />
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-auto pt-2 space-y-0.5">
-      <p className="font-mono text-[8px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 whitespace-nowrap">TVL</p>
-      {tvl !== null ? (
-        <p className="font-mono text-[13px] text-black dark:text-white tabular-nums whitespace-nowrap">${formatUsd(tvl)}</p>
-      ) : (
-        <div className="h-4 w-16 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse" />
-      )}
-      <FeeAprLine feeAprPct={feeAprPct} />
-    </div>
-  );
-}
-
-interface MarketCardProps {
-  marketId: string;
-  ticker: string;
-  pool: PoolData | null;
-  expanded: boolean;
-  positionValue: number | null;
-  positionPrincipal: number | null;
-  layout: GridLayout;
-  panelPassthrough: PoolPanelPassthrough;
-  onToggle: (id: string) => void;
-}
-
-function MarketCard({ marketId, ticker, pool, expanded, positionValue, positionPrincipal, layout, panelPassthrough, onToggle }: MarketCardProps) {
-  const hasPosition = positionValue !== null;
-  const tvl = pool ? microToUsd(pool.total_usdc_micro) : null;
-  const stressed = pool?.stressed ?? false;
-
-  const { poolsByMarket, positions, positionsLoading, solanaAddress, solanaBalance, baseBalance, balanceLoading, authenticated, canDeposit, login, onPoolRefresh } = panelPassthrough;
-  const marketPool = poolsByMarket[marketId] ?? null;
-  const initializing = pool !== null && !pool.depositable;
-
-  const marketPositions = positions.filter((p) => p.pool_market === marketId);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onToggle(marketId);
-    }
-  }, [marketId, onToggle]);
-
-  if (layout === 'list') {
-    return (
-      <div className="flex flex-col">
-        <button
-          type="button"
-          onClick={() => onToggle(marketId)}
-          onKeyDown={handleKeyDown}
-          aria-expanded={expanded}
-          className={`flex items-center justify-between gap-3 w-full px-4 py-2.5 rounded-lg border text-left transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 min-h-[44px] ${
-            expanded
-              ? 'border-atelier/50 bg-atelier/5 dark:bg-atelier/5 rounded-b-none'
-              : 'border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] hover:border-atelier/30 hover:bg-atelier/[0.02]'
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <p className="font-mono font-semibold text-[13px] text-black dark:text-white w-14">{ticker}</p>
-            <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500 truncate">{marketName(marketId)}</p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {initializing && <InitializingBadge />}
-            {stressed && (
-              <span className="inline-flex h-4 px-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 font-mono text-[9px] text-amber-500 items-center gap-1">
-                <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
-                Stress
-              </span>
-            )}
-            {pool !== null && (
-              <span className={`font-mono text-[10px] tabular-nums ${typeof pool.fee_apr_pct === 'number' && pool.fee_apr_pct > 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
-                {formatAprPct(pool.fee_apr_pct)} APR
-              </span>
-            )}
-            {hasPosition ? (
-              <div className="flex items-center gap-1.5">
-                <span className="font-mono text-[11px] tabular-nums text-black dark:text-white">${formatUsd(positionValue!)}</span>
-                {positionPrincipal !== null && (() => {
-                  const pnl = positionValue! - positionPrincipal;
-                  const pos = pnl >= 0;
-                  return (
-                    <span className={`font-mono text-[10px] tabular-nums ${pos ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                      {pos ? '+' : ''}{formatUsd(pnl)}
-                    </span>
-                  );
-                })()}
-              </div>
-            ) : tvl !== null ? (
-              <span className="font-mono text-[11px] tabular-nums text-black dark:text-white">${formatUsd(tvl)}</span>
-            ) : (
-              <span className="h-3 w-10 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse inline-block" />
-            )}
-            <svg
-              className={`w-3.5 h-3.5 text-gray-400 dark:text-neutral-600 transition-transform duration-200 shrink-0 ${expanded ? 'rotate-180' : ''}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-            </svg>
-          </div>
-        </button>
-
-        <AnimatePresence initial={false}>
-          {expanded && marketPool && (
-            <motion.div
-              key="list-detail"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.22, ease: 'easeInOut' }}
-              style={{ overflow: 'hidden' }}
-              className="border border-t-0 border-atelier/50 rounded-b-lg bg-white dark:bg-[#0d0d0d]"
-            >
-              <div className="px-4 py-4">
-                <PoolPanel
-                  pool={marketPool}
-                  market={marketId}
-                  positions={marketPositions}
-                  positionsLoading={positionsLoading}
-                  solanaAddress={solanaAddress}
-                  solanaBalance={solanaBalance}
-                  baseBalance={baseBalance}
-                  balanceLoading={balanceLoading}
-                  authenticated={authenticated}
-                  canDeposit={canDeposit}
-                  login={login}
-                  onPoolRefresh={onPoolRefresh}
-                  embedded
-                />
-              </div>
-            </motion.div>
-          )}
-          {expanded && !marketPool && (
-            <motion.div
-              key="list-loading"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.22, ease: 'easeInOut' }}
-              style={{ overflow: 'hidden' }}
-              className="border border-t-0 border-atelier/50 rounded-b-lg bg-white dark:bg-[#0d0d0d] px-4 py-8"
-            >
-              <div className="flex justify-center">
-                <div className="w-4 h-4 rounded-full border-2 border-atelier/30 border-t-atelier animate-spin" />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => onToggle(marketId)}
-      onKeyDown={handleKeyDown}
-      aria-expanded={expanded}
-      className={`relative rounded-xl border px-3.5 py-3.5 text-left w-full h-[128px] flex flex-col transition-all duration-200 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 ${
-        expanded
-          ? 'border-atelier/60 bg-atelier/5 dark:bg-atelier/5 shadow-[0_0_0_1px_rgb(250_76_20/0.2)]'
-          : 'border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] hover:border-atelier/30 hover:bg-atelier/[0.02] hover:shadow-sm'
-      }`}
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="font-mono font-semibold text-[15px] text-black dark:text-white leading-tight">{ticker}</p>
-          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500 mt-0.5 truncate">{marketName(marketId)}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          {initializing && <InitializingBadge />}
-          {stressed && (
-            <span className="inline-flex h-4 px-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 font-mono text-[9px] text-amber-500 items-center gap-1">
-              <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
-              Stress
-            </span>
-          )}
-          <svg
-            className={`w-3 h-3 text-gray-300 dark:text-neutral-700 transition-transform duration-200 ${expanded ? 'rotate-180 text-atelier dark:text-atelier' : ''}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+    <div className="overflow-hidden relative" aria-label="Constituent equities">
+      <div
+        ref={ref}
+        className="flex flex-wrap gap-1.5 max-h-[4.5rem] overflow-hidden"
+      >
+        {EQUITY_TICKERS.map((ticker) => (
+          <span
+            key={ticker}
+            title={COMPANY_NAMES[ticker]}
+            className="inline-flex items-center h-5 px-1.5 rounded font-mono text-[9px] text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 select-none whitespace-nowrap"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-          </svg>
-        </div>
+            {ticker}
+          </span>
+        ))}
       </div>
-
-      <PositionPreview
-        positionValue={positionValue ?? 0}
-        positionPrincipal={positionPrincipal ?? 0}
-        hasPosition={hasPosition}
-        tvl={tvl}
-        feeAprPct={pool?.fee_apr_pct}
-      />
-    </button>
-  );
-}
-
-interface ExpandedPanelProps {
-  marketId: string;
-  panelPassthrough: PoolPanelPassthrough;
-}
-
-function ExpandedPanel({ marketId, panelPassthrough }: ExpandedPanelProps) {
-  const { poolsByMarket, positions, positionsLoading, solanaAddress, solanaBalance, baseBalance, balanceLoading, authenticated, canDeposit, login, onPoolRefresh } = panelPassthrough;
-  const pool = poolsByMarket[marketId] ?? null;
-  const marketPositions = positions.filter((p) => p.pool_market === marketId);
-
-  if (!pool) {
-    return (
-      <div className="flex justify-center py-10">
-        <div className="w-4 h-4 rounded-full border-2 border-atelier/30 border-t-atelier animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <PoolPanel
-      pool={pool}
-      market={marketId}
-      positions={marketPositions}
-      positionsLoading={positionsLoading}
-      solanaAddress={solanaAddress}
-      solanaBalance={solanaBalance}
-      baseBalance={baseBalance}
-      balanceLoading={balanceLoading}
-      authenticated={authenticated}
-      canDeposit={canDeposit}
-      login={login}
-      onPoolRefresh={onPoolRefresh}
-      embedded
-    />
+    </div>
   );
 }
 
@@ -340,6 +81,239 @@ export interface MarketGridProps {
   onFetchPool: (marketId: string) => Promise<void>;
 }
 
+interface CategoryPoolCardProps {
+  categoryId: string;
+  pool: PoolData | null;
+  positions: Position[];
+  positionsLoading: boolean;
+  solanaAddress: string | null;
+  solanaBalance: number;
+  baseBalance: number;
+  balanceLoading: boolean;
+  authenticated: boolean;
+  canDeposit: boolean;
+  login: () => void;
+  onPoolRefresh: (market: string) => Promise<void>;
+  onFetchPool: (marketId: string) => Promise<void>;
+  showBasket: boolean;
+}
+
+function CategoryPoolCard({
+  categoryId,
+  pool,
+  positions,
+  positionsLoading,
+  solanaAddress,
+  solanaBalance,
+  baseBalance,
+  balanceLoading,
+  authenticated,
+  canDeposit,
+  login,
+  onPoolRefresh,
+  onFetchPool,
+  showBasket,
+}: CategoryPoolCardProps) {
+  const [panelOpen, setPanelOpen] = useState(false);
+
+  const categoryPositions = positions.filter((p) => p.pool_market === categoryId);
+  const totalPositionValue = categoryPositions.reduce((sum, p) => {
+    return sum + (p.value_usd !== null ? parseFloat(p.value_usd) : parseFloat(p.principal_usd));
+  }, 0);
+  const totalPositionPrincipal = categoryPositions.reduce((sum, p) => sum + parseFloat(p.principal_usd), 0);
+  const hasPosition = categoryPositions.length > 0;
+
+  const tvl = pool ? microToUsd(pool.total_usdc_micro) : null;
+  const available = pool ? microToUsd(pool.available_usdc_micro) : null;
+  const paused = pool?.paused ?? false;
+  const stressed = pool?.stressed ?? false;
+  const initializing = pool !== null && !pool.depositable;
+
+  const pnl = hasPosition ? totalPositionValue - totalPositionPrincipal : null;
+  const pnlPositive = pnl !== null && pnl >= 0;
+
+  const handleToggle = useCallback(() => {
+    setPanelOpen((prev) => {
+      if (!prev) void onFetchPool(categoryId);
+      return !prev;
+    });
+  }, [categoryId, onFetchPool]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleToggle();
+    }
+  }, [handleToggle]);
+
+  return (
+    <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] overflow-hidden">
+      <div className="px-5 pt-5 pb-4">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="font-display font-bold text-[20px] text-black dark:text-white leading-tight tracking-[-0.02em]">
+                {categoryName(categoryId)}
+              </h3>
+              {paused && (
+                <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 font-mono text-[9px] text-gray-500 dark:text-neutral-400 shrink-0">
+                  <PauseIcon className="w-2.5 h-2.5" />
+                  Paused
+                </span>
+              )}
+              {!paused && stressed && (
+                <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-amber-500/10 border border-amber-500/30 font-mono text-[9px] text-amber-500 shrink-0">
+                  <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
+                  Stress
+                </span>
+              )}
+              {!paused && initializing && (
+                <span
+                  className="inline-flex items-center gap-1 h-5 px-2 rounded-full border border-gray-200 dark:border-neutral-800 font-mono text-[9px] text-gray-400 dark:text-neutral-500 shrink-0 cursor-help"
+                  title={INIT_TOOLTIP}
+                >
+                  <ClockIcon className="w-2.5 h-2.5" />
+                  Initializing
+                </span>
+              )}
+            </div>
+            <p className="font-mono text-[11px] text-gray-500 dark:text-neutral-400">
+              {categorySubtitle(categoryId)}
+            </p>
+          </div>
+
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            {pool ? (
+              <>
+                <p className={`font-mono text-[11px] tabular-nums ${typeof pool.fee_apr_pct === 'number' && pool.fee_apr_pct > 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
+                  {formatAprPct(pool.fee_apr_pct)}
+                  <span className="text-[9px] ml-1 text-gray-400 dark:text-neutral-600">Fee APR</span>
+                </p>
+              </>
+            ) : (
+              <div className="h-4 w-20 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse" />
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+          <div>
+            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">TVL</p>
+            {tvl !== null ? (
+              <p className="font-mono text-[17px] font-semibold tabular-nums text-black dark:text-white">${formatUsd(tvl)}</p>
+            ) : (
+              <div className="h-5 w-24 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse" />
+            )}
+          </div>
+          <div>
+            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Available</p>
+            {available !== null ? (
+              <p className={`font-mono text-[17px] font-semibold tabular-nums ${stressed ? 'text-amber-500' : 'text-black dark:text-white'}`}>
+                ${formatUsd(available)}
+              </p>
+            ) : (
+              <div className="h-5 w-24 rounded bg-gray-100 dark:bg-neutral-800 animate-pulse" />
+            )}
+          </div>
+          {hasPosition && (
+            <div>
+              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Your position</p>
+              <div className="flex items-baseline gap-1.5">
+                <p className="font-mono text-[17px] font-semibold tabular-nums text-black dark:text-white">${formatUsd(totalPositionValue)}</p>
+                {pnl !== null && (
+                  <span className={`font-mono text-[11px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                    {pnlPositive ? '+' : ''}{formatUsd(pnl)}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {showBasket && (
+          <div className="mb-4">
+            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-1.5">
+              Earns fees across
+            </p>
+            <TickerBasket />
+          </div>
+        )}
+
+        {paused && (
+          <div className="flex items-start gap-2 rounded-lg bg-gray-100 dark:bg-neutral-900/60 border border-gray-200 dark:border-neutral-800 px-3 py-2.5 mb-3">
+            <PauseIcon className="w-3.5 h-3.5 text-gray-400 dark:text-neutral-500 shrink-0 mt-px" />
+            <p className="font-mono text-[11px] text-gray-500 dark:text-neutral-400 leading-snug">
+              Deposits are temporarily paused by Parquet. Withdrawals are still allowed.
+            </p>
+          </div>
+        )}
+
+        {!paused && stressed && (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2.5 mb-3">
+            <WarningTriangleIcon className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-px" />
+            <p className="font-mono text-[11px] text-amber-500 leading-snug">
+              Pool is under stress. Withdrawals may be queued. New deposits carry elevated risk.
+            </p>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={handleToggle}
+          onKeyDown={handleKeyDown}
+          aria-expanded={panelOpen}
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg font-mono text-[12px] font-medium border border-atelier/40 text-atelier hover:bg-atelier hover:text-white hover:border-atelier focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-colors cursor-pointer"
+        >
+          {panelOpen ? 'Close' : (hasPosition ? 'Manage position' : 'Deposit / Withdraw')}
+          <svg
+            className={`w-3.5 h-3.5 transition-transform duration-200 ${panelOpen ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+          </svg>
+        </button>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {panelOpen && (
+          <motion.div
+            key="pool-panel"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            style={{ overflow: 'hidden' }}
+          >
+            <div className="border-t border-gray-200 dark:border-neutral-800/60 px-5 py-5">
+              {pool ? (
+                <PoolPanel
+                  pool={pool}
+                  market={categoryId}
+                  positions={categoryPositions}
+                  positionsLoading={positionsLoading}
+                  solanaAddress={solanaAddress}
+                  solanaBalance={solanaBalance}
+                  baseBalance={baseBalance}
+                  balanceLoading={balanceLoading}
+                  authenticated={authenticated}
+                  canDeposit={canDeposit && !paused}
+                  login={login}
+                  onPoolRefresh={onPoolRefresh}
+                  embedded
+                />
+              ) : (
+                <div className="flex justify-center py-8">
+                  <div className="w-4 h-4 rounded-full border-2 border-atelier/30 border-t-atelier animate-spin" />
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export function MarketGrid({
   poolsByMarket,
   positions,
@@ -355,310 +329,53 @@ export function MarketGrid({
   onPoolRefresh,
   onFetchPool,
 }: MarketGridProps) {
-  const [layout, setLayout] = useState<GridLayout>('grid');
-  const [sortBy, setSortBy] = useState<SortBy>('tvl');
-  const [filterMine, setFilterMine] = useState(false);
-  const [expandedMarketId, setExpandedMarketId] = useState<string | null>(null);
-  const [colCount, setColCount] = useState(1);
-
-  const prevExpandedRef = useRef<string | null>(null);
-  const gridRef = useRef<HTMLDivElement>(null);
-
-  const depositedByMarket = positions.reduce<Record<string, { value: number; principal: number }>>((acc, pos) => {
-    const value = pos.value_usd !== null ? parseFloat(pos.value_usd) : parseFloat(pos.principal_usd);
-    const principal = parseFloat(pos.principal_usd);
-    const existing = acc[pos.pool_market];
-    acc[pos.pool_market] = {
-      value: (existing?.value ?? 0) + value,
-      principal: (existing?.principal ?? 0) + principal,
-    };
-    return acc;
-  }, {});
-
-  const hasPositions = Object.keys(depositedByMarket).length > 0;
-
-  const sortMarkets = useCallback((markets: string[]): string[] => {
-    const withPosition: string[] = [];
-    const without: string[] = [];
-    for (const m of markets) {
-      if (depositedByMarket[m]) withPosition.push(m);
-      else without.push(m);
-    }
-
-    const compareFn = (a: string, b: string): number => {
-      if (sortBy === 'tvl') {
-        const aTvl = poolsByMarket[a] ? Number(poolsByMarket[a].total_usdc_micro) : 0;
-        const bTvl = poolsByMarket[b] ? Number(poolsByMarket[b].total_usdc_micro) : 0;
-        if (aTvl !== bTvl) return bTvl - aTvl;
-      }
-      return a.localeCompare(b);
-    };
-
-    return [...withPosition.sort(compareFn), ...without.sort(compareFn)];
-  }, [depositedByMarket, sortBy, poolsByMarket]);
-
-  const filteredMarkets = filterMine && hasPositions
-    ? enabledMarkets.filter((m) => Boolean(depositedByMarket[m]))
-    : enabledMarkets;
-
-  const sortedMarkets = sortMarkets(filteredMarkets);
-
-  const handleToggle = useCallback((marketId: string) => {
-    setExpandedMarketId((prev) => {
-      if (prev === marketId) return null;
-      return marketId;
-    });
-  }, []);
+  const single = enabledMarkets.length === 1;
 
   useEffect(() => {
-    if (expandedMarketId && expandedMarketId !== prevExpandedRef.current) {
-      void onFetchPool(expandedMarketId);
+    if (single) {
+      void onFetchPool(enabledMarkets[0]);
     }
-    prevExpandedRef.current = expandedMarketId;
-  }, [expandedMarketId, onFetchPool]);
+  }, [single, enabledMarkets, onFetchPool]);
 
-  useEffect(() => {
-    if (layout !== 'grid') return;
-    const el = gridRef.current;
-    if (!el) return;
-    const measure = () => {
-      const cols = getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length;
-      setColCount(cols > 0 ? cols : 1);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [layout, sortedMarkets.length]);
-
-  const panelPassthrough: PoolPanelPassthrough = {
-    poolsByMarket,
-    positions,
-    positionsLoading,
-    solanaAddress,
-    solanaBalance,
-    baseBalance,
-    balanceLoading,
-    authenticated,
-    canDeposit,
-    login,
-    onPoolRefresh,
-    onFetchPool,
-  };
-
-  const displayCount = sortedMarkets.length;
-  const totalCount = enabledMarkets.length;
-
-  const visiblePools = sortedMarkets.map((m) => poolsByMarket[m]).filter(Boolean);
-  const anyInitializing = visiblePools.some((p) => !p.depositable);
-  const anyStressed = visiblePools.some((p) => p.stressed);
-
-  const expandedIndex = expandedMarketId ? sortedMarkets.indexOf(expandedMarketId) : -1;
-  const accordionAfterIndex = expandedIndex >= 0
-    ? Math.min(Math.floor(expandedIndex / colCount) * colCount + colCount - 1, sortedMarkets.length - 1)
-    : -1;
-
-  const renderGridWithAccordion = () => {
-    const elements: React.ReactNode[] = [];
-
-    sortedMarkets.forEach((marketId, i) => {
-      const dep = depositedByMarket[marketId] ?? null;
-      const isExpanded = expandedMarketId === marketId;
-      elements.push(
-        <motion.div
-          key={marketId}
-          layout
-          initial={{ opacity: 0, y: 12 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: '-40px' }}
-          transition={{ duration: 0.25, delay: i * 0.02 }}
-        >
-          <MarketCard
-            marketId={marketId}
-            ticker={marketTicker(marketId)}
-            pool={poolsByMarket[marketId] ?? null}
-            expanded={isExpanded}
-            positionValue={dep?.value ?? null}
-            positionPrincipal={dep?.principal ?? null}
-            layout="grid"
-            panelPassthrough={panelPassthrough}
-            onToggle={handleToggle}
-          />
-        </motion.div>
-      );
-
-      if (i === accordionAfterIndex && expandedMarketId) {
-        elements.push(
-          <div key={`accordion-${expandedMarketId}`} className="col-span-full">
-            <AnimatePresence initial={false}>
-              <motion.div
-                key={expandedMarketId}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.22, ease: 'easeInOut' }}
-                style={{ overflow: 'hidden' }}
-                className="rounded-xl border border-atelier/50 bg-white dark:bg-[#0d0d0d] mt-1"
-              >
-                <div className="px-5 py-5">
-                  <ExpandedPanel marketId={expandedMarketId} panelPassthrough={panelPassthrough} />
-                </div>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        );
-      }
-    });
-
-    return elements;
-  };
+  if (enabledMarkets.length === 0) {
+    return (
+      <div className="px-4 py-10 md:px-8 text-center border-b border-gray-200 dark:border-neutral-800/60">
+        <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600">No markets available.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="px-4 py-6 md:px-8 border-b border-gray-200 dark:border-neutral-800/60">
-      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <div className="flex items-baseline gap-2">
-          <h2 className="font-display font-semibold text-[15px] text-black dark:text-white">Markets</h2>
-          <span className="font-mono text-[10px] text-gray-400 dark:text-neutral-600">
-            {filterMine && displayCount < totalCount
-              ? `${displayCount} of ${totalCount} live`
-              : `${totalCount} live`}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {authenticated && hasPositions && (
-            <button
-              type="button"
-              onClick={() => setFilterMine((v) => !v)}
-              className={`h-7 px-2.5 rounded-md font-mono text-[10px] border transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 ${
-                filterMine
-                  ? 'border-atelier/50 bg-atelier/10 text-atelier dark:text-atelier'
-                  : 'border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400 hover:border-atelier/30 hover:text-atelier'
-              }`}
-            >
-              My positions
-            </button>
-          )}
-
-          <div className="flex items-center gap-1 p-0.5 rounded-lg border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black/40">
-            <button
-              type="button"
-              onClick={() => setSortBy('tvl')}
-              className={`h-6 px-2 rounded font-mono text-[10px] transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 ${
-                sortBy === 'tvl'
-                  ? 'bg-white dark:bg-neutral-800 text-black dark:text-white shadow-sm'
-                  : 'text-gray-400 dark:text-neutral-600 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              TVL
-            </button>
-            <button
-              type="button"
-              onClick={() => setSortBy('alpha')}
-              className={`h-6 px-2 rounded font-mono text-[10px] transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 ${
-                sortBy === 'alpha'
-                  ? 'bg-white dark:bg-neutral-800 text-black dark:text-white shadow-sm'
-                  : 'text-gray-400 dark:text-neutral-600 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              A-Z
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1 p-0.5 rounded-lg border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black/40">
-            <button
-              type="button"
-              onClick={() => setLayout('grid')}
-              aria-label="Grid view"
-              className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 ${
-                layout === 'grid'
-                  ? 'bg-white dark:bg-neutral-800 text-black dark:text-white shadow-sm'
-                  : 'text-gray-400 dark:text-neutral-600 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.4" />
-                <rect x="8" y="1" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.4" />
-                <rect x="1" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.4" />
-                <rect x="8" y="8" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.4" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => setLayout('list')}
-              aria-label="List view"
-              className={`flex items-center justify-center w-7 h-7 rounded-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 ${
-                layout === 'list'
-                  ? 'bg-white dark:bg-neutral-800 text-black dark:text-white shadow-sm'
-                  : 'text-gray-400 dark:text-neutral-600 hover:text-black dark:hover:text-white'
-              }`}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <line x1="1" y1="3.5" x2="13" y2="3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                <line x1="1" y1="7" x2="13" y2="7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                <line x1="1" y1="10.5" x2="13" y2="10.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {sortedMarkets.length === 0 ? (
-        <div className="py-10 text-center">
-          <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600">
-            {filterMine ? 'No positions yet.' : 'No markets available.'}
-          </p>
-        </div>
-      ) : layout === 'grid' ? (
-        <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
-          {renderGridWithAccordion()}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {sortedMarkets.map((marketId, i) => {
-            const dep = depositedByMarket[marketId] ?? null;
-            return (
-              <motion.div
-                key={marketId}
-                layout
-                initial={{ opacity: 0, x: -8 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: '-40px' }}
-                transition={{ duration: 0.2, delay: i * 0.015 }}
-              >
-                <MarketCard
-                  marketId={marketId}
-                  ticker={marketTicker(marketId)}
-                  pool={poolsByMarket[marketId] ?? null}
-                  expanded={expandedMarketId === marketId}
-                  positionValue={dep?.value ?? null}
-                  positionPrincipal={dep?.principal ?? null}
-                  layout="list"
-                  panelPassthrough={panelPassthrough}
-                  onToggle={handleToggle}
-                />
-              </motion.div>
-            );
-          })}
-        </div>
-      )}
-
-      {(anyInitializing || anyStressed) && (
-        <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-          {anyInitializing && (
-            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-gray-400 dark:text-neutral-500">
-              <ClockIcon className="w-3 h-3 shrink-0" />
-              Initializing &mdash; deposits paused while Parquet seeds the pool
-            </span>
-          )}
-          {anyStressed && (
-            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-amber-500/90">
-              <WarningTriangleIcon className="w-3 h-3 shrink-0" />
-              Stressed &mdash; withdrawals may be queued
-            </span>
-          )}
-        </div>
-      )}
+    <div className="px-4 py-6 md:px-8 border-b border-gray-200 dark:border-neutral-800/60 space-y-4">
+      {enabledMarkets.map((categoryId, i) => {
+        const pool = poolsByMarket[categoryId] ?? null;
+        const isEquityUs = categoryId === 'equity-us';
+        return (
+          <motion.div
+            key={categoryId}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: i * 0.05 }}
+          >
+            <CategoryPoolCard
+              categoryId={categoryId}
+              pool={pool}
+              positions={positions}
+              positionsLoading={positionsLoading}
+              solanaAddress={solanaAddress}
+              solanaBalance={solanaBalance}
+              baseBalance={baseBalance}
+              balanceLoading={balanceLoading}
+              authenticated={authenticated}
+              canDeposit={canDeposit}
+              login={login}
+              onPoolRefresh={onPoolRefresh}
+              onFetchPool={onFetchPool}
+              showBasket={isEquityUs}
+            />
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   categoryName,
   categorySubtitle,
-  COMPANY_NAMES,
+  categoryConstituents,
   type PoolData,
   type Position,
   formatUsd,
@@ -16,8 +16,6 @@ import { PoolPanel } from './PoolPanel';
 
 const INIT_TOOLTIP =
   'Initializing - this pool holds USDC with no LP yet, so deposits are paused until Parquet seeds it.';
-
-const EQUITY_TICKERS = Object.keys(COMPANY_NAMES);
 
 function ClockIcon({ className }: { className: string }) {
   return (
@@ -43,18 +41,14 @@ function PauseIcon({ className }: { className: string }) {
   );
 }
 
-function TickerBasket() {
-  const ref = useRef<HTMLDivElement>(null);
+function TickerBasket({ items }: { items: Array<{ ticker: string; name: string }> }) {
   return (
-    <div className="overflow-hidden relative" aria-label="Constituent equities">
-      <div
-        ref={ref}
-        className="flex flex-wrap gap-1.5 max-h-[4.5rem] overflow-hidden"
-      >
-        {EQUITY_TICKERS.map((ticker) => (
+    <div className="overflow-hidden relative" aria-label="Constituent markets">
+      <div className="flex flex-wrap gap-1.5 max-h-[4.5rem] overflow-hidden">
+        {items.map(({ ticker, name }) => (
           <span
             key={ticker}
-            title={COMPANY_NAMES[ticker]}
+            title={name}
             className="inline-flex items-center h-5 px-1.5 rounded font-mono text-[9px] text-gray-500 dark:text-neutral-400 bg-gray-100 dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 select-none whitespace-nowrap"
           >
             {ticker}
@@ -95,7 +89,6 @@ interface CategoryPoolCardProps {
   login: () => void;
   onPoolRefresh: (market: string) => Promise<void>;
   onFetchPool: (marketId: string) => Promise<void>;
-  showBasket: boolean;
 }
 
 function CategoryPoolCard({
@@ -112,9 +105,9 @@ function CategoryPoolCard({
   login,
   onPoolRefresh,
   onFetchPool,
-  showBasket,
 }: CategoryPoolCardProps) {
   const [panelOpen, setPanelOpen] = useState(false);
+  const constituents = categoryConstituents(categoryId);
 
   const categoryPositions = positions.filter((p) => p.pool_market === categoryId);
   const totalPositionValue = categoryPositions.reduce((sum, p) => {
@@ -230,12 +223,12 @@ function CategoryPoolCard({
           )}
         </div>
 
-        {showBasket && (
+        {constituents.length > 0 && (
           <div className="mb-4">
             <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-1.5">
               Earns fees across
             </p>
-            <TickerBasket />
+            <TickerBasket items={constituents} />
           </div>
         )}
 
@@ -349,7 +342,6 @@ export function MarketGrid({
     <div className="px-4 py-6 md:px-8 border-b border-gray-200 dark:border-neutral-800/60 space-y-4">
       {enabledMarkets.map((categoryId, i) => {
         const pool = poolsByMarket[categoryId] ?? null;
-        const isEquityUs = categoryId === 'equity-us';
         return (
           <motion.div
             key={categoryId}
@@ -371,7 +363,6 @@ export function MarketGrid({
               login={login}
               onPoolRefresh={onPoolRefresh}
               onFetchPool={onFetchPool}
-              showBasket={isEquityUs}
             />
           </motion.div>
         );

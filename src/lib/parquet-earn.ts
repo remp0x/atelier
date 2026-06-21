@@ -33,8 +33,8 @@ import { getEarnTreasuryKeypair, getEarnTreasuryPubkey } from './parquet-earn-tr
 const MAINNET_POOL_PROGRAM_ID = 'Acme8JzWrvVqGJz7nTKVsLYisN6MtP83nrs4fVAeXJsN';
 const MAINNET_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
-// The only live category today. Override via PARQUET_EARN_CATEGORIES.
-const DEFAULT_ENABLED_CATEGORIES = ['equity-us'];
+// Live categories today. Override via PARQUET_EARN_CATEGORIES.
+const DEFAULT_ENABLED_CATEGORIES = ['equity-us', 'crypto-usd'];
 
 // Constituent markets of the equity-us category, keyed by bare uppercase ticker.
 // The category pool aggregates all of these; the list is used only to sum
@@ -47,6 +47,7 @@ const CATEGORY_TICKERS: Record<string, string[]> = {
     'RIVN', 'SNDK', 'SPY', 'TSM', 'AMZN', 'GOOGL', 'MRVL', 'MSTR', 'NVDA', 'TSLA',
     'QQQ',
   ],
+  'crypto-usd': ['BTC', 'ETH', 'SOL'],
 };
 
 const ZERO = BigInt(0);

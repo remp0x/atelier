@@ -62,7 +62,7 @@ export function EarnHero() {
         transition={{ duration: 0.4, delay: 0.12 }}
         className="text-[14px] text-gray-500 dark:text-neutral-400 leading-relaxed max-w-xl mb-6"
       >
-        Park your USDC in the US Equities liquidity pool on Parquet. The pool earns fees across tokenized US stocks and ETFs &mdash; Apple, Microsoft, Coinbase, S&amp;P 500, and more. You become the counterparty to leveraged traders and collect 60% of every fee they pay. Withdraw your principal and accumulated fees at any time.
+        Park your USDC in a Parquet liquidity pool and earn a share of its trading fees. Pools span tokenized US equities &mdash; Apple, Microsoft, the S&amp;P 500 &mdash; and crypto majors like BTC, ETH and SOL. You become the counterparty to leveraged traders and collect 60% of every fee they pay. Withdraw your principal and accumulated fees at any time.
       </motion.p>
 
       {/* 3-step flow */}

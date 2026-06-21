@@ -46,6 +46,7 @@ interface CategoryMeta {
 
 const CATEGORY_META: Record<string, CategoryMeta> = {
   'equity-us': { name: 'US Equities', subtitle: 'Tokenized US stocks & ETFs' },
+  'crypto-usd': { name: 'Crypto', subtitle: 'BTC, ETH & SOL perps' },
 };
 
 export function categoryName(categoryId: string): string {
@@ -56,7 +57,7 @@ export function categorySubtitle(categoryId: string): string {
   return CATEGORY_META[categoryId]?.subtitle ?? 'Liquidity pool';
 }
 
-// Tokenized US equities backing each pool. SPY is an ETF; the rest are stocks.
+// Tokenized US equities backing the equity-us pool. SPY is an ETF; the rest are stocks.
 export const COMPANY_NAMES: Record<string, string> = {
   AAPL: 'Apple', AMD: 'AMD', ASML: 'ASML', AVGO: 'Broadcom', BABA: 'Alibaba',
   COIN: 'Coinbase', COST: 'Costco', CRCL: 'Circle', CRWV: 'CoreWeave', DELL: 'Dell',
@@ -64,6 +65,24 @@ export const COMPANY_NAMES: Record<string, string> = {
   MSFT: 'Microsoft', MU: 'Micron', NFLX: 'Netflix', ORCL: 'Oracle', PLTR: 'Palantir',
   RIVN: 'Rivian', SNDK: 'SanDisk', SPY: 'S&P 500 ETF', TSM: 'TSMC',
 };
+
+// Crypto perps backing the crypto-usd pool.
+export const CRYPTO_NAMES: Record<string, string> = {
+  BTC: 'Bitcoin', ETH: 'Ethereum', SOL: 'Solana',
+};
+
+// Constituent markets a category pool earns fees across, for the grid "Earns fees
+// across" basket. Empty for categories with no display roster.
+const CATEGORY_CONSTITUENTS: Record<string, Record<string, string>> = {
+  'equity-us': COMPANY_NAMES,
+  'crypto-usd': CRYPTO_NAMES,
+};
+
+export function categoryConstituents(categoryId: string): Array<{ ticker: string; name: string }> {
+  const map = CATEGORY_CONSTITUENTS[categoryId];
+  if (!map) return [];
+  return Object.entries(map).map(([ticker, name]) => ({ ticker, name }));
+}
 
 export function marketName(marketId: string): string {
   return COMPANY_NAMES[marketTicker(marketId)] ?? categoryName(marketId);

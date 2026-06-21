@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import type { PoolData, Position, WithdrawStep } from './types';
-import { microToUsd, formatUsd, formatAprPct, categoryName, categorySubtitle } from './types';
+import { microToUsd, formatUsd, formatAprPct, categoryName, categorySubtitle, usdcMicroUnits } from './types';
 import { StatusBanner } from './StatusBanner';
 import { DepositPanel } from './DepositPanel';
 
@@ -21,11 +22,47 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
   const [step, setStep] = useState<WithdrawStep>('idle');
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [amount, setAmount] = useState('');
+  const [isMax, setIsMax] = useState(false);
 
   const principal = parseFloat(position.principal_usd);
   const value = position.value_usd !== null ? parseFloat(position.value_usd) : null;
+  // USD value backing the position's shares; what a full withdrawal redeems to.
+  const withdrawable = value ?? principal;
+  const totalShares = BigInt(position.shares);
+
+  const amountNum = parseFloat(amount);
+  const EPSILON = 1e-6;
+  const amountValid =
+    isMax || (!Number.isNaN(amountNum) && amountNum > 0 && amountNum <= withdrawable + EPSILON);
+
+  // Map the requested USD amount to vault shares (shares are linear in value).
+  // A max/at-or-above-balance request burns the exact position to avoid leaving
+  // dust shares from integer rounding.
+  const sharesForRequest = useCallback((): { shares: bigint; all: boolean } => {
+    if (isMax || Number.isNaN(amountNum) || amountNum >= withdrawable - EPSILON) {
+      return { shares: totalShares, all: true };
+    }
+    const basisMicro = usdcMicroUnits(withdrawable);
+    if (basisMicro <= BigInt(0)) return { shares: totalShares, all: true };
+    const shares = (totalShares * usdcMicroUnits(amountNum)) / basisMicro;
+    return { shares, all: false };
+  }, [isMax, amountNum, withdrawable, totalShares]);
+
+  const handleMax = useCallback(() => {
+    setErrorMsg(null);
+    setIsMax(true);
+    setAmount(withdrawable.toFixed(2));
+  }, [withdrawable]);
 
   const handleWithdraw = useCallback(async () => {
+    if (!amountValid) return;
+    const { shares, all } = sharesForRequest();
+    if (!all && shares <= BigInt(0)) {
+      setErrorMsg('Amount too small to withdraw.');
+      return;
+    }
+
     setErrorMsg(null);
     setStep('submitting');
     setStatusMsg('Submitting withdrawal...');
@@ -35,7 +72,9 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const body: Record<string, unknown> = { all: true, market: position.pool_market };
+      const body: Record<string, unknown> = { market: position.pool_market };
+      if (all) body.all = true;
+      else body.shares = shares.toString();
       if (solanaAddress) body.destination_wallet = solanaAddress;
       if (position.agent_id) body.agent_id = position.agent_id;
 
@@ -69,7 +108,7 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
       } else {
         const received = data?.received_micro_usdc
           ? `$${formatUsd(microToUsd(data.received_micro_usdc))} USDC`
-          : 'your deposit';
+          : 'your funds';
         setStatusMsg(`Settled: ${received} returned to your wallet.`);
       }
 
@@ -79,7 +118,9 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
       setErrorMsg(err instanceof Error ? err.message : 'Withdrawal failed');
       setStatusMsg(null);
     }
-  }, [position, solanaAddress, onSuccess]);
+  }, [amountValid, sharesForRequest, position, solanaAddress, onSuccess]);
+
+  const remaining = isMax ? 0 : Math.max(withdrawable - (Number.isNaN(amountNum) ? 0 : amountNum), 0);
 
   return (
     <div className="space-y-4">
@@ -110,6 +151,60 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
         </div>
       </div>
 
+      {step !== 'done' && (
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500">
+              Withdraw amount
+            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[11px] text-gray-500 dark:text-neutral-400 tabular-nums">
+                Available: <span className="text-black dark:text-white">${formatUsd(withdrawable)}</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleMax}
+                disabled={step !== 'idle' || withdrawable <= 0}
+                className="h-5 px-1.5 rounded font-mono text-[10px] text-atelier border border-atelier/30 hover:bg-atelier/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                Max
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[13px] text-gray-400 dark:text-neutral-600">$</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(e) => { setAmount(e.target.value); setIsMax(false); setErrorMsg(null); }}
+                placeholder="0.00"
+                disabled={step !== 'idle'}
+                aria-label="Withdraw amount in USDC"
+                className="w-full h-11 pl-6 pr-3 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-[15px] font-mono placeholder:text-gray-300 dark:placeholder:text-neutral-700 focus:outline-none focus:border-atelier disabled:opacity-50 transition-colors"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 h-11 px-3 rounded-lg border border-gray-200 dark:border-neutral-800 shrink-0">
+              <Image src="/usdc.svg" alt="USDC" width={16} height={16} className="object-contain" style={{ width: 16, height: 16 }} />
+              <span className="font-mono text-[12px] text-black dark:text-white">USDC</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mt-1.5 gap-2">
+            <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums">
+              Remaining after: ${formatUsd(remaining)}
+            </p>
+            {!Number.isNaN(amountNum) && amountNum > withdrawable + EPSILON && (
+              <p className="font-mono text-[10px] text-red-500">Exceeds your position</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {statusMsg && (
         <StatusBanner
           type={step === 'done' ? (statusMsg.includes('queued') ? 'warning' : 'success') : 'info'}
@@ -131,7 +226,7 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
           <button
             type="button"
             onClick={() => void handleWithdraw()}
-            disabled={step === 'submitting'}
+            disabled={step === 'submitting' || !amountValid}
             className="flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-lg font-mono text-[12px] font-medium border border-atelier text-atelier hover:bg-atelier hover:text-white disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-colors cursor-pointer"
           >
             {step === 'submitting' ? (
@@ -143,7 +238,7 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
                 Withdrawing...
               </>
             ) : (
-              'Withdraw all'
+              isMax ? 'Withdraw all' : 'Withdraw'
             )}
           </button>
         </div>

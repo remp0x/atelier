@@ -86,18 +86,31 @@ export function isParquetEarnConfigured(): boolean {
   return Boolean(process.env.PARQUET_EARN_CATEGORY || process.env.PARQUET_EARN_MARKET);
 }
 
-function configuredDefault(): string | undefined {
-  return process.env.PARQUET_EARN_CATEGORY || process.env.PARQUET_EARN_MARKET || undefined;
+function parseCategoryList(value: string | undefined): string[] {
+  return value ? value.split(',').map((s) => s.trim()).filter(Boolean) : [];
 }
 
-// The categories users can deposit into. Empty when Earn is off.
+// The default/switch var (singular) is meant to hold one category id, but may be
+// set to a comma list by mistake -- the default is always its FIRST token, never
+// the raw comma string (which is no valid category and renders an empty card).
+function configuredDefault(): string | undefined {
+  return parseCategoryList(process.env.PARQUET_EARN_CATEGORY || process.env.PARQUET_EARN_MARKET)[0];
+}
+
+// The categories users can deposit into. Empty when Earn is off. Sourced from the
+// plural list var, else a multi-value singular switch, else the built-in default.
 export function getEnabledCategories(): string[] {
   if (!isParquetEarnConfigured()) return [];
-  const env = process.env.PARQUET_EARN_CATEGORIES || process.env.PARQUET_EARN_MARKETS;
-  const list = env ? env.split(',').map((s) => s.trim()).filter(Boolean) : [...DEFAULT_ENABLED_CATEGORIES];
+  const explicit = parseCategoryList(process.env.PARQUET_EARN_CATEGORIES || process.env.PARQUET_EARN_MARKETS);
+  const fromSwitch = parseCategoryList(process.env.PARQUET_EARN_CATEGORY || process.env.PARQUET_EARN_MARKET);
+  const list = explicit.length > 0
+    ? explicit
+    : fromSwitch.length > 1
+      ? fromSwitch
+      : [...DEFAULT_ENABLED_CATEGORIES];
   const def = configuredDefault();
   if (def && !list.includes(def)) list.unshift(def);
-  return list;
+  return Array.from(new Set(list));
 }
 
 export function isCategoryEnabled(category: string): boolean {

@@ -18,10 +18,10 @@
 
 const POD_PROXY_BASE = process.env.POD_BASE_URL || 'https://api.usepod.ai/proxy';
 const POD_TOKEN = process.env.POD_TOKEN;
-// Primary model: claude-fable-5. Pod can 503 it under load, so podChat retries
-// and then falls back to POD_FALLBACK_MODEL so users never see a failure while
-// the marketplace still serves the primary whenever it's available.
-const POD_DEFAULT_MODEL = process.env.POD_MODEL || 'claude-fable-5';
+// Default must be a model Pod actually serves (check `GET /v1/models`).
+// claude-fable-5 was dropped from Pod's catalog and now 400s "not available",
+// which silently killed every Pod call -- do not point the default at it again.
+const POD_DEFAULT_MODEL = process.env.POD_MODEL || 'claude-haiku-4-5-20251001';
 const POD_FALLBACK_MODEL = process.env.POD_FALLBACK_MODEL || 'gpt-4o-mini';
 const POD_TIMEOUT_MS = Number(process.env.POD_TIMEOUT_MS || '25000');
 // Pod routes to a marketplace of upstreams and can return a transient 503
@@ -82,6 +82,12 @@ interface PodChatCompletion {
 interface ChatAttempt {
   content: string | null;
   transient: boolean;
+  unavailable: boolean;
+}
+
+function isModelUnavailable(status: number, body: string): boolean {
+  if (status !== 400 && status !== 404) return false;
+  return /not available|unknown model|no such model|does not exist|not found/i.test(body);
 }
 
 async function attemptChat(model: string, messages: PodChatMessage[], options: PodChatOptions): Promise<ChatAttempt> {
@@ -102,18 +108,19 @@ async function attemptChat(model: string, messages: PodChatMessage[], options: P
 
     recordBalance(res.headers.get('X-Balance-Remaining'));
 
-    if (res.status === 503) return { content: null, transient: true };
+    if (res.status === 503) return { content: null, transient: true, unavailable: false };
     if (!res.ok) {
-      console.error(`Pod inference error (${res.status}):`, await res.text().catch(() => ''));
-      return { content: null, transient: false };
+      const errBody = await res.text().catch(() => '');
+      console.error(`Pod inference error (${res.status}):`, errBody);
+      return { content: null, transient: false, unavailable: isModelUnavailable(res.status, errBody) };
     }
 
     const json = (await res.json()) as PodChatCompletion;
     const content = json.choices?.[0]?.message?.content;
-    return { content: typeof content === 'string' && content.length > 0 ? content.trim() : null, transient: false };
+    return { content: typeof content === 'string' && content.length > 0 ? content.trim() : null, transient: false, unavailable: false };
   } catch (err) {
     console.error('Pod inference request failed:', err);
-    return { content: null, transient: true };
+    return { content: null, transient: true, unavailable: false };
   } finally {
     clearTimeout(timeout);
   }
@@ -124,17 +131,20 @@ async function podChat(messages: PodChatMessage[], options: PodChatOptions = {})
 
   const primary = options.model ?? POD_DEFAULT_MODEL;
   let lastTransient = false;
+  let lastUnavailable = false;
   for (let attempt = 0; attempt <= POD_RETRY_503; attempt++) {
     const result = await attemptChat(primary, messages, options);
     if (result.content !== null) return result.content;
     lastTransient = result.transient;
-    if (!result.transient) return null;
+    lastUnavailable = result.unavailable;
+    if (!result.transient) break;
     if (attempt < POD_RETRY_503) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
   }
 
-  // Primary kept failing transiently (Pod capacity). Fall back once to a
-  // reliable model so the user still gets an answer.
-  if (lastTransient && POD_FALLBACK_MODEL && POD_FALLBACK_MODEL !== primary) {
+  // Fall back once to a reliable model when the primary is unusable: either Pod
+  // is transiently saturated (503) or the configured model is not available on
+  // Pod (400). Other errors (auth, quota, 500) are not recoverable by retrying.
+  if ((lastTransient || lastUnavailable) && POD_FALLBACK_MODEL && POD_FALLBACK_MODEL !== primary) {
     const fallback = await attemptChat(POD_FALLBACK_MODEL, messages, options);
     if (fallback.content !== null) return fallback.content;
   }

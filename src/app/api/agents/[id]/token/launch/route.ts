@@ -19,6 +19,7 @@ import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { TOKEN_LAUNCH_PROVIDER } from '@/lib/token-economics';
 import { launchTokenOnClawpump, ClawpumpError } from '@/lib/clawpump-client';
+import { getSolPriceUsd } from '@/lib/sol-price';
 
 export const maxDuration = 300;
 
@@ -28,20 +29,27 @@ const TOKEN_NAME_SUFFIX = ' by Atelier';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-// Hybrid self-fund fallback (OFF by default). When ClawPump's gasless pool is empty
-// the launch returns "out of funds"; if configured, Atelier covers the ~0.03 SOL gas
-// from its own wallet and retries. Requires BOTH CLAWPUMP_SELFFUND_ENABLED=true and
-// CLAWPUMP_FUNDING_ADDRESS. NOTE: the fundingTxHash handoff to ClawPump is best-effort
-// pending their self-fund spec -- keep disabled until verified end-to-end.
-const SELFFUND_LAMPORTS = Math.round(Number(process.env.CLAWPUMP_SELFFUND_SOL || '0.03') * 1_000_000_000);
+// Auto top-up of ClawPump's gasless launch-wallet pool. ClawPump's relayer fronts the
+// per-launch gas; under heavy launch volume it drains and /api/v1/launch returns "out of
+// funds". Confirmed with the partner: sending SOL to that wallet directly unblocks the
+// gasless launch (no proof handoff needed). On that error we wire ~$2 from the Atelier
+// wallet to the pool and retry, so the user only ever sees a loader. Tunable via env;
+// disable with CLAWPUMP_AUTO_TOPUP=false. NOTE: spends real SOL, and the pool is shared,
+// so a top-up can be consumed by another launcher front-running -- keep EZko... funded.
+const CLAWPUMP_GASLESS_WALLET = process.env.CLAWPUMP_GASLESS_WALLET?.trim()
+  || 'ZPhALZcwXS2K5TmZ1z7LHF5Xp3p4rYyjJurD8gTA6wW';
+const CLAWPUMP_TOPUP_USD = Number(process.env.CLAWPUMP_TOPUP_USD || '2');
 
-function clawpumpSelfFundDestination(): string | null {
-  if (process.env.CLAWPUMP_SELFFUND_ENABLED !== 'true') return null;
-  const addr = process.env.CLAWPUMP_FUNDING_ADDRESS?.trim();
-  return addr || null;
+function clawpumpAutoTopUpEnabled(): boolean {
+  return process.env.CLAWPUMP_AUTO_TOPUP !== 'false';
 }
 
-async function selfFundClawpumpGas(destination: string): Promise<string> {
+async function topUpClawpumpGasless(): Promise<string> {
+  const solPrice = await getSolPriceUsd().catch(() => 0);
+  // ~$CLAWPUMP_TOPUP_USD of SOL; fall back to a fixed amount if price is unavailable.
+  const sol = solPrice > 0 ? CLAWPUMP_TOPUP_USD / solPrice : 0.015;
+  const lamports = Math.max(1, Math.round(sol * 1_000_000_000));
+
   const connection = getServerConnection();
   const payer = getAtelierKeypair();
   const { blockhash } = await connection.getLatestBlockhash('confirmed');
@@ -51,8 +59,8 @@ async function selfFundClawpumpGas(destination: string): Promise<string> {
     instructions: [
       SystemProgram.transfer({
         fromPubkey: ATELIER_PUBKEY,
-        toPubkey: new PublicKey(destination),
-        lamports: SELFFUND_LAMPORTS,
+        toPubkey: new PublicKey(CLAWPUMP_GASLESS_WALLET),
+        lamports,
       }),
     ],
   }).compileToV0Message();
@@ -263,18 +271,16 @@ export async function POST(
           imageUrl: tokenImageUrl,
         });
       } catch (err) {
-        const fundDest = clawpumpSelfFundDestination();
-        if (err instanceof ClawpumpError && err.outOfFunds && fundDest) {
-          // Gasless pool empty -- cover the gas from Atelier's wallet and retry once.
-          let fundingTxHash: string;
+        if (err instanceof ClawpumpError && err.outOfFunds && clawpumpAutoTopUpEnabled()) {
+          // Gasless pool empty -- top it up from the Atelier wallet and retry once.
           try {
-            console.log('[token-launch] ClawPump gasless pool empty -- self-funding gas from Atelier wallet');
-            fundingTxHash = await selfFundClawpumpGas(fundDest);
-            console.log(`[token-launch] self-funded ClawPump gas tx=${fundingTxHash}`);
+            console.log('[token-launch] ClawPump gasless pool empty -- topping up from Atelier wallet');
+            const fundSig = await topUpClawpumpGasless();
+            console.log(`[token-launch] topped up ClawPump gasless pool tx=${fundSig}`);
           } catch (fundErr) {
-            // Funding failed -- surface ClawPump's original (actionable) message; the
+            // Top-up failed -- surface ClawPump's original (actionable) message; the
             // launch minted nothing so the outer catch releases the lock for retry.
-            console.error('[token-launch] self-fund transfer failed:', fundErr);
+            console.error('[token-launch] gasless top-up failed:', fundErr);
             throw err;
           }
           try {
@@ -283,7 +289,6 @@ export async function POST(
               symbol,
               description,
               imageUrl: tokenImageUrl,
-              fundingTxHash,
             });
           } catch (retryErr) {
             if (retryErr instanceof ClawpumpError && retryErr.retriable === false) {

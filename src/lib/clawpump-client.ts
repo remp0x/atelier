@@ -56,13 +56,6 @@ export interface ClawpumpLaunchInput {
   description: string;
   /** A public image URL for the token (the Atelier agent's avatar_url). */
   imageUrl: string;
-  /**
-   * Self-fund proof: the signature of a SOL transfer covering this launch's gas,
-   * sent when ClawPump's gasless pool is empty. Forwarded to ClawPump as the
-   * funding proof. NOTE: exact field name / endpoint is pending ClawPump's
-   * self-fund spec -- this is the best-effort handoff per their error message.
-   */
-  fundingTxHash?: string;
 }
 
 export interface ClawpumpLaunchResult {
@@ -172,8 +165,6 @@ export async function launchTokenOnClawpump(
         symbol: input.symbol,
         description: input.description,
         imageUrl: input.imageUrl,
-        // Only present in the self-fund retry; field name pending ClawPump spec.
-        ...(input.fundingTxHash ? { fundingTxHash: input.fundingTxHash } : {}),
       }),
       signal: AbortSignal.timeout(120_000),
     });

@@ -7,8 +7,11 @@ import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { isAtelierAdminEmail } from '@/lib/admin-client';
+import { getPrivyAccessToken } from '@/lib/privy-client';
 import { atelierHref } from '@/lib/atelier-paths';
+import { categoryName } from '@/components/atelier/earn/types';
 import type { MetricsData, ActivityType, ActivityEvent } from '@/lib/atelier-db';
+import type { EarnActivityEntry, EarnActivityDirection } from '@/lib/parquet-earn-db';
 
 const STATUS_LABELS: Record<string, string> = {
   pending_quote: 'Pending Quote',
@@ -310,6 +313,9 @@ function MetricsContent() {
 
       {/* Activity Feed */}
       <ActivityFeed />
+
+      {/* Earn Activity */}
+      <EarnActivityLog />
     </div>
   );
 }
@@ -482,6 +488,181 @@ function ActivityFeed() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-black-soft border-t border-gray-200 dark:border-neutral-800">
+            <button
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="text-xs font-mono text-neutral-500 hover:text-atelier disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-[10px] font-mono text-neutral-500">
+              {page + 1} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="text-xs font-mono text-neutral-500 hover:text-atelier disabled:opacity-30 disabled:cursor-default cursor-pointer transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+const EARN_FILTERS: { key: EarnActivityDirection | 'all'; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'deposit', label: 'Deposits' },
+  { key: 'withdraw', label: 'Withdrawals' },
+];
+
+const EARN_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  confirmed: 'Confirmed',
+  queued: 'Queued',
+  failed: 'Failed',
+  withdraw_settled: 'Settled',
+};
+
+function formatEarnWho(entry: EarnActivityEntry): string {
+  if (entry.ownerName) return entry.ownerName;
+  if (entry.ownerId) return `${entry.ownerId.slice(0, 6)}...${entry.ownerId.slice(-4)}`;
+  return 'Unknown';
+}
+
+function EarnActivityLog() {
+  const [direction, setDirection] = useState<EarnActivityDirection | 'all'>('all');
+  const [entries, setEntries] = useState<EarnActivityEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+
+  const fetchEarn = useCallback(async (d: EarnActivityDirection | 'all', p: number) => {
+    setLoading(true);
+    try {
+      const token = await getPrivyAccessToken();
+      if (!token) {
+        setEntries([]);
+        setTotal(0);
+        return;
+      }
+      const res = await fetch(
+        `/api/metrics/earn-activity?direction=${d}&limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const json = await res.json();
+      if (json.success) {
+        setEntries(json.data.entries);
+        setTotal(json.data.total);
+      }
+    } catch {
+      // non-critical
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEarn(direction, page);
+  }, [direction, page, fetchEarn]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  return (
+    <section>
+      <h2 className="text-lg font-bold font-display mb-3">Earn Activity</h2>
+
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+        {EARN_FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => { setDirection(f.key); setPage(0); }}
+            className={`px-3 py-1.5 rounded-full text-xs font-mono whitespace-nowrap transition-colors cursor-pointer ${
+              direction === f.key
+                ? 'bg-atelier text-white'
+                : 'bg-gray-100 dark:bg-neutral-800 text-gray-600 dark:text-neutral-400 hover:bg-gray-200 dark:hover:bg-neutral-700'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="rounded-lg border border-gray-200 dark:border-neutral-800 overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="w-5 h-5 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="flex items-center justify-center py-12">
+            <p className="text-neutral-500 font-mono text-xs">No earn activity yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs font-mono">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-black-soft text-neutral-500">
+                  <th className="px-3 py-2 text-left">Who</th>
+                  <th className="px-3 py-2 text-left">Type</th>
+                  <th className="px-3 py-2 text-left">Pool</th>
+                  <th className="px-3 py-2 text-right">Amount</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                  <th className="px-3 py-2 text-right">When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((e) => {
+                  const isDeposit = e.direction === 'deposit';
+                  const tone = isDeposit ? 'text-emerald-400' : 'text-amber-400';
+                  return (
+                    <tr key={e.id} className="border-t border-gray-200 dark:border-neutral-800">
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          {e.ownerAvatarUrl ? (
+                            <Image src={e.ownerAvatarUrl} alt="" width={20} height={20} className="w-5 h-5 rounded-full flex-shrink-0" unoptimized onError={(ev) => { ev.currentTarget.style.display = 'none'; }} />
+                          ) : (
+                            <span className="w-5 h-5 rounded-full flex-shrink-0 bg-gray-100 dark:bg-neutral-800" />
+                          )}
+                          <span className="truncate max-w-[140px]" title={e.ownerId ?? undefined}>{formatEarnWho(e)}</span>
+                          {e.ownerKind === 'agent' && (
+                            <span className="text-[9px] text-neutral-500 uppercase">agent</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex items-center gap-1 ${tone}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${isDeposit ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                          {isDeposit ? 'Deposit' : 'Withdraw'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-neutral-400">{categoryName(e.poolMarket)}</td>
+                      <td className={`px-3 py-2 text-right ${tone}`}>
+                        {e.amountUsd !== null
+                          ? `${isDeposit ? '+' : '-'}$${e.amountUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-neutral-500">{EARN_STATUS_LABELS[e.status] || e.status}</td>
+                      <td className="px-3 py-2 text-right text-neutral-500 whitespace-nowrap">
+                        {e.txHash ? (
+                          <a href={`https://solscan.io/tx/${e.txHash}`} target="_blank" rel="noopener noreferrer" className="hover:text-atelier transition-colors" title="View transaction">
+                            {formatRelativeTime(e.createdAt)}
+                          </a>
+                        ) : (
+                          formatRelativeTime(e.createdAt)
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
 

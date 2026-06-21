@@ -528,6 +528,99 @@ export async function listQueuedWithdrawals(vaultId: string): Promise<EarnMoveme
   return result.rows.map((r) => mapMovement(r as unknown as Record<string, unknown>));
 }
 
+export type EarnActivityDirection = 'deposit' | 'withdraw';
+// The settled state is written to the status column, never the kind column, so the
+// activity status union widens EarnMovementStatus with it for honest display.
+export type EarnActivityStatus = EarnMovementStatus | 'withdraw_settled';
+
+export interface EarnActivityEntry {
+  id: string;
+  direction: EarnActivityDirection;
+  poolMarket: string;
+  ownerKind: EarnOwnerKind | null;
+  ownerId: string | null;
+  ownerName: string | null;
+  ownerAvatarUrl: string | null;
+  amountUsd: number | null;
+  status: EarnActivityStatus;
+  txHash: string | null;
+  destination: string | null;
+  createdAt: string;
+}
+
+// Admin activity log for the Earn product: who deposited/withdrew, how much, when.
+// A withdrawal is always recorded with kind 'withdraw'; settlement only flips its
+// status to 'withdraw_settled' (same row, no double count). harvest/fee rows are
+// excluded -- those are protocol yield events, not user activity.
+export async function getEarnActivityLog(params: {
+  direction?: EarnActivityDirection | 'all';
+  limit?: number;
+  offset?: number;
+}): Promise<{ entries: EarnActivityEntry[]; total: number }> {
+  await initParquetEarnDb();
+
+  const direction = params.direction ?? 'all';
+  const limit = Math.min(Math.max(Math.trunc(Number(params.limit) || 25), 1), 100);
+  const offset = Math.max(Math.trunc(Number(params.offset) || 0), 0);
+
+  const kinds =
+    direction === 'deposit'
+      ? ['deposit']
+      : direction === 'withdraw'
+        ? ['withdraw']
+        : ['deposit', 'withdraw'];
+  const placeholders = kinds.map(() => '?').join(', ');
+  const where = `m.kind IN (${placeholders})`;
+
+  const [countResult, dataResult] = await Promise.all([
+    atelierClient.execute({
+      sql: `SELECT COUNT(*) as total FROM parquet_earn_movements m WHERE ${where}`,
+      args: [...kinds],
+    }),
+    atelierClient.execute({
+      sql: `
+        SELECT m.id, m.kind, m.owner_kind, m.owner_id, m.amount_usdc, m.status,
+               m.tx_hash, m.note, m.created_at,
+               v.pool_market,
+               CASE WHEN m.owner_kind = 'user' THEN u.username
+                    WHEN m.owner_kind = 'agent' THEN a.name END AS owner_name,
+               CASE WHEN m.owner_kind = 'user' THEN u.avatar_url
+                    WHEN m.owner_kind = 'agent' THEN a.avatar_url END AS owner_avatar
+        FROM parquet_earn_movements m
+        JOIN parquet_earn_vault v ON v.id = m.vault_id
+        LEFT JOIN users u ON m.owner_kind = 'user' AND u.privy_user_id = m.owner_id
+        LEFT JOIN atelier_agents a ON m.owner_kind = 'agent' AND a.id = m.owner_id
+        WHERE ${where}
+        ORDER BY m.created_at DESC
+        LIMIT ? OFFSET ?
+      `,
+      args: [...kinds, limit, offset],
+    }),
+  ]);
+
+  const total = Number(countResult.rows[0].total);
+  const entries: EarnActivityEntry[] = dataResult.rows.map((row) => {
+    const kind = String(row.kind) as EarnMovementKind;
+    const amount = row.amount_usdc;
+    return {
+      id: String(row.id),
+      direction: kind === 'deposit' ? 'deposit' : 'withdraw',
+      poolMarket: String(row.pool_market ?? ''),
+      ownerKind: (row.owner_kind as EarnOwnerKind) ?? null,
+      ownerId: row.owner_id ? String(row.owner_id) : null,
+      ownerName: row.owner_name ? String(row.owner_name) : null,
+      ownerAvatarUrl: row.owner_avatar ? String(row.owner_avatar) : null,
+      amountUsd: amount !== null && amount !== undefined ? Number(amount) / 1e6 : null,
+      status: String(row.status) as EarnActivityStatus,
+      txHash: row.tx_hash ? String(row.tx_hash) : null,
+      destination: row.note ? String(row.note) : null,
+      createdAt: String(row.created_at),
+    };
+  });
+
+  return { entries, total };
+}
+
 function mapMovement(row: Record<string, unknown>): EarnMovement {
   return {
     id: row.id as string,

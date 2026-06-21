@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   Keypair,
+  PublicKey,
+  SystemProgram,
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
@@ -25,6 +27,41 @@ const launchRateLimit = rateLimit(10, 60 * 60 * 1000);
 const TOKEN_NAME_SUFFIX = ' by Atelier';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
+// Hybrid self-fund fallback (OFF by default). When ClawPump's gasless pool is empty
+// the launch returns "out of funds"; if configured, Atelier covers the ~0.03 SOL gas
+// from its own wallet and retries. Requires BOTH CLAWPUMP_SELFFUND_ENABLED=true and
+// CLAWPUMP_FUNDING_ADDRESS. NOTE: the fundingTxHash handoff to ClawPump is best-effort
+// pending their self-fund spec -- keep disabled until verified end-to-end.
+const SELFFUND_LAMPORTS = Math.round(Number(process.env.CLAWPUMP_SELFFUND_SOL || '0.03') * 1_000_000_000);
+
+function clawpumpSelfFundDestination(): string | null {
+  if (process.env.CLAWPUMP_SELFFUND_ENABLED !== 'true') return null;
+  const addr = process.env.CLAWPUMP_FUNDING_ADDRESS?.trim();
+  return addr || null;
+}
+
+async function selfFundClawpumpGas(destination: string): Promise<string> {
+  const connection = getServerConnection();
+  const payer = getAtelierKeypair();
+  const { blockhash } = await connection.getLatestBlockhash('confirmed');
+  const message = new TransactionMessage({
+    payerKey: ATELIER_PUBKEY,
+    recentBlockhash: blockhash,
+    instructions: [
+      SystemProgram.transfer({
+        fromPubkey: ATELIER_PUBKEY,
+        toPubkey: new PublicKey(destination),
+        lamports: SELFFUND_LAMPORTS,
+      }),
+    ],
+  }).compileToV0Message();
+  const tx = new VersionedTransaction(message);
+  tx.sign([payer]);
+  const sig = await connection.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
+  await pollTransactionConfirmation(connection, sig, 60_000);
+  return sig;
+}
 
 export async function POST(
   request: NextRequest,
@@ -226,14 +263,44 @@ export async function POST(
           imageUrl: tokenImageUrl,
         });
       } catch (err) {
-        // ClawPump tears down its per-launch agent on a rejected call, so those
-        // failures minted nothing and are safe to retry -- leave broadcasted false
-        // so the outer catch releases the lock. Only a non-retriable error (a 200
-        // response with no mint address) holds the lock for manual review.
-        if (err instanceof ClawpumpError && err.retriable === false) {
-          broadcasted = true;
+        const fundDest = clawpumpSelfFundDestination();
+        if (err instanceof ClawpumpError && err.outOfFunds && fundDest) {
+          // Gasless pool empty -- cover the gas from Atelier's wallet and retry once.
+          let fundingTxHash: string;
+          try {
+            console.log('[token-launch] ClawPump gasless pool empty -- self-funding gas from Atelier wallet');
+            fundingTxHash = await selfFundClawpumpGas(fundDest);
+            console.log(`[token-launch] self-funded ClawPump gas tx=${fundingTxHash}`);
+          } catch (fundErr) {
+            // Funding failed -- surface ClawPump's original (actionable) message; the
+            // launch minted nothing so the outer catch releases the lock for retry.
+            console.error('[token-launch] self-fund transfer failed:', fundErr);
+            throw err;
+          }
+          try {
+            result = await launchTokenOnClawpump({
+              name: tokenName,
+              symbol,
+              description,
+              imageUrl: tokenImageUrl,
+              fundingTxHash,
+            });
+          } catch (retryErr) {
+            if (retryErr instanceof ClawpumpError && retryErr.retriable === false) {
+              broadcasted = true;
+            }
+            throw retryErr;
+          }
+        } else {
+          // ClawPump tears down its per-launch agent on a rejected call, so those
+          // failures minted nothing and are safe to retry -- leave broadcasted false
+          // so the outer catch releases the lock. Only a non-retriable error (a 200
+          // response with no mint address) holds the lock for manual review.
+          if (err instanceof ClawpumpError && err.retriable === false) {
+            broadcasted = true;
+          }
+          throw err;
         }
-        throw err;
       }
       broadcasted = true;
 

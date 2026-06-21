@@ -41,6 +41,9 @@ export class ClawpumpError extends Error {
     // couldn't read its address (the per-launch agent is left intact for review);
     // every other failure tears the agent down and minted nothing.
     public readonly retriable: boolean = true,
+    // True when ClawPump's gasless launch-wallet pool is empty -- the launch can
+    // be retried after Atelier self-funds the gas (see the launch route).
+    public readonly outOfFunds: boolean = false,
   ) {
     super(message);
     this.name = 'ClawpumpError';
@@ -53,6 +56,13 @@ export interface ClawpumpLaunchInput {
   description: string;
   /** A public image URL for the token (the Atelier agent's avatar_url). */
   imageUrl: string;
+  /**
+   * Self-fund proof: the signature of a SOL transfer covering this launch's gas,
+   * sent when ClawPump's gasless pool is empty. Forwarded to ClawPump as the
+   * funding proof. NOTE: exact field name / endpoint is pending ClawPump's
+   * self-fund spec -- this is the best-effort handoff per their error message.
+   */
+  fundingTxHash?: string;
 }
 
 export interface ClawpumpLaunchResult {
@@ -162,6 +172,8 @@ export async function launchTokenOnClawpump(
         symbol: input.symbol,
         description: input.description,
         imageUrl: input.imageUrl,
+        // Only present in the self-fund retry; field name pending ClawPump spec.
+        ...(input.fundingTxHash ? { fundingTxHash: input.fundingTxHash } : {}),
       }),
       signal: AbortSignal.timeout(120_000),
     });
@@ -177,7 +189,10 @@ export async function launchTokenOnClawpump(
     const body = await launchRes.text().catch(() => '');
     console.error('[clawpump] launch error:', launchRes.status, body);
     await deleteClawpumpAgent(clawpumpAgent.id, authHeader);
-    throw new ClawpumpError(detailFromBody(body, `ClawPump launch failed: ${launchRes.status}`), 502);
+    const detail = detailFromBody(body, `ClawPump launch failed: ${launchRes.status}`);
+    // The gasless launch-wallet pool is empty -- retriable once gas is funded.
+    const outOfFunds = launchRes.status === 503 || /out of funds/i.test(detail);
+    throw new ClawpumpError(detail, launchRes.status, true, outOfFunds);
   }
 
   const data = await launchRes.json().catch(() => ({}));

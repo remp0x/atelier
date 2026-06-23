@@ -25,37 +25,29 @@ export function EarnPageClient() {
 
   const [enabledMarkets, setEnabledMarkets] = useState<string[]>([]);
   const [marketsLoading, setMarketsLoading] = useState(true);
-  const [notConfigured, setNotConfigured] = useState(false);
 
   const [poolsByMarket, setPoolsByMarket] = useState<Record<string, PoolData>>({});
 
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
 
-  // silent = background refresh: never flash loading skeletons and never flip
-  // the page into the not-configured state on a transient failure.
+  // silent = background refresh: do not flash loading skeletons on a transient failure.
   const fetchMarkets = useCallback(async (silent = false) => {
     if (!silent) setMarketsLoading(true);
     try {
       const res = await fetch('/api/earn/parquet/markets');
-      if (res.status === 503) {
-        if (!silent) setNotConfigured(true);
-        return;
-      }
+      if (res.status === 503) return;
       const json = await res.json() as { success: boolean; data?: MarketsResponse; error?: string };
       if (json.success && json.data) {
-        setNotConfigured(false);
         setEnabledMarkets(json.data.enabled);
         setPoolsByMarket((prev) => {
           const next = { ...prev };
           for (const p of json.data!.markets ?? []) next[p.market] = p;
           return next;
         });
-      } else if (!silent) {
-        setNotConfigured(true);
       }
     } catch {
-      if (!silent) setNotConfigured(true);
+      // markets unavailable; MarketGrid shows its own empty state
     } finally {
       if (!silent) setMarketsLoading(false);
     }
@@ -119,26 +111,6 @@ export function EarnPageClient() {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
         <div className="w-5 h-5 rounded-full border-2 border-atelier/30 border-t-atelier animate-spin" />
-      </div>
-    );
-  }
-
-  if (notConfigured) {
-    return (
-      <div className="max-w-5xl mx-auto">
-        <EarnHero />
-        <div className="px-4 py-6 md:px-8">
-          <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] px-5 py-8 text-center">
-            <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-500">
-              Parquet Earn — coming soon
-            </p>
-          </div>
-        </div>
-        <div className="px-4 pb-10 md:px-8">
-          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 leading-relaxed max-w-xl">
-            * Principal at risk. The pool is the counterparty to leveraged traders. Your deposit can lose value if the pool takes losses. Only deposit what you can afford to lose.
-          </p>
-        </div>
       </div>
     );
   }

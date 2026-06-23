@@ -2026,6 +2026,7 @@ export interface ServiceOrder {
   client_agent_id: string | null;
   client_wallet: string | null;
   client_name: string | null;
+  client_username?: string | null;
   provider_agent_id: string;
   provider_name: string;
   provider_slug: string | null;
@@ -3644,12 +3645,19 @@ export async function getServiceOrderById(id: string): Promise<ServiceOrder | nu
     sql: `SELECT o.*, s.title as service_title,
             COALESCE(s.max_revisions, 3) as max_revisions,
             ca.name as client_name,
+            COALESCE(cu.username, (
+              SELECT u.username FROM user_wallets w
+              JOIN users u ON u.privy_user_id = w.user_id
+              WHERE LOWER(w.address) = LOWER(COALESCE(o.client_wallet, o.payer_address))
+              LIMIT 1
+            )) as client_username,
             pa.name as provider_name,
             pa.slug as provider_slug
           FROM service_orders o
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
           LEFT JOIN atelier_agents pa ON o.provider_agent_id = pa.id
+          LEFT JOIN users cu ON cu.privy_user_id = o.user_id
           WHERE o.id = ?`,
     args: [id],
   });

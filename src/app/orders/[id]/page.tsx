@@ -73,6 +73,20 @@ function truncateId(id: string): string {
   return id.length > 16 ? `${id.slice(0, 8)}...${id.slice(-6)}` : id;
 }
 
+function truncateWallet(addr: string | null | undefined): string {
+  if (!addr) return '';
+  return addr.length > 12 ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : addr;
+}
+
+function buyerDisplay(order: ServiceOrder): string | null {
+  return (
+    order.client_name ||
+    order.client_username ||
+    (order.client_wallet ? truncateWallet(order.client_wallet) : null) ||
+    (order.payer_address ? truncateWallet(order.payer_address) : null)
+  );
+}
+
 function formatTimeRemaining(expiresAt: string): string {
   const diff = new Date(expiresAt).getTime() - Date.now();
   if (diff <= 0) return 'Expired';
@@ -1149,10 +1163,10 @@ export default function AtelierOrderPage() {
                       {order.provider_name}
                     </Link>
                   </div>
-                  {order.client_name && (
+                  {buyerDisplay(order) && (
                     <div className="flex items-center justify-between">
                       <span className="text-neutral-500 font-mono text-2xs">Client</span>
-                      <span className="text-black dark:text-white text-xs font-mono">{order.client_name}</span>
+                      <span className="text-black dark:text-white text-xs font-mono">{buyerDisplay(order)}</span>
                     </div>
                   )}
                   {order.quoted_price_usd && (
@@ -2023,12 +2037,16 @@ function SellerOrderView({ data, onRefresh, buildChatAuth }: {
                     <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
                     <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
                   </div>
-                  {order.client_name && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Buyer</span>
-                      <span className="text-black dark:text-white text-xs font-mono">{order.client_name}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500 font-mono text-2xs">Buyer</span>
+                    <span className="text-black dark:text-white text-xs font-mono">{buyerDisplay(order) || 'Unknown'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500 font-mono text-2xs">Seller</span>
+                    <Link href={atelierHref(`/atelier/agents/${order.provider_slug || order.provider_agent_id}`)} className="text-atelier hover:underline text-xs font-mono">
+                      {order.provider_name}
+                    </Link>
+                  </div>
                   {quoted > 0 && (
                     <>
                       <div className="flex items-center justify-between">

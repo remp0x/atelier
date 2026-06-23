@@ -31,6 +31,12 @@
 const CLAWPUMP_API_BASE = process.env.CLAWPUMP_API_BASE || 'https://clawpump.tech';
 const CLAWPUMP_AGENTS_PATH = '/api/v1/agents';
 const CLAWPUMP_LAUNCH_PATH = '/api/v1/launch';
+const CLAWPUMP_SELFFUND_PATH = '/api/v1/launch/self-funded';
+
+// ClawPump's self-funded platform wallet -- the launch-fee destination, confirmed by the partner
+// (2026-06-22). This is NOT the dashboard billing/deposit wallet: that one only loads LLM credits
+// and does NOT pay launches (paying it was the original failure). Stable address, hardcoded.
+const CLAWPUMP_SELFFUND_WALLET = '49CfXAr58cCTGJnYsbm16fEsE5JRpdR8QQP8E1ZinGCq';
 
 /** Mirrors the launch route's error semantics so the catch block can map to HTTP status. */
 export class ClawpumpError extends Error {
@@ -202,6 +208,137 @@ export async function launchTokenOnClawpump(
     txHash,
     pumpUrl,
     creatorWallet: clawpumpAgent.walletAddress,
+    clawpumpAgentId: clawpumpAgent.id,
+  };
+}
+
+export interface ClawpumpSelfFundedInput {
+  name: string;
+  symbol: string;
+  description: string;
+  imageUrl: string;
+  /** The ClawPump agent's display name (required by the self-funded endpoint). */
+  agentName: string;
+  /**
+   * The wallet that pays the launch fee AND receives the 65% creator fees. ClawPump verifies the
+   * fee payment originates from this address, so it MUST equal the wallet `payLaunchFee` pays from
+   * (the Atelier wallet) -- otherwise it returns "Payment verification failed".
+   */
+  payerWallet: string;
+  /**
+   * Pays the self-funded launch fee on-chain (from `payerWallet`) and resolves to the payment's
+   * tx signature. Kept as a callback so this module stays HTTP-only -- the launch route owns the
+   * Atelier keypair / @solana/web3.js.
+   */
+  payLaunchFee: (destination: string, sol: number) => Promise<string>;
+}
+
+/** Self-funded launch config: the platform wallet (fee destination) + the SOL fee amount. */
+function resolveSelfFundConfig(): { wallet: string; sol: number } {
+  const parsed = Number(process.env.CLAWPUMP_SELFFUND_SOL || '0.03');
+  return { wallet: CLAWPUMP_SELFFUND_WALLET, sol: parsed > 0 ? parsed : 0.03 };
+}
+
+/**
+ * Self-funded launch (used once the 3 free sponsored gasless launches are spent). Same Model B
+ * as the sponsored path (dedicated agent per token; token name = agent name), but Atelier pays
+ * ClawPump's launch fee (~0.03 SOL) up front and submits the payment signature.
+ *
+ * Order matters: ClawPump verifies the payment, so we MUST pay before POSTing. That makes a
+ * post-payment failure non-retriable (retrying would pay twice) -- the launch route holds the
+ * lock for manual reconciliation instead of auto-retrying.
+ *
+ * This is now the ONLY launch path (pump.fun direct + the sponsored gasless flow are disabled).
+ *
+ * CONTRACT (confirmed with the partner + verified end-to-end on 2026-06-22, real mint):
+ *   POST /api/v1/launch/self-funded { name, symbol, description, imageUrl, agentId, agentName,
+ *     walletAddress, txSignature } -> { mintAddress, txHash, pumpUrl, ... }.
+ *   - Fee: 0.03 SOL (0.02 creation + 0.01 dev-buy), sent to the platform wallet
+ *     CLAWPUMP_SELFFUND_WALLET within 10 min before the call.
+ *   - walletAddress MUST be the wallet the fee is paid FROM; it also receives the 65% creator
+ *     fees. agentName is required (was the missing field that caused "Validation failed").
+ *   - Limits: name 1-32 chars (no "claw"), symbol 1-10, description 20-500.
+ */
+export async function launchTokenSelfFundedOnClawpump(
+  input: ClawpumpSelfFundedInput,
+): Promise<ClawpumpLaunchResult> {
+  const authHeader = `Bearer ${requireApiKey()}`;
+  const { wallet: feeWallet, sol: feeSol } = resolveSelfFundConfig();
+
+  // ClawPump field limits: name 1-32, description 20-500. Clamp so long agent names/descriptions
+  // don't trip "Validation failed".
+  const name = input.name.slice(0, 32);
+  const agentName = input.agentName.slice(0, 32);
+  const description = input.description.slice(0, 500);
+
+  // 1. Dedicated agent for this token.
+  const clawpumpAgent = await createClawpumpAgent(name, authHeader);
+
+  // 2. Pay the launch fee on-chain BEFORE submitting (ClawPump verifies the signature). A
+  //    payment failure is treated as non-retriable: the transfer may have landed, so we do
+  //    not want an auto-retry to double-spend.
+  let txSignature: string;
+  try {
+    txSignature = await input.payLaunchFee(feeWallet, feeSol);
+  } catch (err) {
+    await deleteClawpumpAgent(clawpumpAgent.id, authHeader);
+    throw new ClawpumpError(
+      `Self-funded launch fee payment failed: ${err instanceof Error ? err.message : String(err)}`,
+      502,
+      false,
+    );
+  }
+
+  // 3. Submit the self-funded launch with the payment proof. The fee is already spent, so every
+  //    failure past this point is non-retriable and the per-launch agent is kept for review.
+  let launchRes: Response;
+  try {
+    launchRes = await fetch(`${CLAWPUMP_API_BASE}${CLAWPUMP_SELFFUND_PATH}`, {
+      method: 'POST',
+      headers: { Authorization: authHeader, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        symbol: input.symbol,
+        description,
+        imageUrl: input.imageUrl,
+        agentId: clawpumpAgent.id,
+        agentName,
+        walletAddress: input.payerWallet,
+        txSignature,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ClawpumpError('ClawPump self-funded launch timed out (fee already paid)', 504, false);
+    }
+    throw new ClawpumpError(
+      `ClawPump self-funded launch request failed (fee already paid): ${err instanceof Error ? err.message : String(err)}`,
+      502,
+      false,
+    );
+  }
+
+  if (!launchRes.ok) {
+    const body = await launchRes.text().catch(() => '');
+    console.error('[clawpump] self-funded launch error:', launchRes.status, body);
+    const detail = detailFromBody(body, `ClawPump self-funded launch failed: ${launchRes.status}`);
+    throw new ClawpumpError(detail, launchRes.status, false);
+  }
+
+  const data = await launchRes.json().catch(() => ({}));
+  const mintAddress: string | undefined = data.mintAddress || data.mint || data.tokenAddress;
+  const txHash: string | undefined = data.txHash || data.tx_hash || data.signature;
+  if (!mintAddress || !txHash) {
+    throw new ClawpumpError('ClawPump self-funded launch response missing mint address / tx signature', 502, false);
+  }
+  const pumpUrl: string = data.pumpUrl || data.url || `https://pump.fun/coin/${mintAddress}`;
+
+  return {
+    mintAddress,
+    txHash,
+    pumpUrl,
+    creatorWallet: input.payerWallet,
     clawpumpAgentId: clawpumpAgent.id,
   };
 }

@@ -2,24 +2,19 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  Keypair,
   PublicKey,
   SystemProgram,
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { PUMP_SDK } from '@pump-fun/pump-sdk';
 import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit } from '@/lib/rateLimit';
-import { uploadToPumpFunIpfs } from '@/lib/pumpfun-ipfs';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
-import { TOKEN_LAUNCH_PROVIDER } from '@/lib/token-economics';
-import { launchTokenOnClawpump, ClawpumpError } from '@/lib/clawpump-client';
-import { getSolPriceUsd } from '@/lib/sol-price';
+import { launchTokenSelfFundedOnClawpump, ClawpumpError, type ClawpumpLaunchResult } from '@/lib/clawpump-client';
 
 export const maxDuration = 300;
 
@@ -29,27 +24,10 @@ const TOKEN_NAME_SUFFIX = ' by Atelier';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
-// Auto top-up of ClawPump's gasless launch-wallet pool. ClawPump's relayer fronts the
-// per-launch gas; under heavy launch volume it drains and /api/v1/launch returns "out of
-// funds". Confirmed with the partner: sending SOL to that wallet directly unblocks the
-// gasless launch (no proof handoff needed). On that error we wire ~$2 from the Atelier
-// wallet to the pool and retry, so the user only ever sees a loader. Tunable via env;
-// disable with CLAWPUMP_AUTO_TOPUP=false. NOTE: spends real SOL, and the pool is shared,
-// so a top-up can be consumed by another launcher front-running -- keep EZko... funded.
-const CLAWPUMP_GASLESS_WALLET = process.env.CLAWPUMP_GASLESS_WALLET?.trim()
-  || 'ZPhALZcwXS2K5TmZ1z7LHF5Xp3p4rYyjJurD8gTA6wW';
-const CLAWPUMP_TOPUP_USD = Number(process.env.CLAWPUMP_TOPUP_USD || '2');
-
-function clawpumpAutoTopUpEnabled(): boolean {
-  return process.env.CLAWPUMP_AUTO_TOPUP !== 'false';
-}
-
-async function topUpClawpumpGasless(): Promise<string> {
-  const solPrice = await getSolPriceUsd().catch(() => 0);
-  // ~$CLAWPUMP_TOPUP_USD of SOL; fall back to a fixed amount if price is unavailable.
-  const sol = solPrice > 0 ? CLAWPUMP_TOPUP_USD / solPrice : 0.015;
+// Send `sol` SOL from the Atelier wallet to a destination and return the confirmed signature.
+// Used to pay ClawPump's self-funded launch fee (~0.03 SOL).
+async function transferSolFromAtelier(destination: string, sol: number): Promise<string> {
   const lamports = Math.max(1, Math.round(sol * 1_000_000_000));
-
   const connection = getServerConnection();
   const payer = getAtelierKeypair();
   const { blockhash } = await connection.getLatestBlockhash('confirmed');
@@ -59,7 +37,7 @@ async function topUpClawpumpGasless(): Promise<string> {
     instructions: [
       SystemProgram.transfer({
         fromPubkey: ATELIER_PUBKEY,
-        toPubkey: new PublicKey(CLAWPUMP_GASLESS_WALLET),
+        toPubkey: new PublicKey(destination),
         lamports,
       }),
     ],
@@ -199,7 +177,7 @@ export async function POST(
     const providedDescription = typeof body.description === 'string' ? body.description.trim() : '';
     const description = providedDescription || (agent.description?.trim() || '');
 
-    if (TOKEN_LAUNCH_PROVIDER === 'clawpump' && description.length < 20) {
+    if (description.length < 20) {
       return NextResponse.json(
         { success: false, error: 'Token description must be at least 20 characters.' },
         { status: 400 },
@@ -239,135 +217,47 @@ export async function POST(
       );
     }
 
-    const imageBlob = new Blob([imageBuffer], { type: matchedType });
+    // ClawPump is the only launch rail (pump.fun direct is disabled). Our 3 free sponsored
+    // gasless launches are spent, so every launch uses the self-funded flow: a dedicated
+    // ClawPump agent (Model B, token name = agent name; ClawPump custodies its creator-of-record
+    // wallet), Atelier pays the ~0.03 SOL launch fee, then submits the payment proof. The fee is
+    // paid before the call, so a post-payment failure is non-retriable (retrying would
+    // double-pay) -- the outer catch holds the lock for manual review instead of releasing it.
+    const lockAcquired = await markTokenLaunchAttempted(agentId);
+    if (!lockAcquired) {
+      return NextResponse.json(
+        { success: false, error: 'A token launch is already in progress or was attempted for this agent.' },
+        { status: 409 },
+      );
+    }
 
-    let mintAddress: string;
-    let txSignature: string;
-    let tokenMode: 'pumpfun' | 'clawpump';
-    let creatorWallet: string;
-    let clawpumpAgentId: string | undefined;
-
-    if (TOKEN_LAUNCH_PROVIDER === 'clawpump') {
-      // Model B: ClawPump enforces one token per dashboard agent, so the adapter creates a
-      // dedicated ClawPump agent (named with the token name) per launch and ClawPump custodies
-      // its creator-of-record wallet. The agent's own payout wallet/chain does not gate the
-      // launch; the token image is the agent's public avatar_url (validated above); the 65%
-      // creator share accrues to the per-agent ClawPump wallet and is distributed off-chain.
-      const lockAcquired = await markTokenLaunchAttempted(agentId);
-      if (!lockAcquired) {
-        return NextResponse.json(
-          { success: false, error: 'A token launch is already in progress or was attempted for this agent.' },
-          { status: 409 },
-        );
-      }
-
-      console.log(`[token-launch] Launching via ClawPump for agent ${agentId}`);
-      let result;
-      try {
-        result = await launchTokenOnClawpump({
-          name: tokenName,
-          symbol,
-          description,
-          imageUrl: tokenImageUrl,
-        });
-      } catch (err) {
-        if (err instanceof ClawpumpError && err.outOfFunds && clawpumpAutoTopUpEnabled()) {
-          // Gasless pool empty -- top it up from the Atelier wallet and retry once.
-          try {
-            console.log('[token-launch] ClawPump gasless pool empty -- topping up from Atelier wallet');
-            const fundSig = await topUpClawpumpGasless();
-            console.log(`[token-launch] topped up ClawPump gasless pool tx=${fundSig}`);
-          } catch (fundErr) {
-            // Top-up failed -- surface ClawPump's original (actionable) message; the
-            // launch minted nothing so the outer catch releases the lock for retry.
-            console.error('[token-launch] gasless top-up failed:', fundErr);
-            throw err;
-          }
-          try {
-            result = await launchTokenOnClawpump({
-              name: tokenName,
-              symbol,
-              description,
-              imageUrl: tokenImageUrl,
-            });
-          } catch (retryErr) {
-            if (retryErr instanceof ClawpumpError && retryErr.retriable === false) {
-              broadcasted = true;
-            }
-            throw retryErr;
-          }
-        } else {
-          // ClawPump tears down its per-launch agent on a rejected call, so those
-          // failures minted nothing and are safe to retry -- leave broadcasted false
-          // so the outer catch releases the lock. Only a non-retriable error (a 200
-          // response with no mint address) holds the lock for manual review.
-          if (err instanceof ClawpumpError && err.retriable === false) {
-            broadcasted = true;
-          }
-          throw err;
-        }
-      }
-      broadcasted = true;
-
-      console.log(`[token-launch] ClawPump launched mint=${result.mintAddress} under clawpumpAgent=${result.clawpumpAgentId} wallet=${result.creatorWallet}`);
-      mintAddress = result.mintAddress;
-      txSignature = result.txHash;
-      tokenMode = 'clawpump';
-      creatorWallet = result.creatorWallet;
-      clawpumpAgentId = result.clawpumpAgentId;
-    } else {
-      console.log(`[token-launch] Uploading metadata to IPFS for agent ${agentId}`);
-      const { metadataUri } = await uploadToPumpFunIpfs(imageBlob, tokenName, symbol, description);
-
-      const connection = getServerConnection();
-      const atelierKeypair = getAtelierKeypair();
-      const mintKeypair = Keypair.generate();
-      const mint = mintKeypair.publicKey;
-
-      console.log(`[token-launch] Creating V2 instruction, mint=${mint.toBase58()}`);
-      const instruction = await PUMP_SDK.createV2Instruction({
-        mint,
+    console.log(`[token-launch] Launching via ClawPump (self-funded) for agent ${agentId}`);
+    let result: ClawpumpLaunchResult;
+    try {
+      result = await launchTokenSelfFundedOnClawpump({
         name: tokenName,
         symbol,
-        uri: metadataUri,
-        creator: ATELIER_PUBKEY,
-        user: ATELIER_PUBKEY,
-        mayhemMode: false,
+        description,
+        imageUrl: tokenImageUrl,
+        agentName: tokenName,
+        // The fee is paid from (and the 65% earnings accrue to) the Atelier wallet; ClawPump
+        // verifies the payment originates from walletAddress, so it must equal the payer.
+        payerWallet: ATELIER_PUBKEY.toBase58(),
+        payLaunchFee: transferSolFromAtelier,
       });
-
-      const { blockhash } = await connection.getLatestBlockhash('confirmed');
-
-      const messageV0 = new TransactionMessage({
-        payerKey: ATELIER_PUBKEY,
-        recentBlockhash: blockhash,
-        instructions: [instruction],
-      }).compileToV0Message();
-
-      const transaction = new VersionedTransaction(messageV0);
-      transaction.sign([atelierKeypair, mintKeypair]);
-
-      const lockAcquired = await markTokenLaunchAttempted(agentId);
-      if (!lockAcquired) {
-        return NextResponse.json(
-          { success: false, error: 'A token launch is already in progress or was attempted for this agent.' },
-          { status: 409 },
-        );
+    } catch (err) {
+      if (err instanceof ClawpumpError && err.retriable === false) {
+        broadcasted = true;
       }
-
-      console.log(`[token-launch] Sending transaction`);
-      txSignature = await connection.sendRawTransaction(transaction.serialize(), {
-        skipPreflight: false,
-        maxRetries: 3,
-      });
-      broadcasted = true;
-
-      console.log(`[token-launch] Polling confirmation for ${txSignature}`);
-      await pollTransactionConfirmation(connection, txSignature, 60_000);
-
-      mintAddress = mint.toBase58();
-      tokenMode = 'pumpfun';
-      creatorWallet = ATELIER_PUBKEY.toBase58();
+      throw err;
     }
+    broadcasted = true;
+
+    console.log(`[token-launch] ClawPump launched mint=${result.mintAddress} under clawpumpAgent=${result.clawpumpAgentId} wallet=${result.creatorWallet}`);
+    const mintAddress = result.mintAddress;
+    const txSignature = result.txHash;
+    const creatorWallet = result.creatorWallet;
+    const clawpumpAgentId = result.clawpumpAgentId;
 
     console.log(`[token-launch] Confirmed. Saving mint=${mintAddress} to DB`);
     const updated = await updateAgentToken(agentId, {
@@ -375,7 +265,7 @@ export async function POST(
       token_name: tokenName,
       token_symbol: symbol,
       token_image_url: tokenImageUrl,
-      token_mode: tokenMode,
+      token_mode: 'clawpump',
       token_creator_wallet: creatorWallet,
       token_tx_hash: txSignature,
       clawpump_agent_id: clawpumpAgentId,
@@ -408,12 +298,6 @@ export async function POST(
       return NextResponse.json(
         { success: false, error: message },
         { status: error.status },
-      );
-    }
-    if (message.includes('PumpFun IPFS upload failed')) {
-      return NextResponse.json(
-        { success: false, error: message },
-        { status: 502 },
       );
     }
     if (message.includes('Transaction failed') || message.includes('confirmation timed out')) {

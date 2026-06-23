@@ -342,3 +342,50 @@ export async function launchTokenSelfFundedOnClawpump(
     clawpumpAgentId: clawpumpAgent.id,
   };
 }
+
+export interface ClawpumpEarnings {
+  /** Cumulative creator-fee share accrued (the agent's 65%), in SOL. */
+  totalEarnedSol: number;
+  /** Cumulative amount ClawPump has already pushed to the creator wallet, in SOL. */
+  totalSentSol: number;
+  /** Accrued but not yet pushed, in SOL. */
+  totalPendingSol: number;
+}
+
+/**
+ * Read a ClawPump agent's creator-fee earnings. ClawPump collects pump.fun creator fees hourly
+ * and pushes the agent's 65% (in SOL) to the wallet supplied at launch (our Atelier wallet); this
+ * reports the running totals so Atelier can forward each agent its share.
+ *   GET /api/agents/{id}/earnings -> { totalEarned, totalSent, totalPending, ... } (SOL).
+ */
+export async function getClawpumpAgentEarnings(clawpumpAgentId: string): Promise<ClawpumpEarnings> {
+  const authHeader = `Bearer ${requireApiKey()}`;
+  let res: Response;
+  try {
+    res = await fetch(`${CLAWPUMP_API_BASE}/api/agents/${encodeURIComponent(clawpumpAgentId)}/earnings`, {
+      headers: { Authorization: authHeader, Accept: 'application/json' },
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new ClawpumpError('ClawPump earnings request timed out', 504);
+    }
+    throw new ClawpumpError(`ClawPump earnings request failed: ${err instanceof Error ? err.message : String(err)}`, 502);
+  }
+
+  const body = await res.text().catch(() => '');
+  if (!res.ok) {
+    throw new ClawpumpError(detailFromBody(body, `ClawPump earnings failed: ${res.status}`), 502);
+  }
+  let data: { totalEarned?: number; totalSent?: number; totalPending?: number };
+  try {
+    data = JSON.parse(body);
+  } catch {
+    throw new ClawpumpError('ClawPump earnings returned a non-JSON response', 502);
+  }
+  return {
+    totalEarnedSol: Number(data.totalEarned) || 0,
+    totalSentSol: Number(data.totalSent) || 0,
+    totalPendingSol: Number(data.totalPending) || 0,
+  };
+}

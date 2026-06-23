@@ -81,6 +81,15 @@ export function TokenLaunchSection({
   const [copied, setCopied] = useState(false);
   const [marketData, setMarketData] = useState<MarketData | null>(null);
 
+  interface ClaimInfo {
+    claimableSol: number;
+    minClaimSol: number;
+    payoutWallet: string | null;
+  }
+  const [claimInfo, setClaimInfo] = useState<ClaimInfo | null>(null);
+  const [claiming, setClaiming] = useState(false);
+  const [claimTxHash, setClaimTxHash] = useState<string | null>(null);
+
   // PumpFun form
   const [name, setName] = useState('');
   const [symbol, setSymbol] = useState('');
@@ -93,6 +102,30 @@ export function TokenLaunchSection({
   const [byotMint, setByotMint] = useState('');
   const [byotName, setByotName] = useState('');
   const [byotSymbol, setByotSymbol] = useState('');
+
+  useEffect(() => {
+    if (!IS_CLAWPUMP || token?.mode !== 'clawpump' || !token?.mint) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const privyToken = await getPrivyAccessToken();
+        const res = await fetch(`/api/agents/${agentId}/token/claim`, {
+          headers: privyToken ? { Authorization: `Bearer ${privyToken}` } : {},
+        });
+        const json = await res.json();
+        if (!cancelled && json.success && json.data) {
+          setClaimInfo({
+            claimableSol: json.data.claimableSol,
+            minClaimSol: json.data.minClaimSol,
+            payoutWallet: json.data.payoutWallet ?? null,
+          });
+        }
+      } catch {
+        // owner not authed / earnings unavailable: leave the claim row hidden
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [agentId, token?.mint, token?.mode]);
 
   useEffect(() => {
     if (!token?.mint) return;
@@ -132,6 +165,33 @@ export function TokenLaunchSection({
       setError(err instanceof Error ? err.message : 'Reset failed');
     } finally {
       setResetting(false);
+    }
+  }
+
+  async function handleClaim() {
+    setClaiming(true);
+    setClaimTxHash(null);
+    try {
+      const privyToken = await getPrivyAccessToken();
+      const authHeaders: Record<string, string> = privyToken ? { Authorization: `Bearer ${privyToken}` } : {};
+      const res = await fetch(`/api/agents/${agentId}/token/claim`, { method: 'POST', headers: authHeaders });
+      const json = await res.json();
+      if (!res.ok || !json.success) return;
+      if (json.data?.txHash) setClaimTxHash(json.data.txHash);
+      // Refresh claimable balance
+      const refreshRes = await fetch(`/api/agents/${agentId}/token/claim`, { headers: authHeaders });
+      const refreshJson = await refreshRes.json();
+      if (refreshJson.success && refreshJson.data) {
+        setClaimInfo({
+          claimableSol: refreshJson.data.claimableSol,
+          minClaimSol: refreshJson.data.minClaimSol,
+          payoutWallet: refreshJson.data.payoutWallet ?? null,
+        });
+      }
+    } catch {
+      // Fail silently -- claim row simply stays as-is
+    } finally {
+      setClaiming(false);
     }
   }
 
@@ -212,6 +272,50 @@ export function TokenLaunchSection({
             </a>
           </div>
         </div>
+
+        {IS_CLAWPUMP && token.mode === 'clawpump' && claimInfo !== null && (
+          <div className="px-5 pb-4 border-t border-atelier/10 pt-3 space-y-2">
+            <p className="text-2xs text-neutral-500 font-mono">
+              Launched via {providerLabel}. You earn {agentFeePct}% of your token&apos;s creator fees.
+            </p>
+            {claimInfo.payoutWallet === null ? (
+              <p className="text-2xs text-neutral-500 font-mono">
+                Add a payout wallet to your profile to receive creator fees.
+              </p>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span className="text-2xs font-mono text-neutral-400">
+                  Claimable:{' '}
+                  <span className="text-neutral-200">{claimInfo.claimableSol.toFixed(4)} SOL</span>
+                </span>
+                <button
+                  onClick={handleClaim}
+                  disabled={claiming || claimInfo.claimableSol < claimInfo.minClaimSol}
+                  className="px-2.5 py-1 rounded border border-atelier/40 text-atelier text-2xs font-mono font-medium transition-all duration-200 hover:bg-atelier/10 hover:border-atelier/60 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5"
+                >
+                  {claiming && (
+                    <span className="w-3 h-3 border border-atelier border-t-transparent rounded-full animate-spin inline-block" />
+                  )}
+                  {claiming
+                    ? 'Claiming...'
+                    : claimInfo.claimableSol < claimInfo.minClaimSol
+                      ? 'Nothing to claim yet'
+                      : 'Claim'}
+                </button>
+                {claimTxHash && (
+                  <a
+                    href={`https://solscan.io/tx/${claimTxHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-2xs font-mono text-atelier hover:underline"
+                  >
+                    View transaction
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }

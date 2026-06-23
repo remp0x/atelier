@@ -4148,6 +4148,42 @@ export async function getPayoutsForWallet(wallet: string): Promise<{
   }[];
 }
 
+/** Lamports already paid out or in-flight for an agent (excludes failed) -- the idempotency guard. */
+export async function getReservedFeeLamportsForAgent(agentId: string): Promise<number> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: "SELECT COALESCE(SUM(amount_lamports), 0) AS total FROM creator_fee_payouts WHERE agent_id = ? AND status != 'failed'",
+    args: [agentId],
+  });
+  return Number((result.rows[0] as unknown as { total: number | bigint }).total) || 0;
+}
+
+/** Mark a payout failed so its reserved amount is recomputed (and retried) on the next run. */
+export async function failFeePayout(id: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: "UPDATE creator_fee_payouts SET status = 'failed' WHERE id = ?",
+    args: [id],
+  });
+}
+
+/** Agents that launched a ClawPump token -- candidates for creator-fee payouts. */
+export async function listClawpumpFeeAgents(): Promise<Array<{
+  id: string; clawpump_agent_id: string | null; token_mint: string | null;
+  payout_wallet: string | null; payout_chain: string | null; owner_wallet: string | null;
+}>> {
+  await initAtelierDb();
+  const result = await atelierClient.execute(
+    `SELECT id, clawpump_agent_id, token_mint, payout_wallet, payout_chain, owner_wallet
+       FROM atelier_agents
+      WHERE clawpump_agent_id IS NOT NULL AND token_mint IS NOT NULL AND token_mode = 'clawpump'`,
+  );
+  return result.rows as unknown as Array<{
+    id: string; clawpump_agent_id: string | null; token_mint: string | null;
+    payout_wallet: string | null; payout_chain: string | null; owner_wallet: string | null;
+  }>;
+}
+
 export async function getTotalSwept(): Promise<number> {
   await initAtelierDb();
   const result = await atelierClient.execute('SELECT COALESCE(SUM(amount_lamports), 0) as total FROM creator_fee_sweeps');

@@ -722,6 +722,8 @@ export async function initAtelierDb(): Promise<void> {
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN payout_address_base TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN privy_evm_wallet_id TEXT'); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN privy_solana_wallet_id TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN withdraw_address_solana TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE atelier_agents ADD COLUMN withdraw_address_base TEXT'); } catch (_e) { }
 
   try { await atelierClient.execute("ALTER TABLE creator_fee_payouts ADD COLUMN chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
 
@@ -1906,6 +1908,8 @@ export interface AtelierAgent {
   payout_address_base: string | null;
   privy_evm_wallet_id: string | null;
   privy_solana_wallet_id: string | null;
+  withdraw_address_solana: string | null;
+  withdraw_address_base: string | null;
   partner_badge: string | null;
   token_mint: string | null;
   token_name: string | null;
@@ -2420,6 +2424,29 @@ export async function setAgentServerWallets(agentId: string, wallets: {
       wallets.solanaAddress ?? null,
       agentId,
     ],
+  });
+}
+
+export async function setAgentWithdrawAddress(agentId: string, addresses: {
+  solana?: string | null;
+  base?: string | null;
+}): Promise<void> {
+  await initAtelierDb();
+  const sets: string[] = [];
+  const args: (string | null)[] = [];
+  if (addresses.solana !== undefined) {
+    sets.push('withdraw_address_solana = ?');
+    args.push(addresses.solana);
+  }
+  if (addresses.base !== undefined) {
+    sets.push('withdraw_address_base = ?');
+    args.push(addresses.base);
+  }
+  if (sets.length === 0) return;
+  args.push(agentId);
+  await atelierClient.execute({
+    sql: `UPDATE atelier_agents SET ${sets.join(', ')} WHERE id = ?`,
+    args,
   });
 }
 

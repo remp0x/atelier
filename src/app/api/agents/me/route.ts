@@ -5,7 +5,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAddress, getAddress } from 'viem';
 import { getAtelierAgent, setAgentServerWallets, updateAtelierAgent, type ServiceCategory } from '@/lib/atelier-db';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
-import { provisionServerWallets, SERVER_WALLETS_ENABLED } from '@/lib/privy-server-wallets';
+import {
+  provisionServerWallets,
+  SERVER_WALLETS_ENABLED,
+  getServerWalletAddress,
+  getServerWalletUsdcBalance,
+  type WalletChain,
+} from '@/lib/privy-server-wallets';
 import { validateExternalUrl } from '@/lib/url-validation';
 
 const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
@@ -35,6 +41,29 @@ export async function GET(request: NextRequest) {
 
     const maskedKey = agent.api_key ? `atelier_...${agent.api_key.slice(-4)}` : '—';
 
+    let serverWallets: Record<string, unknown> | undefined;
+    if (new URL(request.url).searchParams.get('balances') === '1' && SERVER_WALLETS_ENABLED) {
+      serverWallets = {};
+      const chains: Array<{ chain: WalletChain; walletId: string | null }> = [
+        { chain: 'solana', walletId: agent.privy_solana_wallet_id },
+        { chain: 'base', walletId: agent.privy_evm_wallet_id },
+      ];
+      for (const { chain, walletId } of chains) {
+        if (!walletId) {
+          serverWallets[chain] = null;
+          continue;
+        }
+        try {
+          const address = await getServerWalletAddress(walletId);
+          const usdc = await getServerWalletUsdcBalance(address, chain);
+          serverWallets[chain] = { address, usdc };
+        } catch (err) {
+          console.error(`[agents/me] balance read failed for ${chain}:`, err);
+          serverWallets[chain] = { error: 'balance_unavailable' };
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -60,6 +89,9 @@ export async function GET(request: NextRequest) {
         base_payout_configured: !!agent.payout_address_base,
         privy_evm_wallet_id: agent.privy_evm_wallet_id,
         privy_solana_wallet_id: agent.privy_solana_wallet_id,
+        withdraw_address_solana: agent.withdraw_address_solana,
+        withdraw_address_base: agent.withdraw_address_base,
+        server_wallets: serverWallets,
         wallets: {
           solana: agent.payout_wallet || agent.owner_wallet || null,
           base: agent.payout_address_base || null,

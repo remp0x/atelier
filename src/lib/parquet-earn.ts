@@ -52,6 +52,16 @@ const CATEGORY_TICKERS: Record<string, string[]> = {
 
 const ZERO = BigInt(0);
 
+// Parquet's pool-program upgrade grew CategoryPool from 264 to 298 bytes by
+// appending trailing fields (credit accounts). The SDK decoder -- through 0.2.8
+// -- still asserts an exact 264-byte length and throws on anything longer, so we
+// hand it only the stable leading prefix. Every field Earn reads lives there.
+const CATEGORY_POOL_LEN = 264;
+
+function decodeCategoryPoolPrefix(data: Uint8Array): ReturnType<typeof decodeCategoryPool> {
+  return decodeCategoryPool(data.length > CATEGORY_POOL_LEN ? data.slice(0, CATEGORY_POOL_LEN) : data);
+}
+
 export interface ParquetEarnConfig {
   poolProgramId: PublicKey;
   usdcMint: PublicKey;
@@ -275,7 +285,7 @@ export async function readPoolHealth(category?: string, connection?: Connection)
 
   const info = await conn.getAccountInfo(accts.categoryPool);
   if (!info) throw new Error(`category pool ${accts.categoryPool.toBase58()} not found on-chain`);
-  const cp = decodeCategoryPool(info.data);
+  const cp = decodeCategoryPoolPrefix(info.data);
   const lpMint = await getMint(conn, accts.lpMint);
 
   return {
@@ -339,7 +349,7 @@ export async function readEnabledPoolHealths(
     const pInfo = poolInfos[i];
     if (!pInfo) return;
     try {
-      const cp = decodeCategoryPool(pInfo.data);
+      const cp = decodeCategoryPoolPrefix(pInfo.data);
       const mInfo = mintInfos[i];
       out.set(c, {
         totalUsdc: BigInt(cp.totalUsdc.toString()),

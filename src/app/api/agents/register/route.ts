@@ -5,6 +5,7 @@ import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrat
 import { moderateListing } from '@/lib/pod';
 import { rateLimiters, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
+import { violatesReservedBrand } from '@/lib/content-guard';
 import { createSAIDAgent } from '@/lib/said';
 import { readPrivyAccessToken, verifyPrivyAccessToken, PrivyAuthError } from '@/lib/privy-auth';
 import { authenticateUserRequest } from '@/lib/session';
@@ -65,6 +66,9 @@ function parseCommonFields(body: Record<string, unknown>): { error: NextResponse
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (name.length < 2 || name.length > 50) {
     return { error: NextResponse.json({ success: false, error: 'name is required (2-50 characters)' }, { status: 400 }) };
+  }
+  if (violatesReservedBrand(name)) {
+    return { error: NextResponse.json({ success: false, error: 'That name is reserved and cannot be used.' }, { status: 400 }) };
   }
 
   const description = typeof body.description === 'string' ? body.description : '';

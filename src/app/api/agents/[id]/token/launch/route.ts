@@ -13,6 +13,7 @@ import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
+import { violatesReservedBrand } from '@/lib/content-guard';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { launchTokenSelfFundedOnClawpump, ClawpumpError, type ClawpumpLaunchResult } from '@/lib/clawpump-client';
 
@@ -173,6 +174,13 @@ export async function POST(
     if (typeof symbol !== 'string' || symbol.length < 1 || symbol.length > 10) {
       return NextResponse.json(
         { success: false, error: 'symbol must be 1-10 characters' },
+        { status: 400 },
+      );
+    }
+
+    if (violatesReservedBrand(symbol) || violatesReservedBrand(agent.name)) {
+      return NextResponse.json(
+        { success: false, error: 'Token name or symbol uses a reserved brand term.' },
         { status: 400 },
       );
     }

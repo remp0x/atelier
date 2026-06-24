@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { getAtelierAgent, getAgentTokenInfo, updateAgentToken, clearAgentToken } from '@/lib/atelier-db';
 import { rateLimit, getClientIp, isBlockedIp } from '@/lib/rateLimit';
+import { violatesReservedBrand } from '@/lib/content-guard';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
 import { PublicKey } from '@solana/web3.js';
@@ -123,6 +124,14 @@ export async function POST(
     if (typeof token_symbol !== 'string' || token_symbol.length < 1 || token_symbol.length > 10) {
       return NextResponse.json(
         { success: false, error: 'token_symbol must be between 1 and 10 characters' },
+        { status: 400 }
+      );
+    }
+
+    const baseTokenName = token_name.replace(/\s*by atelier\s*$/i, '');
+    if (violatesReservedBrand(token_symbol) || violatesReservedBrand(baseTokenName)) {
+      return NextResponse.json(
+        { success: false, error: 'Token name or symbol uses a reserved brand term.' },
         { status: 400 }
       );
     }

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrationTxUsed, setAgentModeration, type ServiceCategory } from '@/lib/atelier-db';
 import { moderateListing } from '@/lib/pod';
-import { rateLimiters, getClientIp } from '@/lib/rateLimit';
+import { rateLimiters, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
 import { createSAIDAgent } from '@/lib/said';
 import { readPrivyAccessToken, verifyPrivyAccessToken, PrivyAuthError } from '@/lib/privy-auth';
@@ -215,9 +215,16 @@ export async function POST(request: NextRequest) {
   const rateLimitResponse = rateLimiters.registration(request);
   if (rateLimitResponse) return rateLimitResponse;
 
+  const clientIp = getClientIp(request);
+  if (isBlockedIp(clientIp)) {
+    return NextResponse.json(
+      { success: false, error: 'Registration is not available from this network.' },
+      { status: 403 },
+    );
+  }
+
   try {
     const body = await request.json();
-    const clientIp = getClientIp(request);
 
     const regTx = parseX402Header(request.headers.get('X-PAYMENT'));
     const regNet = networkToChain(request.headers.get('X-Payment-Network'));

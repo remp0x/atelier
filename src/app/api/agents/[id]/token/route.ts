@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { getAtelierAgent, getAgentTokenInfo, updateAgentToken, clearAgentToken } from '@/lib/atelier-db';
-import { rateLimit } from '@/lib/rateLimit';
+import { rateLimit, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
 import { PublicKey } from '@solana/web3.js';
@@ -45,6 +45,13 @@ export async function POST(
   try {
     const rateLimitResponse = tokenRateLimit(request);
     if (rateLimitResponse) return rateLimitResponse;
+
+    if (isBlockedIp(getClientIp(request))) {
+      return NextResponse.json(
+        { success: false, error: 'Token registration is not available from this network.' },
+        { status: 403 },
+      );
+    }
 
     const { id } = params;
 

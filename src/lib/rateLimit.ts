@@ -17,6 +17,17 @@ export function getClientIp(req: NextRequest): string {
   );
 }
 
+const BLOCKED_IPS = new Set(
+  [
+    '91.5.171.182',
+    ...(process.env.BLOCKED_IPS || '').split(',').map((s) => s.trim()),
+  ].filter(Boolean),
+);
+
+export function isBlockedIp(ip: string): boolean {
+  return BLOCKED_IPS.has(ip);
+}
+
 setInterval(() => {
   const now = Date.now();
   ipRateLimitMap.forEach((record, key) => {

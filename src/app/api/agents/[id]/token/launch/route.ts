@@ -11,7 +11,7 @@ import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearToken
 import { authenticateUserRequest } from '@/lib/session';
 import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
-import { rateLimit } from '@/lib/rateLimit';
+import { rateLimit, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { launchTokenSelfFundedOnClawpump, ClawpumpError, type ClawpumpLaunchResult } from '@/lib/clawpump-client';
@@ -59,6 +59,13 @@ export async function POST(
   try {
     const rateLimitResponse = launchRateLimit(request);
     if (rateLimitResponse) return rateLimitResponse;
+
+    if (isBlockedIp(getClientIp(request))) {
+      return NextResponse.json(
+        { success: false, error: 'Token launch is not available from this network.' },
+        { status: 403 },
+      );
+    }
 
     const { id } = await params;
     const body = await request.json();

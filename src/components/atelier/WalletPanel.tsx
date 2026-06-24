@@ -2,17 +2,32 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import Image from 'next/image';
-import { useExportWallet as useExportEvmWallet, useCreateWallet } from '@privy-io/react-auth';
+import { useExportWallet as useExportEvmWallet, useCreateWallet, useWallets, useSendTransaction } from '@privy-io/react-auth';
 import { useFundWallet as useEvmFundWallet } from '@privy-io/react-auth';
 import {
   useExportWallet as useExportSolanaWallet,
   useFundWallet as useSolanaFundWallet,
   useSolanaFundingPlugin,
   useCreateWallet as useCreateSolanaWallet,
+  useWallets as useSolanaWallets,
+  useSignAndSendTransaction,
 } from '@privy-io/react-auth/solana';
+import { Connection, PublicKey, Transaction } from '@solana/web3.js';
+import {
+  getAssociatedTokenAddress,
+  getAccount,
+  createTransferInstruction,
+  createAssociatedTokenAccountInstruction,
+  TokenAccountNotFoundError,
+  TokenInvalidAccountOwnerError,
+} from '@solana/spl-token';
+import { encodeFunctionData, erc20Abi, isAddress, parseUnits } from 'viem';
+import bs58 from 'bs58';
 import { base } from 'viem/chains';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
+import { USDC_MINT } from '@/lib/solana-pay';
+import { USDC_BASE_ADDRESS } from '@/lib/base-constants';
 import { ChainLogo } from '@/components/atelier/ChainBadge';
 import { useEmbeddedWallets } from '@/hooks/use-embedded-wallets';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
@@ -25,6 +40,9 @@ import {
 } from '@/lib/analytics';
 
 gsap.registerPlugin(useGSAP);
+
+const SOLANA_RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 function middleEllipsis(address: string, keepEach = 8): string {
   if (address.length <= keepEach * 2 + 3) return address;
@@ -64,6 +82,287 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
+type SendState = 'idle' | 'sending' | 'done' | 'error';
+
+interface SendModalProps {
+  chain: 'base' | 'solana';
+  balance: number;
+  senderAddress: string;
+  onClose: () => void;
+  onSuccess: () => void;
+  sendSolana: (to: string, amountUsd: number) => Promise<string>;
+  sendBase: (to: string, amountUsd: number) => Promise<string>;
+}
+
+function SendModal({
+  chain,
+  balance,
+  onClose,
+  onSuccess,
+  sendSolana,
+  sendBase,
+}: SendModalProps) {
+  const [to, setTo] = useState('');
+  const [amount, setAmount] = useState('');
+  const [state, setState] = useState<SendState>('idle');
+  const [statusMsg, setStatusMsg] = useState('');
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  const amountNum = parseFloat(amount);
+  const toTrimmed = to.trim();
+
+  const addressValid =
+    chain === 'solana'
+      ? SOL_ADDR_RE.test(toTrimmed)
+      : isAddress(toTrimmed);
+
+  const amountValid = !Number.isNaN(amountNum) && amountNum > 0 && amountNum <= balance;
+  const canSend = addressValid && amountValid && state === 'idle';
+
+  const txUrl =
+    txHash
+      ? chain === 'solana'
+        ? `https://solscan.io/tx/${txHash}`
+        : `https://basescan.org/tx/${txHash}`
+      : null;
+
+  const handleMax = () => {
+    setAmount(balance > 0 ? balance.toFixed(6) : '');
+    setErrMsg(null);
+  };
+
+  const handleSend = async () => {
+    if (!canSend) return;
+    setErrMsg(null);
+    setTxHash(null);
+    setState('sending');
+    setStatusMsg('Building transaction...');
+    try {
+      let hash: string;
+      if (chain === 'solana') {
+        setStatusMsg('Sign the transaction in your wallet...');
+        hash = await sendSolana(toTrimmed, amountNum);
+      } else {
+        setStatusMsg('Confirm in your wallet...');
+        hash = await sendBase(toTrimmed, amountNum);
+      }
+      setTxHash(hash);
+      setState('done');
+      setStatusMsg(`Sent $${amountNum.toFixed(2)} USDC`);
+      onSuccess();
+    } catch (e) {
+      setState('error');
+      setErrMsg(e instanceof Error ? e.message : 'Send failed');
+      setState('idle');
+    }
+  };
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && state === 'idle') onClose();
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [state, onClose]);
+
+  const chainLabel = chain === 'base' ? 'Base' : 'Solana';
+  const addrPlaceholder = chain === 'solana' ? 'Base58 address (e.g. 7xKX...AsU)' : '0x address (Base mainnet)';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      onClick={() => { if (state === 'idle') onClose(); }}
+    >
+      <div className="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" />
+      <div
+        className="relative bg-white dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-xl w-full max-w-md m-4 p-6 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <ChainLogo chain={chain} size={18} />
+            <h2 className="font-display font-bold text-base text-black dark:text-white">
+              Send USDC on {chainLabel}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={state === 'sending'}
+            aria-label="Close"
+            className="text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 disabled:opacity-40 transition-colors cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block font-mono text-[10px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-500 mb-1.5">
+              Recipient address
+            </label>
+            <input
+              value={to}
+              onChange={(e) => { setTo(e.target.value); setErrMsg(null); }}
+              placeholder={addrPlaceholder}
+              disabled={state === 'sending'}
+              className="w-full px-3 py-2.5 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-xs font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier transition-colors disabled:opacity-50"
+            />
+            {toTrimmed.length > 0 && !addressValid && (
+              <p className="font-mono text-[10px] text-red-500 mt-1">
+                Invalid {chainLabel} address
+              </p>
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="font-mono text-[10px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-500">
+                Amount (USDC)
+              </label>
+              <div className="flex items-center gap-1.5">
+                <span className="font-mono text-[10px] text-gray-400 dark:text-neutral-500 tabular-nums">
+                  Balance: <span className="text-black dark:text-white">${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleMax}
+                  disabled={state === 'sending' || balance <= 0}
+                  className="h-5 px-1.5 rounded font-mono text-[10px] text-atelier border border-atelier/30 hover:bg-atelier/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  Max
+                </button>
+              </div>
+            </div>
+            <div className="relative">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[13px] text-gray-400 dark:text-neutral-600">$</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(e) => { setAmount(e.target.value); setErrMsg(null); }}
+                placeholder="0.00"
+                disabled={state === 'sending'}
+                aria-label="Amount to send in USDC"
+                className="w-full h-10 pl-6 pr-3 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier disabled:opacity-50 transition-colors"
+              />
+            </div>
+            {!Number.isNaN(amountNum) && amountNum > balance && balance > 0 && (
+              <p className="font-mono text-[10px] text-red-500 mt-1">Exceeds balance</p>
+            )}
+          </div>
+
+          {chain === 'base' && (
+            <div className="flex items-start gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+              <svg className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+              </svg>
+              <p className="font-mono text-[10px] text-blue-400 leading-snug">
+                Gas is sponsored. If the transaction fails with an insufficient ETH error, fund a small amount of ETH to your Base wallet for gas.
+              </p>
+            </div>
+          )}
+
+          {state === 'sending' && (
+            <div
+              role="status"
+              className="flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] bg-atelier/10 text-atelier"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span>{statusMsg}</span>
+            </div>
+          )}
+
+          {state === 'done' && txHash && (
+            <div
+              role="status"
+              className="flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              <span className="truncate">
+                {statusMsg}{' '}
+                {txUrl && (
+                  <a
+                    href={txUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-emerald-500 transition-colors"
+                  >
+                    View tx
+                  </a>
+                )}
+              </span>
+            </div>
+          )}
+
+          {errMsg && (
+            <div
+              role="alert"
+              className="flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] bg-red-500/10 text-red-500 dark:text-red-400"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <span className="break-words">{errMsg}</span>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            {state === 'done' ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full py-2.5 rounded-lg font-mono text-sm border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={state === 'sending'}
+                  className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 font-mono text-sm text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSend()}
+                  disabled={!canSend}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-lg font-mono text-sm font-medium bg-atelier text-white hover:bg-atelier-bright disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-colors cursor-pointer"
+                >
+                  {state === 'sending' ? (
+                    <>
+                      <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Sending...
+                    </>
+                  ) : (
+                    'Send'
+                  )}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface WalletCardProps {
   chain: 'base' | 'solana';
   address: string;
@@ -71,6 +370,7 @@ interface WalletCardProps {
   balanceLoading: boolean;
   onFund: () => Promise<void>;
   onExport: () => Promise<void>;
+  onSend: () => void;
 }
 
 function WalletCard({
@@ -80,6 +380,7 @@ function WalletCard({
   balanceLoading,
   onFund,
   onExport,
+  onSend,
 }: WalletCardProps) {
   const [funding, setFunding] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -141,7 +442,6 @@ function WalletCard({
     });
   }, [balance, balanceLoading]);
 
-
   return (
     <div
       data-wallet-card
@@ -153,7 +453,7 @@ function WalletCard({
           <ChainLogo chain={chain} size={18} />
         </span>
 
-        {/* Address block -- the hero */}
+        {/* Address block */}
         <div className="flex-1 min-w-0">
           <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500 mb-1">
             {chainLabel}
@@ -163,7 +463,6 @@ function WalletCard({
               className="font-mono text-[13px] text-black dark:text-white leading-tight truncate"
               title={address}
             >
-              {/* Show more chars on wider screens via CSS -- middle ellipsis in JS for mobile */}
               <span className="sm:hidden">{middleEllipsis(address, 6)}</span>
               <span className="hidden sm:inline">{middleEllipsis(address, 10)}</span>
             </span>
@@ -212,6 +511,17 @@ function WalletCard({
               Fund
             </>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={onSend}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md font-mono text-[11px] border border-gray-200 dark:border-neutral-800 text-gray-500 dark:text-neutral-500 hover:border-gray-300 dark:hover:border-neutral-700 hover:text-gray-700 dark:hover:text-neutral-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/40 transition-colors cursor-pointer"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+          </svg>
+          Send
         </button>
 
         <button
@@ -560,12 +870,21 @@ export function WalletPanel() {
       }
     })();
   }, [ready, evmAddress, solanaAddress, createEvmWallet, createSolanaWallet]);
+
   const balances = useUsdcBalances();
 
   const { exportWallet: exportEvm } = useExportEvmWallet();
   const { exportWallet: exportSol } = useExportSolanaWallet();
   const { fundWallet: fundEvmWallet } = useEvmFundWallet();
   const { fundWallet: fundSolWallet } = useSolanaFundWallet();
+
+  // Send hooks
+  const { wallets: privyEvmWallets } = useWallets();
+  const { wallets: privySolWallets } = useSolanaWallets();
+  const { sendTransaction: evmSendTransaction } = useSendTransaction();
+  const { signAndSendTransaction: solSignAndSend } = useSignAndSendTransaction();
+
+  const [sendChain, setSendChain] = useState<'base' | 'solana' | null>(null);
 
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -596,6 +915,87 @@ export function WalletPanel() {
     trackWalletKeyExported({ chain: 'solana' });
     await exportSol();
   }, [exportSol]);
+
+  const sendSolanaUsdc = useCallback(async (to: string, amountUsd: number): Promise<string> => {
+    if (!solanaAddress) throw new Error('No Solana wallet available');
+    const embeddedSol = privySolWallets.find((w) => w.address === solanaAddress);
+    if (!embeddedSol) throw new Error('Embedded Solana wallet not available');
+
+    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+    const fromPubkey = new PublicKey(solanaAddress);
+    const toPubkey = new PublicKey(to);
+
+    const [whole, frac = ''] = String(amountUsd).split('.');
+    const padded = (frac + '000000').slice(0, 6);
+    const lamports = BigInt(whole) * BigInt(1_000_000) + BigInt(padded);
+
+    const senderAta = await getAssociatedTokenAddress(USDC_MINT, fromPubkey);
+    const recipientAta = await getAssociatedTokenAddress(USDC_MINT, toPubkey);
+
+    try {
+      const senderAccount = await getAccount(connection, senderAta);
+      if (senderAccount.amount < lamports) {
+        const have = Number(senderAccount.amount) / 1_000_000;
+        throw new Error(`Insufficient USDC. Need $${amountUsd.toFixed(2)}, have $${have.toFixed(2)}`);
+      }
+    } catch (err) {
+      if (err instanceof TokenAccountNotFoundError || err instanceof TokenInvalidAccountOwnerError) {
+        throw new Error('No USDC in this wallet. Fund it first.');
+      }
+      throw err;
+    }
+
+    const tx = new Transaction();
+    const recipientAtaInfo = await connection.getAccountInfo(recipientAta);
+    if (!recipientAtaInfo) {
+      tx.add(createAssociatedTokenAccountInstruction(fromPubkey, recipientAta, toPubkey, USDC_MINT));
+    }
+    tx.add(createTransferInstruction(senderAta, recipientAta, fromPubkey, lamports));
+
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = fromPubkey;
+
+    const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
+    const result = await solSignAndSend({
+      transaction: new Uint8Array(serialized),
+      wallet: embeddedSol,
+      chain: 'solana:mainnet',
+      options: { sponsor: true },
+    });
+    const sig = bs58.encode(result.signature);
+
+    for (let i = 0; i < 40; i++) {
+      const { value } = await connection.getSignatureStatuses([sig]);
+      const status = value[0];
+      if (status) {
+        if (status.err) throw new Error(`Transaction failed on-chain: ${JSON.stringify(status.err)}`);
+        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+          return sig;
+        }
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+    }
+    return sig;
+  }, [solanaAddress, privySolWallets, solSignAndSend]);
+
+  const sendBaseUsdc = useCallback(async (to: string, amountUsd: number): Promise<string> => {
+    if (!evmAddress) throw new Error('No Base wallet available');
+    const embedded = privyEvmWallets.find((w) => w.walletClientType === 'privy');
+    if (!embedded) throw new Error('Embedded Base wallet not available');
+
+    const data = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: 'transfer',
+      args: [to as `0x${string}`, parseUnits(amountUsd.toFixed(6), 6)],
+    });
+
+    const { hash } = await evmSendTransaction(
+      { to: USDC_BASE_ADDRESS, data, chainId: 8453, value: BigInt(0) },
+      { address: evmAddress, sponsor: true },
+    );
+    return hash;
+  }, [evmAddress, privyEvmWallets, evmSendTransaction]);
 
   // Entrance stagger animation
   useGSAP(
@@ -636,6 +1036,9 @@ export function WalletPanel() {
     },
     { scope: panelRef },
   );
+
+  const activeSendBalance = sendChain === 'base' ? balances.base : balances.solana;
+  const activeSendAddress = sendChain === 'base' ? (evmAddress ?? '') : (solanaAddress ?? '');
 
   return (
     <div ref={panelRef} className="space-y-6">
@@ -685,6 +1088,7 @@ export function WalletPanel() {
             balanceLoading={balances.loading}
             onFund={handleFundBase}
             onExport={handleExportEvm}
+            onSend={() => setSendChain('base')}
           />
         ) : (
           <PreparingCard chain="base" />
@@ -698,6 +1102,7 @@ export function WalletPanel() {
             balanceLoading={balances.loading}
             onFund={handleFundSolana}
             onExport={handleExportSol}
+            onSend={() => setSendChain('solana')}
           />
         ) : (
           <PreparingCard chain="solana" />
@@ -716,6 +1121,20 @@ export function WalletPanel() {
       <div data-wallet-footer className="pt-2 border-t border-gray-200 dark:border-neutral-800/50">
         <WalletDisclosure />
       </div>
+
+      {sendChain && (
+        <SendModal
+          chain={sendChain}
+          balance={activeSendBalance}
+          senderAddress={activeSendAddress}
+          onClose={() => setSendChain(null)}
+          onSuccess={() => {
+            setSendChain(null);
+          }}
+          sendSolana={sendSolanaUsdc}
+          sendBase={sendBaseUsdc}
+        />
+      )}
     </div>
   );
 }

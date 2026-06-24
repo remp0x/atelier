@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { isAddress } from 'viem';
 import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { atelierHref } from '@/lib/atelier-paths';
@@ -11,6 +12,14 @@ import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import type { AtelierAgent, Service, ServiceOrder, OrderStatus, ServiceCategory, ServicePriceType } from '@/lib/atelier-db';
 import { SUGGESTED_MAX_PRICE_USD } from '@/components/atelier/constants'
 import { badgeLabelForMode } from '@/lib/token-economics';
+
+const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+type ServerWalletInfo = { address: string; usdc: number } | null | { error: string };
+interface ServerWallets {
+  solana: ServerWalletInfo;
+  base: ServerWalletInfo;
+}
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
   pending_quote: 'Pending Quote',
@@ -157,6 +166,10 @@ function DashboardContent() {
 
   const [showLinkAgent, setShowLinkAgent] = useState(false);
 
+  const [serverWallets, setServerWallets] = useState<ServerWallets | null>(null);
+  const [serverWalletsLoading, setServerWalletsLoading] = useState(false);
+  const [showServerWalletSend, setShowServerWalletSend] = useState<'solana' | 'base' | null>(null);
+
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -211,6 +224,30 @@ function DashboardContent() {
     const agent = agents.find(a => a.id === selectedAgent);
     return agent?.api_key ?? null;
   })();
+
+  useEffect(() => {
+    if (!activeApiKey) {
+      setServerWallets(null);
+      return;
+    }
+    setServerWalletsLoading(true);
+    fetch('/api/agents/me?balances=1', {
+      headers: { Authorization: `Bearer ${activeApiKey}` },
+    })
+      .then((r) => r.json())
+      .then((json: { success: boolean; data?: { server_wallets?: { solana?: ServerWalletInfo; base?: ServerWalletInfo } }; error?: string }) => {
+        if (json.success && json.data?.server_wallets) {
+          setServerWallets({
+            solana: json.data.server_wallets.solana ?? null,
+            base: json.data.server_wallets.base ?? null,
+          });
+        } else {
+          setServerWallets(null);
+        }
+      })
+      .catch(() => setServerWallets(null))
+      .finally(() => setServerWalletsLoading(false));
+  }, [activeApiKey]);
 
   const copyApiKey = (key: string, agentId: string) => {
     navigator.clipboard.writeText(key);
@@ -660,6 +697,64 @@ function DashboardContent() {
                 </div>
               </section>
 
+              {/* Server Wallet */}
+              {activeApiKey && (serverWalletsLoading || serverWallets) && (() => {
+                const hasSolana = serverWallets?.solana && !('error' in serverWallets.solana) && 'address' in serverWallets.solana;
+                const hasBase = serverWallets?.base && !('error' in serverWallets.base) && 'address' in serverWallets.base;
+                if (!serverWalletsLoading && !hasSolana && !hasBase) return null;
+                return (
+                  <section>
+                    <div className="flex items-center gap-3 mb-4">
+                      <h3 className="text-base font-bold text-black dark:text-white font-display">Server Wallet</h3>
+                      <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 bg-gray-100 dark:bg-neutral-900 px-2 py-0.5 rounded-full">custodial</span>
+                    </div>
+                    {serverWalletsLoading ? (
+                      <div className="h-16 rounded-xl bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 animate-pulse" />
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {(['solana', 'base'] as const).map((chain) => {
+                          const entry = serverWallets?.[chain];
+                          if (!entry || 'error' in entry) return null;
+                          if (!('address' in entry)) return null;
+                          const wallet = entry as { address: string; usdc: number };
+                          return (
+                            <div key={chain} className="bg-gray-50 dark:bg-neutral-950 border border-gray-200 dark:border-neutral-800 rounded-xl p-4">
+                              <div className="flex items-center justify-between mb-3">
+                                <span className="text-[10px] font-mono uppercase tracking-wider text-gray-400 dark:text-neutral-500">
+                                  {chain === 'base' ? 'BASE' : 'SOLANA'}
+                                </span>
+                                <span className="text-[10px] font-mono font-semibold uppercase tracking-wide rounded px-1.5 py-0.5 border border-atelier/40 text-atelier">
+                                  {chain === 'base' ? 'BASE' : 'SOL'}
+                                </span>
+                              </div>
+                              <code className="block font-mono text-[11px] text-gray-500 dark:text-neutral-400 mb-2 break-all">
+                                {wallet.address.slice(0, 8)}...{wallet.address.slice(-6)}
+                              </code>
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono text-base font-semibold text-black dark:text-white tabular-nums">
+                                  ${wallet.usdc.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  <span className="text-[10px] font-normal text-gray-400 dark:text-neutral-500 ml-1">USDC</span>
+                                </span>
+                                <button
+                                  onClick={() => setShowServerWalletSend(chain)}
+                                  disabled={wallet.usdc <= 0}
+                                  className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded font-mono text-[10px] border border-gray-200 dark:border-neutral-700 text-gray-500 dark:text-neutral-400 hover:border-atelier/40 hover:text-atelier disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+                                  </svg>
+                                  Send
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
+                );
+              })()}
+
               {/* Services */}
               <section>
                 <div className="flex items-center justify-between mb-4">
@@ -760,6 +855,42 @@ function DashboardContent() {
       {showQuote && agent && <QuoteModal orderId={showQuote} apiKey={activeApiKey} getAuth={getAuth} onClose={() => setShowQuote(null)} onSuccess={() => { setShowQuote(null); loadDashboard(); }} />}
       {showDeliver && agent && <DeliverModal orderId={showDeliver} apiKey={activeApiKey} getAuth={getAuth} onClose={() => setShowDeliver(null)} onSuccess={() => { setShowDeliver(null); loadDashboard(); }} />}
       {showLinkAgent && <LinkAgentModal onClose={() => setShowLinkAgent(false)} onSuccess={() => { setShowLinkAgent(false); loadDashboard(); }} />}
+      {showServerWalletSend && agent && (() => {
+        const walletEntry = serverWallets?.[showServerWalletSend];
+        const walletInfo = walletEntry && !('error' in walletEntry) && 'address' in walletEntry
+          ? (walletEntry as { address: string; usdc: number })
+          : null;
+        if (!walletInfo) return null;
+        return (
+          <ServerWalletSendModal
+            chain={showServerWalletSend}
+            agentId={agent.id}
+            balance={walletInfo.usdc}
+            getAuth={getAuth}
+            onClose={() => setShowServerWalletSend(null)}
+            onSuccess={() => {
+              setShowServerWalletSend(null);
+              if (activeApiKey) {
+                setServerWalletsLoading(true);
+                fetch('/api/agents/me?balances=1', {
+                  headers: { Authorization: `Bearer ${activeApiKey}` },
+                })
+                  .then((r) => r.json())
+                  .then((json: { success: boolean; data?: { server_wallets?: { solana?: ServerWalletInfo; base?: ServerWalletInfo } } }) => {
+                    if (json.success && json.data?.server_wallets) {
+                      setServerWallets({
+                        solana: json.data.server_wallets.solana ?? null,
+                        base: json.data.server_wallets.base ?? null,
+                      });
+                    }
+                  })
+                  .catch(() => undefined)
+                  .finally(() => setServerWalletsLoading(false));
+              }
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -1261,6 +1392,210 @@ function DeliverModal({ orderId, apiKey, getAuth, onClose, onSuccess }: { orderI
         <div className="flex gap-3 pt-2">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">Cancel</button>
           <button onClick={handleSubmit} disabled={saving || !deliverableUrl} className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">{saving ? 'Delivering...' : 'Deliver'}</button>
+        </div>
+      </div>
+    </ModalOverlay>
+  );
+}
+
+function ServerWalletSendModal({
+  chain,
+  agentId,
+  balance,
+  getAuth,
+  onClose,
+  onSuccess,
+}: {
+  chain: 'solana' | 'base';
+  agentId: string;
+  balance: number;
+  getAuth: () => Promise<WalletAuth>;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [to, setTo] = useState('');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  const toTrimmed = to.trim();
+  const amountNum = parseFloat(amount);
+
+  const addressValid = chain === 'solana' ? SOL_ADDR_RE.test(toTrimmed) : isAddress(toTrimmed);
+  const amountValid = !Number.isNaN(amountNum) && amountNum > 0 && amountNum <= balance;
+  const canSend = addressValid && amountValid && !busy && !done;
+
+  const txUrl = txHash
+    ? chain === 'solana'
+      ? `https://solscan.io/tx/${txHash}`
+      : `https://basescan.org/tx/${txHash}`
+    : null;
+
+  const handleMax = () => {
+    setAmount(balance > 0 ? balance.toFixed(6) : '');
+    setErrMsg(null);
+  };
+
+  const handleSend = async () => {
+    if (!canSend) return;
+    setBusy(true);
+    setErrMsg(null);
+    try {
+      const token = await getPrivyAccessToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+
+      let body: Record<string, unknown>;
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+        body = { chain, to: toTrimmed, amount: amountNum };
+      } else {
+        const auth = await getAuth();
+        body = { ...auth, chain, to: toTrimmed, amount: amountNum };
+      }
+
+      const res = await fetch(`/api/agents/${agentId}/wallet/send`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+      });
+      const json = await res.json() as { success: boolean; data?: { tx_hash: string; amount_usd: number; chain: string; destination: string }; error?: string };
+      if (!json.success) throw new Error(json.error ?? 'Send failed');
+      setTxHash(json.data?.tx_hash ?? null);
+      setDone(true);
+      onSuccess();
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : 'Send failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === 'Escape' && !busy) onClose();
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [busy, onClose]);
+
+  const chainLabel = chain === 'base' ? 'Base' : 'Solana';
+  const addrPlaceholder = chain === 'solana' ? 'Base58 address (e.g. 7xKX...AsU)' : '0x address (Base mainnet)';
+
+  return (
+    <ModalOverlay onClose={onClose}>
+      <div className="flex items-center justify-between mb-5">
+        <h2 className="text-lg font-bold text-black dark:text-white font-display">
+          Send USDC on {chainLabel}
+        </h2>
+        <span className="text-[10px] font-mono uppercase tracking-wide rounded px-1.5 py-0.5 border border-atelier/40 text-atelier">
+          server wallet
+        </span>
+      </div>
+      <div className="space-y-4">
+        <div>
+          <label className={LABEL_CLASS}>Recipient address</label>
+          <input
+            value={to}
+            onChange={(e) => { setTo(e.target.value); setErrMsg(null); }}
+            placeholder={addrPlaceholder}
+            disabled={busy || done}
+            className={INPUT_CLASS}
+          />
+          {toTrimmed.length > 0 && !addressValid && (
+            <p className="font-mono text-[10px] text-red-500 mt-1">Invalid {chainLabel} address</p>
+          )}
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={LABEL_CLASS} style={{ marginBottom: 0 }}>Amount (USDC)</label>
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[10px] text-gray-400 dark:text-neutral-500 tabular-nums">
+                Balance: <span className="text-black dark:text-white">${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+              </span>
+              <button
+                type="button"
+                onClick={handleMax}
+                disabled={busy || done || balance <= 0}
+                className="h-5 px-1.5 rounded font-mono text-[10px] text-atelier border border-atelier/30 hover:bg-atelier/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                Max
+              </button>
+            </div>
+          </div>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-[13px] text-gray-400 dark:text-neutral-600">$</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              value={amount}
+              onChange={(e) => { setAmount(e.target.value); setErrMsg(null); }}
+              placeholder="0.00"
+              disabled={busy || done}
+              aria-label="Amount to send in USDC"
+              className={`${INPUT_CLASS} pl-6`}
+            />
+          </div>
+          {!Number.isNaN(amountNum) && amountNum > balance && balance > 0 && (
+            <p className="font-mono text-[10px] text-red-500 mt-1">Exceeds balance</p>
+          )}
+        </div>
+
+        {busy && (
+          <div role="status" className="flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] bg-atelier/10 text-atelier">
+            <svg className="w-3.5 h-3.5 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <span>Sending...</span>
+          </div>
+        )}
+
+        {done && (
+          <div role="status" className="flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+            <span>
+              Sent{' '}
+              {txUrl && (
+                <a href={txUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-emerald-500 transition-colors">
+                  View tx
+                </a>
+              )}
+            </span>
+          </div>
+        )}
+
+        {errMsg && (
+          <div role="alert" className="flex items-start gap-2 rounded-md px-3 py-2 font-mono text-[11px] bg-red-500/10 text-red-500 dark:text-red-400">
+            <svg className="w-3.5 h-3.5 shrink-0 mt-px" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+            <span className="break-words">{errMsg}</span>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          {done ? (
+            <button onClick={onClose} className="w-full py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 transition-colors cursor-pointer">
+              Done
+            </button>
+          ) : (
+            <>
+              <button onClick={onClose} disabled={busy} className="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-500 dark:text-neutral-400 hover:bg-gray-50 dark:hover:bg-neutral-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer">Cancel</button>
+              <button
+                onClick={() => void handleSend()}
+                disabled={!canSend}
+                className="flex-1 py-2.5 rounded border border-atelier text-atelier font-mono font-medium text-sm transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {busy ? 'Sending...' : 'Send'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </ModalOverlay>

@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceOrderById, updateOrderStatus, createOrderDeliverable, updateOrderDeliverable } from '@/lib/atelier-db';
@@ -7,6 +8,7 @@ import { authorizeOrderProvider } from '@/lib/order-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyBuyer } from '@/lib/notifications';
 import { verifyDeliverable } from '@/lib/pod';
+import { generateDeliverablePreview } from '@/lib/deliverable-preview';
 
 const VALID_MEDIA_TYPES = ['image', 'video', 'link', 'document', 'code', 'text'] as const;
 type MediaType = typeof VALID_MEDIA_TYPES[number];
@@ -91,14 +93,20 @@ export async function POST(
       );
     }
 
-    // Insert each deliverable into order_deliverables
-    for (const item of items) {
+    // Insert each deliverable into order_deliverables, generating a watermarked
+    // low-res preview for image deliverables so the original stays hidden until accept.
+    let primaryPreviewUrl: string | null = null;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
       const record = await createOrderDeliverable(orderId, '');
+      const previewUrl = await generateDeliverablePreview(item.deliverable_url, item.deliverable_media_type, orderId);
       await updateOrderDeliverable(record.id, {
         status: 'completed',
         deliverable_url: item.deliverable_url,
         deliverable_media_type: item.deliverable_media_type,
+        ...(previewUrl ? { preview_url: previewUrl } : {}),
       });
+      if (i === 0) primaryPreviewUrl = previewUrl;
     }
 
     // Set primary deliverable on the order (first item) for backward compat
@@ -107,6 +115,7 @@ export async function POST(
       status: 'delivered',
       deliverable_url: primary.deliverable_url,
       deliverable_media_type: primary.deliverable_media_type,
+      ...(primaryPreviewUrl ? { deliverable_preview_url: primaryPreviewUrl } : {}),
     });
 
     if (order.brief) {

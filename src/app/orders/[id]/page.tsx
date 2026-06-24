@@ -305,14 +305,53 @@ function DownloadButton({ url, name }: { url: string; name?: string }) {
   );
 }
 
-function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: string | null }) {
+const VIDEO_WATERMARK_SVG = `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><text x='10' y='40' font-family='monospace' font-size='13' fill='rgba(255,255,255,0.28)' transform='rotate(-30,100,100)'>ATELIER ATELIER ATELIER</text><text x='-20' y='110' font-family='monospace' font-size='13' fill='rgba(255,255,255,0.28)' transform='rotate(-30,100,100)'>ATELIER ATELIER ATELIER</text><text x='30' y='180' font-family='monospace' font-size='13' fill='rgba(255,255,255,0.28)' transform='rotate(-30,100,100)'>ATELIER ATELIER ATELIER</text></svg>`;
+const VIDEO_WATERMARK_URI = `url("data:image/svg+xml,${encodeURIComponent(VIDEO_WATERMARK_SVG)}")`;
+
+function PreviewBadge() {
+  return (
+    <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 border border-neutral-700 pointer-events-none">
+      <svg className="w-2.5 h-2.5 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+      </svg>
+      <span className="text-2xs font-mono text-neutral-400 leading-none">Preview</span>
+    </div>
+  );
+}
+
+function PreviewUnavailable() {
+  return (
+    <div className="mt-2 p-4 rounded-lg border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/50 max-w-md">
+      <div className="flex items-center gap-2 mb-1">
+        <svg className="w-4 h-4 text-neutral-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+        </svg>
+        <span className="text-xs font-mono text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Preview</span>
+      </div>
+      <p className="text-xs font-mono text-neutral-400 dark:text-neutral-500">Preview is being prepared</p>
+    </div>
+  );
+}
+
+function DeliverableMedia({ url, mediaType, locked = false }: { url: string | null; mediaType: string | null; locked?: boolean }) {
+  if (!url && locked && mediaType === 'image') return <PreviewUnavailable />;
   if (!url) return null;
 
   if (mediaType === 'video') {
     return (
       <div className="group relative max-w-md mt-2">
         <video src={url} controls playsInline className="w-full rounded-lg border border-neutral-200 dark:border-neutral-800" />
-        <div className="absolute top-2 right-2"><DownloadButton url={url} name="deliverable" /></div>
+        {locked ? (
+          <>
+            <div
+              className="absolute inset-0 rounded-lg pointer-events-none"
+              style={{ backgroundImage: VIDEO_WATERMARK_URI, backgroundRepeat: 'repeat', backgroundSize: '200px 200px' }}
+            />
+            <PreviewBadge />
+          </>
+        ) : (
+          <div className="absolute top-2 right-2"><DownloadButton url={url} name="deliverable" /></div>
+        )}
       </div>
     );
   }
@@ -350,7 +389,7 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
         <a href={url} target="_blank" rel="noopener noreferrer" className="text-atelier-dark hover:text-atelier dark:text-atelier-bright dark:hover:text-atelier-bright font-mono text-sm underline underline-offset-2">
           {linkLabel}
         </a>
-        <div className="mt-2"><DownloadButton url={url} name="deliverable" /></div>
+        {!locked && <div className="mt-2"><DownloadButton url={url} name="deliverable" /></div>}
       </div>
     );
   }
@@ -358,7 +397,11 @@ function DeliverableMedia({ url, mediaType }: { url: string | null; mediaType: s
   return (
     <div className="group relative max-w-md mt-2">
       <img src={url} alt="Deliverable" className="w-full rounded-lg border border-neutral-200 dark:border-neutral-800" />
-      <div className="absolute top-2 right-2"><DownloadButton url={url} name="deliverable" /></div>
+      {locked ? (
+        <PreviewBadge />
+      ) : (
+        <div className="absolute top-2 right-2"><DownloadButton url={url} name="deliverable" /></div>
+      )}
     </div>
   );
 }
@@ -476,8 +519,10 @@ function ReviewInline({ review }: { review: ServiceReview }) {
   );
 }
 
-function DeliverablesGallery({ deliverables }: { deliverables: OrderDeliverable[] }) {
-  const completed = deliverables.filter((d) => d.status === 'completed' && d.deliverable_url);
+function DeliverablesGallery({ deliverables, locked = false }: { deliverables: OrderDeliverable[]; locked?: boolean }) {
+  const completed = deliverables.filter(
+    (d) => d.status === 'completed' && (d.deliverable_url || (locked && d.deliverable_media_type === 'image')),
+  );
   if (completed.length === 0) return null;
 
   return (
@@ -492,31 +537,73 @@ function DeliverablesGallery({ deliverables }: { deliverables: OrderDeliverable[
             className="group relative rounded-lg border border-neutral-800 overflow-hidden bg-black"
           >
             {d.deliverable_media_type === 'video' ? (
-              <video
-                src={d.deliverable_url!}
-                controls
-                playsInline
-                className="w-full aspect-square object-cover"
-              />
+              <>
+                <video
+                  src={d.deliverable_url!}
+                  controls
+                  playsInline
+                  className="w-full aspect-square object-cover"
+                />
+                {locked ? (
+                  <>
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ backgroundImage: VIDEO_WATERMARK_URI, backgroundRepeat: 'repeat', backgroundSize: '200px 200px' }}
+                    />
+                    <PreviewBadge />
+                  </>
+                ) : (
+                  <div className="absolute top-2 right-2">
+                    <DownloadButton url={d.deliverable_url!} name="deliverable" />
+                  </div>
+                )}
+              </>
             ) : d.deliverable_media_type === 'image' || !d.deliverable_media_type ? (
-              <img
-                src={d.deliverable_url!}
-                alt="Deliverable"
-                className="w-full aspect-square object-cover"
-              />
+              <>
+                {!d.deliverable_url && locked ? (
+                  <div className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-4">
+                    <svg className="w-5 h-5 text-neutral-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                    </svg>
+                    <span className="text-2xs font-mono text-neutral-500 uppercase tracking-wider">Preview</span>
+                    <span className="text-2xs font-mono text-neutral-600 text-center">Preview is being prepared</span>
+                  </div>
+                ) : (
+                  <>
+                    <img
+                      src={d.deliverable_url!}
+                      alt="Deliverable"
+                      className="w-full aspect-square object-cover"
+                    />
+                    {locked ? (
+                      <PreviewBadge />
+                    ) : (
+                      <div className="absolute top-2 right-2">
+                        <DownloadButton url={d.deliverable_url!} name="deliverable" />
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
             ) : (
-              <div className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-3">
-                <svg className="w-6 h-6 text-atelier-bright" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
-                </svg>
-                <a href={d.deliverable_url!} target="_blank" rel="noopener noreferrer" className="text-atelier-bright hover:text-atelier-bright text-xs font-mono text-center break-all underline underline-offset-2">
-                  {d.deliverable_media_type}
-                </a>
-              </div>
+              <>
+                <div className="w-full aspect-square flex flex-col items-center justify-center gap-2 p-3">
+                  <svg className="w-6 h-6 text-atelier-bright" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.03a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
+                  </svg>
+                  <a href={d.deliverable_url!} target="_blank" rel="noopener noreferrer" className="text-atelier-bright hover:text-atelier-bright text-xs font-mono text-center break-all underline underline-offset-2">
+                    {d.deliverable_media_type}
+                  </a>
+                </div>
+                {locked ? (
+                  <PreviewBadge />
+                ) : (
+                  <div className="absolute top-2 right-2">
+                    <DownloadButton url={d.deliverable_url!} name="deliverable" />
+                  </div>
+                )}
+              </>
             )}
-            <div className="absolute top-2 right-2">
-              <DownloadButton url={d.deliverable_url!} name="deliverable" />
-            </div>
           </div>
         ))}
       </div>
@@ -841,7 +928,7 @@ interface DeliveryInfo {
   revisionCount: number;
 }
 
-function DeliveryCard({ delivery, index }: { delivery: DeliveryInfo; index: number }) {
+function DeliveryCard({ delivery, index, locked = false }: { delivery: DeliveryInfo; index: number; locked?: boolean }) {
   return (
     <div className="flex justify-start my-3">
       <div className="max-w-[85%] rounded-lg border border-atelier/20 bg-white dark:bg-black-soft overflow-hidden">
@@ -857,7 +944,7 @@ function DeliveryCard({ delivery, index }: { delivery: DeliveryInfo; index: numb
           )}
         </div>
         <div className="p-3">
-          <DeliverableMedia url={delivery.url} mediaType={delivery.mediaType} />
+          <DeliverableMedia url={delivery.url} mediaType={delivery.mediaType} locked={locked} />
         </div>
       </div>
     </div>
@@ -869,11 +956,12 @@ interface ChatAuth {
   sig?: { wallet: string; wallet_sig: string; wallet_sig_ts: string };
 }
 
-function OrderChat({ orderId, selfIds, deliveries, buildAuth }: {
+function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: {
   orderId: string;
   selfIds: string[];
   deliveries: DeliveryInfo[];
   buildAuth: () => Promise<ChatAuth>;
+  locked?: boolean;
 }) {
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [input, setInput] = useState('');
@@ -984,7 +1072,7 @@ function OrderChat({ orderId, selfIds, deliveries, buildAuth }: {
           );
         })}
         {deliveries.map((d, i) => (
-          <DeliveryCard key={`delivery-${i}`} delivery={d} index={i + 1} />
+          <DeliveryCard key={`delivery-${i}`} delivery={d} index={i + 1} locked={locked} />
         ))}
         <div ref={messagesEndRef} />
       </div>
@@ -1108,6 +1196,7 @@ export default function AtelierOrderPage() {
     || (!!atelierUser?.privy_user_id && !!order.user_id && order.user_id === atelierUser.privy_user_id)
     || (atelierUser?.google_email ?? atelierUser?.email ?? '').toLowerCase() === 'rempxbt@gmail.com';
   const walletMismatch = isOrderClient && !walletMatches;
+  const locked = isOrderClient && order.status !== 'completed';
 
   const buildOrderAuth = async (): Promise<Record<string, unknown>> => {
     if (walletMatches) {
@@ -1477,7 +1566,7 @@ export default function AtelierOrderPage() {
 
             {/* Deliverables gallery for standard (non-workspace) orders */}
             {!showWorkspace && data.deliverables.length > 0 && (
-              <DeliverablesGallery deliverables={data.deliverables} />
+              <DeliverablesGallery deliverables={data.deliverables} locked={locked} />
             )}
 
             {review && <ReviewInline review={review} />}
@@ -1628,6 +1717,7 @@ export default function AtelierOrderPage() {
                 orderId={order.id}
                 selfIds={[walletAddress]}
                 buildAuth={buildChatAuth}
+                locked={locked}
                 deliveries={data.deliverables.length > 0
                   ? data.deliverables
                       .filter((d) => d.status === 'completed' && d.deliverable_url)

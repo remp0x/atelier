@@ -211,6 +211,7 @@ export async function initAtelierDb(): Promise<void> {
       prompt TEXT NOT NULL,
       deliverable_url TEXT,
       deliverable_media_type TEXT,
+      preview_url TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
       error TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -592,6 +593,8 @@ export async function initAtelierDb(): Promise<void> {
 
   try { await atelierClient.execute("ALTER TABLE service_orders ADD COLUMN client_type TEXT NOT NULL DEFAULT 'wallet'"); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN payment_tx_signature TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN deliverable_preview_url TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE order_deliverables ADD COLUMN preview_url TEXT'); } catch (_e) { }
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_client_type ON service_orders(client_type)');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_payment_tx ON service_orders(payment_tx_signature)');
   // Atomic guard against x402 payment replay: an on-chain payment signature may
@@ -2027,6 +2030,7 @@ export interface ServiceOrder {
   client_wallet: string | null;
   client_name: string | null;
   client_username?: string | null;
+  client_type: 'wallet' | 'agent_x402';
   provider_agent_id: string;
   provider_name: string;
   provider_slug: string | null;
@@ -2044,6 +2048,7 @@ export interface ServiceOrder {
   deliverable_post_id: number | null;
   deliverable_url: string | null;
   deliverable_media_type: 'image' | 'video' | 'link' | 'document' | 'code' | 'text' | null;
+  deliverable_preview_url: string | null;
   quota_total: number;
   quota_used: number;
   workspace_expires_at: string | null;
@@ -2116,6 +2121,7 @@ export interface OrderDeliverable {
   prompt: string;
   deliverable_url: string | null;
   deliverable_media_type: 'image' | 'video' | 'link' | 'document' | 'code' | 'text' | null;
+  preview_url: string | null;
   status: 'pending' | 'generating' | 'completed' | 'failed';
   error: string | null;
   created_at: string;
@@ -3719,6 +3725,7 @@ export async function updateOrderStatus(
     deliverable_post_id?: number;
     deliverable_url?: string;
     deliverable_media_type?: string;
+    deliverable_preview_url?: string;
     workspace_expires_at?: string;
     payment_chain?: 'solana' | 'base';
     payer_address?: string | null;
@@ -3736,6 +3743,7 @@ export async function updateOrderStatus(
   if (updates.deliverable_post_id !== undefined) { setClauses.push('deliverable_post_id = ?'); args.push(updates.deliverable_post_id); }
   if (updates.deliverable_url !== undefined) { setClauses.push('deliverable_url = ?'); args.push(updates.deliverable_url); }
   if (updates.deliverable_media_type !== undefined) { setClauses.push('deliverable_media_type = ?'); args.push(updates.deliverable_media_type); }
+  if (updates.deliverable_preview_url !== undefined) { setClauses.push('deliverable_preview_url = ?'); args.push(updates.deliverable_preview_url); }
   if (updates.workspace_expires_at !== undefined) { setClauses.push('workspace_expires_at = ?'); args.push(updates.workspace_expires_at); }
   if (updates.payment_chain !== undefined) { setClauses.push('payment_chain = ?'); args.push(updates.payment_chain); }
   if (updates.payer_address !== undefined) { setClauses.push('payer_address = ?'); args.push(updates.payer_address); }
@@ -3933,7 +3941,7 @@ export async function getOrderDeliverables(orderId: string): Promise<OrderDelive
 
 export async function updateOrderDeliverable(
   id: string,
-  updates: { status?: string; deliverable_url?: string; deliverable_media_type?: string; error?: string }
+  updates: { status?: string; deliverable_url?: string; deliverable_media_type?: string; preview_url?: string; error?: string }
 ): Promise<void> {
   await initAtelierDb();
   const setClauses: string[] = [];
@@ -3941,6 +3949,7 @@ export async function updateOrderDeliverable(
   if (updates.status !== undefined) { setClauses.push('status = ?'); args.push(updates.status); }
   if (updates.deliverable_url !== undefined) { setClauses.push('deliverable_url = ?'); args.push(updates.deliverable_url); }
   if (updates.deliverable_media_type !== undefined) { setClauses.push('deliverable_media_type = ?'); args.push(updates.deliverable_media_type); }
+  if (updates.preview_url !== undefined) { setClauses.push('preview_url = ?'); args.push(updates.preview_url); }
   if (updates.error !== undefined) { setClauses.push('error = ?'); args.push(updates.error); }
   if (setClauses.length === 0) return;
   args.push(id);

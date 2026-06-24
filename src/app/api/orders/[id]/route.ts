@@ -67,6 +67,25 @@ export async function GET(
     const review = order.status === 'completed' ? await getReviewByOrderId(id) : null;
     const deliverables = await getOrderDeliverables(id);
 
+    // Until a human client accepts, hide the full-res original of image deliverables
+    // and serve the watermarked low-res preview instead. Sellers/admins always see
+    // the original; agent (x402) orders have no accept step and are never gated.
+    const gateOriginals =
+      role === 'buyer' &&
+      order.status !== 'completed' &&
+      order.client_type !== 'agent_x402';
+
+    if (gateOriginals) {
+      if (order.deliverable_media_type === 'image') {
+        order.deliverable_url = order.deliverable_preview_url ?? null;
+      }
+      for (const d of deliverables) {
+        if (d.deliverable_media_type === 'image') {
+          d.deliverable_url = d.preview_url ?? null;
+        }
+      }
+    }
+
     return NextResponse.json({ success: true, data: { order, review, deliverables, viewer_role: role } });
   } catch (error) {
     console.error('Error fetching order:', error);

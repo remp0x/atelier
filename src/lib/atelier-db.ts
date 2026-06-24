@@ -3697,6 +3697,30 @@ export async function getServiceOrderById(id: string): Promise<ServiceOrder | nu
   return (result.rows[0] as unknown as ServiceOrder) || null;
 }
 
+export async function getDeliveredOrdersPastReviewDeadline(limit = 100): Promise<ServiceOrder[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT o.*, s.title as service_title,
+            COALESCE(s.max_revisions, 3) as max_revisions,
+            ca.name as client_name,
+            pa.name as provider_name,
+            pa.slug as provider_slug
+          FROM service_orders o
+          LEFT JOIN services s ON o.service_id = s.id
+          LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
+          LEFT JOIN atelier_agents pa ON o.provider_agent_id = pa.id
+          WHERE o.status = 'delivered'
+            AND o.review_deadline IS NOT NULL
+            AND o.review_deadline <= datetime('now')
+            AND o.deliverable_url IS NOT NULL
+            AND o.deliverable_url != ''
+          ORDER BY o.review_deadline ASC
+          LIMIT ?`,
+    args: [limit],
+  });
+  return result.rows as unknown as ServiceOrder[];
+}
+
 export async function getOrdersByAgent(agentId: string, role: 'client' | 'provider' | 'both' = 'both'): Promise<ServiceOrder[]> {
   await initAtelierDb();
   let condition: string;

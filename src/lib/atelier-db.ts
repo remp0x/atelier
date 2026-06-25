@@ -4942,6 +4942,8 @@ export interface ActivityEvent {
   avatar_url: string | null;
   link_id: string | null;
   slug: string | null;
+  privy_user_id: string | null;
+  email: string | null;
 }
 
 export async function getActivityFeed(
@@ -4958,7 +4960,9 @@ export async function getActivityFeed(
   if (filter === 'all' || filter === 'registration') {
     unions.push(`
       SELECT 'registration' as type, id, name as title, owner_wallet as subtitle,
-             created_at as timestamp, avatar_url, id as link_id, slug
+             created_at as timestamp, avatar_url, id as link_id, slug,
+             privy_user_id,
+             (SELECT COALESCE(u.email, u.google_email) FROM users u WHERE u.privy_user_id = atelier_agents.privy_user_id) as email
       FROM atelier_agents WHERE active = 1
     `);
   }
@@ -4969,7 +4973,9 @@ export async function getActivityFeed(
              so.created_at as timestamp,
              (SELECT a.avatar_url FROM atelier_agents a WHERE a.id = so.provider_agent_id) as avatar_url,
              so.id as link_id,
-             NULL as slug
+             NULL as slug,
+             NULL as privy_user_id,
+             NULL as email
       FROM service_orders so
       JOIN services s ON s.id = so.service_id
     `);
@@ -4981,7 +4987,9 @@ export async function getActivityFeed(
              s.created_at as timestamp,
              (SELECT a.avatar_url FROM atelier_agents a WHERE a.id = s.agent_id) as avatar_url,
              s.agent_id as link_id,
-             (SELECT a.slug FROM atelier_agents a WHERE a.id = s.agent_id) as slug
+             (SELECT a.slug FROM atelier_agents a WHERE a.id = s.agent_id) as slug,
+             NULL as privy_user_id,
+             NULL as email
       FROM services s WHERE s.active = 1
     `);
   }
@@ -4993,7 +5001,9 @@ export async function getActivityFeed(
              sr.created_at as timestamp,
              NULL as avatar_url,
              sr.order_id as link_id,
-             NULL as slug
+             NULL as slug,
+             NULL as privy_user_id,
+             NULL as email
       FROM service_reviews sr
     `);
   }
@@ -5001,7 +5011,9 @@ export async function getActivityFeed(
   if (filter === 'all' || filter === 'token_launch') {
     unions.push(`
       SELECT 'token_launch' as type, id, name as title, token_symbol as subtitle,
-             token_created_at as timestamp, avatar_url, id as link_id, slug
+             token_created_at as timestamp, avatar_url, id as link_id, slug,
+             privy_user_id,
+             (SELECT COALESCE(u.email, u.google_email) FROM users u WHERE u.privy_user_id = atelier_agents.privy_user_id) as email
       FROM atelier_agents WHERE token_mint IS NOT NULL AND token_created_at IS NOT NULL
     `);
   }
@@ -5028,6 +5040,8 @@ export async function getActivityFeed(
     avatar_url: row.avatar_url ? String(row.avatar_url) : null,
     link_id: row.link_id ? String(row.link_id) : null,
     slug: row.slug ? String(row.slug) : null,
+    privy_user_id: row.privy_user_id ? String(row.privy_user_id) : null,
+    email: row.email ? String(row.email) : null,
   }));
 
   return { events, total };

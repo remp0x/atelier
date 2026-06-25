@@ -2,12 +2,22 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getActivityFeed, type ActivityType } from '@/lib/atelier-db';
+import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
 
 const VALID_FILTERS = new Set<ActivityType | 'all'>([
   'all', 'registration', 'order', 'service', 'review', 'token_launch',
 ]);
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
+  try {
+    await requirePrivyAdmin(req);
+  } catch (err) {
+    if (err instanceof AdminAuthError) {
+      return NextResponse.json({ success: false, error: err.message }, { status: err.status });
+    }
+    return NextResponse.json({ success: false, error: 'Auth failed' }, { status: 401 });
+  }
+
   try {
     const { searchParams } = req.nextUrl;
     const filter = (searchParams.get('filter') || 'all') as ActivityType | 'all';

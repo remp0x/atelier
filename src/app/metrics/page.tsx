@@ -337,9 +337,25 @@ const ACTIVITY_TYPE_CONFIG: Record<string, { label: string; color: string; dot: 
   token_launch: { label: 'Token', color: 'text-pink-400', dot: 'bg-pink-400' },
 };
 
+function shortPrivy(id: string): string {
+  const raw = id.replace(/^did:privy:/, '');
+  return `${raw.slice(0, 6)}...${raw.slice(-4)}`;
+}
+
+const AR_TIMEZONE = 'America/Argentina/Buenos_Aires';
+
+// DB timestamps are naive UTC ("YYYY-MM-DD HH:MM:SS"). Mark them UTC explicitly so
+// the browser doesn't reinterpret them in its own zone, then render in UTC-3 (AR).
+function parseDbUtc(ts: string): Date {
+  const trimmed = ts.trim();
+  const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(trimmed);
+  const iso = trimmed.replace(' ', 'T');
+  return new Date(hasZone ? iso : `${iso}Z`);
+}
+
 function formatRelativeTime(ts: string): string {
   const now = Date.now();
-  const then = new Date(ts).getTime();
+  const then = parseDbUtc(ts).getTime();
   const diff = now - then;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'just now';
@@ -348,7 +364,16 @@ function formatRelativeTime(ts: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}d ago`;
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return parseDbUtc(ts).toLocaleDateString('en-GB', { timeZone: AR_TIMEZONE, day: '2-digit', month: 'short' });
+}
+
+function fullLogTime(ts: string): string {
+  const t = parseDbUtc(ts).toLocaleString('en-GB', {
+    timeZone: AR_TIMEZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  return `${t} (UTC-3)`;
 }
 
 function getActivitySubtitle(event: ActivityEvent): string {
@@ -394,7 +419,16 @@ function ActivityFeed() {
   const fetchActivity = useCallback(async (f: ActivityType | 'all', p: number) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/metrics/activity?filter=${f}&limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}`);
+      const token = await getPrivyAccessToken();
+      if (!token) {
+        setEvents([]);
+        setTotal(0);
+        return;
+      }
+      const res = await fetch(
+        `/api/metrics/activity?filter=${f}&limit=${PAGE_SIZE}&offset=${p * PAGE_SIZE}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
       const json = await res.json();
       if (json.success) {
         setEvents(json.data.events);
@@ -466,13 +500,27 @@ function ActivityFeed() {
                         <span className="text-[10px] font-mono text-neutral-500 truncate hidden sm:inline">{subtitle}</span>
                       )}
                     </div>
+                    {(event.email || event.privy_user_id) && (
+                      <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                        {event.email && (
+                          <span className="text-[10px] font-mono text-neutral-400 truncate" title={event.email}>
+                            {event.email}
+                          </span>
+                        )}
+                        {event.privy_user_id && (
+                          <span className="text-[10px] font-mono text-neutral-600 dark:text-neutral-500 truncate flex-shrink-0" title={event.privy_user_id}>
+                            {shortPrivy(event.privy_user_id)}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full bg-gray-100 dark:bg-neutral-800 ${config.color} flex-shrink-0`}>
                     {config.label}
                   </span>
 
-                  <span className="text-[10px] font-mono text-neutral-500 flex-shrink-0 w-16 text-right">
+                  <span className="text-[10px] font-mono text-neutral-500 flex-shrink-0 w-16 text-right" title={fullLogTime(event.timestamp)}>
                     {formatRelativeTime(event.timestamp)}
                   </span>
                 </div>
@@ -651,11 +699,11 @@ function EarnActivityLog() {
                       <td className="px-3 py-2 text-neutral-500">{EARN_STATUS_LABELS[e.status] || e.status}</td>
                       <td className="px-3 py-2 text-right text-neutral-500 whitespace-nowrap">
                         {e.txHash ? (
-                          <a href={`https://solscan.io/tx/${e.txHash}`} target="_blank" rel="noopener noreferrer" className="hover:text-atelier transition-colors" title="View transaction">
+                          <a href={`https://solscan.io/tx/${e.txHash}`} target="_blank" rel="noopener noreferrer" className="hover:text-atelier transition-colors" title={`${fullLogTime(e.createdAt)} -- view transaction`}>
                             {formatRelativeTime(e.createdAt)}
                           </a>
                         ) : (
-                          formatRelativeTime(e.createdAt)
+                          <span title={fullLogTime(e.createdAt)}>{formatRelativeTime(e.createdAt)}</span>
                         )}
                       </td>
                     </tr>

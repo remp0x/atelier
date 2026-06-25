@@ -72,7 +72,7 @@ function WithdrawFlow({ position, solanaAddress, onSuccess, onCancel }: Withdraw
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const body: Record<string, unknown> = { market: position.pool_market };
+      const body: Record<string, unknown> = { key: position.pool_market };
       if (all) body.all = true;
       else body.shares = shares.toString();
       if (solanaAddress) body.destination_wallet = solanaAddress;
@@ -357,6 +357,7 @@ function AgentPositionRow({ position, poolTotal, onWithdraw }: PositionViewProps
 export interface PoolPanelProps {
   pool: PoolData;
   market: string;
+  poolKey: string;
   positions: Position[];
   positionsLoading: boolean;
   solanaAddress: string | null;
@@ -373,6 +374,7 @@ export interface PoolPanelProps {
 export function PoolPanel({
   pool,
   market,
+  poolKey,
   positions,
   positionsLoading,
   solanaAddress,
@@ -612,6 +614,7 @@ export function PoolPanel({
           <DepositPanel
             pool={pool}
             market={market}
+            poolKey={poolKey}
             solanaAddress={solanaAddress}
             solanaBalance={solanaBalance}
             baseBalance={baseBalance}

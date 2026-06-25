@@ -111,16 +111,27 @@ function readU128LE(buf: Buffer, offset: number): bigint {
 
 // Verified byte offsets into the Solend Reserve account (RESERVE_SIZE = 619),
 // derived from ReserveLayout in solend-sdk state/reserve.ts (LastUpdate = 9B).
+// RESERVE_SIZE = 619. The interest-rate config fields after the 56-byte
+// RateLimiter (maxUtilizationRate @470, superMaxBorrowRate @471) are placed by
+// the layout closing exactly at 619; all offsets are cross-checked against live
+// mainnet (see scratchpad verify script).
 const RESERVE_DATA_LEN = 619;
 const OFF = {
   pythOracle: 107,
   switchboardOracle: 139,
   availableAmount: 171, // u64
   borrowedAmountWads: 179, // u128
+  optimalUtilizationRate: 299, // u8 (percent)
+  minBorrowRate: 303, // u8 (percent)
+  optimalBorrowRate: 304, // u8 (percent)
+  maxBorrowRate: 305, // u8 (percent)
   cTokenSupply: 259, // u64 (collateral.mintTotalSupply)
   depositLimit: 323, // u64
   borrowLimit: 331, // u64
+  protocolTakeRate: 372, // u8 (percent)
   protocolFeesWads: 373, // u128
+  maxUtilizationRate: 470, // u8 (percent)
+  superMaxBorrowRate: 471, // u64 (percent)
 } as const;
 
 interface DecodedReserve {
@@ -132,6 +143,13 @@ interface DecodedReserve {
   cTokenSupply: bigint;
   depositLimit: bigint;
   borrowLimit: bigint;
+  optimalUtilizationRate: number;
+  maxUtilizationRate: number;
+  minBorrowRate: number;
+  optimalBorrowRate: number;
+  maxBorrowRate: number;
+  superMaxBorrowRate: bigint;
+  protocolTakeRate: number;
 }
 
 function decodeReserve(data: Buffer): DecodedReserve {
@@ -147,7 +165,53 @@ function decodeReserve(data: Buffer): DecodedReserve {
     cTokenSupply: data.readBigUInt64LE(OFF.cTokenSupply),
     depositLimit: data.readBigUInt64LE(OFF.depositLimit),
     borrowLimit: data.readBigUInt64LE(OFF.borrowLimit),
+    optimalUtilizationRate: data.readUInt8(OFF.optimalUtilizationRate),
+    maxUtilizationRate: data.readUInt8(OFF.maxUtilizationRate),
+    minBorrowRate: data.readUInt8(OFF.minBorrowRate),
+    optimalBorrowRate: data.readUInt8(OFF.optimalBorrowRate),
+    maxBorrowRate: data.readUInt8(OFF.maxBorrowRate),
+    superMaxBorrowRate: data.readBigUInt64LE(OFF.superMaxBorrowRate),
+    protocolTakeRate: data.readUInt8(OFF.protocolTakeRate),
   };
+}
+
+// Supply APY, replicating solend-sdk core/utils/rates.ts. Config rate fields are
+// integer percents (/100). Borrow APR is a 3-slope piecewise of utilization;
+// supply APR = utilization * borrowAPR * (1 - protocolTakeRate); APY compounds
+// per-slot over SLOTS_PER_YEAR. Float math is ample for a displayed percentage.
+const SLOTS_PER_YEAR = 63_072_000;
+
+function supplyAprFraction(r: DecodedReserve): number {
+  const borrowed = Number(r.borrowedAmountWads) / 1e18; // -> micro-USDC
+  const available = Number(r.availableAmount);
+  const total = borrowed + available;
+  if (total <= 0) return 0;
+  const u = borrowed / total;
+
+  const optimalUtil = r.optimalUtilizationRate / 100;
+  const maxUtil = r.maxUtilizationRate / 100;
+  const minR = r.minBorrowRate / 100;
+  const optR = r.optimalBorrowRate / 100;
+  const maxR = r.maxBorrowRate / 100;
+  const superR = Number(r.superMaxBorrowRate) / 100;
+
+  let borrowApr: number;
+  if (u <= optimalUtil) {
+    borrowApr = optimalUtil === 0 ? minR : (u / optimalUtil) * (optR - minR) + minR;
+  } else if (u <= maxUtil) {
+    const w = (u - optimalUtil) / (maxUtil - optimalUtil);
+    borrowApr = w * (maxR - optR) + optR;
+  } else {
+    const w = (u - maxUtil) / (1 - maxUtil);
+    borrowApr = w * (superR - maxR) + maxR;
+  }
+  return u * borrowApr * (1 - r.protocolTakeRate / 100);
+}
+
+function supplyApyBps(r: DecodedReserve): number {
+  const apr = supplyAprFraction(r);
+  const apy = (1 + apr / SLOTS_PER_YEAR) ** SLOTS_PER_YEAR - 1;
+  return Math.round(apy * 10_000);
 }
 
 async function fetchReserve(conn: Connection, cfg: SolendConfig): Promise<DecodedReserve> {
@@ -229,6 +293,12 @@ function redeemReserveCollateralIx(
 export const solendVenue: EarnVenue = {
   id: 'solend',
   label: 'Solend',
+  product: {
+    kind: 'lending',
+    label: 'Lending',
+    risk: 'lower',
+    aprLabel: 'Supply APY',
+  },
 
   isConfigured(): boolean {
     return isSolendConfigured();
@@ -260,7 +330,9 @@ export const solendVenue: EarnVenue = {
     const reserve = await fetchReserve(getServerConnection(), getConfig());
     return {
       availableUsdc: reserve.availableAmount,
+      totalUsdc: reserve.availableAmount + reserve.borrowedAmountWads / WAD,
       isPaused: reserve.depositLimit === ZERO && reserve.borrowLimit === ZERO,
+      aprBps: supplyApyBps(reserve),
     };
   },
 

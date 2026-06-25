@@ -7,6 +7,7 @@ import {
   categorySubtitle,
   categoryConstituents,
   type PoolData,
+  type ParquetMarketEntry,
   type Position,
   formatUsd,
   formatAprPct,
@@ -60,10 +61,10 @@ function TickerBasket({ items }: { items: Array<{ ticker: string; name: string }
 }
 
 export interface MarketGridProps {
+  markets: ParquetMarketEntry[];
   poolsByMarket: Record<string, PoolData>;
   positions: Position[];
   positionsLoading: boolean;
-  enabledMarkets: string[];
   solanaAddress: string | null;
   solanaBalance: number;
   baseBalance: number;
@@ -77,6 +78,7 @@ export interface MarketGridProps {
 
 interface CategoryPoolCardProps {
   categoryId: string;
+  poolKey: string;
   pool: PoolData | null;
   positions: Position[];
   positionsLoading: boolean;
@@ -93,6 +95,7 @@ interface CategoryPoolCardProps {
 
 function CategoryPoolCard({
   categoryId,
+  poolKey,
   pool,
   positions,
   positionsLoading,
@@ -282,6 +285,7 @@ function CategoryPoolCard({
                 <PoolPanel
                   pool={pool}
                   market={categoryId}
+                  poolKey={poolKey}
                   positions={categoryPositions}
                   positionsLoading={positionsLoading}
                   solanaAddress={solanaAddress}
@@ -308,10 +312,10 @@ function CategoryPoolCard({
 }
 
 export function MarketGrid({
+  markets,
   poolsByMarket,
   positions,
   positionsLoading,
-  enabledMarkets,
   solanaAddress,
   solanaBalance,
   baseBalance,
@@ -322,35 +326,34 @@ export function MarketGrid({
   onPoolRefresh,
   onFetchPool,
 }: MarketGridProps) {
-  const single = enabledMarkets.length === 1;
-
   useEffect(() => {
-    if (single) {
-      void onFetchPool(enabledMarkets[0]);
+    if (markets.length === 1) {
+      void onFetchPool(markets[0].market);
     }
-  }, [single, enabledMarkets, onFetchPool]);
+  }, [markets, onFetchPool]);
 
-  if (enabledMarkets.length === 0) {
+  if (markets.length === 0) {
     return (
-      <div className="px-4 py-10 md:px-8 text-center border-b border-gray-200 dark:border-neutral-800/60">
+      <div className="py-10 text-center">
         <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600">No markets available.</p>
       </div>
     );
   }
 
   return (
-    <div className="px-4 py-6 md:px-8 border-b border-gray-200 dark:border-neutral-800/60 space-y-4">
-      {enabledMarkets.map((categoryId, i) => {
-        const pool = poolsByMarket[categoryId] ?? null;
+    <div className="space-y-4">
+      {markets.map((entry, i) => {
+        const pool = poolsByMarket[entry.market] ?? null;
         return (
           <motion.div
-            key={categoryId}
+            key={entry.market}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: i * 0.05 }}
           >
             <CategoryPoolCard
-              categoryId={categoryId}
+              categoryId={entry.market}
+              poolKey={entry.key}
               pool={pool}
               positions={positions}
               positionsLoading={positionsLoading}

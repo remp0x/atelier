@@ -9,7 +9,7 @@ import {
   parseSharesArg,
   validateSolanaAddress,
 } from '@/lib/earn-auth';
-import { isAnyEarnConfigured, tryGetVenue, vaultKeyFor } from '@/lib/earn/registry';
+import { isAnyEarnConfigured, tryGetVenue, vaultKeyFor, parseVenueKey } from '@/lib/earn/registry';
 import { withdrawForOwner, getOwnerEarnPosition } from '@/lib/parquet-earn-flows';
 import type { EarnOwnerKind } from '@/lib/parquet-earn-db';
 
@@ -30,7 +30,12 @@ export async function POST(request: NextRequest) {
     const limited = earnRateLimit(`earn:${caller.ownerId}`);
     if (limited) return limited;
 
-    const venueId = typeof body.venue === 'string' && body.venue.trim() ? body.venue.trim() : 'parquet';
+    // A position is identified by its vault `key` (e.g. "solend:usdc", which is
+    // what positions return as pool_market), or by an explicit venue+market pair.
+    const parsedKey = typeof body.key === 'string' && body.key.trim() ? parseVenueKey(body.key.trim()) : null;
+    const venueId = parsedKey
+      ? parsedKey.venue
+      : (typeof body.venue === 'string' && body.venue.trim() ? body.venue.trim() : 'parquet');
     const venue = tryGetVenue(venueId);
     if (!venue) {
       return NextResponse.json({ success: false, error: `unknown venue "${venueId}"` }, { status: 400 });
@@ -38,9 +43,9 @@ export async function POST(request: NextRequest) {
     if (!venue.isConfigured()) {
       return NextResponse.json({ success: false, error: `venue "${venueId}" is not configured` }, { status: 503 });
     }
-    const market = typeof body.market === 'string' && body.market.trim()
-      ? body.market.trim()
-      : venue.listMarkets()[0]?.market;
+    const market = parsedKey
+      ? parsedKey.market
+      : (typeof body.market === 'string' && body.market.trim() ? body.market.trim() : venue.listMarkets()[0]?.market);
     if (!market || !venue.isMarketEnabled(market)) {
       return NextResponse.json(
         { success: false, error: `market "${market ?? ''}" is not enabled for venue "${venueId}"` },

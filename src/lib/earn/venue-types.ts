@@ -22,9 +22,11 @@ export interface EarnMarket {
 }
 
 // Liquidity + status for withdraw gating and the UI. `availableUsdc` is the
-// amount immediately withdrawable from the venue (not gross TVL).
+// amount immediately withdrawable from the venue (not gross TVL); `totalUsdc` is
+// the venue's gross size (TVL) for the market, when the venue can report it.
 export interface EarnVenueHealth {
   availableUsdc: bigint;
+  totalUsdc?: bigint;
   isPaused: boolean;
   aprBps?: number;
 }
@@ -39,9 +41,19 @@ export type EarnWithdrawOutcome =
   | { status: 'settled'; txHash: string; received: bigint }
   | { status: 'illiquid'; estimateUsdc: bigint };
 
+// Product-level presentation metadata for the Earn hub. A venue maps to one
+// product/strategy with its own risk framing and yield label.
+export interface EarnVenueProduct {
+  kind: 'lending' | 'liquidity_provision';
+  label: string; // 'Lending' | 'Liquidity Provision'
+  risk: 'lower' | 'higher';
+  aprLabel: string; // 'Supply APY' | 'Fee APR'
+}
+
 export interface EarnVenue {
   readonly id: string;
-  readonly label: string;
+  readonly label: string; // the provider, e.g. 'Solend' / 'Parquet'
+  readonly product: EarnVenueProduct;
 
   // Whether this venue is configured/enabled for the deployment.
   isConfigured(): boolean;

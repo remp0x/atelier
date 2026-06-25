@@ -5,18 +5,43 @@ export interface PoolData {
   reserved_usdc_micro: string;
   queue_total_owed_micro: string;
   available_usdc_micro: string;
-  // Trader collateral locked in the pool — NOT withdrawable by LPs.
   escrowed_usdc_micro?: string;
   lp_supply: string;
   stressed: boolean;
-  // Pool paused by Parquet admin — deposits disabled, withdrawals still allowed.
   paused?: boolean;
-  // Deposits are blocked by the program (err 6031) when a pool holds USDC with 0
-  // LP supply (stranded). depositable = lp_supply > 0 OR total_usdc == 0.
   depositable: boolean;
-  // LP share of the trailing-24h trading fees, annualized against pool TVL.
-  // Null when the Parquet indexer is unavailable or the pool has no TVL.
   fee_apr_pct?: number | null;
+}
+
+export interface ParquetMarketEntry extends PoolData {
+  venue: 'parquet';
+  key: string;
+}
+
+export interface SolendMarketEntry {
+  venue: 'solend';
+  market: string;
+  key: string;
+  label: string;
+  treasury_wallet: string;
+  total_usdc_micro: string;
+  available_usdc_micro: string;
+  apr_pct: number | null;
+  paused: boolean;
+  depositable: boolean;
+}
+
+export type MarketEntry = ParquetMarketEntry | SolendMarketEntry;
+
+export interface ProductData {
+  id: 'solend' | 'parquet';
+  kind: 'lending' | 'liquidity_provision';
+  label: string;
+  risk: 'lower' | 'higher';
+  apr_label: string;
+  headline_apr_pct: number | null;
+  total_tvl_micro: string;
+  markets: MarketEntry[];
 }
 
 export interface Position {

@@ -61,6 +61,12 @@ async function readSplBalance(conn: Connection, ata: PublicKey): Promise<bigint>
 export const parquetVenue: EarnVenue = {
   id: 'parquet',
   label: 'Parquet',
+  product: {
+    kind: 'liquidity_provision',
+    label: 'Liquidity Provision',
+    risk: 'higher',
+    aprLabel: 'Fee APR',
+  },
 
   isConfigured(): boolean {
     return isParquetEarnConfigured();
@@ -90,7 +96,11 @@ export const parquetVenue: EarnVenue = {
 
   async readHealth(market: string): Promise<EarnVenueHealth> {
     const health = await readPoolHealth(market);
-    return { availableUsdc: availableLiquidity(health), isPaused: health.isPaused };
+    return {
+      availableUsdc: availableLiquidity(health),
+      totalUsdc: health.totalUsdc,
+      isPaused: health.isPaused,
+    };
   },
 
   // Deposits USDC already in the treasury and measures the LP minted as the

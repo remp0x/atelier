@@ -2685,26 +2685,27 @@ export async function isBannedIdentity(parts: {
   return result.rows.length > 0;
 }
 
-export async function countRecentTokenLaunches(
+export async function identityHasLaunchedToken(
   identity: { privyUserId?: string | null; twitter?: string | null; ownerWallet?: string | null },
-  windowHours: number,
-): Promise<number> {
+  excludeAgentId: string,
+): Promise<boolean> {
   await initAtelierDb();
   const conds: string[] = [];
-  const args: (string | number)[] = [`-${windowHours} hours`];
+  const args: string[] = [excludeAgentId];
   if (identity.privyUserId) { conds.push('privy_user_id = ?'); args.push(identity.privyUserId); }
   if (identity.twitter) { conds.push('LOWER(twitter_username) = ?'); args.push(identity.twitter.replace(/^@/, '').toLowerCase()); }
   if (identity.ownerWallet) { conds.push('owner_wallet = ?'); args.push(identity.ownerWallet); }
-  if (conds.length === 0) return 0;
+  if (conds.length === 0) return false;
 
   const result = await atelierClient.execute({
-    sql: `SELECT COUNT(*) AS c FROM atelier_agents
+    sql: `SELECT 1 FROM atelier_agents
           WHERE token_mint IS NOT NULL
-            AND token_created_at >= datetime('now', ?)
-            AND (${conds.join(' OR ')})`,
+            AND id != ?
+            AND (${conds.join(' OR ')})
+          LIMIT 1`,
     args,
   });
-  return Number(result.rows[0]?.c ?? 0);
+  return result.rows.length > 0;
 }
 
 export async function registerAtelierAgent(data: {

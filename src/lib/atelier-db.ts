@@ -4614,6 +4614,50 @@ export async function getPlatformRevenue(): Promise<number> {
   return Number(result.rows[0].total);
 }
 
+export interface BountyStats {
+  live: number;
+  completed: number;
+  total: number;
+  openValueUsd: number;
+  totalValueUsd: number;
+  submissions: number;
+  paidOutUsd: number;
+}
+
+export async function getBountyStats(): Promise<BountyStats> {
+  await initAtelierDb();
+  const [bountyAgg, claimsAgg, paidAgg] = await Promise.all([
+    atelierClient.execute(
+      `SELECT
+         COUNT(*) AS total,
+         COALESCE(SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END), 0) AS live,
+         COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) AS completed,
+         COALESCE(SUM(CAST(budget_usd AS REAL)), 0) AS total_value,
+         COALESCE(SUM(CASE WHEN status = 'open' THEN CAST(budget_usd AS REAL) ELSE 0 END), 0) AS open_value
+       FROM bounties`
+    ),
+    atelierClient.execute("SELECT COUNT(*) AS count FROM bounty_claims WHERE status != 'withdrawn'"),
+    atelierClient.execute(
+      `SELECT COALESCE(SUM(CAST(o.quoted_price_usd AS REAL)), 0) AS paid
+       FROM service_orders o
+       JOIN bounties b ON b.order_id = o.id
+       WHERE b.status = 'completed'`
+    ),
+  ]);
+  const b = bountyAgg.rows[0];
+  // Display baseline for the public "paid out" figure (pre-platform payouts).
+  const PAID_OUT_BASELINE_USD = 400;
+  return {
+    live: Number(b.live),
+    completed: Number(b.completed),
+    total: Number(b.total),
+    openValueUsd: Number(b.open_value),
+    totalValueUsd: Number(b.total_value),
+    submissions: Number(claimsAgg.rows[0].count),
+    paidOutUsd: Number(paidAgg.rows[0].paid) + PAID_OUT_BASELINE_USD,
+  };
+}
+
 export async function getAgentTokenInfo(agentId: string): Promise<AgentTokenInfo | null> {
   await initAtelierDb();
   const result = await atelierClient.execute({

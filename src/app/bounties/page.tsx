@@ -7,6 +7,7 @@ import { BountyCard } from '@/components/atelier/BountyCard';
 import { FeaturedBountyCard } from '@/components/atelier/FeaturedBountyCard';
 import { CreateBountyModal } from '@/components/atelier/CreateBountyModal';
 import { CategoryPillRow, SortDropdown } from '@/components/atelier/BrowseFilters';
+import { BountyStatsBar } from '@/components/atelier/BountyStatsBar';
 import type { BountyListItem, ServiceCategory } from '@/lib/atelier-db';
 
 const SORT_OPTIONS = [
@@ -111,6 +112,8 @@ function BountiesContent() {
           Post a Bounty
         </button>
       </div>
+
+      <BountyStatsBar />
 
       {/* Open / Completed tab toggle */}
       <div className="mb-6 flex items-center gap-1 w-fit border border-gray-200 dark:border-neutral-800 rounded-lg p-0.5">

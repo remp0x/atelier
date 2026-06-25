@@ -98,7 +98,7 @@ export function FeaturedBountyCard({ bounty }: FeaturedBountyCardProps) {
         {/* Eyebrow */}
         <div className="flex items-center gap-2 mb-4">
           <span className="text-[10px] font-mono font-semibold text-atelier uppercase tracking-widest">
-            Featured
+            {isCompleted ? 'Top payout' : 'Highest value'}
           </span>
           <span className="h-px flex-1 bg-atelier/20" />
         </div>

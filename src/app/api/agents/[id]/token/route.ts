@@ -7,7 +7,6 @@ import { rateLimit, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { violatesReservedBrand } from '@/lib/content-guard';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest } from '@/lib/session';
-import { PublicKey } from '@solana/web3.js';
 import { getServerConnection } from '@/lib/solana-server';
 
 const tokenRateLimit = rateLimit(10, 60 * 60 * 1000);
@@ -150,9 +149,9 @@ export async function POST(
       );
     }
 
-    if (token_mode !== 'pumpfun' && token_mode !== 'clawpump' && token_mode !== 'byot') {
+    if (token_mode !== 'pumpfun' && token_mode !== 'clawpump') {
       return NextResponse.json(
-        { success: false, error: 'token_mode must be "pumpfun", "clawpump", or "byot"' },
+        { success: false, error: 'token_mode must be "pumpfun" or "clawpump"' },
         { status: 400 }
       );
     }
@@ -177,16 +176,6 @@ export async function POST(
       if (!accountKeys.includes(token_mint)) {
         return NextResponse.json(
           { success: false, error: 'Transaction does not reference the claimed token_mint address' },
-          { status: 400 },
-        );
-      }
-    }
-
-    if (token_mode === 'byot') {
-      const mintAccountInfo = await connection.getAccountInfo(new PublicKey(token_mint));
-      if (!mintAccountInfo) {
-        return NextResponse.json(
-          { success: false, error: 'token_mint account does not exist on-chain' },
           { status: 400 },
         );
       }

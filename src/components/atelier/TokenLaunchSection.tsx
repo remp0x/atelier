@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useLinkAccount } from '@privy-io/react-auth';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
-import { linkExistingToken } from '@/lib/pumpfun-client';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import { isAtelierAdminEmail } from '@/lib/admin-client';
 import { providerLabel, agentFeePct, badgeLabelForMode, IS_CLAWPUMP } from '@/lib/token-economics';
@@ -22,8 +21,6 @@ interface TokenInfo {
 }
 
 type LaunchStep = 'idle' | 'launching' | 'confirming' | 'saving' | 'done' | 'error';
-
-const TOKEN_NAME_SUFFIX = ' by Atelier';
 
 function formatMcap(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -85,7 +82,7 @@ export function TokenLaunchSection({
     (user?.linkedAccounts ?? []).some((a) => a.type === 'twitter_oauth') ||
     Boolean(atelierUser?.twitter_username);
 
-  const [mode, setMode] = useState<'none' | 'pumpfun' | 'byot'>('none');
+  const [mode, setMode] = useState<'none' | 'pumpfun'>('none');
   const [resetting, setResetting] = useState(false);
   const [step, setStep] = useState<LaunchStep>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -108,11 +105,6 @@ export function TokenLaunchSection({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // BYOT form
-  const [byotMint, setByotMint] = useState('');
-  const [byotName, setByotName] = useState('');
-  const [byotSymbol, setByotSymbol] = useState('');
 
   useEffect(() => {
     if (!IS_CLAWPUMP || token?.mode !== 'clawpump' || !token?.mint) return;
@@ -236,7 +228,8 @@ export function TokenLaunchSection({
               <span className="text-xs font-mono text-neutral-500">CA:</span>
               <button
                 onClick={() => handleCopy(token.mint!)}
-                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded transition-all duration-200 text-xs font-mono ${
+                aria-label={copied ? 'Copied!' : 'Copy contract address'}
+                className={`cursor-pointer inline-flex items-center gap-1.5 px-2 py-0.5 rounded transition-all duration-200 text-xs font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 ${
                   copied
                     ? 'bg-green-500/15 text-green-500'
                     : 'text-neutral-400 hover:text-atelier hover:bg-atelier/10'
@@ -253,33 +246,36 @@ export function TokenLaunchSection({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0">
             <a
               href={`https://pump.fun/coin/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 opacity-60 hover:opacity-100 transition-all"
+              aria-label="View on PumpFun"
               title="PumpFun"
+              className="cursor-pointer p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 opacity-60 hover:opacity-100 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60"
             >
-              <img src="/pumpfun.svg" alt="PumpFun" className="w-5 h-5" />
+              <img src="/pumpfun.svg" alt="" className="w-5 h-5" />
             </a>
             <a
               href={`https://dexscreener.com/solana/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 opacity-60 hover:opacity-100 transition-all"
+              aria-label="View on DexScreener"
               title="DexScreener"
+              className="cursor-pointer p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 opacity-60 hover:opacity-100 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60"
             >
-              <img src="/dexscreener.svg" alt="DexScreener" className="w-5 h-5 invert dark:invert-0" />
+              <img src="/dexscreener.svg" alt="" className="w-5 h-5 invert dark:invert-0" />
             </a>
             <a
               href={`https://solscan.io/token/${token.mint}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 opacity-60 hover:opacity-100 transition-all"
+              aria-label="View on Solscan"
               title="Solscan"
+              className="cursor-pointer p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800/60 opacity-60 hover:opacity-100 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60"
             >
-              <img src="/solscan.svg" alt="Solscan" className="w-5 h-5" />
+              <img src="/solscan.svg" alt="" className="w-5 h-5" />
             </a>
           </div>
         </div>
@@ -302,7 +298,7 @@ export function TokenLaunchSection({
                 <button
                   onClick={handleClaim}
                   disabled={claiming || claimInfo.claimableSol < claimInfo.minClaimSol}
-                  className="px-2.5 py-1 rounded border border-atelier/40 text-atelier text-2xs font-mono font-medium transition-all duration-200 hover:bg-atelier/10 hover:border-atelier/60 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5"
+                  className="cursor-pointer px-2.5 py-1 rounded-md border border-atelier/40 text-atelier text-2xs font-mono font-medium transition-all duration-200 hover:bg-atelier/10 hover:border-atelier/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1.5"
                 >
                   {claiming && (
                     <span className="w-3 h-3 border border-atelier border-t-transparent rounded-full animate-spin inline-block" />
@@ -452,30 +448,6 @@ export function TokenLaunchSection({
     }
   }
 
-  async function handleByotLink() {
-    if (!walletAddress) return;
-    setError(null);
-
-    try {
-      setStep('saving');
-      const fullName = byotName.endsWith(TOKEN_NAME_SUFFIX) ? byotName : byotName + TOKEN_NAME_SUFFIX;
-      const walletAuth = await getAuth();
-      await linkExistingToken({
-        agentId,
-        mintAddress: byotMint,
-        name: fullName,
-        symbol: byotSymbol,
-        walletPublicKey: walletAddress,
-        walletAuth,
-      });
-      setStep('done');
-      onTokenSet();
-    } catch (err) {
-      setStep('error');
-      setError(err instanceof Error ? err.message : 'Link failed');
-    }
-  }
-
   const stepLabels: Record<string, string> = {
     launching: 'Launching token...',
     confirming: 'Confirming transaction...',
@@ -487,30 +459,30 @@ export function TokenLaunchSection({
       <h3 className="text-sm font-bold font-display mb-3">Agent Token</h3>
 
       {mode === 'none' && (
-        <div className="flex gap-3">
+        <div className="space-y-2">
           <button
+            aria-label={`Launch ${agentName} token on ${providerLabel}`}
             onClick={() => { setMode('pumpfun'); setName(agentName); setDescription(agentDescription || ''); setImageUrl(agentAvatarUrl); }}
             disabled={busy}
-            className="group flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-mono font-semibold text-white shadow-sm shadow-atelier/20 transition-all duration-200 hover:shadow-md hover:shadow-atelier/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
+            className="group w-full flex flex-col items-center justify-center gap-1 px-5 py-4 rounded-xl text-white cursor-pointer shadow-md shadow-atelier/25 transition-all duration-200 hover:shadow-lg hover:shadow-atelier/40 hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black disabled:opacity-50 disabled:pointer-events-none"
             style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)' }}
           >
-            {IS_CLAWPUMP && (
-              <img src="/clawpump_logo.png" alt="" className="w-[18px] h-[18px] rounded-sm transition-transform duration-200 group-hover:scale-110" />
-            )}
-            Launch on {providerLabel}
-          </button>
-          <button
-            onClick={() => setMode('byot')}
-            disabled={busy}
-            className="flex-1 px-4 py-2.5 rounded-lg border border-atelier/30 text-atelier text-sm font-mono font-medium transition-all duration-200 hover:bg-atelier/10 hover:border-atelier/50 disabled:opacity-50"
-          >
-            Link Existing Token
+            <span className="flex items-center gap-2.5">
+              {IS_CLAWPUMP && (
+                <img src="/clawpump_logo.png" alt="" className="w-5 h-5 rounded-sm transition-transform duration-200 group-hover:scale-110" />
+              )}
+              <span className="text-sm font-semibold font-display tracking-tight">Launch on {providerLabel}</span>
+            </span>
+            <span className="text-2xs font-mono text-white/75">
+              No wallet signing needed &middot; you earn {agentFeePct}% of creator fees
+            </span>
           </button>
         </div>
       )}
 
       {mode === 'pumpfun' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Image picker */}
           <div className="flex items-center gap-3">
             <div className="w-14 h-14 rounded-lg overflow-hidden bg-atelier/10 flex items-center justify-center shrink-0 border border-gray-200 dark:border-neutral-800">
               {imageUrl ? (
@@ -522,9 +494,10 @@ export function TokenLaunchSection({
             <div className="flex-1 min-w-0">
               <button
                 type="button"
+                aria-label={uploadingImage ? 'Uploading image' : imageUrl ? 'Change token image' : 'Upload token image'}
                 onClick={() => fileInputRef.current?.click()}
                 disabled={busy || uploadingImage}
-                className="px-3 py-1.5 rounded border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 hover:text-atelier hover:border-atelier/40 transition-all disabled:opacity-50"
+                className="cursor-pointer px-3 py-1.5 rounded-md border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 hover:text-atelier hover:border-atelier/40 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 disabled:opacity-50"
               >
                 {uploadingImage ? 'Uploading...' : imageUrl ? 'Change image' : 'Upload image'}
               </button>
@@ -542,55 +515,61 @@ export function TokenLaunchSection({
               />
             </div>
           </div>
+
+          {/* Name + Symbol */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="relative">
+            <div>
+              <label htmlFor="token-name" className="block text-2xs font-mono text-neutral-500 mb-1">Token Name</label>
+              <div className="relative">
+                <input
+                  id="token-name"
+                  type="text"
+                  placeholder="e.g. MyAgent"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={busy}
+                  className="w-full px-3 py-2 pr-24 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 focus:ring-1 focus:ring-atelier/30 transition-colors duration-150 disabled:opacity-50"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-2xs font-mono text-atelier pointer-events-none">
+                  by Atelier
+                </span>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="token-symbol" className="block text-2xs font-mono text-neutral-500 mb-1">Symbol</label>
               <input
+                id="token-symbol"
                 type="text"
-                placeholder="Token Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                placeholder="SYMBOL"
+                value={symbol}
+                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                maxLength={10}
                 disabled={busy}
-                className="w-full px-3 py-2 pr-24 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 disabled:opacity-50"
+                className="w-full px-3 py-2 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 focus:ring-1 focus:ring-atelier/30 transition-colors duration-150 disabled:opacity-50"
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-2xs font-mono text-atelier pointer-events-none">
-                by Atelier
-              </span>
             </div>
-            <input
-              type="text"
-              placeholder="SYMBOL"
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-              maxLength={10}
-              disabled={busy}
-              className="px-3 py-2 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 disabled:opacity-50"
-            />
           </div>
-          <textarea
-            placeholder="Description (min 20 characters)"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 resize-none disabled:opacity-50"
-          />
-          {IS_CLAWPUMP && description.trim().length < 20 && (
-            <p className="text-2xs font-mono text-amber-500">
-              Description needs at least 20 characters ({description.trim().length}/20).
-            </p>
-          )}
 
-          {busy && (
-            <div className="flex items-center gap-2 py-2">
-              <div className="w-4 h-4 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs text-green-400 font-mono">{stepLabels[step] || 'Processing...'}</span>
-            </div>
-          )}
+          {/* Description */}
+          <div>
+            <label htmlFor="token-description" className="block text-2xs font-mono text-neutral-500 mb-1">Description</label>
+            <textarea
+              id="token-description"
+              placeholder="Min 20 characters"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              disabled={busy}
+              className="w-full px-3 py-2 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 focus:ring-1 focus:ring-atelier/30 transition-colors duration-150 resize-none disabled:opacity-50"
+            />
+            {IS_CLAWPUMP && description.trim().length < 20 && (
+              <p className="mt-1 text-2xs font-mono text-amber-500">
+                {description.trim().length}/20 characters minimum
+              </p>
+            )}
+          </div>
 
-          {error && (
-            <p className="text-xs text-red-400 font-mono">{error}</p>
-          )}
-
+          {/* X account gate */}
           {!hasLinkedX && (
             <div className="rounded-lg border border-amber-400/40 bg-amber-50 dark:bg-amber-900/10 p-3 space-y-2">
               <p className="text-2xs font-mono text-amber-600 dark:text-amber-400">
@@ -600,74 +579,17 @@ export function TokenLaunchSection({
                 type="button"
                 onClick={() => { void linkTwitter(); }}
                 disabled={busy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-400/50 text-amber-600 dark:text-amber-400 text-2xs font-mono font-medium transition-all hover:bg-amber-400/10 disabled:opacity-50"
+                className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-400/50 text-amber-600 dark:text-amber-400 text-2xs font-mono font-medium transition-all duration-150 hover:bg-amber-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:opacity-50"
               >
                 Connect X
               </button>
             </div>
           )}
 
-          <div className="flex gap-3">
-            <button
-              onClick={handlePumpFunLaunch}
-              disabled={busy || uploadingImage || !name || !symbol || !imageUrl || !hasLinkedX || (IS_CLAWPUMP && description.trim().length < 20)}
-              className="flex-1 px-3 py-2 rounded border border-green-500/50 text-green-400 text-xs font-medium font-mono transition-all duration-200 hover:bg-green-500 hover:text-black hover:border-green-500 disabled:opacity-50"
-            >
-              Launch Token
-            </button>
-            <button
-              onClick={() => { setMode('none'); setError(null); setStep('idle'); }}
-              disabled={busy}
-              className="px-3 py-2 rounded border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 hover:text-atelier hover:border-atelier/40 transition-all duration-200 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-          <p className="text-2xs text-neutral-500 font-mono flex items-center gap-1.5">
-            {IS_CLAWPUMP && <img src="/clawpump_logo.png" alt="" className="w-3 h-3 rounded-sm shrink-0" />}
-            <span>Launched via {providerLabel}. You earn {agentFeePct}% of your token&apos;s creator fees.</span>
-          </p>
-        </div>
-      )}
-
-      {mode === 'byot' && (
-        <div className="space-y-3">
-          <input
-            type="text"
-            placeholder="Token Mint Address"
-            value={byotMint}
-            onChange={(e) => setByotMint(e.target.value)}
-            disabled={busy}
-            className="w-full px-3 py-2 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 disabled:opacity-50"
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Token Name"
-                value={byotName}
-                onChange={(e) => setByotName(e.target.value)}
-                disabled={busy}
-                className="w-full px-3 py-2 pr-24 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 disabled:opacity-50"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-2xs font-mono text-atelier pointer-events-none">
-                by Atelier
-              </span>
-            </div>
-            <input
-              type="text"
-              placeholder="SYMBOL"
-              value={byotSymbol}
-              onChange={(e) => setByotSymbol(e.target.value.toUpperCase())}
-              maxLength={10}
-              disabled={busy}
-              className="px-3 py-2 rounded-lg bg-white dark:bg-black-light border border-gray-200 dark:border-neutral-800 text-sm font-mono placeholder:text-neutral-500 focus:outline-none focus:border-atelier/50 disabled:opacity-50"
-            />
-          </div>
-
+          {/* Busy indicator */}
           {busy && (
-            <div className="flex items-center gap-2 py-2">
-              <div className="w-4 h-4 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center gap-2 py-1">
+              <div className="w-4 h-4 border-2 border-atelier border-t-transparent rounded-full animate-spin shrink-0" />
               <span className="text-xs text-atelier font-mono">{stepLabels[step] || 'Processing...'}</span>
             </div>
           )}
@@ -676,22 +598,30 @@ export function TokenLaunchSection({
             <p className="text-xs text-red-400 font-mono">{error}</p>
           )}
 
-          <div className="flex gap-3">
+          {/* Actions */}
+          <div className="flex gap-2.5">
             <button
-              onClick={handleByotLink}
-              disabled={busy || !byotMint || !byotName || !byotSymbol}
-              className="flex-1 px-3 py-2 rounded border border-atelier/60 text-atelier text-xs font-medium font-mono transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier disabled:opacity-50"
+              onClick={handlePumpFunLaunch}
+              disabled={busy || uploadingImage || !name || !symbol || !imageUrl || !hasLinkedX || (IS_CLAWPUMP && description.trim().length < 20)}
+              className="cursor-pointer flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold font-mono text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black disabled:opacity-40 disabled:pointer-events-none"
+              style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)' }}
             >
-              Link Token
+              {busy && <span className="w-3.5 h-3.5 border-2 border-white/60 border-t-white rounded-full animate-spin" />}
+              {busy ? 'Launching...' : 'Launch Token'}
             </button>
             <button
               onClick={() => { setMode('none'); setError(null); setStep('idle'); }}
               disabled={busy}
-              className="px-3 py-2 rounded border border-gray-200 dark:border-neutral-800 text-xs font-mono text-gray-600 dark:text-neutral-300 hover:text-atelier hover:border-atelier/40 transition-all duration-200 disabled:opacity-50"
+              className="cursor-pointer px-4 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-mono text-gray-600 dark:text-neutral-300 hover:text-atelier hover:border-atelier/40 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier/60 disabled:opacity-50"
             >
               Cancel
             </button>
           </div>
+
+          <p className="text-2xs text-neutral-500 font-mono flex items-center gap-1.5">
+            {IS_CLAWPUMP && <img src="/clawpump_logo.png" alt="" className="w-3 h-3 rounded-sm shrink-0" />}
+            <span>Via {providerLabel}. You earn {agentFeePct}% of creator fees.</span>
+          </p>
         </div>
       )}
     </div>

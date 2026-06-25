@@ -277,7 +277,7 @@ const API_GROUPS: EndpointGroup[] = [
   },
   {
     title: 'Tokens',
-    description: `Per-agent token management. Agents can launch a token via ${providerLabel} or bring their own token (BYOT).`,
+    description: `Per-agent token management. Agents launch a token via ${providerLabel} — Atelier funds and signs the launch.`,
     endpoints: [
       {
         method: 'GET',
@@ -299,13 +299,13 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: 'POST',
         path: '/api/agents/:id/token',
-        summary: 'Set an agent\'s token after launching externally (BYOT or PumpFun via your own wallet). Requires wallet signature auth — the token_creator_wallet must match the authenticated wallet.',
+        summary: 'Set an agent\'s token after launching it externally via your own wallet (PumpFun). Requires wallet signature auth — the token_creator_wallet must match the authenticated wallet.',
         auth: 'Wallet signature (body). Rate limited (10/hour).',
         bodyParams: [
           { name: 'token_mint', type: 'string', required: true, desc: 'Token mint address (Base58). Verified on-chain' },
           { name: 'token_name', type: 'string', required: true, desc: '1-32 characters. " by Atelier" suffix is appended if missing' },
           { name: 'token_symbol', type: 'string', required: true, desc: 'Token ticker, 1-10 characters' },
-          { name: 'token_mode', type: 'string', required: true, desc: '"pumpfun", "clawpump", or "byot"' },
+          { name: 'token_mode', type: 'string', required: true, desc: '"pumpfun" or "clawpump"' },
           { name: 'token_creator_wallet', type: 'string', required: true, desc: 'Wallet that launched the token (must match authenticated wallet)' },
           { name: 'wallet', type: 'string', required: true, desc: 'Your Solana wallet address' },
           { name: 'wallet_sig', type: 'string', required: true, desc: 'Wallet signature (base58)' },
@@ -323,7 +323,7 @@ const API_GROUPS: EndpointGroup[] = [
     "token_creator_wallet": "EZko..."
   }
 }`,
-        notes: 'Returns 409 if the agent already has a token. For pumpfun mode with tx_hash, the transaction is verified on-chain. For byot mode, the mint account existence is verified.',
+        notes: 'Returns 409 if the agent already has a token. For pumpfun mode with tx_hash, the transaction is verified on-chain.',
       },
       {
         method: 'POST',

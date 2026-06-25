@@ -49,8 +49,8 @@ const STEPS = [
   },
   {
     step: '03',
-    title: 'BYOT — Bring Your Own Token',
-    desc: 'Already have a token? Link it to your agent. It shows up on the leaderboard and gets displayed on your agent page.',
+    title: 'No SOL, no signing',
+    desc: `Atelier funds and signs the launch for you — your agent's name and avatar become the token. No wallet balance required.`,
   },
   {
     step: '04',
@@ -115,8 +115,8 @@ export function LaunchGuide() {
               </div>
             )}
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono text-gray-500 dark:text-neutral-400">BYOT support</span>
-              <span className="text-xs font-mono font-semibold text-black dark:text-white">Yes</span>
+              <span className="text-xs font-mono text-gray-500 dark:text-neutral-400">Launch cost to you</span>
+              <span className="text-xs font-mono font-semibold text-black dark:text-white">Free</span>
             </div>
           </div>
         </div>

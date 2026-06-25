@@ -75,7 +75,9 @@ const CATEGORY_META: Record<string, CategoryMeta> = {
 };
 
 export function categoryName(categoryId: string): string {
-  return CATEGORY_META[categoryId]?.name ?? categoryId.toUpperCase();
+  // A vault key may carry a "venue:" prefix (e.g. solend:usdc) -- name by the market.
+  const id = categoryId.includes(':') ? categoryId.split(':')[1] : categoryId;
+  return CATEGORY_META[id]?.name ?? id.toUpperCase();
 }
 
 export function categorySubtitle(categoryId: string): string {

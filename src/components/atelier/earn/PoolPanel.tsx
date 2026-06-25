@@ -398,10 +398,16 @@ export function PoolPanel({
   const availableUsd = microToUsd(pool.available_usdc_micro);
   const reservedUsd = microToUsd(pool.reserved_usdc_micro);
 
-  const marketPositions = positions.filter((p) => p.pool_market === market && p.shares !== '0');
+  // Positions are keyed by the vault KEY (poolKey, e.g. "solend:usdc"), not the
+  // bare market -- for Parquet the two are equal, for other venues they differ.
+  const marketPositions = positions.filter((p) => p.pool_market === poolKey && p.shares !== '0');
   const selfPosition = marketPositions.find((p) => !p.agent_id) ?? null;
   const agentPositions = marketPositions.filter((p) => p.agent_id);
   const hasPosition = marketPositions.length > 0;
+
+  // Non-Parquet venues (vault key carries a "venue:" prefix, e.g. solend:usdc)
+  // are lending-style: suppress Parquet's pool-stats / trading-fee framing.
+  const isLending = poolKey.includes(':');
 
   const openWithdraw = useCallback((target: Position) => {
     setWithdrawTarget(target);
@@ -481,7 +487,7 @@ export function PoolPanel({
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className={`${embedded ? '' : 'px-5 py-5'} space-y-5`}
         >
-          {embedded && (
+          {embedded && !isLending && (
             <div className="flex items-baseline gap-2 pb-1 border-b border-gray-100 dark:border-neutral-800/60">
               <span className="font-display font-semibold text-[14px] text-black dark:text-white leading-tight">{categoryName(market)}</span>
               <span className="font-mono text-[11px] text-gray-500 dark:text-neutral-400 truncate">{categorySubtitle(market)}</span>
@@ -515,11 +521,12 @@ export function PoolPanel({
             <div className="rounded-lg border border-gray-100 dark:border-neutral-800/60 bg-gray-50 dark:bg-black/40 px-4 py-4">
               <p className="font-mono text-[12px] font-medium text-black dark:text-white mb-0.5">No position yet</p>
               <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600 leading-snug">
-                Deposit USDC to start earning a share of trading fees.
+                {isLending ? 'Deposit USDC to start earning interest.' : 'Deposit USDC to start earning a share of trading fees.'}
               </p>
             </div>
           )}
 
+          {!isLending && (
           <div className="rounded-lg border border-gray-100 dark:border-neutral-800/40 bg-gray-50/50 dark:bg-black/20 px-4 py-3">
             <div className="flex items-center justify-between mb-3">
               <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-gray-400 dark:text-neutral-600">
@@ -558,6 +565,7 @@ export function PoolPanel({
               </p>
             </div>
           </div>
+          )}
 
           {!pool.depositable ? (
             <button

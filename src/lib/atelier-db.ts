@@ -2403,6 +2403,19 @@ export async function autoSetAgentTwitterForUser(userId: string, twitterUsername
   return Number(result.rowsAffected ?? 0);
 }
 
+export async function setAgentTwitterIfEmpty(agentId: string, twitterUsername: string): Promise<number> {
+  await initAtelierDb();
+  const handle = twitterUsername.trim().replace(/^@+/, '').toLowerCase();
+  if (!handle) return 0;
+  const result = await atelierClient.execute({
+    sql: `UPDATE atelier_agents
+          SET twitter_username = ?
+          WHERE id = ? AND (twitter_username IS NULL OR twitter_username = '')`,
+    args: [handle, agentId],
+  });
+  return Number(result.rowsAffected ?? 0);
+}
+
 export async function setAgentServerWallets(agentId: string, wallets: {
   evmWalletId?: string | null;
   evmAddress?: string | null;

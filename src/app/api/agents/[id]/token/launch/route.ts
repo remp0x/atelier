@@ -7,7 +7,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { tryAuthenticatePrivy, type PrivyUserInfo } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
@@ -148,9 +148,11 @@ export async function POST(
     // auth path. The owner's linked X auto-propagates to agent.twitter_username on
     // login; for a live Privy session we also accept the handle straight from the
     // verified token (covers a just-linked account whose propagation hasn't run yet).
-    const hasLinkedX = Boolean(
-      agent.twitter_username?.trim() || privyInfo?.twitterUsername?.trim(),
-    );
+    // The X handle that vouches for this launch. When the agent row carries no
+    // handle yet (propagation lag), the live Privy token is what satisfies the
+    // gate -- capture it so the launched token records a traceable account.
+    const vouchingTwitter = agent.twitter_username?.trim() || privyInfo?.twitterUsername?.trim() || '';
+    const hasLinkedX = Boolean(vouchingTwitter);
     if (!hasLinkedX) {
       return NextResponse.json(
         { success: false, error: 'Link an X (Twitter) account before launching a token. This keeps launches spam-free.' },
@@ -307,6 +309,15 @@ export async function POST(
         { success: false, error: 'Token already set or agent not found' },
         { status: 409 },
       );
+    }
+
+    // Anti-spam audit trail: every launched token must record the X that vouched
+    // for it. If the row had no handle, persist the live Privy one (no-op when the
+    // agent already carries one). Best-effort -- the mint already succeeded.
+    if (!agent.twitter_username?.trim() && vouchingTwitter) {
+      await setAgentTwitterIfEmpty(agentId, vouchingTwitter).catch((err) => {
+        console.error('[token-launch] Failed to persist vouching X handle:', err);
+      });
     }
 
     return NextResponse.json({

@@ -9,17 +9,18 @@ import {
   parseSharesArg,
   validateSolanaAddress,
 } from '@/lib/earn-auth';
-import { isParquetEarnConfigured, isCategoryEnabled, getDefaultCategory } from '@/lib/parquet-earn';
+import { isAnyEarnConfigured, tryGetVenue, vaultKeyFor } from '@/lib/earn/registry';
 import { withdrawForOwner, getOwnerEarnPosition } from '@/lib/parquet-earn-flows';
 import type { EarnOwnerKind } from '@/lib/parquet-earn-db';
 
-// Withdraw from the Parquet Earn pool by burning vault shares. Pass `shares`
-// (integer string) or `all: true`. USDC is sent to `destination_wallet`, or for
-// agents falls back to their configured payout/owner wallet.
+// Withdraw from an Earn venue by burning vault shares. Pass `shares` (integer
+// string) or `all: true`, plus an optional `venue`/`market` (default parquet).
+// USDC is sent to `destination_wallet`, or for agents falls back to their
+// configured payout/owner wallet.
 export async function POST(request: NextRequest) {
   try {
-    if (!isParquetEarnConfigured()) {
-      return NextResponse.json({ success: false, error: 'Parquet Earn is not configured' }, { status: 503 });
+    if (!isAnyEarnConfigured()) {
+      return NextResponse.json({ success: false, error: 'Earn is not configured' }, { status: 503 });
     }
 
     const body = await request.json().catch(() => ({}));
@@ -29,10 +30,24 @@ export async function POST(request: NextRequest) {
     const limited = earnRateLimit(`earn:${caller.ownerId}`);
     if (limited) return limited;
 
-    const market = typeof body.market === 'string' && body.market.trim() ? body.market.trim() : getDefaultCategory();
-    if (!isCategoryEnabled(market)) {
-      return NextResponse.json({ success: false, error: `market "${market}" is not enabled for Earn` }, { status: 400 });
+    const venueId = typeof body.venue === 'string' && body.venue.trim() ? body.venue.trim() : 'parquet';
+    const venue = tryGetVenue(venueId);
+    if (!venue) {
+      return NextResponse.json({ success: false, error: `unknown venue "${venueId}"` }, { status: 400 });
     }
+    if (!venue.isConfigured()) {
+      return NextResponse.json({ success: false, error: `venue "${venueId}" is not configured` }, { status: 503 });
+    }
+    const market = typeof body.market === 'string' && body.market.trim()
+      ? body.market.trim()
+      : venue.listMarkets()[0]?.market;
+    if (!market || !venue.isMarketEnabled(market)) {
+      return NextResponse.json(
+        { success: false, error: `market "${market ?? ''}" is not enabled for venue "${venueId}"` },
+        { status: 400 },
+      );
+    }
+    const marketKey = vaultKeyFor(venueId, market);
 
     // A signed-in owner may withdraw on behalf of an agent they own by passing
     // agent_id; otherwise the caller withdraws their own position.
@@ -54,7 +69,7 @@ export async function POST(request: NextRequest) {
       fallbackDestination = agent?.payout_wallet || agent?.owner_wallet || null;
     }
 
-    const { position } = await getOwnerEarnPosition(market, ownerKind, ownerId);
+    const { position } = await getOwnerEarnPosition(marketKey, ownerKind, ownerId);
     if (!position || position.shares <= BigInt(0)) {
       return NextResponse.json({ success: false, error: 'No active Earn position' }, { status: 400 });
     }
@@ -83,7 +98,7 @@ export async function POST(request: NextRequest) {
     const slippageBps = typeof body.slippage_bps === 'number' ? body.slippage_bps : undefined;
 
     const result = await withdrawForOwner({
-      market,
+      market: marketKey,
       ownerKind,
       ownerId,
       shares,

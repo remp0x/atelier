@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthError } from '@/lib/atelier-auth';
 import { getAtelierAgentsByUser } from '@/lib/atelier-db';
 import { resolveEarnCaller, earnRateLimit, microToUsdString } from '@/lib/earn-auth';
-import { isParquetEarnConfigured, isCategoryEnabled, valueLpInUsdc } from '@/lib/parquet-earn';
+import { isAnyEarnConfigured, tryGetVenue, parseVenueKey } from '@/lib/earn/registry';
 import { listPositionsByOwner, getVaultById, computeLpForShares, type EarnOwnerKind } from '@/lib/parquet-earn-db';
 
 interface PositionSource {
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const configured = isParquetEarnConfigured();
+    const configured = isAnyEarnConfigured();
 
     const data = (
       await Promise.all(
@@ -44,9 +44,13 @@ export async function GET(request: NextRequest) {
             positions.map(async (p) => {
               const vault = await getVaultById(p.vaultId);
               let valueUsd: string | null = null;
-              if (configured && vault && vault.totalShares > BigInt(0) && isCategoryEnabled(vault.poolMarket)) {
-                const lp = computeLpForShares(vault, p.shares);
-                valueUsd = microToUsdString(await valueLpInUsdc(vault.poolMarket, lp));
+              if (configured && vault && vault.totalShares > BigInt(0)) {
+                const { venue: venueId, market } = parseVenueKey(vault.poolMarket);
+                const venue = tryGetVenue(venueId);
+                if (venue && venue.isMarketEnabled(market)) {
+                  const lp = computeLpForShares(vault, p.shares);
+                  valueUsd = microToUsdString(await venue.valueUnits(market, lp));
+                }
               }
               return {
                 vault_id: p.vaultId,

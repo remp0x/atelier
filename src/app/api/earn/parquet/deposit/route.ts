@@ -4,18 +4,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AuthError } from '@/lib/atelier-auth';
 import { requirePrivyAdmin, AdminAuthError } from '@/lib/admin-auth';
 import { resolveEarnCaller, earnRateLimit, parseUsdToMicro, microToUsdString } from '@/lib/earn-auth';
-import { isParquetEarnConfigured, isCategoryEnabled, getDefaultCategory } from '@/lib/parquet-earn';
+import { isAnyEarnConfigured, tryGetVenue, vaultKeyFor } from '@/lib/earn/registry';
 import { isEarnDepositsOpen } from '@/lib/earn-access';
 import { depositFromTransfer } from '@/lib/parquet-earn-flows';
 
-// Deposit into a Parquet Earn pool. The caller first sends USDC to the Earn
-// treasury and passes that transfer signature as `incoming_tx_hash` (push model),
-// plus the `market` to deposit into (defaults to the configured market). The
-// server verifies the transfer, deploys it into that pool, and mints shares.
+// Deposit into an Earn venue. The caller first sends USDC to the Earn treasury
+// and passes that transfer signature as `incoming_tx_hash` (push model), plus the
+// `venue` (defaults to parquet) and `market` to deposit into (defaults to the
+// venue's first market). The server verifies the transfer, deploys it into that
+// venue, and mints shares.
 export async function POST(request: NextRequest) {
   try {
-    if (!isParquetEarnConfigured()) {
-      return NextResponse.json({ success: false, error: 'Parquet Earn is not configured' }, { status: 503 });
+    if (!isAnyEarnConfigured()) {
+      return NextResponse.json({ success: false, error: 'Earn is not configured' }, { status: 503 });
     }
 
     const body = await request.json().catch(() => ({}));
@@ -26,10 +27,24 @@ export async function POST(request: NextRequest) {
     const limited = earnRateLimit(`earn:${caller.ownerId}`);
     if (limited) return limited;
 
-    const market = typeof body.market === 'string' && body.market.trim() ? body.market.trim() : getDefaultCategory();
-    if (!isCategoryEnabled(market)) {
-      return NextResponse.json({ success: false, error: `market "${market}" is not enabled for Earn` }, { status: 400 });
+    const venueId = typeof body.venue === 'string' && body.venue.trim() ? body.venue.trim() : 'parquet';
+    const venue = tryGetVenue(venueId);
+    if (!venue) {
+      return NextResponse.json({ success: false, error: `unknown venue "${venueId}"` }, { status: 400 });
     }
+    if (!venue.isConfigured()) {
+      return NextResponse.json({ success: false, error: `venue "${venueId}" is not configured` }, { status: 503 });
+    }
+    const market = typeof body.market === 'string' && body.market.trim()
+      ? body.market.trim()
+      : venue.listMarkets()[0]?.market;
+    if (!market || !venue.isMarketEnabled(market)) {
+      return NextResponse.json(
+        { success: false, error: `market "${market ?? ''}" is not enabled for venue "${venueId}"` },
+        { status: 400 },
+      );
+    }
+    const marketKey = vaultKeyFor(venueId, market);
 
     const amountUsdc = parseUsdToMicro(body.amount_usd);
     const incomingTxHash = typeof body.incoming_tx_hash === 'string' ? body.incoming_tx_hash.trim() : '';
@@ -42,7 +57,7 @@ export async function POST(request: NextRequest) {
     const slippageBps = typeof body.slippage_bps === 'number' ? body.slippage_bps : undefined;
 
     const result = await depositFromTransfer({
-      market,
+      market: marketKey,
       ownerKind: caller.ownerKind,
       ownerId: caller.ownerId,
       amountUsdc,
@@ -53,6 +68,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
+        venue: venueId,
         market,
         tx_hash: result.txHash,
         shares_minted: result.sharesMinted.toString(),

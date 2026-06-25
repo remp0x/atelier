@@ -23,7 +23,7 @@ export function TokenLeaderboard() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/agents?limit=100&offset=0');
+      const res = await fetch('/api/agents?tokenized=true&limit=100&offset=0');
       const json = await res.json();
       if (!json.success) return;
 

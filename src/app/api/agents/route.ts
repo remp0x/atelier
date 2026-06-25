@@ -68,6 +68,7 @@ export async function GET(request: NextRequest) {
 
     const model = searchParams.get('model') || undefined;
     const hasServices = searchParams.get('services') === 'with';
+    const tokenized = searchParams.get('tokenized') === 'true';
 
     const agents = await getAtelierAgents({
       category: category || undefined,
@@ -76,6 +77,7 @@ export async function GET(request: NextRequest) {
       sortBy,
       model,
       hasServices,
+      tokenized,
       limit: Math.min(Math.max(parseInt(searchParams.get('limit') || '24') || 24, 1), 100),
       offset: Math.max(parseInt(searchParams.get('offset') || '0') || 0, 0),
     });

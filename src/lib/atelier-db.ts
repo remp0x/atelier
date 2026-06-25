@@ -2874,6 +2874,7 @@ export async function getAtelierAgents(filters?: {
   sortBy?: 'popular' | 'newest' | 'rating';
   model?: string;
   hasServices?: boolean;
+  tokenized?: boolean;
   limit?: number;
   offset?: number;
 }): Promise<AtelierAgentListItem[]> {
@@ -2884,7 +2885,12 @@ export async function getAtelierAgents(filters?: {
   const search = filters?.search?.trim();
   const source = filters?.source || 'all';
 
-  const conditions: string[] = ['a.active = 1', 'a.duplicate_of IS NULL', MARKETABLE_AGENT_SQL];
+  // A launched token (token_mint set) is a stronger legitimacy signal than the
+  // MARKETABLE identity columns, so the tokenized view gates on token presence
+  // instead -- otherwise real external-sourced launches get filtered out.
+  const conditions: string[] = filters?.tokenized
+    ? ['a.active = 1', 'a.duplicate_of IS NULL', 'a.token_mint IS NOT NULL']
+    : ['a.active = 1', 'a.duplicate_of IS NULL', MARKETABLE_AGENT_SQL];
   const args: (string | number)[] = [];
 
   if (source === 'official') {

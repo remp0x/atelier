@@ -9,7 +9,7 @@ import {
 } from '@solana/web3.js';
 import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
-import { tryResolvePrivyUserId } from '@/lib/privy-auth';
+import { tryAuthenticatePrivy, type PrivyUserInfo } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
@@ -84,6 +84,7 @@ export async function POST(
 
     let authVia: 'apikey' | 'privy' | 'wallet' | null = null;
     let privyUserId: string | null = null;
+    let privyInfo: PrivyUserInfo | null = null;
     let verifiedWallet: string | null = null;
 
     if (bearer && bearer.startsWith('atelier_')) {
@@ -101,8 +102,9 @@ export async function POST(
         return NextResponse.json({ success: false, error: msg }, { status: 401 });
       }
     } else {
-      privyUserId = await tryResolvePrivyUserId(request, null);
-      if (privyUserId) {
+      privyInfo = await tryAuthenticatePrivy(request, body);
+      if (privyInfo) {
+        privyUserId = privyInfo.privyUserId;
         authVia = 'privy';
       } else {
         try {
@@ -140,6 +142,20 @@ export async function POST(
           { status: 403 },
         );
       }
+    }
+
+    // Anti-spam: every launch requires a linked X (Twitter) account, regardless of
+    // auth path. The owner's linked X auto-propagates to agent.twitter_username on
+    // login; for a live Privy session we also accept the handle straight from the
+    // verified token (covers a just-linked account whose propagation hasn't run yet).
+    const hasLinkedX = Boolean(
+      agent.twitter_username?.trim() || privyInfo?.twitterUsername?.trim(),
+    );
+    if (!hasLinkedX) {
+      return NextResponse.json(
+        { success: false, error: 'Link an X (Twitter) account before launching a token. This keeps launches spam-free.' },
+        { status: 403 },
+      );
     }
 
     if (agent.token_mint) {

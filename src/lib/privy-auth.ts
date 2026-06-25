@@ -214,3 +214,21 @@ export async function tryResolvePrivyUserId(
     return null;
   }
 }
+
+/**
+ * Best-effort full Privy identity resolution. Returns the verified PrivyUserInfo
+ * when a valid token is present, or null when absent/invalid — so callers can read
+ * fields like twitterUsername while still falling back to legacy wallet-sig auth.
+ */
+export async function tryAuthenticatePrivy(
+  request: Request,
+  body?: Record<string, unknown> | null,
+): Promise<PrivyUserInfo | null> {
+  const token = readPrivyAccessToken(request, body ?? null);
+  if (!token) return null;
+  try {
+    return await verifyPrivyAccessToken(token);
+  } catch {
+    return null;
+  }
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
+import { useLinkAccount } from '@privy-io/react-auth';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { linkExistingToken } from '@/lib/pumpfun-client';
 import { getPrivyAccessToken } from '@/lib/privy-client';
@@ -71,8 +72,18 @@ export function TokenLaunchSection({
   onTokenSet: () => void;
   canManage?: boolean;
 }) {
-  const { walletAddress, authenticated, getAuth, user } = useAtelierAuth();
+  const { walletAddress, authenticated, getAuth, user, atelierUser, refreshAtelierUser } = useAtelierAuth();
   const isAdmin = isAtelierAdminEmail(user?.google?.email ?? user?.email?.address ?? null);
+
+  const { linkTwitter } = useLinkAccount({
+    onSuccess: () => { void refreshAtelierUser(); },
+  });
+
+  // Anti-spam: a token can only launch once an X account is linked. Trust the live
+  // Privy session first; fall back to the persisted handle for wallet-only owners.
+  const hasLinkedX =
+    (user?.linkedAccounts ?? []).some((a) => a.type === 'twitter_oauth') ||
+    Boolean(atelierUser?.twitter_username);
 
   const [mode, setMode] = useState<'none' | 'pumpfun' | 'byot'>('none');
   const [resetting, setResetting] = useState(false);
@@ -580,10 +591,26 @@ export function TokenLaunchSection({
             <p className="text-xs text-red-400 font-mono">{error}</p>
           )}
 
+          {!hasLinkedX && (
+            <div className="rounded-lg border border-amber-400/40 bg-amber-50 dark:bg-amber-900/10 p-3 space-y-2">
+              <p className="text-2xs font-mono text-amber-600 dark:text-amber-400">
+                Link an X account to launch a token -- this keeps launches spam-free.
+              </p>
+              <button
+                type="button"
+                onClick={() => { void linkTwitter(); }}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-amber-400/50 text-amber-600 dark:text-amber-400 text-2xs font-mono font-medium transition-all hover:bg-amber-400/10 disabled:opacity-50"
+              >
+                Connect X
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-3">
             <button
               onClick={handlePumpFunLaunch}
-              disabled={busy || uploadingImage || !name || !symbol || !imageUrl || (IS_CLAWPUMP && description.trim().length < 20)}
+              disabled={busy || uploadingImage || !name || !symbol || !imageUrl || !hasLinkedX || (IS_CLAWPUMP && description.trim().length < 20)}
               className="flex-1 px-3 py-2 rounded border border-green-500/50 text-green-400 text-xs font-medium font-mono transition-all duration-200 hover:bg-green-500 hover:text-black hover:border-green-500 disabled:opacity-50"
             >
               Launch Token

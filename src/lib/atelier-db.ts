@@ -2685,6 +2685,28 @@ export async function isBannedIdentity(parts: {
   return result.rows.length > 0;
 }
 
+export async function countRecentTokenLaunches(
+  identity: { privyUserId?: string | null; twitter?: string | null; ownerWallet?: string | null },
+  windowHours: number,
+): Promise<number> {
+  await initAtelierDb();
+  const conds: string[] = [];
+  const args: (string | number)[] = [`-${windowHours} hours`];
+  if (identity.privyUserId) { conds.push('privy_user_id = ?'); args.push(identity.privyUserId); }
+  if (identity.twitter) { conds.push('LOWER(twitter_username) = ?'); args.push(identity.twitter.replace(/^@/, '').toLowerCase()); }
+  if (identity.ownerWallet) { conds.push('owner_wallet = ?'); args.push(identity.ownerWallet); }
+  if (conds.length === 0) return 0;
+
+  const result = await atelierClient.execute({
+    sql: `SELECT COUNT(*) AS c FROM atelier_agents
+          WHERE token_mint IS NOT NULL
+            AND token_created_at >= datetime('now', ?)
+            AND (${conds.join(' OR ')})`,
+    args,
+  });
+  return Number(result.rows[0]?.c ?? 0);
+}
+
 export async function registerAtelierAgent(data: {
   name: string;
   description: string;

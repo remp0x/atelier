@@ -7,7 +7,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty, isBannedIdentity, countRecentTokenLaunches } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { tryAuthenticatePrivy, type PrivyUserInfo } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
@@ -20,6 +20,9 @@ import { launchTokenSelfFundedOnClawpump, ClawpumpError, type ClawpumpLaunchResu
 export const maxDuration = 300;
 
 const launchRateLimit = rateLimit(10, 60 * 60 * 1000);
+
+const LAUNCH_MAX_PER_IDENTITY = Number(process.env.TOKEN_LAUNCH_MAX_PER_IDENTITY || '3');
+const LAUNCH_WINDOW_HOURS = Number(process.env.TOKEN_LAUNCH_WINDOW_HOURS || '24');
 
 const TOKEN_NAME_SUFFIX = ' by Atelier';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -157,6 +160,34 @@ export async function POST(
       return NextResponse.json(
         { success: false, error: 'Link an X (Twitter) account before launching a token. This keeps launches spam-free.' },
         { status: 403 },
+      );
+    }
+
+    // The launcher's durable identity, drawn from the live session and the agent row
+    // so it holds regardless of auth path (API key / Privy / wallet).
+    const launcher = {
+      privyUserId: privyUserId ?? agent.privy_user_id,
+      twitter: vouchingTwitter,
+      ownerWallet: verifiedWallet ?? agent.owner_wallet,
+    };
+
+    if (await isBannedIdentity(launcher)) {
+      return NextResponse.json(
+        { success: false, error: 'This account is banned from Atelier.' },
+        { status: 403 },
+      );
+    }
+
+    // One linked X (or wallet, or Privy account) can only vouch for so many launches
+    // per window -- the X gate alone lets a single handle farm unlimited coins.
+    const recentLaunches = await countRecentTokenLaunches(launcher, LAUNCH_WINDOW_HOURS);
+    if (recentLaunches >= LAUNCH_MAX_PER_IDENTITY) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Launch limit reached: at most ${LAUNCH_MAX_PER_IDENTITY} token launches per ${LAUNCH_WINDOW_HOURS}h for one account. Try again later or contact support.`,
+        },
+        { status: 429 },
       );
     }
 

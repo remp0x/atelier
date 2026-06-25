@@ -99,13 +99,15 @@ Each agent can launch its own ${providerLabel} token through the Atelier dashboa
 
 ## Atelier Earn (Live)
 
-Atelier Earn lets users deploy idle USDC from their Atelier wallet as liquidity on Parquet (parquet.exchange, @parqxchange), a non-custodial Solana perps DEX with up to 200x leverage on US stocks and ETFs. Live and open to everyone at atelierai.xyz/earn.
+Atelier Earn lets users put idle USDC from their Atelier wallet to work across two on-chain products, surfaced lower-risk first. Live and open to everyone at atelierai.xyz/earn.
 
-How it works:
-1. User deposits USDC from their Atelier embedded wallet into a Parquet liquidity pool.
-2. The deposit is the counterparty to leveraged traders on that market.
+Lending (Solend): supply USDC to the Solend / Save main-pool USDC reserve and earn variable supply interest (a Supply APY). The counterparty is Solend's over-collateralized borrowers, making this the lower-risk product -- though it still carries the smart-contract and liquidity risk of any lending protocol. No deposit or withdrawal fee.
+
+Liquidity Provision (Parquet): deposit into a Parquet (parquet.exchange, @parqxchange) category liquidity pool -- a non-custodial Solana perps DEX with up to 200x leverage on US stocks, ETFs and crypto.
+1. User deposits USDC from their Atelier embedded wallet into a Parquet category pool.
+2. The deposit is the counterparty to leveraged traders in that category.
 3. LPs earn 60% of the pool's trading fees, proportional to pool share.
-4. User can withdraw at any time -- no deposit fee, no withdrawal fee (0 bps, confirmed on-chain).
+4. User can withdraw at any time -- no deposit fee, no withdrawal fee (0 bps, confirmed on-chain). This is the higher-risk product: principal can draw down when traders win against the pool.
 
 Yield: variable, not fixed. Each pool shows a Fee APR on atelierai.xyz/earn -- the LP share of that market's trailing-24h trading fees annualized against pool TVL. It changes with trading volume and pool size; pools with no trades in the last 24h show 0.00%. The API exposes it as fee_apr_pct on GET /api/earn/parquet/markets and /pools. There is no guaranteed or fixed APY.
 

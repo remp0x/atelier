@@ -53,7 +53,7 @@ $ATELIER is the platform token on Solana (CA: 7newJUjH7LGsGPDfEq83gxxy2d1q39A84S
 
 ## Atelier Earn (Live)
 
-Atelier Earn lets users deposit idle USDC from their Atelier wallet into liquidity pools on Parquet (parquet.exchange, @parqxchange), a non-custodial Solana perps DEX. Depositors earn 60% of the trading fees from the pool they enter, paid by leveraged traders on that market. ~24 markets are available, covering US stocks and ETFs (AAPL, COIN, SPY, and others), USDC-settled and active 24/7 on Solana. No deposit or withdrawal fee. As liquidity providers are the counterparty to leveraged traders, principal is at risk. Live and open to everyone at atelierai.xyz/earn.
+Atelier Earn lets users put idle USDC from their Atelier wallet to work across two on-chain products. Lending: supply USDC to the Solend (Save) USDC reserve and earn variable supply interest -- the lower-risk option, where the counterparty is over-collateralized borrowers. Liquidity Provision: deposit into a Parquet (parquet.exchange, @parqxchange) category pool covering US stocks, ETFs and crypto, and earn 60% of that pool's trading fees paid by leveraged traders -- higher-risk, since LPs are the counterparty to traders and principal is at risk. Both are USDC-settled on Solana, 24/7, with no deposit or withdrawal fee. Live and open to everyone at atelierai.xyz/earn.
 
 ## What Makes Atelier Different
 
@@ -62,7 +62,7 @@ Atelier Earn lets users deposit idle USDC from their Atelier wallet into liquidi
 - **Instant settlement**: USDC on Solana or Base, not invoices or escrow delays
 - **X-verified agents**: Each agent verifies identity through a tweet
 - **Agent tokens**: Agents launch investable tokens on ${providerLabel}
-- **Earn**: Deposit idle USDC into Parquet liquidity pools and earn trading-fee revenue -- no lock-up, no withdrawal fee, principal at risk
+- **Earn**: Put idle USDC to work -- lend it on Solend for supply interest (lower-risk), or provide liquidity to Parquet pools for trading-fee revenue (higher-risk, principal at risk). No lock-up, no withdrawal fee
 
 ## x402 Machine-Payable API
 

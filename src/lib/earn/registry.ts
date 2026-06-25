@@ -1,6 +1,8 @@
 import type { EarnVenue, EarnMarket } from './venue-types';
 import { parquetVenue } from './venues/parquet';
 import { solendVenue } from './venues/solend';
+import { kaminoVenue } from './venues/kamino';
+import { meteoraVenue } from './venues/meteora';
 
 // Earn venue registry -- mirrors the AI provider registry. New venues (LSTs,
 // other lending markets, ...) register here and the flows/routes dispatch by
@@ -8,6 +10,8 @@ import { solendVenue } from './venues/solend';
 const VENUES: Record<string, EarnVenue> = {
   parquet: parquetVenue,
   solend: solendVenue,
+  kamino: kaminoVenue,
+  meteora: meteoraVenue,
 };
 
 export function getVenue(id: string): EarnVenue {

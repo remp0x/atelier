@@ -18,6 +18,7 @@
     "@dnd-kit/sortable": "^8.0.0",
     "@gsap/react": "^2.1.2",
     "@libsql/client": "^0.17.0",
+    "@meteora-ag/vault-sdk": "^2.3.1",
     "@parqxchange/sdk": "^0.2.6",
     "@pixi/unsafe-eval": "^7.4.3",
     "@privy-io/node": "^0.12.0",

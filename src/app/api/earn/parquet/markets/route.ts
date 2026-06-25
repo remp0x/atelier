@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rateLimit';
 import { isParquetEarnConfigured, getEnabledCategories, readEnabledPoolHealths, availableLiquidity } from '@/lib/parquet-earn';
 import { isAnyEarnConfigured, getVenue, getEnabledVenueMarkets } from '@/lib/earn/registry';
+import type { EarnVenueProduct } from '@/lib/earn/venue-types';
 import { fetchCategoryFeeAccruals24h, computeFeeAprPct } from '@/lib/parquet-indexer';
 import { getEarnTreasuryPubkey } from '@/lib/parquet-earn-treasury';
 
@@ -90,70 +91,71 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const products: ProductEntry[] = [];
-
-  // Parquet product
-  if (enabled.length > 0) {
-    const v = getVenue('parquet');
-    const feeAprs = markets
-      .map((m) => m.fee_apr_pct)
-      .filter((x): x is number => typeof x === 'number' && x > 0);
-    const tvl = markets.reduce((s, m) => s + BigInt(m.total_usdc_micro as string), ZERO);
-    products.push({
-      id: v.id,
-      kind: v.product.kind,
-      label: v.product.label,
-      risk: v.product.risk,
-      apr_label: v.product.aprLabel,
-      headline_apr_pct: feeAprs.length ? Math.max(...feeAprs) : null,
-      total_tvl_micro: tvl.toString(),
-      markets,
-    });
+  // Group products by KIND so multiple venues of the same strategy (e.g. several
+  // lending markets) collapse into ONE hub card that lists their markets.
+  const byKind = new Map<string, { meta: EarnVenueProduct; markets: Array<Record<string, unknown>>; headlineApr: number | null; tvl: bigint }>();
+  function accumulate(meta: EarnVenueProduct, entries: Array<Record<string, unknown>>, headlineApr: number | null, tvl: bigint) {
+    if (entries.length === 0) return;
+    let acc = byKind.get(meta.kind);
+    if (!acc) { acc = { meta, markets: [], headlineApr: null, tvl: ZERO }; byKind.set(meta.kind, acc); }
+    acc.markets.push(...entries);
+    if (headlineApr !== null && (acc.headlineApr === null || headlineApr > acc.headlineApr)) acc.headlineApr = headlineApr;
+    acc.tvl += tvl;
   }
 
-  // Other venues (lending, ...): generic health, one product each.
+  // Parquet (liquidity provision)
+  if (enabled.length > 0) {
+    const feeAprs = markets.map((m) => m.fee_apr_pct).filter((x): x is number => typeof x === 'number' && x > 0);
+    const tvl = markets.reduce((s, m) => s + BigInt(m.total_usdc_micro as string), ZERO);
+    accumulate(getVenue('parquet').product, markets, feeAprs.length ? Math.max(...feeAprs) : null, tvl);
+  }
+
+  // Other venues (lending, ...) -- read each venue's markets in parallel.
   const otherVenueIds = Array.from(new Set(getEnabledVenueMarkets().map((m) => m.venue))).filter((id) => id !== 'parquet');
-  for (const venueId of otherVenueIds) {
+  await Promise.all(otherVenueIds.map(async (venueId) => {
     const v = getVenue(venueId);
-    const entries: Array<Record<string, unknown>> = [];
-    let headlineApr: number | null = null;
-    let tvl = ZERO;
-    for (const vm of v.listMarkets()) {
+    const results = await Promise.all(v.listMarkets().map(async (vm) => {
       try {
         const h = await v.readHealth(vm.market);
         const apr = typeof h.aprBps === 'number' ? h.aprBps / 100 : null;
-        if (apr !== null && (headlineApr === null || apr > headlineApr)) headlineApr = apr;
         const total = h.totalUsdc ?? h.availableUsdc;
-        tvl += total;
-        entries.push({
-          venue: venueId,
-          market: vm.market,
-          key: vm.key,
-          label: vm.label,
-          treasury_wallet: treasuryWallet,
-          total_usdc_micro: total.toString(),
-          available_usdc_micro: h.availableUsdc.toString(),
-          apr_pct: apr,
-          paused: h.isPaused,
-          depositable: !h.isPaused,
-        });
+        return {
+          apr,
+          total,
+          entry: {
+            venue: venueId,
+            market: vm.market,
+            key: vm.key,
+            label: vm.label,
+            treasury_wallet: treasuryWallet,
+            total_usdc_micro: total.toString(),
+            available_usdc_micro: h.availableUsdc.toString(),
+            apr_pct: apr,
+            paused: h.isPaused,
+            depositable: !h.isPaused,
+          },
+        };
       } catch (err) {
         console.error(`GET /api/earn/parquet/markets ${venueId}/${vm.market} health read failed:`, err);
+        return null;
       }
-    }
-    if (entries.length > 0) {
-      products.push({
-        id: v.id,
-        kind: v.product.kind,
-        label: v.product.label,
-        risk: v.product.risk,
-        apr_label: v.product.aprLabel,
-        headline_apr_pct: headlineApr,
-        total_tvl_micro: tvl.toString(),
-        markets: entries,
-      });
-    }
-  }
+    }));
+    const ok = results.filter((r): r is NonNullable<typeof r> => r !== null);
+    const headlineApr = ok.reduce<number | null>((max, r) => (r.apr !== null && (max === null || r.apr > max) ? r.apr : max), null);
+    const tvl = ok.reduce((s, r) => s + r.total, ZERO);
+    accumulate(v.product, ok.map((r) => r.entry), headlineApr, tvl);
+  }));
+
+  const products: ProductEntry[] = Array.from(byKind.values()).map((acc) => ({
+    id: acc.meta.kind,
+    kind: acc.meta.kind,
+    label: acc.meta.label,
+    risk: acc.meta.risk,
+    apr_label: acc.meta.aprLabel,
+    headline_apr_pct: acc.headlineApr,
+    total_tvl_micro: acc.tvl.toString(),
+    markets: acc.markets,
+  }));
 
   // Risk ladder: lower-risk products first.
   products.sort((a, b) => (a.risk === 'lower' ? 0 : 1) - (b.risk === 'lower' ? 0 : 1));

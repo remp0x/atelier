@@ -332,17 +332,9 @@ function ProductView({
             <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 leading-relaxed max-w-xl">
               Variable APY. Withdrawals can be delayed when utilization is high. Smart-contract risk applies. You are not the counterparty to leveraged traders.
             </p>
-            <a
-              href="https://solend.fi"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 font-mono text-[10px] text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors"
-            >
-              Lending powered by Solend (Save Finance)
-              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-              </svg>
-            </a>
+            <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500">
+              Lending markets powered by Solend, Kamino &amp; Meteora.
+            </p>
           </div>
         </>
       )}

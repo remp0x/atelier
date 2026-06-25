@@ -701,6 +701,22 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_user_wallets_address ON user_wallets(LOWER(address))');
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_user_wallets_chain_address ON user_wallets(chain, LOWER(address))');
 
+  try { await atelierClient.execute('ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE users ADD COLUMN banned_reason TEXT'); } catch (_e) { }
+  try { await atelierClient.execute('ALTER TABLE users ADD COLUMN banned_at TIMESTAMP'); } catch (_e) { }
+
+  try {
+    await atelierClient.execute(`
+      CREATE TABLE IF NOT EXISTS banned_identities (
+        kind TEXT NOT NULL,
+        value TEXT NOT NULL,
+        reason TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (kind, value)
+      )
+    `);
+  } catch (_e) { }
+
   try { await atelierClient.execute("ALTER TABLE service_orders ADD COLUMN payment_chain TEXT NOT NULL DEFAULT 'solana'"); } catch (_e) { }
   try { await atelierClient.execute('ALTER TABLE service_orders ADD COLUMN payer_address TEXT'); } catch (_e) { }
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_service_orders_chain ON service_orders(payment_chain)');
@@ -2096,6 +2112,12 @@ export interface Bounty {
 export interface BountyListItem extends Bounty {
   poster_display_name: string | null;
   claims_count: number;
+  winner_agent_id: string | null;
+  winner_agent_name: string | null;
+  winner_agent_slug: string | null;
+  winner_agent_avatar_url: string | null;
+  earned_usd: string | null;
+  completed_at: string | null;
 }
 
 export interface BountyClaim {
@@ -2619,6 +2641,48 @@ export async function getAtelierAgentsByTwitterUsername(twitterUsername: string)
     args: [twitterUsername],
   });
   return result.rows as unknown as AtelierAgent[];
+}
+
+export type BannedIdentityKind = 'privy' | 'email' | 'twitter' | 'wallet' | 'ip';
+
+function normalizeBanValue(kind: BannedIdentityKind, value: string): string {
+  const v = value.trim();
+  if (kind === 'twitter') return v.replace(/^@/, '').toLowerCase();
+  if (kind === 'wallet') return v;
+  return v.toLowerCase();
+}
+
+export async function addBannedIdentity(kind: BannedIdentityKind, value: string, reason?: string): Promise<void> {
+  await initAtelierDb();
+  if (!value?.trim()) return;
+  await atelierClient.execute({
+    sql: `INSERT INTO banned_identities (kind, value, reason) VALUES (?, ?, ?)
+          ON CONFLICT(kind, value) DO UPDATE SET reason = excluded.reason`,
+    args: [kind, normalizeBanValue(kind, value), reason ?? null],
+  });
+}
+
+export async function isBannedIdentity(parts: {
+  privyUserId?: string | null;
+  email?: string | null;
+  twitter?: string | null;
+  wallet?: string | null;
+}): Promise<boolean> {
+  await initAtelierDb();
+  const checks: [BannedIdentityKind, string][] = [];
+  if (parts.privyUserId) checks.push(['privy', parts.privyUserId]);
+  if (parts.email) checks.push(['email', parts.email]);
+  if (parts.twitter) checks.push(['twitter', parts.twitter]);
+  if (parts.wallet) checks.push(['wallet', parts.wallet]);
+  if (checks.length === 0) return false;
+
+  const conds = checks.map(() => '(kind = ? AND value = ?)').join(' OR ');
+  const args = checks.flatMap(([kind, value]) => [kind, normalizeBanValue(kind, value)]);
+  const result = await atelierClient.execute({
+    sql: `SELECT 1 FROM banned_identities WHERE ${conds} LIMIT 1`,
+    args,
+  });
+  return result.rows.length > 0;
 }
 
 export async function registerAtelierAgent(data: {
@@ -5162,7 +5226,9 @@ export async function listBounties(filters: {
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  let orderBy = 'b.created_at DESC';
+  const completedView = filters.status === 'completed';
+
+  let orderBy = completedView ? 'COALESCE(o.completed_at, b.created_at) DESC' : 'b.created_at DESC';
   if (filters.sort === 'budget_desc') orderBy = 'CAST(b.budget_usd AS REAL) DESC';
   else if (filters.sort === 'deadline_asc') orderBy = 'b.expires_at ASC';
   else if (filters.sort === 'claims_count') orderBy = 'claims_count DESC';
@@ -5179,9 +5245,18 @@ export async function listBounties(filters: {
   const result = await atelierClient.execute({
     sql: `SELECT b.*,
             p.display_name as poster_display_name,
-            (SELECT COUNT(*) FROM bounty_claims bc WHERE bc.bounty_id = b.id AND bc.status != 'withdrawn') as claims_count
+            (SELECT COUNT(*) FROM bounty_claims bc WHERE bc.bounty_id = b.id AND bc.status != 'withdrawn') as claims_count,
+            wc.agent_id as winner_agent_id,
+            wa.name as winner_agent_name,
+            wa.slug as winner_agent_slug,
+            wa.avatar_url as winner_agent_avatar_url,
+            o.quoted_price_usd as earned_usd,
+            o.completed_at as completed_at
           FROM bounties b
           LEFT JOIN atelier_profiles p ON p.wallet = b.poster_wallet
+          LEFT JOIN bounty_claims wc ON wc.id = b.accepted_claim_id
+          LEFT JOIN atelier_agents wa ON wa.id = wc.agent_id
+          LEFT JOIN service_orders o ON o.id = b.order_id
           ${where}
           ORDER BY ${orderBy}
           LIMIT ? OFFSET ?`,

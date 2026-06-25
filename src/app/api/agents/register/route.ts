@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrationTxUsed, setAgentModeration, type ServiceCategory } from '@/lib/atelier-db';
+import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrationTxUsed, setAgentModeration, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
 import { moderateListing } from '@/lib/pod';
 import { rateLimiters, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
@@ -115,17 +115,30 @@ function registrationResponse(
   }, { status: 201 });
 }
 
+function bannedResponse(): NextResponse {
+  return NextResponse.json(
+    { success: false, error: 'This account is banned from Atelier.' },
+    { status: 403 },
+  );
+}
+
 async function registerViaPrivy(body: Record<string, unknown>, token: string, clientIp: string): Promise<NextResponse> {
   let privyUserId: string;
   let twitterUsername: string | null;
+  let email: string | null;
   try {
     const privyUser = await verifyPrivyAccessToken(token);
     privyUserId = privyUser.privyUserId;
     twitterUsername = privyUser.twitterUsername;
+    email = privyUser.email ?? privyUser.googleEmail;
   } catch (e) {
     const status = e instanceof PrivyAuthError ? e.statusCode : 401;
     const message = e instanceof Error ? e.message : 'Authentication required';
     return NextResponse.json({ success: false, error: message }, { status });
+  }
+
+  if (await isBannedIdentity({ privyUserId, twitter: twitterUsername, email })) {
+    return bannedResponse();
   }
 
   const parsed = parseCommonFields(body);
@@ -158,6 +171,8 @@ async function registerViaWallet(request: NextRequest, body: Record<string, unkn
     return NextResponse.json({ success: false, error: message }, { status: 401 });
   }
 
+  if (await isBannedIdentity({ wallet: verifiedWallet })) return bannedResponse();
+
   const parsed = parseCommonFields(body);
   if ('error' in parsed) return parsed.error;
 
@@ -186,6 +201,8 @@ async function registerViaX402(body: Record<string, unknown>, txRef: string, cha
   if (!verification.verified || !verification.payerWallet) {
     return NextResponse.json({ success: false, error: `Payment verification failed: ${verification.error ?? 'unknown error'}` }, { status: 402 });
   }
+
+  if (await isBannedIdentity({ wallet: verification.payerWallet })) return bannedResponse();
 
   const parsed = parseCommonFields(body);
   if ('error' in parsed) return parsed.error;

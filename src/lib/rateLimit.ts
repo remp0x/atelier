@@ -20,6 +20,14 @@ export function getClientIp(req: NextRequest): string {
 const BLOCKED_IPS = new Set(
   [
     '91.5.171.182',
+    // Coin-spam ring (did:privy:cmqrfhtel001e0dl9v9oan4gx / mwmbase): 23 fake agents in <24h
+    '44.222.129.198',
+    '3.236.197.2',
+    '3.235.3.190',
+    '50.19.19.247',
+    '100.53.184.81',
+    '100.31.250.47',
+    '100.57.4.226',
     ...(process.env.BLOCKED_IPS || '').split(',').map((s) => s.trim()),
   ].filter(Boolean),
 );

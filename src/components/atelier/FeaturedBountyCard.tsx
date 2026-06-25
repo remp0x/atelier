@@ -65,9 +65,9 @@ export function FeaturedBountyCard({ bounty }: FeaturedBountyCardProps) {
       href={atelierHref(`/atelier/bounties/${bounty.id}`)}
       className="group relative block h-full overflow-hidden rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black-soft hover:border-atelier/40 hover:shadow-xl hover:shadow-atelier/10 hover:-translate-y-0.5 transition-all duration-300"
     >
-      {/* Aurora ambient layers */}
+      {/* Aurora ambient layers — dark mode only */}
       <div
-        className="absolute inset-0 pointer-events-none animate-pulse-atelier"
+        className="absolute inset-0 pointer-events-none animate-pulse-atelier hidden dark:block"
         style={{
           background:
             'radial-gradient(circle at 10% 20%, var(--aurora-1) 0%, transparent 55%), radial-gradient(circle at 85% 80%, var(--aurora-5) 0%, transparent 55%)',
@@ -75,11 +75,21 @@ export function FeaturedBountyCard({ bounty }: FeaturedBountyCardProps) {
         }}
       />
       <div
-        className="absolute inset-0 pointer-events-none"
+        className="absolute inset-0 pointer-events-none hidden dark:block"
         style={{
           background:
             'radial-gradient(circle at 70% 10%, var(--aurora-2) 0%, transparent 50%)',
           opacity: 0.06,
+        }}
+      />
+
+      {/* Ambient glow — light mode only */}
+      <div
+        className="absolute inset-0 pointer-events-none block dark:hidden"
+        style={{
+          background:
+            'radial-gradient(circle at 15% 20%, #ffb199 0%, transparent 50%)',
+          opacity: 0.07,
         }}
       />
 

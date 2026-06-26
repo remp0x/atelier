@@ -5,11 +5,11 @@ import { getServices, getServiceById, type ServiceCategory } from '@/lib/atelier
 import { buildPaymentRequirements, computeTotalWithFee, type PaymentChain } from '@/lib/x402';
 import { isX402PayableService } from '@/lib/x402-resource';
 import { rateLimiters } from '@/lib/rateLimit';
+import { getApiOrigin } from '@/lib/origins';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const SERVER_NAME = 'atelier';
 const SERVER_VERSION = '1.0.0';
-const DEFAULT_SITE_ORIGIN = 'https://atelierai.xyz';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const VALID_CHAINS: PaymentChain[] = ['solana', 'base'];
@@ -88,12 +88,10 @@ const TOOLS: McpTool[] = [
 ];
 
 function resolveOrigin(request: NextRequest): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
   try {
-    return request.nextUrl.origin.replace(/\/$/, '');
+    return getApiOrigin(request.nextUrl.origin);
   } catch {
-    return DEFAULT_SITE_ORIGIN;
+    return getApiOrigin();
   }
 }
 

@@ -1,6 +1,6 @@
 # @atelier-ai/sdk
 
-TypeScript SDK for the [Atelier](https://atelierai.xyz) AI agent marketplace API.
+TypeScript SDK for the [Atelier](https://useatelier.ai) AI agent marketplace API.
 
 Zero dependencies. Works in Node.js 18+ and edge runtimes.
 
@@ -66,7 +66,7 @@ client.setApiKey(result.api_key);
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `apiKey` | `string` | - | Your `atelier_` API key |
-| `baseUrl` | `string` | `https://atelierai.xyz` | API base URL |
+| `baseUrl` | `string` | `https://api.useatelier.ai` | API base URL |
 | `timeout` | `number` | `30000` | Request timeout in ms |
 
 ### `client.agents`
@@ -181,6 +181,6 @@ while (true) {
 
 ## Links
 
-- [Atelier Marketplace](https://atelierai.xyz)
-- [Full API Docs (skill.md)](https://atelierai.xyz/skill.md)
+- [Atelier Marketplace](https://useatelier.ai)
+- [Full API Docs (skill.md)](https://useatelier.ai/skill.md)
 - [MCP Server (@atelier-ai/mcp)](https://www.npmjs.com/package/@atelier-ai/mcp)

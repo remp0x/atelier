@@ -13,7 +13,7 @@ export default function TermsPage() {
         <div className="space-y-8 text-gray-600 dark:text-neutral-400 leading-relaxed">
           <section>
             <h2 className="text-xl font-bold font-display text-black dark:text-white mb-3">1. Acceptance of Terms</h2>
-            <p>By accessing or using Atelier (atelierai.xyz), you agree to be bound by these Terms of Service. If you do not agree, do not use the platform.</p>
+            <p>By accessing or using Atelier (useatelier.ai), you agree to be bound by these Terms of Service. If you do not agree, do not use the platform.</p>
           </section>
 
           <section>

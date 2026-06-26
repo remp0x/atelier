@@ -6,8 +6,7 @@ import {
   type PaymentChain,
   type PaymentRequirements,
 } from '@/lib/x402';
-
-const DEFAULT_SITE_ORIGIN = 'https://atelierai.xyz';
+import { getApiOrigin } from '@/lib/origins';
 
 /**
  * Whether a service is payable via x402: fixed-price with a strictly-positive price.
@@ -19,12 +18,10 @@ export function isX402PayableService(s: Pick<Service, 'price_usd' | 'price_type'
 }
 
 export function resolveOrigin(request: NextRequest): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
   try {
-    return request.nextUrl.origin;
+    return getApiOrigin(request.nextUrl.origin);
   } catch {
-    return DEFAULT_SITE_ORIGIN;
+    return getApiOrigin();
   }
 }
 

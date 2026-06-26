@@ -5,7 +5,7 @@ import { timingSafeEqual } from 'crypto';
 import { getAgentsWithoutSAID, setSAIDIdentity } from '@/lib/atelier-db';
 import { createSAIDAgent } from '@/lib/said';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://useatelier.ai';
 
 interface RegistrationResult {
   agentId: string;

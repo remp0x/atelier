@@ -55,7 +55,7 @@ live and enter the Bazaar index:
    deployment env (and optionally `CDP_FACILITATOR_URL`).
 2. From a funded Base wallet, hire ONE fixed-price service with a standard x402
    client (`x402-fetch` / `x402-axios`) pointed at
-   `https://atelierai.xyz/api/x402/pay?service_id=<id>` (chain=base). The client
+   `https://api.useatelier.ai/api/x402/pay?service_id=<id>` (chain=base). The client
    will: GET -> receive the v2 402 -> sign the EIP-3009 `transferWithAuthorization`
    -> retry with the base64 payment header. Helper: `scripts/x402-test-pay.mjs`.
 3. The route runs CDP `verify` then `settle`. On success it returns 200 with an
@@ -118,7 +118,7 @@ OpenAPI. Atelier now serves all three so that every discovery path resolves:
 Validate after deploy:
 
 ```bash
-npx -y @agentcash/discovery atelierai.xyz -v
+npx -y @agentcash/discovery api.useatelier.ai -v
 ```
 
 Expected: source `openapi`, one `paid … [x402]` route per fixed-price service, and
@@ -130,22 +130,22 @@ Expected: source `openapi`, one `paid … [x402]` route per fixed-price service,
 These directories index x402 resources independently of CDP Bazaar.
 
 Canonical URLs to submit:
-- OpenAPI spec: `https://atelierai.xyz/openapi.json`
-- Well-known resource list: `https://atelierai.xyz/.well-known/x402`
-- Service catalog: `https://atelierai.xyz/api/x402/services`
-- Bazaar discovery feed: `https://atelierai.xyz/api/x402/bazaar`
-- MCP endpoint: `https://atelierai.xyz/api/x402/mcp`
+- OpenAPI spec: `https://api.useatelier.ai/openapi.json`
+- Well-known resource list: `https://api.useatelier.ai/.well-known/x402`
+- Service catalog: `https://api.useatelier.ai/api/x402/services`
+- Bazaar discovery feed: `https://api.useatelier.ai/api/x402/bazaar`
+- MCP endpoint: `https://api.useatelier.ai/api/x402/mcp`
 
 Actions:
-- [ ] x402scan -- "Add Server" with the bare origin `atelierai.xyz` (auto-discovers
+- [ ] x402scan -- "Add Server" with the bare origin `api.useatelier.ai` (auto-discovers
       via `/openapi.json`), or "Register This URL Only" with individual
-      `https://atelierai.xyz/api/x402/discover/{service_id}` URLs.
+      `https://api.useatelier.ai/api/x402/discover/{service_id}` URLs.
 - [ ] Submit to `x402.direct` -- `/openapi.json` and `/api/x402/services`.
 - [ ] Submit to `x402-list.com` -- `/openapi.json` and `/api/x402/services`.
 - [ ] `x402list.fun` -- no manual action; it auto-mirrors once Atelier is in CDP
       Bazaar (i.e., after the cutover above).
 
 Ready-to-paste:
-- OpenAPI URL: `https://atelierai.xyz/openapi.json`
-- Service catalog URL: `https://atelierai.xyz/api/x402/services`
-- MCP URL: `https://atelierai.xyz/api/x402/mcp`
+- OpenAPI URL: `https://api.useatelier.ai/openapi.json`
+- Service catalog URL: `https://api.useatelier.ai/api/x402/services`
+- MCP URL: `https://api.useatelier.ai/api/x402/mcp`

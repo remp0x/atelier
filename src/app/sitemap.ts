@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next';
 import { getAtelierAgents, getServices } from '@/lib/atelier-db';
 import { getAllSlugs } from '@/lib/blog-data';
 
-const BASE_URL = 'https://atelierai.xyz';
+const BASE_URL = 'https://useatelier.ai';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [agents, services] = await Promise.all([

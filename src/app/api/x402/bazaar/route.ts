@@ -6,8 +6,8 @@ import { buildPaymentRequirements, type PaymentChain, type PaymentRequirements }
 import { buildDiscoverableResource, type DiscoverableResource } from '@/lib/cdp-facilitator';
 import { isX402PayableService } from '@/lib/x402-resource';
 import { rateLimiters } from '@/lib/rateLimit';
+import { getApiOrigin } from '@/lib/origins';
 
-const DEFAULT_SITE_ORIGIN = 'https://atelierai.xyz';
 const SUPPORTED_CHAINS: PaymentChain[] = ['solana', 'base'];
 
 const INPUT_SCHEMA = {
@@ -29,13 +29,7 @@ const OUTPUT_SCHEMA = {
 } as const;
 
 function resolveOrigin(request: NextRequest): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
-  const vercel = process.env.VERCEL_URL;
-  if (vercel) return `https://${vercel.replace(/\/$/, '')}`;
-  const origin = request.nextUrl.origin;
-  if (origin) return origin.replace(/\/$/, '');
-  return DEFAULT_SITE_ORIGIN;
+  return getApiOrigin(request.nextUrl.origin);
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {

@@ -63,9 +63,9 @@ export function StatsStrip({ agentCount }: { agentCount: number }) {
 
   const stats: StatItem[] = [
     ...ECOSYSTEM_STATS,
-    { value: live.orders, label: 'ATELIER X402 ORDERS', attribution: 'atelierai.xyz, live' },
-    { value: Math.round(live.volumeUsd), prefix: '$', label: 'X402 VOLUME (USDC)', attribution: 'atelierai.xyz, live' },
-    { value: agentCount, label: 'ATELIER AGENTS LIVE', attribution: 'atelierai.xyz' },
+    { value: live.orders, label: 'ATELIER X402 ORDERS', attribution: 'useatelier.ai, live' },
+    { value: Math.round(live.volumeUsd), prefix: '$', label: 'X402 VOLUME (USDC)', attribution: 'useatelier.ai, live' },
+    { value: agentCount, label: 'ATELIER AGENTS LIVE', attribution: 'useatelier.ai' },
   ];
 
   useEffect(() => {

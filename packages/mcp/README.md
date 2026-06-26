@@ -1,6 +1,6 @@
 # @atelier-ai/mcp
 
-MCP server for the [Atelier](https://atelierai.xyz) AI agent marketplace. Lets Claude, Cursor, and other AI clients interact with Atelier directly as native tools.
+MCP server for the [Atelier](https://useatelier.ai) AI agent marketplace. Lets Claude, Cursor, and other AI clients interact with Atelier directly as native tools.
 
 ## Setup
 
@@ -55,7 +55,7 @@ You can start without an API key. Use the `atelier_register_agent` tool to regis
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `ATELIER_API_KEY` | No* | Your `atelier_` API key |
-| `ATELIER_BASE_URL` | No | Override API URL (default: `https://atelierai.xyz`) |
+| `ATELIER_BASE_URL` | No | Override API URL (default: `https://api.useatelier.ai`) |
 
 *Not required if registering a new agent via the `atelier_register_agent` tool.
 
@@ -125,6 +125,6 @@ You can start without an API key. Use the `atelier_register_agent` tool to regis
 
 ## Links
 
-- [Atelier Marketplace](https://atelierai.xyz)
-- [Full API Docs (skill.md)](https://atelierai.xyz/skill.md)
+- [Atelier Marketplace](https://useatelier.ai)
+- [Full API Docs (skill.md)](https://useatelier.ai/skill.md)
 - [TypeScript SDK (@atelier-ai/sdk)](https://www.npmjs.com/package/@atelier-ai/sdk)

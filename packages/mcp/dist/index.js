@@ -6,6 +6,7 @@ var import_stdio = require("@modelcontextprotocol/sdk/server/stdio.js");
 var import_types = require("@modelcontextprotocol/sdk/types.js");
 
 // ../sdk/dist/index.mjs
+var import_crypto = require("crypto");
 var AtelierError = class extends Error {
   status;
   code;
@@ -54,7 +55,7 @@ var RateLimitError = class extends AtelierError {
     this.retryAfter = retryAfter;
   }
 };
-var DEFAULT_BASE_URL = "https://atelierai.xyz";
+var DEFAULT_BASE_URL = "https://api.useatelier.ai";
 var DEFAULT_TIMEOUT = 3e4;
 var HttpClient = class {
   baseUrl;
@@ -191,6 +192,9 @@ var AgentsResource = class {
   async managePortfolio(agentId, input) {
     return this.http.patch(`/api/agents/${encodeURIComponent(agentId)}/portfolio`, input);
   }
+  async recover(input) {
+    return this.http.post("/api/agents/recover", input);
+  }
 };
 var ServicesResource = class {
   constructor(http) {
@@ -297,6 +301,60 @@ var ModelsResource = class {
     return this.http.get("/api/models");
   }
 };
+var SIGNATURE_TOLERANCE_SEC = 300;
+function parseSignatureHeader(header) {
+  const parts = header.split(",");
+  let timestamp = 0;
+  const signatures = [];
+  for (const part of parts) {
+    const [key, value] = part.split("=", 2);
+    if (key === "t") timestamp = parseInt(value, 10);
+    else if (key === "v1") signatures.push(value);
+  }
+  return { timestamp, signatures };
+}
+function verifySignature(secret, timestamp, body, signatures) {
+  const expected = (0, import_crypto.createHmac)("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
+  const expectedBuf = Buffer.from(expected, "hex");
+  return signatures.some((sig) => {
+    const sigBuf = Buffer.from(sig, "hex");
+    return sigBuf.length === expectedBuf.length && (0, import_crypto.timingSafeEqual)(sigBuf, expectedBuf);
+  });
+}
+var WebhooksResource = class {
+  constructor(secret) {
+    this.secret = secret;
+  }
+  verify(rawBody, signatureHeader) {
+    const { timestamp, signatures } = parseSignatureHeader(signatureHeader);
+    if (!timestamp || signatures.length === 0) {
+      throw new WebhookVerificationError("Invalid signature header format");
+    }
+    const age = Math.floor(Date.now() / 1e3) - timestamp;
+    if (age > SIGNATURE_TOLERANCE_SEC) {
+      throw new WebhookVerificationError("Timestamp outside tolerance window");
+    }
+    if (!verifySignature(this.secret, timestamp, rawBody, signatures)) {
+      throw new WebhookVerificationError("Signature mismatch");
+    }
+    return JSON.parse(rawBody);
+  }
+  createHandler(handlers) {
+    return async (req) => {
+      const sig = req.headers["x-atelier-signature"];
+      if (!sig) throw new WebhookVerificationError("Missing X-Atelier-Signature header");
+      const event = this.verify(req.body, sig);
+      const handler = handlers[event.event];
+      if (handler) await handler(event);
+    };
+  }
+};
+var WebhookVerificationError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "WebhookVerificationError";
+  }
+};
 var AtelierClient = class {
   http;
   agents;
@@ -306,6 +364,7 @@ var AtelierClient = class {
   metrics;
   market;
   models;
+  webhooks;
   constructor(config = {}) {
     this.http = new HttpClient(config);
     this.agents = new AgentsResource(this.http);
@@ -315,6 +374,7 @@ var AtelierClient = class {
     this.metrics = new MetricsResource(this.http);
     this.market = new MarketResource(this.http);
     this.models = new ModelsResource(this.http);
+    this.webhooks = config.webhookSecret ? new WebhooksResource(config.webhookSecret) : null;
   }
   setApiKey(apiKey2) {
     this.http.setApiKey(apiKey2);
@@ -332,7 +392,7 @@ function jsonResult(data) {
 var tools = [
   {
     name: "atelier_register_agent",
-    description: "Register a new AI agent on the Atelier marketplace. Returns agent_id, api_key, and a verification tweet to post on X/Twitter.",
+    description: "Register a new AI agent on the Atelier marketplace in a single call. Returns agent_id and api_key immediately. Provide owner_wallet + wallet_sig to register an owned, marketplace-visible agent; without an owner the agent is registered but hidden until you attach one (sign with a wallet, pay via x402, or link X). Linking X is optional and only adds a verified badge.",
     inputSchema: {
       type: "object",
       properties: {
@@ -349,7 +409,10 @@ var tools = [
           type: "array",
           items: { type: "string" },
           description: 'AI models the agent uses (e.g. ["gpt-4", "stable-diffusion"])'
-        }
+        },
+        owner_wallet: { type: "string", description: "Owner Solana wallet (base58). Pass with wallet_sig to register an owned, marketplace-visible agent." },
+        wallet_sig: { type: "string", description: "Signature over the auth message proving control of owner_wallet (optional, pairs with owner_wallet)." },
+        wallet_sig_ts: { type: "number", description: "Unix ms timestamp used in the signed auth message (optional, pairs with wallet_sig)." }
       },
       required: ["name", "description"]
     },
@@ -361,7 +424,10 @@ var tools = [
           avatar_url: args.avatar_url,
           endpoint_url: args.endpoint_url,
           capabilities: args.capabilities,
-          ai_models: args.ai_models
+          ai_models: args.ai_models,
+          owner_wallet: args.owner_wallet,
+          wallet_sig: args.wallet_sig,
+          wallet_sig_ts: args.wallet_sig_ts
         });
         if (result.api_key) {
           client2.setApiKey(result.api_key);
@@ -425,7 +491,7 @@ var tools = [
   },
   {
     name: "atelier_verify_twitter",
-    description: "Verify your agent on Atelier by providing the URL of your verification tweet on X/Twitter.",
+    description: "Optional: link your X/Twitter account to earn a verified badge. Not required to operate -- your agent can create services and take orders without it. Provide the URL of a tweet containing your agent verification code that mentions @useAtelier.",
     inputSchema: {
       type: "object",
       properties: {

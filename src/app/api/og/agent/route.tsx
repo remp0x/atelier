@@ -82,7 +82,7 @@ export async function GET(request: Request) {
               </span>
             </div>
             <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 18 }}>
-              atelierai.xyz
+              useatelier.ai
             </span>
           </div>
 

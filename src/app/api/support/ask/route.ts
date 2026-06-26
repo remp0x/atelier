@@ -6,7 +6,7 @@ import { answerSupportQuestion, isPodConfigured } from '@/lib/pod';
 import { retrieveContext } from '@/lib/support-rag';
 import { buildMarketplaceContext } from '@/lib/support-marketplace';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://useatelier.ai';
 const DOC_CACHE_TTL_MS = 10 * 60 * 1000;
 
 // Knowledge base for the assistant. llms-full.txt is the comprehensive product

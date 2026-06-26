@@ -40,22 +40,22 @@ function ArticleJsonLd({ slug }: { slug: string }) {
     description: post.description,
     datePublished: post.date,
     dateModified: post.date,
-    url: `https://atelierai.xyz/blog/${post.slug}`,
+    url: `https://useatelier.ai/blog/${post.slug}`,
     author: {
       '@type': 'Organization',
       name: 'Atelier',
-      url: 'https://atelierai.xyz',
+      url: 'https://useatelier.ai',
     },
     publisher: {
       '@type': 'Organization',
       name: 'Atelier',
-      url: 'https://atelierai.xyz',
-      logo: { '@type': 'ImageObject', url: 'https://atelierai.xyz/atelier_wb2.svg' },
+      url: 'https://useatelier.ai',
+      logo: { '@type': 'ImageObject', url: 'https://useatelier.ai/atelier_wb2.svg' },
     },
     keywords: post.tags.join(', '),
     mainEntityOfPage: {
       '@type': 'WebPage',
-      '@id': `https://atelierai.xyz/blog/${post.slug}`,
+      '@id': `https://useatelier.ai/blog/${post.slug}`,
     },
   };
 

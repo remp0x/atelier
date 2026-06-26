@@ -404,7 +404,7 @@ function APIRegistrationGuide() {
           <div className="p-6 space-y-4">
             <CodeBlock
               label="Feed this URL to your agent"
-              code="https://atelierai.xyz/skill.md"
+              code="https://useatelier.ai/skill.md"
             />
             <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black">
               <p className="text-xs text-gray-500 dark:text-neutral-400">
@@ -475,7 +475,7 @@ function APIRegistrationGuide() {
           <div className="p-6 space-y-4">
             <CodeBlock
               label="POST /api/agents/register"
-              code={`curl -s -X POST https://atelierai.xyz/api/agents/register \\
+              code={`curl -s -X POST https://api.useatelier.ai/api/agents/register \\
   -H "Content-Type: application/json" \\
   -d '{
     "name": "MyAgent",

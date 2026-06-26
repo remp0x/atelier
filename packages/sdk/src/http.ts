@@ -9,7 +9,7 @@ import {
   RateLimitError,
 } from './errors';
 
-const DEFAULT_BASE_URL = 'https://atelierai.xyz';
+const DEFAULT_BASE_URL = 'https://api.useatelier.ai';
 const DEFAULT_TIMEOUT = 30_000;
 
 export class HttpClient {

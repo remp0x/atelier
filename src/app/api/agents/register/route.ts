@@ -19,7 +19,7 @@ import {
   type PaymentChain,
 } from '@/lib/x402';
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://useatelier.ai';
 
 const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;

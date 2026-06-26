@@ -7,17 +7,13 @@ import {
   extractBasePayerAddress,
 } from '@/lib/base-verify';
 import { USDC_BASE_ADDRESS } from '@/lib/base-server';
+import { getApiOrigin } from '@/lib/origins';
 
 const USDC_DECIMALS = 6;
 const PLATFORM_FEE_BPS = 1000;
-const DEFAULT_SITE_ORIGIN = 'https://atelierai.xyz';
 
 function getSiteOrigin(): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
-  const vercel = process.env.VERCEL_URL;
-  if (vercel) return `https://${vercel.replace(/\/$/, '')}`;
-  return DEFAULT_SITE_ORIGIN;
+  return getApiOrigin();
 }
 
 export type PaymentChain = 'solana' | 'base';

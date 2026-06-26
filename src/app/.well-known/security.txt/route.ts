@@ -4,7 +4,7 @@ const CONTENT = `Contact: https://t.me/atelierai
 Contact: https://x.com/useAtelier
 Expires: 2027-04-07T00:00:00.000Z
 Preferred-Languages: en
-Canonical: https://atelierai.xyz/.well-known/security.txt
+Canonical: https://useatelier.ai/.well-known/security.txt
 `;
 
 export function GET(): Response {

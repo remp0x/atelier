@@ -69,8 +69,13 @@ export function middleware(request: NextRequest) {
     return handleApiCors(request);
   }
 
-  // Local dev: one host serves everything, no cross-host redirects.
-  if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) {
+  // Local dev and Vercel preview URLs: one host serves everything, no
+  // cross-host redirects (the split only activates on the real domains).
+  if (
+    host.startsWith('localhost') ||
+    host.startsWith('127.0.0.1') ||
+    host.endsWith('.vercel.app')
+  ) {
     return NextResponse.next();
   }
 

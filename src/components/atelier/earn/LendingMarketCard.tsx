@@ -1,11 +1,18 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { SolendMarketEntry, Position } from './types';
-import { formatUsd, formatAprPct, microToUsd } from './types';
+import { formatUsd, formatAprPct, microToUsd, compactUsd } from './types';
 import { PoolPanel } from './PoolPanel';
 import type { PoolData } from './types';
+
+const VENUE_LOGO: Record<string, string> = {
+  solend: '/save.jpg',
+  kamino: '/kamino.jpg',
+  meteora: '/meteora.svg',
+};
 
 function PauseIcon({ className }: { className: string }) {
   return (
@@ -73,6 +80,9 @@ export function LendingMarketCard({
   const available = microToUsd(market.available_usdc_micro);
   const aprPositive = market.apr_pct !== null && market.apr_pct > 0;
 
+  const venue = market.key.split(':')[0];
+  const logoSrc = VENUE_LOGO[venue];
+
   const pool = solendMarketAsPoolData(market);
 
   const handleToggle = useCallback(() => {
@@ -90,59 +100,67 @@ export function LendingMarketCard({
     <div className="rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] overflow-hidden">
       <div className="px-5 pt-5 pb-4">
         <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-display font-bold text-[20px] text-black dark:text-white leading-tight tracking-[-0.02em]">
-                {market.label}
-              </h3>
-              {market.paused && (
-                <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 font-mono text-[9px] text-gray-500 dark:text-neutral-400 shrink-0">
-                  <PauseIcon className="w-2.5 h-2.5" />
-                  Paused
-                </span>
-              )}
+          <div className="flex items-center gap-3 min-w-0">
+            {logoSrc && (
+              <div className="w-7 h-7 rounded-full overflow-hidden shrink-0">
+                <Image
+                  src={logoSrc}
+                  alt={market.label}
+                  width={28}
+                  height={28}
+                  style={{ width: 28, height: 28 }}
+                  className="object-cover"
+                />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-display font-bold text-[20px] text-black dark:text-white leading-tight tracking-[-0.02em]">
+                  {market.label}
+                </h3>
+                {market.paused && (
+                  <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-gray-100 dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 font-mono text-[9px] text-gray-500 dark:text-neutral-400 shrink-0">
+                    <PauseIcon className="w-2.5 h-2.5" />
+                    Paused
+                  </span>
+                )}
+              </div>
+              <p className="font-mono text-[11px] text-gray-500 dark:text-neutral-400">
+                USDC money market
+              </p>
             </div>
-            <p className="font-mono text-[11px] text-gray-500 dark:text-neutral-400">
-              USDC money market
-            </p>
           </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <p className={`font-mono text-[11px] tabular-nums ${aprPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
+          <div className="flex flex-col items-end shrink-0">
+            <p className={`font-mono text-[26px] font-semibold tabular-nums leading-none ${aprPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
               {formatAprPct(market.apr_pct)}
-              <span className="text-[9px] ml-1 text-gray-400 dark:text-neutral-600">Supply APY</span>
+            </p>
+            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mt-0.5">
+              Supply APY
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-          <div>
-            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Total supplied</p>
-            <p className="font-mono text-[17px] font-semibold tabular-nums text-black dark:text-white">
-              ${formatUsd(totalSupplied)}
+        {hasPosition && (
+          <div className="mb-3">
+            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">
+              Your position
             </p>
-          </div>
-          <div>
-            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Available</p>
-            <p className="font-mono text-[17px] font-semibold tabular-nums text-black dark:text-white">
-              ${formatUsd(available)}
-            </p>
-          </div>
-          {hasPosition && (
-            <div>
-              <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">Your position</p>
-              <div className="flex items-baseline gap-1.5">
-                <p className="font-mono text-[17px] font-semibold tabular-nums text-black dark:text-white">
-                  ${formatUsd(totalPositionValue)}
-                </p>
-                {pnl !== null && (
-                  <span className={`font-mono text-[11px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                    {pnlPositive ? '+' : ''}{formatUsd(pnl)}
-                  </span>
-                )}
-              </div>
+            <div className="flex items-baseline gap-2">
+              <p className="font-mono text-[18px] font-semibold tabular-nums text-black dark:text-white">
+                ${formatUsd(totalPositionValue)}
+              </p>
+              {pnl !== null && (
+                <span className={`font-mono text-[11px] tabular-nums ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                  {pnlPositive ? '+' : '-'}${formatUsd(Math.abs(pnl))}
+                </span>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600 tabular-nums mb-4">
+          Supplied {compactUsd(totalSupplied)} &middot; Available {compactUsd(available)}
+        </p>
 
         {market.paused && (
           <div className="flex items-start gap-2 rounded-lg bg-gray-100 dark:bg-neutral-900/60 border border-gray-200 dark:border-neutral-800 px-3 py-2.5 mb-3">

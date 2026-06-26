@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import type { ProductData, Position } from './types';
-import { formatUsd, formatAprPct, microToUsd } from './types';
+import { formatUsd, formatAprPct, microToUsd, compactUsd } from './types';
 
 interface StrategyMenuProps {
   products: ProductData[];
@@ -44,12 +44,6 @@ const PRODUCT_ICON: Record<string, React.ReactNode> = {
     </svg>
   ),
 };
-
-function compactUsd(v: number): string {
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`;
-  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
-  return `$${formatUsd(v)}`;
-}
 
 function ProductCard({
   product,

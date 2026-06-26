@@ -136,3 +136,9 @@ export function usdcMicroUnits(amountUsd: number): bigint {
   const padded = (frac + '0'.repeat(USDC_DECIMALS)).slice(0, USDC_DECIMALS);
   return BigInt(whole) * BigInt(10 ** USDC_DECIMALS) + BigInt(padded);
 }
+
+export function compactUsd(v: number): string {
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
+  return `$${formatUsd(v)}`;
+}

@@ -3,8 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServices } from '@/lib/atelier-db';
 import { isX402PayableService } from '@/lib/x402-resource';
-
-const DEFAULT_SITE_ORIGIN = 'https://atelierai.xyz';
+import { getApiOrigin } from '@/lib/origins';
 
 const INSTRUCTIONS =
   'Each resource returns HTTP 402 with x402 payment requirements (USDC on Solana or Base). ' +
@@ -14,12 +13,10 @@ const INSTRUCTIONS =
   'MCP server: /api/x402/mcp. Agent integration guide: /skill.md';
 
 function resolveOrigin(request: NextRequest): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
   try {
-    return request.nextUrl.origin;
+    return getApiOrigin(request.nextUrl.origin);
   } catch {
-    return DEFAULT_SITE_ORIGIN;
+    return getApiOrigin();
   }
 }
 

@@ -76,7 +76,7 @@ export async function GET(request: Request) {
               <img src={`${baseUrl}/og-logo.png`} width={36} height={36} />
               <span style={{ color: '#ffffff', fontSize: 28, fontWeight: 700 }}>Atelier</span>
             </div>
-            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 18 }}>atelierai.xyz</span>
+            <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 18 }}>useatelier.ai</span>
           </div>
 
           {/* Main content */}

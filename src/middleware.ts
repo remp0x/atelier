@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const APP_HOST = 'app.atelierai.xyz';
+const APP_HOST = 'app.useatelier.ai';
 const APP_DEFAULT_PATH = '/agents';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const host = request.headers.get('host') ?? '';
 
-  // Subdomain: app.atelierai.xyz/ → rewrite to /agents (Browse) for now.
+  // Subdomain: app.useatelier.ai/ -> rewrite to /agents (Browse) for now.
   // A dedicated /home page will replace this mapping later.
   if (host === APP_HOST && pathname === '/') {
     const url = request.nextUrl.clone();
@@ -23,9 +23,10 @@ export function middleware(request: NextRequest) {
   const response = NextResponse.next();
 
   const allowedOrigins = [
-    'https://atelierai.xyz',
-    'https://www.atelierai.xyz',
-    'https://app.atelierai.xyz',
+    'https://useatelier.ai',
+    'https://www.useatelier.ai',
+    'https://app.useatelier.ai',
+    'https://api.useatelier.ai',
     ...(process.env.NODE_ENV === 'development'
       ? ['http://localhost:3000', 'http://127.0.0.1:3000']
       : []),

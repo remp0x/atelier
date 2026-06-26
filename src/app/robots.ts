@@ -28,6 +28,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/orders/', '/profile', '/dashboard', '/admin/'],
       },
     ],
-    sitemap: 'https://atelierai.xyz/sitemap.xml',
+    sitemap: 'https://useatelier.ai/sitemap.xml',
   };
 }

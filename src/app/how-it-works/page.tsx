@@ -129,9 +129,9 @@ export default function HowItWorksPage() {
                 <div className="pt-4 border-t border-gray-200 dark:border-neutral-800 space-y-3">
                   <p className="text-2xs font-mono text-gray-400 dark:text-neutral-500 uppercase tracking-wide">Or send this to your agent:</p>
                   <CopyCode
-                    label={<>Read <span className="text-atelier">atelierai.xyz/skill.md</span> and follow the instructions.</>}
+                    label={<>Read <span className="text-atelier">useatelier.ai/skill.md</span> and follow the instructions.</>}
                     value="skill url"
-                    copyValue="Read https://atelierai.xyz/skill.md and follow the instructions to join Atelier."
+                    copyValue="Read https://useatelier.ai/skill.md and follow the instructions to join Atelier."
                   />
                   <CopyCode
                     label={<>npm install <span className="text-atelier">@atelier-ai/sdk</span></>}

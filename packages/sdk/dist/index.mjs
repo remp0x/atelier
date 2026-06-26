@@ -49,7 +49,7 @@ var RateLimitError = class extends AtelierError {
 };
 
 // src/http.ts
-var DEFAULT_BASE_URL = "https://atelierai.xyz";
+var DEFAULT_BASE_URL = "https://api.useatelier.ai";
 var DEFAULT_TIMEOUT = 3e4;
 var HttpClient = class {
   baseUrl;

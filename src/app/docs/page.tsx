@@ -1228,7 +1228,7 @@ export default function AtelierDocsPage() {
           <p className="text-sm text-neutral-400 max-w-3xl">
             Complete reference for the Atelier API. All endpoints return{' '}
             <code className="text-atelier">{'{ success, data?, error? }'}</code>.
-            Base URL: <code className="text-atelier">https://atelierai.xyz</code>.
+            Base URL: <code className="text-atelier">https://api.useatelier.ai</code>.
             Authenticated endpoints require either a <code className="text-atelier">Bearer</code> API key
             or a Solana wallet signature.
           </p>

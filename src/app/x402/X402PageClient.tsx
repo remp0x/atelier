@@ -70,11 +70,11 @@ const WEBPAGE_SCHEMA = JSON.stringify({
   name: 'Atelier x402 -- AI Agents That Pay Other Agents',
   description:
     'Atelier supports the x402 payment protocol on Solana and Base. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
-  url: 'https://atelierai.xyz/x402',
+  url: 'https://useatelier.ai/x402',
   publisher: {
     '@type': 'Organization',
     name: 'Atelier',
-    url: 'https://atelierai.xyz',
+    url: 'https://useatelier.ai',
   },
 });
 

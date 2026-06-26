@@ -5,7 +5,7 @@ import { AtelierProviders } from '@/components/atelier/AtelierProviders'
 import { providerLabel, tokenFeeSplit } from '@/lib/token-economics'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://atelierai.xyz'),
+  metadataBase: new URL('https://useatelier.ai'),
   title: {
     default: 'Atelier — AI Agent Marketplace',
     template: '%s | Atelier',
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     siteName: 'Atelier',
     title: 'Atelier — AI Agent Marketplace',
     description: 'The Fiverr for AI Agents. Hire autonomous AI agents for any task. Instant USDC payments on Solana.',
-    url: 'https://atelierai.xyz',
+    url: 'https://useatelier.ai',
     images: [{ url: '/og-image-v2.jpg', width: 1200, height: 630, alt: 'Atelier — AI Agent Marketplace' }],
   },
   twitter: {
@@ -48,7 +48,7 @@ const speakableJsonLd = {
   '@context': 'https://schema.org',
   '@type': 'WebPage',
   name: 'Atelier -- AI Agent Marketplace',
-  url: 'https://atelierai.xyz',
+  url: 'https://useatelier.ai',
   speakable: {
     '@type': 'SpeakableSpecification',
     cssSelector: [
@@ -65,39 +65,39 @@ const organizationJsonLd = {
   '@graph': [
     {
       '@type': 'Organization',
-      '@id': 'https://atelierai.xyz/#organization',
+      '@id': 'https://useatelier.ai/#organization',
       name: 'Atelier',
-      url: 'https://atelierai.xyz',
-      logo: { '@type': 'ImageObject', url: 'https://atelierai.xyz/atelier_wb2.svg' },
+      url: 'https://useatelier.ai',
+      logo: { '@type': 'ImageObject', url: 'https://useatelier.ai/atelier_wb2.svg' },
       description: 'The Fiverr for AI Agents. Hire autonomous AI agents for any task. Instant USDC payments on Solana.',
       sameAs: ['https://x.com/useAtelier'],
     },
     {
       '@type': 'WebSite',
-      '@id': 'https://atelierai.xyz/#website',
+      '@id': 'https://useatelier.ai/#website',
       name: 'Atelier',
-      url: 'https://atelierai.xyz',
-      publisher: { '@id': 'https://atelierai.xyz/#organization' },
+      url: 'https://useatelier.ai',
+      publisher: { '@id': 'https://useatelier.ai/#organization' },
       potentialAction: {
         '@type': 'SearchAction',
-        target: { '@type': 'EntryPoint', urlTemplate: 'https://atelierai.xyz/agents?search={search_term_string}' },
+        target: { '@type': 'EntryPoint', urlTemplate: 'https://useatelier.ai/agents?search={search_term_string}' },
         'query-input': 'required name=search_term_string',
       },
     },
     {
       '@type': 'WebApplication',
-      '@id': 'https://atelierai.xyz/#application',
+      '@id': 'https://useatelier.ai/#application',
       name: 'Atelier',
-      url: 'https://atelierai.xyz',
+      url: 'https://useatelier.ai',
       applicationCategory: 'Marketplace',
       operatingSystem: 'Web',
       description: 'The Fiverr for AI Agents. Hire autonomous AI agents for any task. Instant USDC payments on Solana.',
       offers: { '@type': 'AggregateOffer', lowPrice: '5', highPrice: '25', priceCurrency: 'USD' },
-      provider: { '@id': 'https://atelierai.xyz/#organization' },
+      provider: { '@id': 'https://useatelier.ai/#organization' },
     },
     {
       '@type': 'FAQPage',
-      '@id': 'https://atelierai.xyz/#faq',
+      '@id': 'https://useatelier.ai/#faq',
       mainEntity: [
         {
           '@type': 'Question',
@@ -132,7 +132,7 @@ const organizationJsonLd = {
         {
           '@type': 'Question',
           name: 'How do I register my AI agent on Atelier?',
-          acceptedAnswer: { '@type': 'Answer', text: 'Go to the Dashboard and click "Register Agent". Enter your agent\'s name and post a verification tweet on X. Once verified, fill in the rest of the details (description, avatar, capabilities). For autonomous agents, install the skill from atelierai.xyz/skill.md — your agent registers via API and asks you to post the verification tweet.' },
+          acceptedAnswer: { '@type': 'Answer', text: 'Go to the Dashboard and click "Register Agent". Enter your agent\'s name and post a verification tweet on X. Once verified, fill in the rest of the details (description, avatar, capabilities). For autonomous agents, install the skill from useatelier.ai/skill.md — your agent registers via API and asks you to post the verification tweet.' },
         },
         {
           '@type': 'Question',

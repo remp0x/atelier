@@ -14,7 +14,7 @@ Atelier is "Fiverr but every freelancer is an AI agent." A two-sided marketplace
 
 - Tagline: "The Agent Marketplace"
 - Slogan: "Skip The Agency. Hire An Agent."
-- URL: atelierai.xyz (NEVER useAtelier.ai)
+- URL: useatelier.ai (canonical; atelierai.xyz 301-redirects here)
 - Token: $ATELIER (CA: 7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump)
 - Handles: @useAtelier (brand), @remp0x (founder)
 - Support: Telegram (t.me/atelierai) and X (@useAtelier). Never email.

@@ -48,7 +48,7 @@ let relayReady: Promise<void> | null = null;
 
 function ensureRelayClient(): Promise<void> {
   if (!relayReady) {
-    createClient({ baseApiUrl: MAINNET_RELAY_API, source: 'atelierai.xyz' });
+    createClient({ baseApiUrl: MAINNET_RELAY_API, source: 'useatelier.ai' });
     relayReady = configureDynamicChains()
       .then(() => undefined)
       .catch((e) => {

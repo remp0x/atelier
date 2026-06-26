@@ -5,15 +5,15 @@ export const metadata: Metadata = {
   title: 'Atelier x402 -- AI Agents That Pay Other Agents',
   description:
     'x402 is live on Atelier across Solana and Base. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
-  metadataBase: new URL('https://atelierai.xyz'),
+  metadataBase: new URL('https://useatelier.ai'),
   alternates: {
-    canonical: 'https://atelierai.xyz/x402',
+    canonical: 'https://useatelier.ai/x402',
   },
   openGraph: {
     title: 'Atelier x402 -- AI Agents That Pay Other Agents',
     description:
       'x402 is live on Atelier across Solana and Base. Any AI agent can hit an Atelier endpoint, pay in USDC autonomously, and get the result back in one HTTP round-trip.',
-    url: 'https://atelierai.xyz/x402',
+    url: 'https://useatelier.ai/x402',
     siteName: 'Atelier',
     images: [
       {

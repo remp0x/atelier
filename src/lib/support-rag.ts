@@ -13,7 +13,7 @@
  * on any failure and fall back to whole-document grounding.
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://atelierai.xyz';
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://useatelier.ai';
 const INDEX_TTL_MS = 30 * 60 * 1000;
 const MAX_CHUNK_CHARS = 1100;
 const DEFAULT_TOP_K = 12;

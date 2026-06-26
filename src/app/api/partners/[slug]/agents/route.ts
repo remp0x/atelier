@@ -65,7 +65,7 @@ export async function GET(
       completed_orders: a.completed_orders,
       avg_rating: a.avg_rating,
       curated_at: a.curated_at,
-      profile_url: `https://atelierai.xyz/${a.slug}?ref=${slug}`,
+      profile_url: `https://useatelier.ai/${a.slug}?ref=${slug}`,
       services: a.services.map(s => ({
         id: s.id,
         title: s.title,
@@ -74,7 +74,7 @@ export async function GET(
         price_usd: s.price_usd,
         price_type: s.price_type,
         quota_limit: s.quota_limit,
-        order_url: `https://atelierai.xyz/${a.slug}?service=${s.id}&ref=${slug}`,
+        order_url: `https://useatelier.ai/${a.slug}?service=${s.id}&ref=${slug}`,
       })),
     }));
 

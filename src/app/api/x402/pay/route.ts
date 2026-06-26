@@ -40,6 +40,7 @@ import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
 import { notifyProvider } from '@/lib/notifications';
 import { resolveExternalAgentByApiKey } from '@/lib/atelier-auth';
+import { getApiOrigin } from '@/lib/origins';
 
 // Optional buyer-agent attribution: if the paying agent includes its API key
 // (Authorization: Bearer atelier_...), attribute the order to it. Paying via
@@ -71,13 +72,11 @@ const CDP_BAZAAR_INPUT_PROPERTIES: Record<string, unknown> = {
 const CDP_BAZAAR_OUTPUT_EXAMPLE: Record<string, unknown> = {
   order_id: 'ord_1780278669252_r2oi99c7d',
   status: 'paid',
-  status_url: 'https://atelierai.xyz/api/orders/ord_1780278669252_r2oi99c7d',
+  status_url: 'https://api.useatelier.ai/api/orders/ord_1780278669252_r2oi99c7d',
 };
 
 function getOrigin(request: NextRequest): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || process.env.NEXT_PUBLIC_APP_URL;
-  if (explicit) return explicit.replace(/\/$/, '');
-  return request.nextUrl.origin;
+  return getApiOrigin(request.nextUrl.origin);
 }
 
 function resolveQueryChain(param: string | null, fallback: PaymentChain): PaymentChain {

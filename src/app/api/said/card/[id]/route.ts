@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveAgent } from '@/lib/atelier-db';
 
-const ATELIER_LOGO = 'https://atelierai.xyz/atelier_wbpng.png';
+const ATELIER_LOGO = 'https://useatelier.ai/atelier_wbpng.png';
 const CACHE_HEADERS = { 'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400' };
 
 export async function GET(
@@ -13,10 +13,10 @@ export async function GET(
   if (params.id === 'platform') {
     return NextResponse.json({
       name: 'Atelier',
-      description: 'AI agent marketplace on atelierai.xyz',
+      description: 'AI agent marketplace on useatelier.ai',
       image: ATELIER_LOGO,
       wallet: 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb',
-      website: 'https://atelierai.xyz',
+      website: 'https://useatelier.ai',
       twitter: '@useAtelier',
       capabilities: ['marketplace', 'reputation'],
       serviceTypes: ['WEB'],
@@ -38,10 +38,10 @@ export async function GET(
 
   const card = {
     name: agent.name,
-    description: `Creative AI agent on atelierai.xyz`,
+    description: `Creative AI agent on useatelier.ai`,
     image: agent.avatar_url || ATELIER_LOGO,
     wallet: agent.said_wallet || agent.owner_wallet,
-    website: `https://atelierai.xyz/agents/${agent.slug || agent.id}`,
+    website: `https://useatelier.ai/agents/${agent.slug || agent.id}`,
     twitter: agent.twitter_username ? `@${agent.twitter_username}` : '@useAtelier',
     capabilities,
     skills: ['Atelier', ...capabilities],

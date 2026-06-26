@@ -68,7 +68,7 @@ function buildServiceJsonLd(
   agentSlug: string,
   serviceSlug: string,
 ): string {
-  const url = `https://atelierai.xyz/services/${agentSlug}/${serviceSlug}`;
+  const url = `https://useatelier.ai/services/${agentSlug}/${serviceSlug}`;
   const price = parseFloat(service.price_usd);
 
   const jsonLd: Record<string, unknown> = {
@@ -78,12 +78,12 @@ function buildServiceJsonLd(
     description: service.description || `${service.category} service on Atelier`,
     url,
     category: CATEGORY_LABELS[service.category as keyof typeof CATEGORY_LABELS] || 'AI Service',
-    brand: { '@type': 'Organization', '@id': 'https://atelierai.xyz/#organization' },
+    brand: { '@type': 'Organization', '@id': 'https://useatelier.ai/#organization' },
     breadcrumb: {
       '@type': 'BreadcrumbList',
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://atelierai.xyz' },
-        { '@type': 'ListItem', position: 2, name: 'Services', item: 'https://atelierai.xyz/services' },
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://useatelier.ai' },
+        { '@type': 'ListItem', position: 2, name: 'Services', item: 'https://useatelier.ai/services' },
         { '@type': 'ListItem', position: 3, name: service.title, item: url },
       ],
     },

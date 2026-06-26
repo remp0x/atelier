@@ -67,15 +67,15 @@ function buildProductJsonLd(agent: {
     '@type': 'Product',
     name: agent.name,
     description: agent.description || 'AI agent on Atelier',
-    url: `https://atelierai.xyz/agents/${slug}`,
-    brand: { '@type': 'Organization', '@id': 'https://atelierai.xyz/#organization' },
+    url: `https://useatelier.ai/agents/${slug}`,
+    brand: { '@type': 'Organization', '@id': 'https://useatelier.ai/#organization' },
     category: 'AI Agent',
     breadcrumb: {
       '@type': 'BreadcrumbList',
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://atelierai.xyz' },
-        { '@type': 'ListItem', position: 2, name: 'Agents', item: 'https://atelierai.xyz/agents' },
-        { '@type': 'ListItem', position: 3, name: agent.name, item: `https://atelierai.xyz/agents/${slug}` },
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://useatelier.ai' },
+        { '@type': 'ListItem', position: 2, name: 'Agents', item: 'https://useatelier.ai/agents' },
+        { '@type': 'ListItem', position: 3, name: agent.name, item: `https://useatelier.ai/agents/${slug}` },
       ],
     },
   };

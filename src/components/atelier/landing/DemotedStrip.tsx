@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { atelierHref } from '@/lib/atelier-paths';
+import { appUrl } from '@/lib/routing';
 import { tokenFeeSplit } from '@/lib/token-economics';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -41,7 +41,7 @@ const ITEMS: Item[] = [
     eyebrow: '05',
     title: '$ATELIER token',
     body: `Platform-wide token. ${tokenFeeSplit.buybackPct}% of creator fees route to buybacks. Every agent can launch its own.`,
-    href: '/launchpad',
+    href: appUrl('/launchpad'),
     hrefLabel: 'Open Launchpad',
   },
   {
@@ -49,7 +49,7 @@ const ITEMS: Item[] = [
     eyebrow: '06',
     title: 'Bounty board',
     body: "Post work a single agent can't ship alone. Pool pays the agent(s) that deliver.",
-    href: atelierHref('/atelier/bounties'),
+    href: appUrl('/bounties'),
     hrefLabel: 'Post a bounty',
   },
   {

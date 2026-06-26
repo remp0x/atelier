@@ -1,8 +1,15 @@
 import type { MetadataRoute } from 'next';
 import { getAtelierAgents, getServices } from '@/lib/atelier-db';
 import { getAllSlugs } from '@/lib/blog-data';
+import { getSiteOrigin, getAppOrigin } from '@/lib/origins';
+import { isAppPath } from '@/lib/routing';
 
-const BASE_URL = 'https://useatelier.ai';
+const LANDING = getSiteOrigin();
+const APP = getAppOrigin();
+
+function urlFor(path: string): string {
+  return `${isAppPath(path) ? APP : LANDING}${path}`;
+}
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [agents, services] = await Promise.all([
@@ -11,25 +18,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]);
 
   const staticPages: MetadataRoute.Sitemap = [
-    { url: BASE_URL, changeFrequency: 'weekly', priority: 1.0 },
-    { url: `${BASE_URL}/agents`, changeFrequency: 'daily', priority: 0.9 },
-    { url: `${BASE_URL}/token`, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${BASE_URL}/agents/register`, changeFrequency: 'monthly', priority: 0.6 },
-    { url: `${BASE_URL}/docs`, changeFrequency: 'monthly', priority: 0.5 },
-    { url: `${BASE_URL}/services`, changeFrequency: 'weekly', priority: 0.6 },
-    { url: `${BASE_URL}/metrics`, changeFrequency: 'daily', priority: 0.5 },
-    { url: `${BASE_URL}/leaderboard`, changeFrequency: 'daily', priority: 0.5 },
-{ url: `${BASE_URL}/blog`, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${BASE_URL}/about`, changeFrequency: 'monthly', priority: 0.4 },
-    { url: `${BASE_URL}/x402`, changeFrequency: 'weekly', priority: 0.8 },
-    { url: `${BASE_URL}/earn`, changeFrequency: 'weekly', priority: 0.7 },
-    { url: `${BASE_URL}/terms`, changeFrequency: 'monthly', priority: 0.2 },
-    { url: `${BASE_URL}/privacy`, changeFrequency: 'monthly', priority: 0.2 },
-    { url: `${BASE_URL}/llms.txt`, changeFrequency: 'monthly', priority: 0.6 },
+    { url: urlFor('/'), changeFrequency: 'weekly', priority: 1.0 },
+    { url: urlFor('/agents'), changeFrequency: 'daily', priority: 0.9 },
+    { url: urlFor('/token'), changeFrequency: 'weekly', priority: 0.7 },
+    { url: urlFor('/agents/register'), changeFrequency: 'monthly', priority: 0.6 },
+    { url: urlFor('/docs'), changeFrequency: 'monthly', priority: 0.5 },
+    { url: urlFor('/services'), changeFrequency: 'weekly', priority: 0.6 },
+    { url: urlFor('/metrics'), changeFrequency: 'daily', priority: 0.5 },
+    { url: urlFor('/leaderboard'), changeFrequency: 'daily', priority: 0.5 },
+    { url: urlFor('/blog'), changeFrequency: 'weekly', priority: 0.7 },
+    { url: urlFor('/about'), changeFrequency: 'monthly', priority: 0.4 },
+    { url: urlFor('/x402'), changeFrequency: 'weekly', priority: 0.8 },
+    { url: urlFor('/earn'), changeFrequency: 'weekly', priority: 0.7 },
+    { url: urlFor('/terms'), changeFrequency: 'monthly', priority: 0.2 },
+    { url: urlFor('/privacy'), changeFrequency: 'monthly', priority: 0.2 },
+    { url: `${LANDING}/llms.txt`, changeFrequency: 'monthly', priority: 0.6 },
   ];
 
   const agentPages: MetadataRoute.Sitemap = agents.map((agent) => ({
-    url: `${BASE_URL}/agents/${agent.slug || agent.id}`,
+    url: urlFor(`/agents/${agent.slug || agent.id}`),
     changeFrequency: 'weekly' as const,
     priority: 0.8,
   }));
@@ -37,13 +44,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const servicePages: MetadataRoute.Sitemap = services
     .filter((s) => s.agent_slug && s.slug)
     .map((s) => ({
-      url: `${BASE_URL}/services/${s.agent_slug}/${s.slug}`,
+      url: urlFor(`/services/${s.agent_slug}/${s.slug}`),
       changeFrequency: 'weekly' as const,
       priority: 0.7,
     }));
 
   const blogPages: MetadataRoute.Sitemap = getAllSlugs().map((slug) => ({
-    url: `${BASE_URL}/blog/${slug}`,
+    url: urlFor(`/blog/${slug}`),
     changeFrequency: 'monthly' as const,
     priority: 0.6,
   }));

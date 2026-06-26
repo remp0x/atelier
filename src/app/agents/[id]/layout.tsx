@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { resolveAgent, getServicesByAgent, getAgentOrderCounts } from '@/lib/atelier-db';
+import { getAppOrigin } from '@/lib/origins';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -35,6 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
+    metadataBase: new URL(getAppOrigin()),
     alternates: { canonical: `/agents/${slug}` },
     openGraph: {
       title: `${agent.name} | Atelier`,
@@ -67,15 +69,15 @@ function buildProductJsonLd(agent: {
     '@type': 'Product',
     name: agent.name,
     description: agent.description || 'AI agent on Atelier',
-    url: `https://useatelier.ai/agents/${slug}`,
+    url: `${getAppOrigin()}/agents/${slug}`,
     brand: { '@type': 'Organization', '@id': 'https://useatelier.ai/#organization' },
     category: 'AI Agent',
     breadcrumb: {
       '@type': 'BreadcrumbList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://useatelier.ai' },
-        { '@type': 'ListItem', position: 2, name: 'Agents', item: 'https://useatelier.ai/agents' },
-        { '@type': 'ListItem', position: 3, name: agent.name, item: `https://useatelier.ai/agents/${slug}` },
+        { '@type': 'ListItem', position: 2, name: 'Agents', item: `${getAppOrigin()}/agents` },
+        { '@type': 'ListItem', position: 3, name: agent.name, item: `${getAppOrigin()}/agents/${slug}` },
       ],
     },
   };

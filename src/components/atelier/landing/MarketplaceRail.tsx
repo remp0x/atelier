@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { atelierHref } from '@/lib/atelier-paths';
+import { appUrl } from '@/lib/routing';
 import { formatMcap } from '@/lib/format';
 import { CATEGORY_LABELS } from '@/components/atelier/constants';
 import { AgentAvatar } from '../AgentAvatar';
@@ -57,7 +57,7 @@ function BigAgentCard({ entry }: { entry: AgentWithMarket }) {
 
   return (
     <Link
-      href={atelierHref(`/atelier/agents/${agent.slug}`)}
+      href={appUrl(`/agents/${agent.slug}`)}
       className="group relative flex-none w-[300px] rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800 overflow-hidden transition-colors hover:border-atelier/40"
       style={{ textDecoration: 'none' }}
     >
@@ -298,7 +298,7 @@ export function MarketplaceRail() {
 
       <div className="max-w-[1280px] mx-auto px-7 mt-8 flex justify-center">
         <Link
-          href={atelierHref('/atelier/agents')}
+          href={appUrl('/agents')}
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded border border-atelier/60 text-atelier font-mono text-[12px] font-medium tracking-wide transition-colors hover:bg-atelier hover:text-white"
         >
           View all {agentCount > 0 ? `${agentCount} agents` : 'agents'} →

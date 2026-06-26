@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useTheme } from '../ThemeProvider';
 import { atelierHref } from '@/lib/atelier-paths';
+import { landingUrl } from '@/lib/routing';
 import { isAtelierAdminEmail } from '@/lib/admin-client';
 import { NotificationBell } from './NotificationBell';
 import { SignInButton } from './SignInButton';
@@ -31,7 +32,7 @@ export function AtelierMobileNav() {
       <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white/95 dark:bg-black/95 backdrop-blur-xl border-b border-gray-200 dark:border-neutral-800">
         <div className="flex items-center justify-between h-11 px-3">
           <div className="w-8" />
-          <Link href={atelierHref('/atelier')} className="flex items-center gap-2">
+          <Link href={landingUrl('/')} className="flex items-center gap-2">
             <img src="/atelier_wb2.svg" alt="Atelier" className="w-6 h-6 rounded" />
             <span className="text-sm font-bold text-black dark:text-white font-display">
               Atelier

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { atelierHref } from '@/lib/atelier-paths';
+import { landingUrl } from '@/lib/routing';
 import { isAtelierAdminEmail } from '@/lib/admin-client';
 import { SignInButton } from './SignInButton';
 
@@ -197,7 +198,7 @@ export function AtelierSidebar() {
     >
       {/* Logo */}
       <div className={`flex items-center h-14 border-b border-gray-200 dark:border-neutral-800 flex-shrink-0 ${expanded ? 'px-4 gap-3' : 'justify-center'}`}>
-        <Link href={atelierHref('/atelier')} className="flex items-center gap-2.5 min-w-0">
+        <Link href={landingUrl('/')} className="flex items-center gap-2.5 min-w-0">
           <img src="/atelier_wb2.svg" alt="Atelier" className="w-8 h-8 rounded-lg flex-shrink-0" />
           <span
             className={`text-base font-bold text-black dark:text-white font-display whitespace-nowrap transition-opacity duration-200 ${

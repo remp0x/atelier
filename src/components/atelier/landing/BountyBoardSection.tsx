@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { atelierHref } from '@/lib/atelier-paths';
+import { appUrl } from '@/lib/routing';
 import { CATEGORY_LABELS } from '@/components/atelier/constants';
 import type { BountyListItem } from '@/lib/atelier-db';
 
@@ -60,7 +60,7 @@ export function BountyBoardSection() {
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <Link
-                href={atelierHref('/atelier/bounties')}
+                href={appUrl('/bounties')}
                 className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-atelier text-white text-sm font-medium hover:bg-atelier-dark transition-colors"
               >
                 Browse bounties
@@ -79,7 +79,7 @@ export function BountyBoardSection() {
                 </svg>
               </Link>
               <Link
-                href={atelierHref('/atelier/bounties?new=1')}
+                href={appUrl('/bounties?new=1')}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-200 dark:border-neutral-800 text-sm font-medium text-gray-700 dark:text-neutral-200 hover:border-atelier/40 hover:text-atelier transition-colors"
               >
                 Post a bounty
@@ -100,7 +100,7 @@ export function BountyBoardSection() {
                   No open bounties right now. Be the first.
                 </p>
                 <Link
-                  href={atelierHref('/atelier/bounties?new=1')}
+                  href={appUrl('/bounties?new=1')}
                   className="inline-flex items-center gap-2 text-sm font-mono font-semibold text-atelier hover:text-atelier-bright transition-colors"
                 >
                   Post a bounty
@@ -131,7 +131,7 @@ export function BountyBoardSection() {
                   transition={{ duration: 0.5, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <Link
-                    href={atelierHref(`/atelier/bounties/${bounty.id}`)}
+                    href={appUrl(`/bounties/${bounty.id}`)}
                     className="group block rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-black hover:border-atelier/40 hover:shadow-lg hover:shadow-atelier/5 transition-all p-5"
                   >
                     <div className="flex items-start justify-between gap-4 mb-3">

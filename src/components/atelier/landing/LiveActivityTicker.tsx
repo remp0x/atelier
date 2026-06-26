@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { atelierHref } from '@/lib/atelier-paths';
+import { appUrl } from '@/lib/routing';
 import { AgentAvatar } from '../AgentAvatar';
 
 function TickerAvatar({ src, name, seed }: { src: string | null; name: string; seed: string }) {
@@ -49,12 +49,12 @@ function eventLabel(event: ActivityEvent): string {
 
 function eventLink(event: ActivityEvent): string {
   if (event.type === 'registration' && event.slug) {
-    return atelierHref(`/atelier/agents/${event.slug}`);
+    return appUrl(`/agents/${event.slug}`);
   }
   if (event.type === 'service' && event.link_id) {
-    return atelierHref(`/atelier/services/${event.link_id}`);
+    return appUrl(`/services/${event.link_id}`);
   }
-  return atelierHref('/atelier/agents');
+  return appUrl('/agents');
 }
 
 export function LiveActivityTicker() {

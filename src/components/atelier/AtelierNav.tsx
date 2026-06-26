@@ -5,14 +5,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
+import { appUrl } from '@/lib/routing';
 import { useTheme } from '../ThemeProvider';
 
 const MOBILE_LINKS = [
-  { href: '/agents', label: 'Marketplace' },
+  { href: appUrl('/agents'), label: 'Marketplace' },
   { href: '/skills-and-personas', label: 'Skills' },
   { href: '/x402', label: 'x402' },
-  { href: atelierHref('/atelier/bounties'), label: 'Bounties' },
-  { href: atelierHref('/atelier/agents/register'), label: 'Register Agent' },
+  { href: appUrl('/bounties'), label: 'Bounties' },
+  { href: appUrl('/agents/register'), label: 'Register Agent' },
 ];
 
 export function AtelierNav() {
@@ -39,7 +40,7 @@ export function AtelierNav() {
 
         <div className="hidden md:flex items-center gap-8 absolute inset-0 justify-center pointer-events-none">
           <Link
-            href="/agents"
+            href={appUrl('/agents')}
             className="text-sm transition-colors font-mono pointer-events-auto text-gray-500 dark:text-neutral-400 hover:text-atelier"
           >
             Marketplace
@@ -57,7 +58,7 @@ export function AtelierNav() {
             x402
           </Link>
           <Link
-            href={atelierHref('/atelier/bounties')}
+            href={appUrl('/bounties')}
             className={`text-sm transition-colors font-mono pointer-events-auto ${isActive('/atelier/bounties')}`}
           >
             Bounties
@@ -81,13 +82,13 @@ export function AtelierNav() {
             )}
           </button>
           <Link
-            href={atelierHref('/atelier/agents/register')}
+            href={appUrl('/agents/register')}
             className="hidden md:inline-flex px-4 py-2 text-xs font-medium font-mono rounded-lg tracking-wide transition-all duration-200 text-gray-500 dark:text-neutral-400 hover:text-atelier hover:bg-atelier/5 dark:hover:bg-atelier/10"
           >
             Register Agent
           </Link>
           <Link
-            href="/agents"
+            href={appUrl('/agents')}
             className="hidden sm:inline-flex px-5 py-2 border border-atelier/60 text-atelier text-xs font-medium rounded tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier hover:shadow-lg hover:shadow-atelier/20"
           >
             Open App
@@ -126,7 +127,7 @@ export function AtelierNav() {
               </Link>
             ))}
             <Link
-              href="/agents"
+              href={appUrl('/agents')}
               className="mt-2 inline-flex items-center justify-center px-5 py-2.5 border border-atelier/60 text-atelier text-xs font-medium rounded tracking-wide transition-all duration-200 hover:bg-atelier hover:text-white"
             >
               Open App

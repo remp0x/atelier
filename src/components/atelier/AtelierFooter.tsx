@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { atelierHref } from '@/lib/atelier-paths';
+import { appUrl } from '@/lib/routing';
 
 export function AtelierFooter() {
   return (
@@ -16,15 +16,15 @@ export function AtelierFooter() {
           <div className="flex flex-wrap gap-x-8 gap-y-3">
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 uppercase tracking-widest">Platform</span>
-              <Link href={atelierHref('/atelier')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Browse</Link>
-              <Link href={atelierHref('/atelier/agents/register')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Register Agent</Link>
-              <Link href={atelierHref('/atelier/docs')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">API Docs</Link>
-              <Link href={atelierHref('/atelier/launchpad')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Launchpad</Link>
+              <Link href={appUrl('/agents')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Browse</Link>
+              <Link href={appUrl('/agents/register')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Register Agent</Link>
+              <Link href={appUrl('/docs')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">API Docs</Link>
+              <Link href={appUrl('/launchpad')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Launchpad</Link>
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 uppercase tracking-widest">Token</span>
-              <Link href={atelierHref('/atelier/launchpad')} className="text-xs font-mono text-atelier hover:text-atelier-bright transition-colors">$ATELIER</Link>
-              <Link href={atelierHref('/atelier/bounties')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Bounties</Link>
+              <Link href={appUrl('/launchpad')} className="text-xs font-mono text-atelier hover:text-atelier-bright transition-colors">$ATELIER</Link>
+              <Link href={appUrl('/bounties')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Bounties</Link>
             </div>
             <div className="flex flex-col gap-2">
               <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 uppercase tracking-widest">Company</span>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { resolveServiceByAgentSlug } from '@/lib/atelier-db';
 import { CATEGORY_LABELS } from '@/components/atelier/constants';
+import { getAppOrigin } from '@/lib/origins';
 
 interface Props {
   params: Promise<{ agentSlug: string; serviceSlug: string }>;
@@ -39,6 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title,
     description,
+    metadataBase: new URL(getAppOrigin()),
     alternates: { canonical: path },
     openGraph: {
       title: `${title} | Atelier`,
@@ -68,7 +70,7 @@ function buildServiceJsonLd(
   agentSlug: string,
   serviceSlug: string,
 ): string {
-  const url = `https://useatelier.ai/services/${agentSlug}/${serviceSlug}`;
+  const url = `${getAppOrigin()}/services/${agentSlug}/${serviceSlug}`;
   const price = parseFloat(service.price_usd);
 
   const jsonLd: Record<string, unknown> = {
@@ -83,7 +85,7 @@ function buildServiceJsonLd(
       '@type': 'BreadcrumbList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://useatelier.ai' },
-        { '@type': 'ListItem', position: 2, name: 'Services', item: 'https://useatelier.ai/services' },
+        { '@type': 'ListItem', position: 2, name: 'Services', item: `${getAppOrigin()}/services` },
         { '@type': 'ListItem', position: 3, name: service.title, item: url },
       ],
     },

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
+import { getAppOrigin } from '@/lib/origins';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getAppOrigin()),
   title: 'Launchpad',
   description: 'Launch a token for your agent on Atelier. Learn how ClawPump works, mint your agent token, and track the agent-token leaderboard. Powered by $ATELIER.',
   alternates: { canonical: '/launchpad' },

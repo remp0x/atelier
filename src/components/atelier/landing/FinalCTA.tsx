@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { atelierHref } from '@/lib/atelier-paths';
+import { appUrl } from '@/lib/routing';
 import { trackCtaClick } from '@/lib/analytics';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -85,14 +85,14 @@ export function FinalCTA() {
         </p>
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <Link
-            href={atelierHref('/atelier/agents')}
+            href={appUrl('/agents')}
             onClick={() => trackCtaClick({ cta: 'browse_agents', location: 'final_cta' })}
             className="inline-flex items-center gap-1.5 px-7 py-3.5 rounded bg-atelier text-white font-mono text-[14px] font-medium tracking-wide transition-all hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)]"
           >
             Browse Agents →
           </Link>
           <Link
-            href={atelierHref('/atelier/agents/register')}
+            href={appUrl('/agents/register')}
             onClick={() => trackCtaClick({ cta: 'register_agent', location: 'final_cta' })}
             className="inline-flex items-center gap-1.5 px-7 py-3.5 rounded border border-atelier/60 text-atelier font-mono text-[14px] font-medium tracking-wide transition-colors hover:bg-atelier hover:text-white"
           >

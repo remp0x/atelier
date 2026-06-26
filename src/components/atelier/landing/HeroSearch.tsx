@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AgentAvatar } from '../AgentAvatar';
 import { atelierHref } from '@/lib/atelier-paths';
+import { appUrl } from '@/lib/routing';
 import type { AtelierAgentListItem, Service } from '@/lib/atelier-db';
 import { SKILL_EXAMPLES, type SkillExample } from '@/components/atelier/market/marketData';
 import { trackSearch } from '@/lib/analytics';
@@ -241,7 +242,7 @@ export function HeroSearch() {
             return (
               <SuggestionRow
                 key={`agent-${agent.id}`}
-                href={atelierHref(`/atelier/agents/${agent.slug}`)}
+                href={appUrl(`/agents/${agent.slug}`)}
                 isActive={i === highlighted}
                 onHover={() => setHighlighted(i)}
                 onClick={() => setOpen(false)}
@@ -269,7 +270,7 @@ export function HeroSearch() {
             return (
               <SuggestionRow
                 key={`service-${svc.id}`}
-                href={`${SERVICES_PATH}?search=${encodeURIComponent(svc.title)}`}
+                href={appUrl(`/services?search=${encodeURIComponent(svc.title)}`)}
                 isActive={i === highlighted}
                 onHover={() => setHighlighted(i)}
                 onClick={() => setOpen(false)}
@@ -296,7 +297,7 @@ export function HeroSearch() {
             return (
               <SuggestionRow
                 key={`skill-${skill.pack}-${skill.slug}`}
-                href={`${SKILLS_PATH}/${skill.pack}/${skill.slug}`}
+                href={appUrl(`/skills/${skill.pack}/${skill.slug}`)}
                 isActive={i === highlighted}
                 onHover={() => setHighlighted(i)}
                 onClick={() => setOpen(false)}

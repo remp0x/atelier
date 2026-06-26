@@ -1,4 +1,5 @@
 const SITE_FALLBACK = 'https://useatelier.ai';
+const APP_FALLBACK = 'https://app.useatelier.ai';
 const API_FALLBACK = 'https://api.useatelier.ai';
 
 function clean(value: string): string {
@@ -21,6 +22,10 @@ export function getSiteOrigin(): string {
       process.env.SITE_URL,
     ) ?? SITE_FALLBACK
   );
+}
+
+export function getAppOrigin(): string {
+  return firstEnv(process.env.NEXT_PUBLIC_APP_URL) ?? APP_FALLBACK;
 }
 
 export function getApiOrigin(requestOrigin?: string | null): string {

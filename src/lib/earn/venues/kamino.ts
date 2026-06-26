@@ -22,9 +22,11 @@ import type { EarnVenue, EarnMarket, EarnVenueHealth, EarnWithdrawOutcome } from
 // same 6 decimals as USDC. No obligation -- the standalone reserve-liquidity path.
 
 const ZERO = BigInt(0);
-// Kamino's scaled-fraction (Fraction) scale is 2^60 -- borrowed/fees are stored
-// as value * 2^60. (Verified on-chain: only /2^60 yields a cToken rate >= 1.0,
-// which is required since collateral starts at 1:1 and only appreciates.)
+// klend stores borrowed/fee amounts as a Fraction (the `fixed` crate's U68F60):
+// a u128 scaled by 2^60, NOT 2^64. Descaling by 2^64 undercounts them 16x, which
+// mixed against the plain-u64 availableAmount corrupts the cToken exchange rate
+// (verified on-chain: a 10 USDC deposit minted 8,414,043 cTokens that only value
+// to $10 under the 2^60 scale).
 const SF = BigInt(1) << BigInt(60);
 const SLOTS_PER_YEAR = 63_072_000;
 
@@ -100,10 +102,10 @@ const OFF = {
   liquidityMint: 128,
   supplyVault: 160,
   availableAmount: 224, // u64
-  borrowedAmountSf: 232, // u128 SF.64
-  accProtocolFeesSf: 344, // u128 SF.64
-  accReferrerFeesSf: 360, // u128 SF.64
-  pendingReferrerFeesSf: 376, // u128 SF.64
+  borrowedAmountSf: 232, // u128 Fraction (2^60-scaled)
+  accProtocolFeesSf: 344, // u128 Fraction (2^60-scaled)
+  accReferrerFeesSf: 360, // u128 Fraction (2^60-scaled)
+  pendingReferrerFeesSf: 376, // u128 Fraction (2^60-scaled)
   collateralMint: 2560,
   collateralSupply: 2592, // u64
   status: 4856, // u8 (0 = Active)
@@ -167,7 +169,7 @@ async function fetchReserve(conn: Connection, cfg: KaminoConfig): Promise<Decode
   return decodeReserve(info.data);
 }
 
-// Total underlying USDC backing the cTokens, in SF.64 scaled-fraction units, so
+// Total underlying USDC backing the cTokens, in 2^60-scaled Fraction units, so
 // valuation keeps full precision against the scaled borrowed/fees fields.
 function totalSupplySf(r: DecodedReserve): bigint {
   return r.availableAmount * SF + r.borrowedAmountSf - r.accProtocolFeesSf - r.accReferrerFeesSf - r.pendingReferrerFeesSf;

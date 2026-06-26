@@ -22,7 +22,10 @@ import type { EarnVenue, EarnMarket, EarnVenueHealth, EarnWithdrawOutcome } from
 // same 6 decimals as USDC. No obligation -- the standalone reserve-liquidity path.
 
 const ZERO = BigInt(0);
-const Q64 = BigInt(1) << BigInt(64); // 2^64 -- borrowed/fees are Q64.64 scaled fractions
+// Kamino's scaled-fraction (Fraction) scale is 2^60 -- borrowed/fees are stored
+// as value * 2^60. (Verified on-chain: only /2^60 yields a cToken rate >= 1.0,
+// which is required since collateral starts at 1:1 and only appreciates.)
+const SF = BigInt(1) << BigInt(60);
 const SLOTS_PER_YEAR = 63_072_000;
 
 // Anchor discriminators (sha256("global:<ix>")[:8]).
@@ -97,10 +100,10 @@ const OFF = {
   liquidityMint: 128,
   supplyVault: 160,
   availableAmount: 224, // u64
-  borrowedAmountSf: 232, // u128 Q64.64
-  accProtocolFeesSf: 344, // u128 Q64.64
-  accReferrerFeesSf: 360, // u128 Q64.64
-  pendingReferrerFeesSf: 376, // u128 Q64.64
+  borrowedAmountSf: 232, // u128 SF.64
+  accProtocolFeesSf: 344, // u128 SF.64
+  accReferrerFeesSf: 360, // u128 SF.64
+  pendingReferrerFeesSf: 376, // u128 SF.64
   collateralMint: 2560,
   collateralSupply: 2592, // u64
   status: 4856, // u8 (0 = Active)
@@ -164,10 +167,10 @@ async function fetchReserve(conn: Connection, cfg: KaminoConfig): Promise<Decode
   return decodeReserve(info.data);
 }
 
-// Total underlying USDC backing the cTokens, in Q64.64 scaled-fraction units, so
+// Total underlying USDC backing the cTokens, in SF.64 scaled-fraction units, so
 // valuation keeps full precision against the scaled borrowed/fees fields.
 function totalSupplySf(r: DecodedReserve): bigint {
-  return r.availableAmount * Q64 + r.borrowedAmountSf - r.accProtocolFeesSf - r.accReferrerFeesSf - r.pendingReferrerFeesSf;
+  return r.availableAmount * SF + r.borrowedAmountSf - r.accProtocolFeesSf - r.accReferrerFeesSf - r.pendingReferrerFeesSf;
 }
 
 // USDC micro-value of `units` cTokens = units * totalSupply / collateralSupply.
@@ -175,7 +178,7 @@ function cTokenToUsdc(units: bigint, r: DecodedReserve): bigint {
   if (units <= ZERO || r.collateralSupply <= ZERO) return ZERO;
   const tsSf = totalSupplySf(r);
   if (tsSf <= ZERO) return ZERO;
-  return (units * tsSf) / (Q64 * r.collateralSupply);
+  return (units * tsSf) / (SF * r.collateralSupply);
 }
 
 // Supply APY from the borrow-rate curve (klend reserve.ts replica): piecewise
@@ -184,8 +187,8 @@ function cTokenToUsdc(units: bigint, r: DecodedReserve): bigint {
 function supplyApyBps(r: DecodedReserve): number {
   const tsSf = totalSupplySf(r);
   if (tsSf <= ZERO) return 0;
-  const total = Number(tsSf) / Number(Q64);
-  const borrowed = Number(r.borrowedAmountSf) / Number(Q64);
+  const total = Number(tsSf) / Number(SF);
+  const borrowed = Number(r.borrowedAmountSf) / Number(SF);
   const util = total > 0 ? borrowed / total : 0;
   const utilBps = util * 10_000;
 
@@ -326,7 +329,7 @@ export const kaminoVenue: EarnVenue = {
     const reserve = await fetchReserve(getServerConnection(), getConfig());
     return {
       availableUsdc: reserve.availableAmount,
-      totalUsdc: totalSupplySf(reserve) / Q64,
+      totalUsdc: totalSupplySf(reserve) / SF,
       isPaused: reserve.status !== 0,
       aprBps: supplyApyBps(reserve),
     };

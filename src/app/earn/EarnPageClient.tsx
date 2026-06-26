@@ -175,6 +175,7 @@ export function EarnPageClient() {
             >
               <StrategyMenu
                 products={products}
+                positions={positions}
                 onSelect={(id) => setActiveProductId(id)}
               />
             </motion.div>

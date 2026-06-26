@@ -1,11 +1,12 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import type { ProductData } from './types';
+import type { ProductData, Position } from './types';
 import { formatUsd, formatAprPct, microToUsd } from './types';
 
 interface StrategyMenuProps {
   products: ProductData[];
+  positions: Position[];
   onSelect: (productId: string) => void;
 }
 
@@ -44,19 +45,50 @@ const PRODUCT_ICON: Record<string, React.ReactNode> = {
   ),
 };
 
+function compactUsd(v: number): string {
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
+  return `$${formatUsd(v)}`;
+}
+
 function ProductCard({
   product,
   index,
+  positions,
   onSelect,
 }: {
   product: ProductData;
   index: number;
+  positions: Position[];
   onSelect: () => void;
 }) {
+  const marketKeys = product.markets.map((m) => m.key);
+  const productPositions = positions.filter((p) => marketKeys.includes(p.pool_market));
+
+  const value = productPositions.reduce(
+    (sum, p) => sum + (p.value_usd !== null ? parseFloat(p.value_usd) : parseFloat(p.principal_usd)),
+    0,
+  );
+  const principal = productPositions.reduce((sum, p) => sum + parseFloat(p.principal_usd), 0);
+  const pnl = value - principal;
+  const pnlPct = principal > 0 ? (pnl / principal) * 100 : 0;
+  const funded = value > 0;
+  const pnlPositive = pnl >= 0;
+
   const tvl = microToUsd(product.total_tvl_micro);
   const aprDisplay =
     product.headline_apr_pct !== null ? formatAprPct(product.headline_apr_pct) : 'Variable';
   const aprPositive = product.headline_apr_pct !== null && product.headline_apr_pct > 0;
+  const earningLine =
+    product.headline_apr_pct !== null
+      ? `Earning ${formatAprPct(product.headline_apr_pct)} ${product.apr_label}`
+      : `Variable ${product.apr_label}`;
+
+  const ctaArrow = (
+    <svg className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+    </svg>
+  );
 
   return (
     <motion.div
@@ -66,56 +98,100 @@ function ProductCard({
       className="group relative rounded-2xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] overflow-hidden hover:border-atelier/30 transition-colors duration-200"
     >
       <div className="px-5 pt-5 pb-5">
-        <div className="flex items-start justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-atelier/10 border border-atelier/20 text-atelier shrink-0">
-              {PRODUCT_ICON[product.id] ?? PRODUCT_ICON['liquidity_provision']}
-            </span>
-            <div>
-              <div className="flex items-center gap-2 mb-0.5">
+        {funded ? (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-atelier/10 border border-atelier/20 text-atelier shrink-0">
+                {PRODUCT_ICON[product.id] ?? PRODUCT_ICON['liquidity_provision']}
+              </span>
+              <div className="flex items-center gap-2">
                 <h3 className="font-display font-bold text-[18px] text-black dark:text-white leading-tight tracking-[-0.02em]">
                   {product.label}
                 </h3>
                 <RiskBadge risk={product.risk} />
               </div>
             </div>
-          </div>
-          <div className="text-right shrink-0">
-            <p className={`font-mono text-[22px] font-semibold tabular-nums leading-none ${aprPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
-              {aprDisplay}
-            </p>
-            <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 mt-0.5">{product.apr_label}</p>
-          </div>
-        </div>
 
-        <p className="text-[13px] text-gray-500 dark:text-neutral-400 leading-relaxed mb-4">
-          {PRODUCT_PITCH[product.id] ?? ''}
-        </p>
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-400 dark:text-neutral-500">
+                YOUR POSITION
+              </p>
+              <span className={`font-mono text-[11px] tabular-nums shrink-0 ${pnlPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                {pnlPositive ? '+' : '-'}${formatUsd(Math.abs(pnl))} ({pnlPositive ? '+' : ''}{pnlPct.toFixed(2)}%)
+              </span>
+            </div>
 
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-gray-400 dark:text-neutral-600 mb-0.5">TVL</p>
-            <p className="font-mono text-[14px] font-semibold tabular-nums text-black dark:text-white">
-              ${formatUsd(tvl)}
+            <p className="font-mono text-[22px] font-semibold tabular-nums leading-none text-black dark:text-white mb-3">
+              ${formatUsd(value)}
             </p>
-          </div>
-          <button
-            type="button"
-            onClick={onSelect}
-            className="inline-flex items-center gap-2 h-9 px-4 rounded-lg font-mono text-[12px] font-medium border border-atelier/40 text-atelier hover:bg-atelier hover:text-white hover:border-atelier focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-colors cursor-pointer"
-          >
-            Open
-            <svg className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-            </svg>
-          </button>
-        </div>
+
+            <p className="font-mono text-[12px] text-gray-400 dark:text-neutral-500 mb-4">
+              {earningLine}
+            </p>
+
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600 tabular-nums">
+                {product.markets.length} market{product.markets.length === 1 ? '' : 's'}
+              </p>
+              <button
+                type="button"
+                onClick={onSelect}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-lg font-mono text-[12px] font-medium border border-atelier/40 text-atelier hover:bg-atelier hover:text-white hover:border-atelier focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-colors cursor-pointer"
+              >
+                Manage
+                {ctaArrow}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-atelier/10 border border-atelier/20 text-atelier shrink-0">
+                  {PRODUCT_ICON[product.id] ?? PRODUCT_ICON['liquidity_provision']}
+                </span>
+                <div>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <h3 className="font-display font-bold text-[18px] text-black dark:text-white leading-tight tracking-[-0.02em]">
+                      {product.label}
+                    </h3>
+                    <RiskBadge risk={product.risk} />
+                  </div>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={`font-mono text-[22px] font-semibold tabular-nums leading-none ${aprPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
+                  {aprDisplay}
+                </p>
+                <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 mt-0.5">{product.apr_label}</p>
+              </div>
+            </div>
+
+            <p className="text-[13px] text-gray-500 dark:text-neutral-400 leading-relaxed mb-4">
+              {PRODUCT_PITCH[product.id] ?? ''}
+            </p>
+
+            <div className="flex items-center justify-between">
+              <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600 tabular-nums">
+                {product.markets.length} market{product.markets.length === 1 ? '' : 's'} &middot; {compactUsd(tvl)} pooled
+              </p>
+              <button
+                type="button"
+                onClick={onSelect}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-lg font-mono text-[12px] font-medium border border-atelier/40 text-atelier hover:bg-atelier hover:text-white hover:border-atelier focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-atelier/60 transition-colors cursor-pointer"
+              >
+                Open
+                {ctaArrow}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </motion.div>
   );
 }
 
-export function StrategyMenu({ products, onSelect }: StrategyMenuProps) {
+export function StrategyMenu({ products, positions, onSelect }: StrategyMenuProps) {
   if (products.length === 0) {
     return (
       <div className="py-10 text-center">
@@ -141,6 +217,7 @@ export function StrategyMenu({ products, onSelect }: StrategyMenuProps) {
           key={product.id}
           product={product}
           index={i}
+          positions={positions}
           onSelect={() => onSelect(product.id)}
         />
       ))}

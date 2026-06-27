@@ -52,14 +52,16 @@ const CATEGORY_TICKERS: Record<string, string[]> = {
 
 const ZERO = BigInt(0);
 
-// Parquet's pool-program upgrade grew CategoryPool from 264 to 298 bytes by
-// appending trailing fields (credit accounts). The SDK decoder -- through 0.2.8
-// -- still asserts an exact 264-byte length and throws on anything longer, so we
-// hand it only the stable leading prefix. Every field Earn reads lives there.
-const CATEGORY_POOL_LEN = 264;
+// CategoryPool grows by appending trailing fields: 264 (base), 290 (+withdraw
+// bucket), 298 (+builder earmark). decodeCategoryPool (>= 0.3.0) accepts exactly
+// those sizes, so a future append would make it throw on length again. Fall back
+// to the largest known prefix to stay forward-compatible; every field Earn reads
+// lives within the base layout.
+const CATEGORY_POOL_SIZES = [298, 290, 264];
 
-function decodeCategoryPoolPrefix(data: Uint8Array): ReturnType<typeof decodeCategoryPool> {
-  return decodeCategoryPool(data.length > CATEGORY_POOL_LEN ? data.slice(0, CATEGORY_POOL_LEN) : data);
+function decodeCategoryPoolTolerant(data: Uint8Array): ReturnType<typeof decodeCategoryPool> {
+  const known = CATEGORY_POOL_SIZES.find((size) => data.length >= size);
+  return decodeCategoryPool(known ? data.slice(0, known) : data);
 }
 
 export interface ParquetEarnConfig {
@@ -285,7 +287,7 @@ export async function readPoolHealth(category?: string, connection?: Connection)
 
   const info = await conn.getAccountInfo(accts.categoryPool);
   if (!info) throw new Error(`category pool ${accts.categoryPool.toBase58()} not found on-chain`);
-  const cp = decodeCategoryPoolPrefix(info.data);
+  const cp = decodeCategoryPoolTolerant(info.data);
   const lpMint = await getMint(conn, accts.lpMint);
 
   return {
@@ -349,7 +351,7 @@ export async function readEnabledPoolHealths(
     const pInfo = poolInfos[i];
     if (!pInfo) return;
     try {
-      const cp = decodeCategoryPoolPrefix(pInfo.data);
+      const cp = decodeCategoryPoolTolerant(pInfo.data);
       const mInfo = mintInfos[i];
       out.set(c, {
         totalUsdc: BigInt(cp.totalUsdc.toString()),

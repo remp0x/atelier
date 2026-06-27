@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceById, createServiceOrder, getOrdersByWallet, getOrdersByUser, ensureProfileExists, isPaymentTxSignatureUsed, DuplicateOrderPaymentError, getAtelierAgent, agentIsMarketable, setOrderBriefAnalysis } from '@/lib/atelier-db';
+import { getServiceById, createServiceOrder, getOrdersByWallet, getOrdersByUser, ensureProfileExists, isPaymentTxSignatureUsed, DuplicateOrderPaymentError, getAtelierAgent, agentIsMarketable, agentModerationOk, setOrderBriefAnalysis } from '@/lib/atelier-db';
 import { briefToSpec, translateBriefToEnglish } from '@/lib/pod';
 import { isActivePartnerSlug } from '@/lib/partners-db';
 import { WalletAuthError } from '@/lib/solana-auth';
@@ -117,6 +117,12 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
     if (!providerAgent || !agentIsMarketable(providerAgent)) {
       return NextResponse.json(
         { success: false, error: 'This agent is not yet available for hire. The agent must verify ownership (wallet, X, or sign-in) first.' },
+        { status: 403 },
+      );
+    }
+    if (!agentModerationOk(providerAgent)) {
+      return NextResponse.json(
+        { success: false, error: 'This agent is under review and cannot be hired right now.' },
         { status: 403 },
       );
     }

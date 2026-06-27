@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useLinkAccount } from '@privy-io/react-auth';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import { isAtelierAdminEmail } from '@/lib/admin-client';
 import { providerLabel, agentFeePct, badgeLabelForMode, IS_CLAWPUMP } from '@/lib/token-economics';
@@ -20,7 +21,7 @@ interface TokenInfo {
   launch_attempted: boolean;
 }
 
-type LaunchStep = 'idle' | 'launching' | 'confirming' | 'saving' | 'done' | 'error';
+type LaunchStep = 'idle' | 'paying' | 'launching' | 'confirming' | 'saving' | 'done' | 'error';
 
 function formatMcap(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -70,6 +71,7 @@ export function TokenLaunchSection({
   canManage?: boolean;
 }) {
   const { walletAddress, authenticated, getAuth, user, atelierUser, refreshAtelierUser } = useAtelierAuth();
+  const { payUsdc } = useUsdcPayment();
   const isAdmin = isAtelierAdminEmail(user?.google?.email ?? user?.email?.address ?? null);
 
   const { linkTwitter } = useLinkAccount({
@@ -429,15 +431,47 @@ export function TokenLaunchSection({
         Object.assign(requestBody, walletAuth);
       }
 
-      const res = await fetch(`/api/agents/${agentId}/token/launch`, {
+      const launchUrl = `/api/agents/${agentId}/token/launch`;
+
+      // Probe first with no payment: the server runs every eligibility gate and
+      // only then answers 402 with the fee requirements. Any other status means a
+      // gate rejected the launch -- surface that error WITHOUT charging the user.
+      const probe = await fetch(launchUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody),
       });
 
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        throw new Error(json.error || `Launch failed: ${res.status}`);
+      if (probe.status === 402) {
+        const requirements = await probe.json();
+        const treasury = requirements.payTo as string;
+        const amountUsd = Number(requirements.maxAmountRequired) / 1_000_000;
+        if (!treasury || !Number.isFinite(amountUsd) || amountUsd <= 0) {
+          throw new Error('Launch fee could not be determined. Please try again.');
+        }
+
+        setStep('paying');
+        const paymentTx = await payUsdc({ chain: 'solana', treasury, amountUsd });
+
+        setStep('launching');
+        const paid = await fetch(launchUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ...requestBody, payment_tx: paymentTx }),
+        });
+        const paidJson = await paid.json();
+        if (!paid.ok || !paidJson.success) {
+          throw new Error(paidJson.error || `Launch failed: ${paid.status}`);
+        }
+
+        setStep('done');
+        onTokenSet();
+        return;
+      }
+
+      const json = await probe.json();
+      if (!probe.ok || !json.success) {
+        throw new Error(json.error || `Launch failed: ${probe.status}`);
       }
 
       setStep('done');
@@ -449,6 +483,7 @@ export function TokenLaunchSection({
   }
 
   const stepLabels: Record<string, string> = {
+    paying: 'Paying launch fee...',
     launching: 'Launching token...',
     confirming: 'Confirming transaction...',
     saving: 'Saving token info...',
@@ -474,7 +509,7 @@ export function TokenLaunchSection({
               <span className="text-sm font-semibold font-display tracking-tight">Launch on {providerLabel}</span>
             </span>
             <span className="text-2xs font-mono text-white/75">
-              No wallet signing needed &middot; you earn {agentFeePct}% of creator fees
+              Small USDC launch fee &middot; you earn {agentFeePct}% of creator fees
             </span>
           </button>
         </div>

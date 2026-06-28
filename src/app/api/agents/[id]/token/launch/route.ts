@@ -7,7 +7,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty, isBannedIdentity, identityHasLaunchedToken } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty, isBannedIdentity, identityHasLaunchedToken, agentModerationOk, isLaunchFeeTxUsed } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { tryAuthenticatePrivy, type PrivyUserInfo } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
@@ -16,10 +16,16 @@ import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 import { violatesReservedBrand } from '@/lib/content-guard';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { launchTokenSelfFundedOnClawpump, ClawpumpError, type ClawpumpLaunchResult } from '@/lib/clawpump-client';
+import { parseX402Header, buildFlatPaymentRequirements, buildPaymentRequiredResponse, verifyX402Payment } from '@/lib/x402';
 
 export const maxDuration = 300;
 
 const launchRateLimit = rateLimit(10, 60 * 60 * 1000);
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://useatelier.ai';
+// Token launches are no longer sponsored: the owner pays this fee in USDC to the
+// Atelier treasury (Solana) before the launch proceeds.
+const LAUNCH_FEE_USD = Number(process.env.ATELIER_LAUNCH_FEE_USD || '2');
 
 const TOKEN_NAME_SUFFIX = ' by Atelier';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -53,7 +59,7 @@ async function transferSolFromAtelier(destination: string, sol: number): Promise
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
-): Promise<NextResponse> {
+): Promise<NextResponse | Response> {
   let agentId: string | null = null;
   let broadcasted = false;
 
@@ -187,6 +193,13 @@ export async function POST(
       );
     }
 
+    if (!agentModerationOk(agent)) {
+      return NextResponse.json(
+        { success: false, error: 'This agent is under review and cannot launch a token right now.' },
+        { status: 403 },
+      );
+    }
+
     if (agent.token_mint) {
       return NextResponse.json(
         { success: false, error: 'Agent already has a token' },
@@ -244,6 +257,23 @@ export async function POST(
       );
     }
 
+    // Launch fee: the owner must pay LAUNCH_FEE_USD in USDC to the Solana treasury.
+    // Web clients pre-pay from their embedded wallet and send the signature as
+    // body.payment_tx; machine agents follow the x402 flow (X-PAYMENT header, 402
+    // challenge when absent). Verified after the cheap input checks but before any
+    // irreversible work.
+    const paymentRef = parseX402Header(request.headers.get('X-PAYMENT'))
+      || (typeof body.payment_tx === 'string' && body.payment_tx.trim() ? body.payment_tx.trim() : null);
+    if (!paymentRef) {
+      const requirements = buildFlatPaymentRequirements({
+        amountUsd: LAUNCH_FEE_USD,
+        description: `Atelier token launch for ${agent.name}`,
+        resource: `${BASE_URL}/api/agents/${agentId}/token/launch`,
+        chain: 'solana',
+      });
+      return buildPaymentRequiredResponse(requirements);
+    }
+
     const avatarUrlCheck = await validateExternalUrlWithDNS(tokenImageUrl);
     if (!avatarUrlCheck.valid) {
       return NextResponse.json(
@@ -277,14 +307,35 @@ export async function POST(
       );
     }
 
-    // ClawPump is the only launch rail (pump.fun direct is disabled). Our 3 free sponsored
-    // gasless launches are spent, so every launch uses the self-funded flow: a dedicated
-    // ClawPump agent (Model B, token name = agent name; ClawPump custodies its creator-of-record
-    // wallet), Atelier pays the ~0.03 SOL launch fee, then submits the payment proof. The fee is
-    // paid before the call, so a post-payment failure is non-retriable (retrying would
-    // double-pay) -- the outer catch holds the lock for manual review instead of releasing it.
-    const lockAcquired = await markTokenLaunchAttempted(agentId);
-    if (!lockAcquired) {
+    if (await isLaunchFeeTxUsed(paymentRef)) {
+      return NextResponse.json(
+        { success: false, error: 'This payment was already used to launch a token.' },
+        { status: 409 },
+      );
+    }
+
+    const feeVerification = await verifyX402Payment(paymentRef, LAUNCH_FEE_USD, 'solana');
+    if (!feeVerification.verified) {
+      return NextResponse.json(
+        { success: false, error: `Launch fee payment verification failed: ${feeVerification.error ?? 'unknown error'}` },
+        { status: 402 },
+      );
+    }
+
+    // ClawPump is the only launch rail (pump.fun direct is disabled). The owner's
+    // USDC fee (verified above) replaces the old free sponsorship; Atelier still
+    // fronts the ~0.03 SOL ClawPump self-funded fee operationally. The launch lock
+    // records the payment atomically (UNIQUE index = replay guard). The SOL fee is
+    // paid before the ClawPump call, so a post-broadcast failure is non-retriable
+    // (retrying would double-pay) -- the outer catch holds the lock for manual review.
+    const lockResult = await markTokenLaunchAttempted(agentId, paymentRef);
+    if (lockResult === 'fee_tx_used') {
+      return NextResponse.json(
+        { success: false, error: 'This payment was already used to launch a token.' },
+        { status: 409 },
+      );
+    }
+    if (lockResult === 'locked') {
       return NextResponse.json(
         { success: false, error: 'A token launch is already in progress or was attempted for this agent.' },
         { status: 409 },

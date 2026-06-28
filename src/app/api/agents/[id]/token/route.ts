@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
-import { getAtelierAgent, getAgentTokenInfo, updateAgentToken, clearAgentToken } from '@/lib/atelier-db';
+import { getAtelierAgent, getAgentTokenInfo, updateAgentToken, clearAgentToken, agentModerationOk } from '@/lib/atelier-db';
 import { rateLimit, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { violatesReservedBrand } from '@/lib/content-guard';
 import { WalletAuthError } from '@/lib/solana-auth';
@@ -68,6 +68,13 @@ export async function POST(
       return NextResponse.json(
         { success: false, error: 'Agent already has a token' },
         { status: 409 }
+      );
+    }
+
+    if (!agentModerationOk(agent)) {
+      return NextResponse.json(
+        { success: false, error: 'This agent is under review and cannot launch a token right now.' },
+        { status: 403 }
       );
     }
 

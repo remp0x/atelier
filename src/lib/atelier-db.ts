@@ -118,6 +118,11 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN webhook_secret TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN registration_tx TEXT`).catch(() => {});
   await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_registration_tx ON atelier_agents(registration_tx)').catch(() => {});
+  // The USDC payment that funded this agent's token launch. UNIQUE so one payment
+  // can't be replayed to launch tokens on multiple agents. Cleared on a pre-broadcast
+  // failure so the owner can retry with the same payment.
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN token_launch_fee_tx TEXT`).catch(() => {});
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_token_launch_fee_tx ON atelier_agents(token_launch_fee_tx)').catch(() => {});
 
   await atelierClient.execute(`
     CREATE TABLE IF NOT EXISTS services (
@@ -1936,6 +1941,7 @@ export interface AtelierAgent {
   token_tx_hash: string | null;
   token_created_at: string | null;
   token_launch_attempted: number;
+  token_launch_fee_tx: string | null;
   clawpump_agent_id: string | null;
   ai_models: string | null;
   last_poll_at: string | null;
@@ -1949,6 +1955,8 @@ export interface AtelierAgent {
   user_id: string | null;
   webhook_secret: string | null;
   registration_ip: string | null;
+  moderation_status: ModerationStatus | null;
+  moderation_reason: string | null;
   created_at: string;
 }
 
@@ -2867,6 +2875,16 @@ export function agentIsMarketable(agent: {
 
 const MARKETABLE_AGENT_SQL = "(a.source != 'external' OR a.owner_wallet IS NOT NULL OR a.privy_user_id IS NOT NULL OR a.user_id IS NOT NULL OR a.twitter_username IS NOT NULL OR a.payout_wallet IS NOT NULL OR a.payout_address_base IS NOT NULL)";
 
+// A listing the Pod moderator flagged ('review' for vague/borderline, 'spam' for
+// scams) is held back from the marketplace until an admin clears it via the
+// moderation queue. NULL/'ok' stays live, so a Pod outage (fail-open) never hides
+// legitimate agents.
+const NOT_FLAGGED_AGENT_SQL = "(a.moderation_status IS NULL OR a.moderation_status = 'ok')";
+
+export function agentModerationOk(agent: { moderation_status?: ModerationStatus | null }): boolean {
+  return !agent.moderation_status || agent.moderation_status === 'ok';
+}
+
 export async function getAtelierAgents(filters?: {
   category?: ServiceCategory;
   search?: string;
@@ -2891,6 +2909,7 @@ export async function getAtelierAgents(filters?: {
   const conditions: string[] = filters?.tokenized
     ? ['a.active = 1', 'a.duplicate_of IS NULL', 'a.token_mint IS NOT NULL']
     : ['a.active = 1', 'a.duplicate_of IS NULL', MARKETABLE_AGENT_SQL];
+  conditions.push(NOT_FLAGGED_AGENT_SQL);
   const args: (string | number)[] = [];
 
   if (source === 'official') {
@@ -4502,19 +4521,38 @@ export async function resetFeeIndexCursors(): Promise<void> {
 
 // ─── Token Queries ───
 
-export async function markTokenLaunchAttempted(agentId: string): Promise<boolean> {
+export async function isLaunchFeeTxUsed(txRef: string): Promise<boolean> {
   await initAtelierDb();
   const result = await atelierClient.execute({
-    sql: 'UPDATE atelier_agents SET token_launch_attempted = 1 WHERE id = ? AND token_launch_attempted = 0',
-    args: [agentId],
+    sql: 'SELECT COUNT(*) as cnt FROM atelier_agents WHERE token_launch_fee_tx = ?',
+    args: [txRef],
   });
-  return result.rowsAffected > 0;
+  return Number((result.rows[0] as unknown as { cnt: number }).cnt) > 0;
+}
+
+export type LaunchLockResult = 'ok' | 'locked' | 'fee_tx_used';
+
+// Acquires the per-agent launch lock and records the funding payment in one atomic
+// write. The UNIQUE index on token_launch_fee_tx is the real replay guard: a payment
+// already tied to another agent makes the UPDATE throw -> 'fee_tx_used'.
+export async function markTokenLaunchAttempted(agentId: string, feeTx?: string | null): Promise<LaunchLockResult> {
+  await initAtelierDb();
+  try {
+    const result = await atelierClient.execute({
+      sql: 'UPDATE atelier_agents SET token_launch_attempted = 1, token_launch_fee_tx = ? WHERE id = ? AND token_launch_attempted = 0',
+      args: [feeTx ?? null, agentId],
+    });
+    return result.rowsAffected > 0 ? 'ok' : 'locked';
+  } catch (e) {
+    if (/UNIQUE constraint failed/i.test(String(e))) return 'fee_tx_used';
+    throw e;
+  }
 }
 
 export async function clearTokenLaunchAttempted(agentId: string): Promise<boolean> {
   await initAtelierDb();
   const result = await atelierClient.execute({
-    sql: 'UPDATE atelier_agents SET token_launch_attempted = 0 WHERE id = ? AND token_mint IS NULL',
+    sql: 'UPDATE atelier_agents SET token_launch_attempted = 0, token_launch_fee_tx = NULL WHERE id = ? AND token_mint IS NULL',
     args: [agentId],
   });
   return result.rowsAffected > 0;

@@ -83,9 +83,11 @@ for an audit.
   `MintCloseAuthority`. This neutralizes the transfer-hook reentrancy/arbitrary-CPI
   vector and the transfer-fee insolvency vector at the source. Checking the reward
   mint as well prevents a fee/hook reward mint from underpaying or reverting
-  claims. Legacy SPL mints (USDC) pass trivially. $ATELIER must be confirmed to
-  carry none of these (it is expected to carry only metadata extensions) -- verify
-  on-chain before init.
+  claims. Legacy SPL mints (USDC) pass trivially. **$ATELIER confirmed passing
+  (2026-06-29):** it is a Token-2022 mint carrying only `MetadataPointer` +
+  `TokenMetadata` (both authorities Disabled; mint/freeze authority revoked) --
+  no blocklisted extension, so `assert_safe_mint` accepts it. Re-verify before
+  mainnet init in case the mint changes.
 
 ## Economic
 

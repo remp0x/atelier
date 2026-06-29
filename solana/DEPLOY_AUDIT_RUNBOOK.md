@@ -118,12 +118,14 @@ claim -> unstake end to end with the web app pointed at devnet.
 1. **Professional audit complete** and findings resolved. Hand the auditor:
    `solana/programs/atelier-staking/src`, `SECURITY.md` (esp. "Known residual
    items"), and this runbook.
-2. **$ATELIER mint extension check.** Confirm the mainnet $ATELIER mint
-   (`7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump`) carries NO blocklisted
-   Token-2022 extension (TransferFee, TransferHook, PermanentDelegate,
-   ConfidentialTransfer, DefaultAccountState, NonTransferable, MintCloseAuthority).
-   If it does, `initialize_pool` will reject it and the design needs revisiting.
-   Check: `spl-token display 7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump`.
+2. **$ATELIER mint extension check -- CONFIRMED PASSING (2026-06-29).**
+   `spl-token display 7newJUjH7LGsGPDfEq83gxxy2d1q39A84SeUKha8pump` shows it is a
+   Token-2022 mint whose only extensions are `MetadataPointer` + `TokenMetadata`
+   (both update authorities Disabled), with mint and freeze authority unset
+   (revoked). None are on the blocklist (TransferFee, TransferHook,
+   PermanentDelegate, ConfidentialTransfer, DefaultAccountState, NonTransferable,
+   MintCloseAuthority), so `assert_safe_mint` accepts it. Re-verify before
+   mainnet init in case the mint changes.
 3. **Upgrade authority secured.** Move it to a Squads multisig (or set the
    program immutable post-audit):
    `solana program set-upgrade-authority <PROGRAM_ID> --new-upgrade-authority <MULTISIG>`.

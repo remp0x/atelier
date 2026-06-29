@@ -75,8 +75,10 @@ works with no pins.
    verified (clean upgradeable deploy on a local validator), but the public
    devnet faucet was rate-limiting this host on 2026-06-29, so the devnet wallet
    needs ~3 SOL funded before `anchor deploy` will succeed.
-4. **Confirm the $ATELIER mint carries no blocklisted Token-2022 extension**
-   (runbook s.4.2) -- if it has a transfer fee or hook, the design needs a tweak.
+4. ~~Confirm the $ATELIER mint carries no blocklisted Token-2022 extension~~
+   **DONE (2026-06-29):** it is a Token-2022 mint with only metadata extensions
+   (authorities disabled, mint/freeze revoked) -- passes `assert_safe_mint`.
+   Re-verify before mainnet in case the mint changes. (runbook s.4.2)
 5. **Get a professional audit** before mainnet; move the program upgrade
    authority to a multisig.
 6. Wire the cron's revenue tally to the real fee ledger (TODO in

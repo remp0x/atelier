@@ -89,8 +89,11 @@ flexible (10,000 weight) earns ~$13. The 8x spread is the incentive.
 
 ## Status
 
-- Program, backend funding, client config, docs: written.
-- Frontend, client SDK, tests: see task tracker / morning summary.
+- Program builds to BPF; **6/6 on-chain tests pass** on a local validator; host
+  `cargo check` clean.
+- Full web app passes `tsc`; client SDK discriminators match the generated IDL
+  byte-for-byte. Generated IDL committed at `solana/idl/atelier_staking.json`.
+- Committed to branch `staking`.
 - **NOT deployed. NOT audited.** Mainnet is gated on a professional audit, the
   $ATELIER extension check, and securing the upgrade authority (runbook section 4).
 

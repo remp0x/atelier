@@ -5,14 +5,15 @@ per the office-hours design. Read this first.
 
 ## TL;DR
 
-- A complete, hardened **Anchor (Solana) staking program** + TypeScript client
-  SDK + reward-funding cron + a full `/stake` frontend + tests + docs.
-- **Verified:** the program passes `cargo check` (full type + borrow check); the
-  entire web app passes `tsc --noEmit` (zero errors).
-- **NOT done (by design / blocked):** the program is **not deployed and not
-  audited** -- do not put real funds in it until a paid audit (see runbook). The
-  SBF `.so` artifact didn't build *in this environment* due to a toolchain
-  version cap (not a code bug) -- details below.
+- A complete **Anchor (Solana) staking program** + TypeScript client SDK +
+  reward-funding cron + a full `/stake` frontend + tests + docs.
+- **Verified end to end:** the program builds to BPF, deploys to a local
+  validator, and **all 6 Anchor tests pass**. Host `cargo check` is clean. The
+  entire web app passes `tsc --noEmit` (zero errors). The hand-rolled client SDK
+  discriminators match the generated IDL byte-for-byte.
+- **NOT done (the real gates):** the program is **not deployed to devnet/mainnet
+  and not audited.** Do not put real funds in it until a professional audit. See
+  `solana/DEPLOY_AUDIT_RUNBOOK.md`.
 
 ## IMPORTANT: I did not touch your other work
 
@@ -28,43 +29,47 @@ Anchor build (the only audited candidate is BUSL-licensed; nothing audited
 supports Token-2022), 3 moderate tiers (flexible 1x / 90d 4x / 180d 8x),
 continuous accrual, claim anytime. Full rationale in `STAKING_SPEC.md`.
 
-## What's verified vs pending
+## State
 
 | Piece | State |
 |---|---|
-| Anchor program (`solana/`) | Written; `cargo check` clean (type + borrow). |
+| Anchor program (`solana/`) | Builds to BPF; `cargo check` clean. |
+| On-chain tests (`solana/tests`) | **6/6 passing** on a local validator. |
 | Security self-review | `solana/SECURITY.md` -- full vuln taxonomy mapped. |
-| Client SDK + config | `src/lib/staking-program.ts`, `staking-config.ts` -- tsc clean. |
-| Reward funding cron | `src/lib/staking-rewards.ts` + `/api/cron/staking-rewards` -- tsc clean, registered in `vercel.json`. |
+| Client SDK + config | `src/lib/staking-{program,config}.ts` -- tsc clean; discriminators match IDL. |
+| Reward funding cron | `src/lib/staking-rewards.ts` + `/api/cron/staking-rewards`; in `vercel.json`. |
 | Stats read model | `/api/staking/stats` -- tsc clean. |
-| Frontend `/stake` | Full page + dashboard/panel/positions/how-it-works; Privy embedded-wallet signing (DepositPanel pattern); sidebar link. tsc clean. |
-| Anchor tests | `solana/tests/atelier-staking.ts` -- written, **unrun** (need a successful SBF build + local validator). |
-| SBF `.so` + generated IDL | **Blocked on toolchain** (see below). |
-| Deploy / audit | **Not done.** Gated -- see `solana/DEPLOY_AUDIT_RUNBOOK.md`. |
+| Frontend `/stake` | Full page; Privy embedded-wallet signing; sidebar link. tsc clean. |
+| Generated IDL | committed at `solana/idl/atelier_staking.json`. |
+| Deploy / audit | **Not done.** Gated -- see runbook. |
 
-## The SBF build blocker (environment, not code)
+## What the 6 tests prove
 
-`anchor build` needs the Solana SBF toolchain. The one installed here is
-Cargo 1.84 (platform-tools v1.50/v1.51); several modern transitive deps now
-require `edition2024` (Rust >= 1.85). So the `.so`/IDL didn't build here.
-`cargo check` on the host (rustc 1.96) passes, which validates the code itself.
+init with 3 tiers; a sole flexible staker collects ~all funded USDC; rewards
+split correctly by weighted stake (1x vs 8x across tiers); locked positions
+cannot unstake early; flexible positions unstake immediately; a Token-2022 mint
+carrying a transfer-fee extension is rejected at pool init.
 
-To produce the deployable artifact: install platform-tools with Rust >= 1.85 and
-`anchor build -- --tools-version <that version>`. Full detail + the pin-based
-fallback in the runbook ("Build status").
+## Build note
+
+The SBF toolchain here caps at Rust 1.84, so a handful of modern deps that
+declare `edition2024` are pinned in the committed `Cargo.lock` and the build uses
+`--tools-version v1.50` with a separate host-side IDL step. Exact recipe in the
+runbook ("Build status"). On a toolchain with Rust >= 1.85 a plain `anchor build`
+works with no pins.
 
 ## Next steps (your call, in order)
 
 1. `git checkout staking` and review the diff.
-2. Build the `.so` on a machine/toolchain with Rust >= 1.85 (runbook s.0-1),
-   then `anchor keys sync` and set `NEXT_PUBLIC_STAKING_PROGRAM_ID`.
-3. `anchor test` (runs the suite on a local validator).
-4. Devnet deploy + manual end-to-end (runbook s.3).
-5. **Confirm the $ATELIER mint carries no blocklisted Token-2022 extension**
+2. Set `NEXT_PUBLIC_STAKING_PROGRAM_ID` (program id this build:
+   `5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq`; back up the keypair under
+   `target/deploy/` to keep it stable, or generate a fresh one).
+3. Devnet deploy + manual end-to-end (runbook s.3).
+4. **Confirm the $ATELIER mint carries no blocklisted Token-2022 extension**
    (runbook s.4.2) -- if it has a transfer fee or hook, the design needs a tweak.
-6. **Get a professional audit** before mainnet; secure the program upgrade
-   authority behind a multisig.
-7. Wire the cron's revenue tally to the real fee ledger (TODO in
+5. **Get a professional audit** before mainnet; move the program upgrade
+   authority to a multisig.
+6. Wire the cron's revenue tally to the real fee ledger (TODO in
    `staking-rewards.ts`); set `STAKING_*` env vars (runbook s.6).
 
 ## Open design choice still on the table

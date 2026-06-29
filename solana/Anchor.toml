@@ -5,20 +5,17 @@ anchor_version = "0.31.1"
 resolution = true
 skip-lint = false
 
-# Placeholder program id (valid Anchor example key). After the first
-# `anchor build`, run `anchor keys sync` to replace this everywhere with the
-# real keypair generated under target/deploy/. See DEPLOY_AUDIT_RUNBOOK.md.
-[programs.localnet]
-atelier_staking = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
-
 [programs.devnet]
-atelier_staking = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+atelier_staking = "5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq"
+
+[programs.localnet]
+atelier_staking = "5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

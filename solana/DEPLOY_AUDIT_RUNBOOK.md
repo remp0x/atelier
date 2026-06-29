@@ -10,26 +10,37 @@ program custodies user funds.
 - anchor-cli 0.31.1 (via `avm use 0.31.1`) -- must match `@coral-xyz/anchor`
   0.31.1 in the web app, or the generated IDL won't deserialize client-side.
 
-## Build status (2026-06-29)
+## Build status (2026-06-29) -- BUILDS + TESTS PASS
 
-- **`cargo check` (host rustc 1.96) passes cleanly** -- the program type-checks
-  and borrow-checks; only benign warnings. This is the correctness signal.
-- **The SBF artifact build (`anchor build` / `cargo build-sbf`) is blocked in
-  this environment** by a toolchain mismatch, NOT a code bug: the bundled SBF
-  Cargo is 1.84 (platform-tools v1.50/v1.51), and several modern transitive
-  deps (`zeroize_derive 1.5`, etc.) declare `edition2024`, which only stabilized
-  in Rust 1.85. `cargo build-sbf` re-resolves to the latest deps regardless of
-  lockfile pins, so it re-pulls them.
-- **Fix (one of):**
-  1. Install Solana platform-tools whose Rust is >= 1.85 and build with
-     `anchor build -- --tools-version <that version>` (preferred -- no pins).
-  2. Or stay on the 1.84 tools and pin every `edition2024` dep down in
-     `Cargo.lock` (`proc-macro-crate 3.1.0`, `blake3 1.5.5`, `indexmap 2.7.1`,
-     `zeroize 1.8.1`, ...). Partial pins are already applied; this is whack-a-mole
-     and the newer-toolchain route is cleaner.
-- Once it builds, the IDL appears at `target/idl/atelier_staking.json`. The
-  hand-rolled client SDK (`src/lib/staking-program.ts`) uses the same
-  discriminators, so it already matches; copying the generated IDL is optional.
+The program compiles to BPF, deploys to a local validator, and **all 6 Anchor
+tests pass** (init, sole-staker rewards, weighted reward split across tiers, lock
+enforcement, flexible unstake, Token-2022 unsafe-extension rejection). Host
+`cargo check` is also clean.
+
+The SBF toolchain in this environment caps at Rust 1.84, so a few modern deps
+that declare `edition2024` are pinned down in the committed `Cargo.lock`:
+`proc-macro-crate 3.1.0`, `blake3 1.5.5`, `indexmap 2.7.1`, `zeroize 1.8.1`,
+`zeroize_derive 1.4.2`, `unicode-segmentation 1.12.0`. Working recipe:
+
+```bash
+# 1. build the .so (skip the IDL step -- it is host-side and rejects --tools-version)
+anchor build --no-idl -- --tools-version v1.50
+anchor keys sync                                  # sync declared id to the keypair
+anchor build --no-idl -- --tools-version v1.50    # rebuild so the .so embeds the id
+# 2. build the IDL on the host toolchain (rustc 1.96 handles edition2024)
+anchor idl build -o target/idl/atelier_staking.json
+# 3. run the suite against a local validator using the prebuilt .so
+anchor test --skip-build
+```
+
+Cleaner long-term: install platform-tools with Rust >= 1.85 and a plain
+`anchor build` works with no pins. The canonical IDL is committed at
+`solana/idl/atelier_staking.json`; the hand-rolled client SDK uses the same
+discriminators (verified byte-for-byte), so copying it into the app is optional.
+
+Program id (this build): `5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq`. The
+keypair is at `target/deploy/atelier_staking-keypair.json` (gitignored) -- back
+it up to keep the id stable across deploys, or generate a fresh one.
 
 ## 1. Build + sync program id
 

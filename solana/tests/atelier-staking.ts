@@ -227,7 +227,7 @@ describe("atelier-staking", () => {
         stakedTokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .signers([a.kp])
-      .rpc();
+      .rpc({ commitment: "confirmed" });
     const back = await getAccount(connection, a.ata, "confirmed", TOKEN_2022_PROGRAM_ID);
     assert.equal(back.amount.toString(), "400000");
   });

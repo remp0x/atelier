@@ -11,7 +11,7 @@ use state::Tier;
 
 // Placeholder id (valid Anchor example key). Run `anchor keys sync` after the
 // first build to replace with the real keypair. See DEPLOY_AUDIT_RUNBOOK.md.
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq");
 
 /// Atelier $ATELIER staking.
 ///

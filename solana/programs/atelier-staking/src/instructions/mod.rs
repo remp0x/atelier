@@ -13,12 +13,16 @@ pub mod set_paused;
 pub mod stake;
 pub mod unstake;
 
-pub use claim::Claim;
-pub use crank::CrankSync;
-pub use initialize_pool::InitializePool;
-pub use set_paused::SetPaused;
-pub use stake::Stake;
-pub use unstake::Unstake;
+// Glob re-exports are required: `#[derive(Accounts)]` generates helper modules
+// (`__client_accounts_*`, `__cpi_client_accounts_*`) that the `#[program]` macro
+// references at crate root. The only cost is a benign "ambiguous glob" warning
+// on the per-module `handler` fns, which are always called fully-qualified.
+pub use claim::*;
+pub use crank::*;
+pub use initialize_pool::*;
+pub use set_paused::*;
+pub use stake::*;
+pub use unstake::*;
 
 /// Reject staked mints whose Token-2022 extensions would break the program's
 /// accounting or custody assumptions:

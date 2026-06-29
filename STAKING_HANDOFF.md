@@ -8,14 +8,21 @@ per the office-hours design. Read this first.
 - A complete **Anchor (Solana) staking program** + TypeScript client SDK +
   reward-funding cron + a full `/stake` frontend + tests + docs.
 - **Verified end to end:** the program builds to BPF, deploys to a local
-  validator, and **all 7 Anchor tests pass**. Host `cargo check` is clean. The
+  validator, and **all 8 Anchor tests pass**. Host `cargo check` is clean. The
   entire web app passes `tsc --noEmit` (zero errors). The hand-rolled client SDK
   discriminators match the generated IDL byte-for-byte.
-- **Security-reviewed (2026-06-29):** an independent adversarial pass found no
-  Critical/High issues. The init front-run (MED-1) is fixed with an
-  upgrade-authority gate; the reward-mint extension check (LOW-1) and an
-  empty-pool funding guard (MED-2) were added. Full findings + resolutions in
-  `solana/SECURITY.md`.
+- **Security-reviewed twice (2026-06-29):** the first pass fixed the init
+  front-run (MED-1, upgrade-authority gate) and added the reward-mint extension
+  check (LOW-1). The **second pass caught a HIGH** issue the first missed: the
+  original lump reward distribution let a JIT/monopoly staker scoop a funding
+  tranche. Fixed by switching to a **Synthetix-style linear reward drip**
+  (rewards now vest over a `reward_duration` window) plus checks-effects-
+  interactions ordering. Full findings + resolutions in `solana/SECURITY.md`.
+- **Heads-up -- reward semantics changed by the HIGH fix:** rewards no longer
+  become claimable in full right after a crank; they drip linearly over
+  `reward_duration` (set at init, e.g. 7 days). This is required to defeat the
+  JIT exploit, but it changes the UX from the original "claim anytime, instant"
+  framing -- confirm the drip window is what you want.
 - **NOT done (the real gates):** the program is **not deployed to devnet/mainnet
   and not audited.** Do not put real funds in it until a professional audit. See
   `solana/DEPLOY_AUDIT_RUNBOOK.md`.
@@ -39,7 +46,7 @@ continuous accrual, claim anytime. Full rationale in `STAKING_SPEC.md`.
 | Piece | State |
 |---|---|
 | Anchor program (`solana/`) | Builds to BPF; `cargo check` clean. |
-| On-chain tests (`solana/tests`) | **7/7 passing** on a local validator. |
+| On-chain tests (`solana/tests`) | **8/8 passing** on a local validator. |
 | Security self-review | `solana/SECURITY.md` -- full vuln taxonomy mapped. |
 | Client SDK + config | `src/lib/staking-{program,config}.ts` -- tsc clean; discriminators match IDL. |
 | Reward funding cron | `src/lib/staking-rewards.ts` + `/api/cron/staking-rewards`; in `vercel.json`. |
@@ -48,14 +55,15 @@ continuous accrual, claim anytime. Full rationale in `STAKING_SPEC.md`.
 | Generated IDL | committed at `solana/idl/atelier_staking.json`. |
 | Deploy / audit | **Not done.** Gated -- see runbook. |
 
-## What the 7 tests prove
+## What the 8 tests prove
 
-init with 3 tiers; a sole flexible staker collects ~all funded USDC; rewards
-split correctly by weighted stake (1x vs 8x across tiers); locked positions
-cannot unstake early; flexible positions unstake immediately; a Token-2022 mint
-carrying a transfer-fee extension is rejected at pool init; and an init attempt
-by a wallet that is not the program upgrade authority is rejected (the MED-1
-front-run fix).
+init with 3 tiers; a sole flexible staker collects ~all funded USDC after the
+drip; rewards split correctly by weighted stake (1x vs 8x across tiers); rewards
+**drip over time, not instantly** (the JIT/monopoly-resistance test); locked
+positions cannot unstake early; flexible positions unstake immediately; a
+Token-2022 mint carrying a transfer-fee extension is rejected at pool init; and
+an init attempt by a wallet that is not the program upgrade authority is rejected
+(the MED-1 front-run fix).
 
 ## Build note
 

@@ -30,9 +30,14 @@ pub mod atelier_staking {
     use super::*;
 
     /// One-time pool creation for a given staked mint. Sets the three lock
-    /// tiers (immutable thereafter) and rejects unsafe Token-2022 extensions.
-    pub fn initialize_pool(ctx: Context<InitializePool>, tiers: [Tier; 3]) -> Result<()> {
-        instructions::initialize_pool::handler(ctx, tiers)
+    /// tiers and the reward-drip window (both immutable thereafter) and rejects
+    /// unsafe Token-2022 extensions.
+    pub fn initialize_pool(
+        ctx: Context<InitializePool>,
+        tiers: [Tier; 3],
+        reward_duration_secs: i64,
+    ) -> Result<()> {
+        instructions::initialize_pool::handler(ctx, tiers, reward_duration_secs)
     }
 
     /// Stake `amount` into `tier_index`. Creates the position on first use,

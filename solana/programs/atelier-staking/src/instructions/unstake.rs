@@ -55,34 +55,13 @@ pub fn handler(ctx: Context<Unstake>, amount: u64) -> Result<()> {
         StakingError::Locked
     );
 
-    // Settle rewards against the old weight before reducing it.
-    let reward_vault_amount = ctx.accounts.reward_vault.amount;
-    ctx.accounts.pool.sync_rewards(reward_vault_amount)?;
+    // Drip rewards up to now and settle against the old weight before reducing it.
+    ctx.accounts.pool.update_rewards(now)?;
     let acc = ctx.accounts.pool.acc_reward_per_weight;
     ctx.accounts.position.settle(acc)?;
 
-    // Return principal, signed by the pool PDA (the vault authority).
-    let staked_mint_key = ctx.accounts.pool.staked_mint;
-    let pool_bump_arr = [ctx.accounts.pool.bump];
-    let seeds: &[&[u8]] = &[POOL_SEED, staked_mint_key.as_ref(), &pool_bump_arr];
-    let signer_seeds: &[&[&[u8]]] = &[seeds];
-    let decimals = ctx.accounts.staked_mint.decimals;
-    transfer_checked(
-        CpiContext::new_with_signer(
-            ctx.accounts.staked_token_program.to_account_info(),
-            TransferChecked {
-                from: ctx.accounts.staked_vault.to_account_info(),
-                mint: ctx.accounts.staked_mint.to_account_info(),
-                to: ctx.accounts.owner_staked_ata.to_account_info(),
-                authority: ctx.accounts.pool.to_account_info(),
-            },
-            signer_seeds,
-        ),
-        amount,
-        decimals,
-    )?;
-
-    // Update weights and pool totals.
+    // Effects before interaction (checks-effects-interactions): apply the weight
+    // and total updates, then transfer principal out last.
     let tier_index = ctx.accounts.position.tier_index;
     let new_amount = ctx
         .accounts
@@ -112,6 +91,27 @@ pub fn handler(ctx: Context<Unstake>, amount: u64) -> Result<()> {
 
     let acc_final = ctx.accounts.pool.acc_reward_per_weight;
     ctx.accounts.position.reset_reward_debt(acc_final)?;
+
+    // Interaction last: return principal, signed by the pool PDA (vault authority).
+    let staked_mint_key = ctx.accounts.pool.staked_mint;
+    let pool_bump_arr = [ctx.accounts.pool.bump];
+    let seeds: &[&[u8]] = &[POOL_SEED, staked_mint_key.as_ref(), &pool_bump_arr];
+    let signer_seeds: &[&[&[u8]]] = &[seeds];
+    let decimals = ctx.accounts.staked_mint.decimals;
+    transfer_checked(
+        CpiContext::new_with_signer(
+            ctx.accounts.staked_token_program.to_account_info(),
+            TransferChecked {
+                from: ctx.accounts.staked_vault.to_account_info(),
+                mint: ctx.accounts.staked_mint.to_account_info(),
+                to: ctx.accounts.owner_staked_ata.to_account_info(),
+                authority: ctx.accounts.pool.to_account_info(),
+            },
+            signer_seeds,
+        ),
+        amount,
+        decimals,
+    )?;
 
     emit!(Unstaked {
         pool: ctx.accounts.pool.key(),

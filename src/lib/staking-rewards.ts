@@ -63,10 +63,25 @@ function anchorDiscriminator(ixName: string): Buffer {
 /**
  * Platform revenue (in micro-USDC) attributable to the epoch just ended.
  *
- * TODO(staking): wire this to the live fee ledger (see fee-indexer.ts /
- * /api/fees). Until then it reads STAKING_EPOCH_REVENUE_USDC so the cron can be
- * dry-run safely and never distributes a fabricated amount: with nothing
- * configured it returns 0 and the cron no-ops.
+ * Reads STAKING_EPOCH_REVENUE_USDC so the cron is safe-by-default: with nothing
+ * configured it returns 0 and the cron no-ops -- it never distributes a
+ * fabricated amount. This is the seam for a live revenue feed, but wiring it is a
+ * DECISION, not a mechanical TODO -- two things must be settled first:
+ *
+ *   1. WHICH revenue stream funds staking. The existing ledger (`fee-indexer.ts`,
+ *      `getTotalIndexedWithdrawals`) tracks pump.fun creator-fee income in
+ *      LAMPORTS (SOL), not USDC, and is CUMULATIVE all-time. Order platform fees
+ *      live in `service_orders.platform_fee_usd` (USD). Pick the stream(s) that
+ *      should accrue to stakers.
+ *   2. DENOMINATION + windowing. Rewards pay USDC, so a SOL-denominated stream
+ *      needs a SOL->USDC rate (oracle or manual), and "epoch revenue" must be the
+ *      DELTA over the window (e.g. cumulative-now minus cumulative-at-last-run;
+ *      `staking_reward_funding.revenue_micro_usdc` already records per-run revenue
+ *      for this).
+ *
+ * Until both are decided, set STAKING_EPOCH_REVENUE_USDC (or the explicit
+ * STAKING_EPOCH_USDC budget override) manually. See runbook "Outstanding
+ * integration TODO".
  */
 async function getEpochRevenueMicroUsdc(): Promise<bigint> {
   const configured = process.env.STAKING_EPOCH_REVENUE_USDC;
@@ -109,8 +124,11 @@ async function recentlyFunded(): Promise<boolean> {
   if (rows.rows.length === 0) return false;
   const last = rows.rows[0].created_at;
   if (typeof last !== 'string') return false;
-  const lastMs = Date.parse(`${last}Z`);
-  if (Number.isNaN(lastMs)) return false;
+  // SQLite CURRENT_TIMESTAMP is "YYYY-MM-DD HH:MM:SS" (space, UTC). Normalize to
+  // ISO so Date.parse is reliable; on an unparseable value, fail SAFE (treat as
+  // recently funded) so a parse glitch can never trigger a double-funding.
+  const lastMs = Date.parse(`${last.replace(' ', 'T')}Z`);
+  if (Number.isNaN(lastMs)) return true;
   return Date.now() - lastMs < MIN_FUNDING_INTERVAL_SECS * 1000;
 }
 
@@ -159,9 +177,10 @@ export async function fundStakingRewards(): Promise<FundingResult> {
   if (!poolAccount) {
     return { status: 'skipped', reason: 'pool not initialized on-chain' };
   }
-  // Never deposit a tranche into a pool with no staked weight: sync_rewards
-  // holds it for the next staker, who an attacker can deterministically be
-  // (stake 1 atom + crank + claim + unstake in one tx). Wait for real stake.
+  // Don't fund a pool with no staked weight: rewards drip over time and the
+  // accumulator does not advance while total_weight == 0, so a tranche funded now
+  // would partly drip to nobody (wasted). Wait for real stake. (JIT/monopoly
+  // capture itself is handled on-chain by the linear drip.)
   if (poolAccount.totalWeight === 0n) {
     return {
       status: 'skipped',

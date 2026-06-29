@@ -73,7 +73,13 @@ describe("atelier-staking", () => {
     await connection.confirmTransaction(sig, "confirmed");
   }
 
-  async function setupPool(): Promise<PoolCtx> {
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Rewards drip linearly over reward_duration. Tests use a short window and
+  // sleep past it so a claim collects the fully-dripped amount.
+  async function setupPool(rewardDurationSecs = 2): Promise<PoolCtx> {
     const stakedMint = await createMint(
       connection, payer, payer.publicKey, null, 6, Keypair.generate(), undefined, TOKEN_2022_PROGRAM_ID,
     );
@@ -85,7 +91,7 @@ describe("atelier-staking", () => {
     const rewardVault = pda([REWARD_VAULT_SEED, pool.toBuffer()]);
 
     await program.methods
-      .initializePool(TIERS as never)
+      .initializePool(TIERS as never, new BN(rewardDurationSecs))
       .accountsPartial({
         admin: payer.publicKey,
         program: program.programId,
@@ -156,8 +162,8 @@ describe("atelier-staking", () => {
         rewardTokenProgram: TOKEN_PROGRAM_ID,
       })
       .signers([staker.kp])
-      .rpc();
-    const acct = await getAccount(connection, rewardAta.address);
+      .rpc({ commitment: "confirmed", skipPreflight: true });
+    const acct = await getAccount(connection, rewardAta.address, "confirmed");
     return acct.amount;
   }
 
@@ -167,32 +173,54 @@ describe("atelier-staking", () => {
     assert.equal(acct.tiers.length, 3);
     assert.equal(acct.tiers[2].multiplierBps.toNumber(), 80_000);
     assert.equal(acct.totalStaked.toNumber(), 0);
+    assert.equal(acct.rewardDuration.toNumber(), 2);
     assert.isFalse(acct.paused);
   });
 
-  it("sole flexible staker collects ~all funded rewards", async () => {
-    const ctx = await setupPool();
+  it("sole flexible staker collects ~all funded rewards (after the drip)", async () => {
+    const ctx = await setupPool(2);
     const a = await makeStaker(ctx, 1_000_000);
     await stake(ctx, a, 0, 1_000_000);
-    await fundRewards(ctx, 500_000);
+    await fundRewards(ctx, 500_000); // starts a 2s linear drip
+    await sleep(5000); // wait past period_finish so the full tranche has dripped
     const got = await claim(ctx, a, 0);
     // sole staker -> ~100% (allow rounding dust)
     assert.isTrue(got >= 499_999n && got <= 500_000n, `got ${got}`);
   });
 
   it("splits rewards by weighted stake across tiers", async () => {
-    const ctx = await setupPool();
+    const ctx = await setupPool(2);
     const a = await makeStaker(ctx, 1_000_000); // flexible 1x
     const b = await makeStaker(ctx, 1_000_000); // 180d 8x
     await stake(ctx, a, 0, 1_000_000);
     await stake(ctx, b, 2, 1_000_000);
     // weights: a=1_000_000, b=8_000_000, total=9_000_000
     await fundRewards(ctx, 9_000_000);
+    await sleep(5000); // both held the full window -> split strictly by weight
     const aGot = await claim(ctx, a, 0);
     const bGot = await claim(ctx, b, 2);
     // a ~ 1/9, b ~ 8/9
     assert.isTrue(aGot >= 999_000n && aGot <= 1_000_000n, `a ${aGot}`);
     assert.isTrue(bGot >= 7_999_000n && bGot <= 8_000_000n, `b ${bGot}`);
+  });
+
+  it("drips rewards over time, not instantly (JIT / monopoly resistance)", async () => {
+    const ctx = await setupPool(10); // 10s drip window
+    const a = await makeStaker(ctx, 1_000_000);
+    await stake(ctx, a, 0, 1_000_000);
+    await fundRewards(ctx, 1_000_000); // funds a 10s drip; NOT claimable all at once
+    await sleep(2500);
+    const afterFirst = await claim(ctx, a, 0); // cumulative; only a fraction dripped
+    assert.isTrue(
+      afterFirst > 0n && afterFirst < 800_000n,
+      `expected a partial drip, got ${afterFirst}`,
+    );
+    await sleep(9000); // now past period_finish -> remainder dripped
+    const afterSecond = await claim(ctx, a, 0); // cumulative full
+    assert.isTrue(
+      afterSecond >= 990_000n && afterSecond <= 1_000_000n,
+      `expected ~full after the window, got ${afterSecond}`,
+    );
   });
 
   it("blocks unstake while locked", async () => {
@@ -274,7 +302,7 @@ describe("atelier-staking", () => {
     let failed = false;
     try {
       await program.methods
-        .initializePool(TIERS as never)
+        .initializePool(TIERS as never, new BN(2))
         .accountsPartial({
           admin: payer.publicKey,
           program: program.programId,
@@ -313,7 +341,7 @@ describe("atelier-staking", () => {
     let failed = false;
     try {
       await program.methods
-        .initializePool(TIERS as never)
+        .initializePool(TIERS as never, new BN(2))
         .accountsPartial({
           admin: attacker.publicKey,
           program: program.programId,

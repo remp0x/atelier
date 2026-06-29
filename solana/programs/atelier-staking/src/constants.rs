@@ -28,3 +28,10 @@ pub const MAX_MULTIPLIER_BPS: u64 = 1_000_000;
 
 /// Cap lock duration at 4 years.
 pub const MAX_TIER_DURATION_SECS: i64 = 4 * 365 * 24 * 60 * 60;
+
+/// Reward-drip window bounds. Funded USDC is paid out linearly over the pool's
+/// `reward_duration` (Synthetix-style) so a position must be staked across real
+/// time to earn -- this is what defeats crank front-running / JIT capture. The
+/// window should be >> slot time and ideally >= the funding cadence. Capped at 1
+/// year. (A very short duration re-opens the JIT vector; see SECURITY.md.)
+pub const MAX_REWARD_DURATION_SECS: i64 = 365 * 24 * 60 * 60;

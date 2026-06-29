@@ -48,14 +48,26 @@ for an audit.
   money operation the position is `settle`d against the current accumulator
   before its weight changes, then `reward_debt` is re-anchored to the new weight
   (`reset_reward_debt`). This is the canonical drain-safe ordering.
-- **Empty-pool distribution:** `sync_rewards` returns early when
-  `total_weight == 0` and deliberately does NOT advance
-  `reward_vault_last_balance`, so USDC sent before anyone stakes is held in the
-  vault and distributed to the first stakers rather than lost or div-by-zero'd.
+- **Time-drip distribution (not lump):** funded USDC is NOT folded into the
+  accumulator at once. `crank` (`notify_reward`) sets a `reward_rate` and a
+  `period_finish = now + reward_duration`; `update_rewards(now)` -- called at the
+  start of every stake/unstake/claim/crank, before any settle or weight change --
+  advances the accumulator by `reward_rate * elapsed / total_weight` up to
+  `period_finish`. So rewards accrue over real time; a position must be staked
+  across the window to earn (Synthetix `StakingRewards`). This is what defeats
+  crank front-running / JIT capture (see Economic).
+- **Empty-pool handling:** `update_rewards` advances `last_update_time` even when
+  `total_weight == 0`, so reward time that elapses while the pool is empty is
+  skipped -- NOT retroactively granted to the first staker (this closes the
+  "fund empty pool then be first staker" capture). The funding cron additionally
+  refuses to fund a pool with `total_weight == 0`, so that USDC is not wasted.
 - **Claim accounting:** after paying out, `reward_vault_last_balance` is
-  decremented by the payout so the next `sync_rewards` delta is correct. A vault
+  decremented by the payout so the next crank's deposit-delta is correct. A vault
   balance below the recorded last balance is treated as corruption
-  (`RewardVaultBalanceMismatch`) rather than silently floored.
+  (`RewardVaultBalanceMismatch`) rather than silently floored. Claim follows
+  checks-effects-interactions: `pending_reward` is zeroed and balances updated
+  BEFORE the payout CPI (defense-in-depth against a reentrant transfer hook,
+  which is itself blocklisted).
 - **Precision:** `ACC_SCALE = 1e18`. For any realistic `total_weight`
   (<= ~1e16 base units for a 1e9-supply, 6-decimal token at 8x), a 1-base-unit
   USDC deposit still advances the accumulator by >= 1, so no dust is lost on the
@@ -91,12 +103,18 @@ for an audit.
 
 ## Economic
 
-- **Reward-timing farming:** because accrual is continuous (not epoch-snapshot),
-  there is no "stake right before the snapshot" exploit. A flexible staker who
-  deposits right before a large reward sweep and unstakes right after still only
-  earns at 1x for the brief window held; lock tiers earn more precisely because
-  they cannot exit. To further blunt this, the funding cron MAY stream the
-  weekly budget in smaller increments rather than one lump (see runbook).
+- **Reward-timing farming / JIT / crank front-running:** rewards drip linearly
+  over `reward_duration` (see "Time-drip distribution"), so the share a position
+  captures is proportional to weight x **time staked within the window**, not to
+  who holds weight at the single instant of a crank. A flexible staker who stakes
+  one slot before a crank and unstakes one slot after earns ~0 (their elapsed
+  reward-time is ~0). This was NOT true of the original lump-on-crank design,
+  which distributed the whole tranche to whoever held weight at crank time and
+  was exploitable by a 1-atom monopolist (low TVL) or a JIT whale -- the HIGH
+  finding from the 2026-06-29 second review, fixed by the drip. Choosing
+  `reward_duration >>` slot time (and ideally >= the funding cadence) is what
+  makes the window meaningful; a very short duration re-opens the JIT vector.
+  Streaming the budget in smaller increments remains an optional extra smoother.
 - **First-staker inflation / donation attack:** not applicable -- this is a
   reward-accumulator design, not an ERC4626 share-price design, so there is no
   share price to manipulate by donating to the vault. Principal is tracked 1:1.
@@ -141,10 +159,19 @@ leak into `unstake`/`claim`; the accumulator cannot be over-drawn; principal is
 | ID | Issue | Resolution |
 |---|---|---|
 | MED-1 | Permissionless `initialize_pool` + deterministic PDA + immutable admin -> init front-run could permanently brick new stakes (availability, not funds). | **Fixed.** Init gated to the program upgrade authority (see "Init authorization"); covered by the `rejects initialize_pool from a non-upgrade-authority` test. |
-| MED-2 | Crank front-run on an empty/near-empty pool could let a 1-atom staker scoop a tranche funded before real stakers exist. | **Mitigated.** Funding cron skips when `total_weight == 0`, and transfer+crank are one atomic tx; runbook also advises streaming the budget. Bounded to the pre-funded-empty window only. |
+| MED-2 | Crank front-run on an empty/near-empty pool could let a 1-atom staker scoop a tranche funded before real stakers exist. | **Superseded by the drip fix (HIGH-1 below).** The first attempt (cron skips `total_weight == 0`) only caught the exactly-empty case; the second review showed the root cause was lump distribution. Now fixed for the general case by time-drip. |
 | LOW-1 | `reward_mint` not run through the extension blocklist (a fee/hook reward mint would underpay/revert claims). | **Fixed.** `assert_safe_mint` now checks both mints at init. USDC (legacy SPL) passes trivially. |
-| LOW-2 | `unstake`/`claim` call `sync_rewards`, coupling principal return to reward bookkeeping. | **Accepted.** Both error paths (`RewardVaultBalanceMismatch`, `MathOverflow`) are unreachable given USDC supply and bounded weight; flagged for the auditor as defense-in-depth, not a live bug. |
 | LOW-3 | Blocklist is complete for v6.0.0 but v7 adds `Pausable`/`ScaledUiAmount`. | **Accepted + pinned.** `spl-token-2022` is pinned via `Cargo.lock`; re-audit the blocklist on any bump (also residual #2 below). |
+
+### Second review (2026-06-29) -- found the lump-distribution flaw the first pass missed
+
+| ID | Issue | Resolution |
+|---|---|---|
+| HIGH-1 | **Lump reward distribution.** `sync_rewards` folded each funded tranche into the accumulator instantly, paying it to whoever held weight at that single instant. A 1-atom monopolist (low TVL) could pre-stake before the scheduled crank and take the whole tranche; a JIT whale could stake flexible for one slot around the crank and capture a large share. Defeated the point of rewarding committed stake. Rewards only (never principal). | **Fixed.** Replaced lump distribution with a Synthetix-style linear drip over `reward_duration` (`reward_rate`/`period_finish`/`last_update_time`/`update_rewards`/`notify_reward`). A one-slot position now earns ~0. Covered by the `drips rewards over time` test. |
+| LOW-2 (CEI) | State mutated after the token-transfer CPI in `claim`/`unstake` -- reentrancy safety rested entirely on the (version-fragile) transfer-hook blocklist. | **Fixed.** Reordered to checks-effects-interactions: `claim` zeroes `pending_reward`/updates balances and `unstake` applies weight/total updates BEFORE the payout/principal CPI. |
+| LOW (cron) | `recentlyFunded()` parsed the SQLite timestamp with a space separator (`Date.parse` may yield `NaN`), which would skip the double-funding guard. | **Fixed.** Normalize to ISO (`' ' -> 'T'`) and fail SAFE (treat unparseable as recently-funded) -- treasury cost only, never user funds. |
+| LOW (info) | Pool `admin` (the `set_paused` key) does not follow the upgrade authority; a post-multisig compromise of the original deploy wallet could pause NEW stakes (availability only -- `unstake`/`claim` never check `paused`). | **Accepted** (residual #4). No fund access. Consider a multisig-gated `set_admin` later. |
+| LOW (info) | `update_rewards` floors `reward_rate * elapsed / total_weight`; with an extreme high-supply/high-multiplier mint (`total_weight > 1e18`) per-tick remainders could accrue slowly. Not reachable for $ATELIER (`total_weight <= ~1e16`). | **Accepted.** Bounded, vault-favoring; documented for the auditor. |
 
 ## Known residual items for the auditor
 

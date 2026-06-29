@@ -40,15 +40,33 @@ pub struct Claim<'info> {
 }
 
 pub fn handler(ctx: Context<Claim>) -> Result<()> {
-    let reward_vault_amount = ctx.accounts.reward_vault.amount;
-    ctx.accounts.pool.sync_rewards(reward_vault_amount)?;
+    let now = Clock::get()?.unix_timestamp;
+    ctx.accounts.pool.update_rewards(now)?;
     let acc = ctx.accounts.pool.acc_reward_per_weight;
     ctx.accounts.position.settle(acc)?;
 
     let payout = ctx.accounts.position.pending_reward;
     require!(payout > 0, StakingError::NothingToClaim);
 
-    // Pay out, signed by the pool PDA (the vault authority).
+    // Effects before interaction (checks-effects-interactions): zero pending and
+    // decrement the recorded balance BEFORE the payout CPI, so a (blocklisted but
+    // defense-in-depth) reentrant transfer hook cannot double-claim.
+    ctx.accounts.position.pending_reward = 0;
+    {
+        let pool = &mut ctx.accounts.pool;
+        pool.total_rewards_claimed = pool
+            .total_rewards_claimed
+            .checked_add(payout)
+            .ok_or(StakingError::MathOverflow)?;
+        // Keep last_balance in lockstep with the outflow so the next crank's
+        // delta computation stays correct.
+        pool.reward_vault_last_balance = pool
+            .reward_vault_last_balance
+            .checked_sub(payout)
+            .ok_or(StakingError::MathOverflow)?;
+    }
+
+    // Interaction last: pay out, signed by the pool PDA (the vault authority).
     let staked_mint_key = ctx.accounts.pool.staked_mint;
     let pool_bump_arr = [ctx.accounts.pool.bump];
     let seeds: &[&[u8]] = &[POOL_SEED, staked_mint_key.as_ref(), &pool_bump_arr];
@@ -68,22 +86,6 @@ pub fn handler(ctx: Context<Claim>) -> Result<()> {
         payout,
         decimals,
     )?;
-
-    ctx.accounts.position.pending_reward = 0;
-
-    {
-        let pool = &mut ctx.accounts.pool;
-        pool.total_rewards_claimed = pool
-            .total_rewards_claimed
-            .checked_add(payout)
-            .ok_or(StakingError::MathOverflow)?;
-        // Keep last_balance in lockstep with the outflow so the next sync's
-        // delta computation stays correct.
-        pool.reward_vault_last_balance = pool
-            .reward_vault_last_balance
-            .checked_sub(payout)
-            .ok_or(StakingError::MathOverflow)?;
-    }
 
     emit!(Claimed {
         pool: ctx.accounts.pool.key(),

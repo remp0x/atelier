@@ -142,7 +142,8 @@
       "name": "initialize_pool",
       "docs": [
         "One-time pool creation for a given staked mint. Sets the three lock",
-        "tiers (immutable thereafter) and rejects unsafe Token-2022 extensions."
+        "tiers and the reward-drip window (both immutable thereafter) and rejects",
+        "unsafe Token-2022 extensions."
       ],
       "discriminator": [
         95,
@@ -288,6 +289,10 @@
               3
             ]
           }
+        },
+        {
+          "name": "reward_duration_secs",
+          "type": "i64"
         }
       ]
     },
@@ -673,6 +678,11 @@
       "code": 6010,
       "name": "Unauthorized",
       "msg": "Only the program upgrade authority may initialize a pool"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidRewardDuration",
+      "msg": "Reward duration must be greater than zero and within bounds"
     }
   ],
   "types": [
@@ -824,6 +834,38 @@
             "type": "u128"
           },
           {
+            "name": "reward_rate",
+            "docs": [
+              "Linear reward drip (Synthetix-style). Funded USDC is paid out over",
+              "`reward_duration` seconds rather than dumped into the accumulator at once,",
+              "so a position must be staked across real time to earn -- defeating crank",
+              "front-running and JIT (stake-around-the-crank) reward capture.",
+              "`reward_rate` is (micro-USDC * ACC_SCALE) per second."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "period_finish",
+            "docs": [
+              "Unix time the current drip ends."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_update_time",
+            "docs": [
+              "Unix time the accumulator was last advanced."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "reward_duration",
+            "docs": [
+              "Length of each drip window (set at init, immutable)."
+            ],
+            "type": "i64"
+          },
+          {
             "name": "reward_vault_last_balance",
             "docs": [
               "Last observed reward-vault balance; deposits are detected as the delta."
@@ -832,6 +874,9 @@
           },
           {
             "name": "total_rewards_distributed",
+            "docs": [
+              "Cumulative USDC funded into drips."
+            ],
             "type": "u64"
           },
           {

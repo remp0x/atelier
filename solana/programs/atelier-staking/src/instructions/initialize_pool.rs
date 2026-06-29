@@ -69,7 +69,15 @@ pub struct InitializePool<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handler(ctx: Context<InitializePool>, tiers: [Tier; TIER_COUNT]) -> Result<()> {
+pub fn handler(
+    ctx: Context<InitializePool>,
+    tiers: [Tier; TIER_COUNT],
+    reward_duration_secs: i64,
+) -> Result<()> {
+    require!(
+        reward_duration_secs > 0 && reward_duration_secs <= MAX_REWARD_DURATION_SECS,
+        StakingError::InvalidRewardDuration
+    );
     for tier in tiers.iter() {
         require!(
             tier.multiplier_bps >= MIN_MULTIPLIER_BPS,
@@ -99,6 +107,11 @@ pub fn handler(ctx: Context<InitializePool>, tiers: [Tier; TIER_COUNT]) -> Resul
     pool.total_staked = 0;
     pool.total_weight = 0;
     pool.acc_reward_per_weight = 0;
+    let now = Clock::get()?.unix_timestamp;
+    pool.reward_rate = 0;
+    pool.period_finish = now;
+    pool.last_update_time = now;
+    pool.reward_duration = reward_duration_secs;
     pool.reward_vault_last_balance = ctx.accounts.reward_vault.amount;
     pool.total_rewards_distributed = 0;
     pool.total_rewards_claimed = 0;

@@ -57,10 +57,9 @@ pub fn handler(ctx: Context<Stake>, tier_index: u8, amount: u64) -> Result<()> {
     require!((tier_index as usize) < TIER_COUNT, StakingError::InvalidTierIndex);
 
     let now = Clock::get()?.unix_timestamp;
-    let reward_vault_amount = ctx.accounts.reward_vault.amount;
 
-    // 1. Distribute any USDC that arrived before this stake, against old weight.
-    ctx.accounts.pool.sync_rewards(reward_vault_amount)?;
+    // 1. Drip rewards up to now (against old weight) before this stake changes it.
+    ctx.accounts.pool.update_rewards(now)?;
     let acc = ctx.accounts.pool.acc_reward_per_weight;
 
     // 2. Identity on first stake; enforce same tier on subsequent stakes.

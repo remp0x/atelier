@@ -83,8 +83,34 @@ export function findPositionPda(
 }
 
 /**
+ * Project the reward accumulator forward for rewards that have dripped since the
+ * pool was last touched on-chain (mirror of the program's `update_rewards`).
+ * The on-chain `acc_reward_per_weight` only advances on an interaction, so the
+ * UI must project it to show live claimable. Returns the stored value unchanged
+ * when nothing has dripped (no weight, or already past `period_finish`).
+ */
+export function projectAccRewardPerWeight(
+  pool: {
+    accRewardPerWeight: bigint;
+    rewardRate: bigint;
+    periodFinish: bigint;
+    lastUpdateTime: bigint;
+    totalWeight: bigint;
+  },
+  nowSecs: number,
+): bigint {
+  if (pool.totalWeight === 0n) return pool.accRewardPerWeight;
+  const now = BigInt(Math.floor(nowSecs));
+  const applicable = now < pool.periodFinish ? now : pool.periodFinish;
+  if (applicable <= pool.lastUpdateTime) return pool.accRewardPerWeight;
+  const elapsed = applicable - pool.lastUpdateTime;
+  return pool.accRewardPerWeight + (pool.rewardRate * elapsed) / pool.totalWeight;
+}
+
+/**
  * Mirror of the on-chain settle math: USDC owed to a position given the current
- * accumulator. `weight = amount * multiplierBps / BPS_DENOM`.
+ * accumulator. `weight = amount * multiplierBps / BPS_DENOM`. Pass an accumulator
+ * projected via `projectAccRewardPerWeight` for live (drip-aware) display.
  */
 export function computeClaimable(params: {
   weight: bigint;

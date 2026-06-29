@@ -28,8 +28,21 @@ pub struct StakePool {
     pub total_weight: u128,
     /// Cumulative USDC distributed per unit of weight, scaled by ACC_SCALE.
     pub acc_reward_per_weight: u128,
+    /// Linear reward drip (Synthetix-style). Funded USDC is paid out over
+    /// `reward_duration` seconds rather than dumped into the accumulator at once,
+    /// so a position must be staked across real time to earn -- defeating crank
+    /// front-running and JIT (stake-around-the-crank) reward capture.
+    /// `reward_rate` is (micro-USDC * ACC_SCALE) per second.
+    pub reward_rate: u128,
+    /// Unix time the current drip ends.
+    pub period_finish: i64,
+    /// Unix time the accumulator was last advanced.
+    pub last_update_time: i64,
+    /// Length of each drip window (set at init, immutable).
+    pub reward_duration: i64,
     /// Last observed reward-vault balance; deposits are detected as the delta.
     pub reward_vault_last_balance: u64,
+    /// Cumulative USDC funded into drips.
     pub total_rewards_distributed: u64,
     pub total_rewards_claimed: u64,
     pub paused: bool,
@@ -39,37 +52,77 @@ pub struct StakePool {
 }
 
 impl StakePool {
-    /// Fold any USDC that arrived in the reward vault since the last observation
-    /// into the accumulator, pro-rata across current weight.
+    /// Reward time that has actually elapsed under the current drip: `now`
+    /// clamped to `period_finish`, so rewards never accrue past the window.
+    fn applicable_time(&self, now: i64) -> i64 {
+        if now < self.period_finish {
+            now
+        } else {
+            self.period_finish
+        }
+    }
+
+    /// Advance the accumulator for the time elapsed since the last update,
+    /// dripping `reward_rate` across current weight (Synthetix `rewardPerToken`).
+    /// MUST be called before any `settle` and before any weight change.
     ///
-    /// If no one is staked (`total_weight == 0`) the delta is intentionally NOT
-    /// consumed -- `reward_vault_last_balance` is left behind so the funds wait
-    /// in the vault and distribute to the first stakers. A balance lower than
-    /// the recorded one can only mean ledger corruption (claims decrement it in
-    /// lockstep), so it is rejected rather than silently floored.
-    pub fn sync_rewards(&mut self, reward_vault_amount: u64) -> Result<u64> {
-        if reward_vault_amount < self.reward_vault_last_balance {
-            return err!(StakingError::RewardVaultBalanceMismatch);
+    /// `last_update_time` advances even when `total_weight == 0`, so rewards that
+    /// drip while the pool is empty are skipped (not retroactively granted to the
+    /// first staker) -- this closes the "fund an empty pool then be first staker"
+    /// capture. Time-based accrual also means a one-slot (JIT) position earns ~0.
+    pub fn update_rewards(&mut self, now: i64) -> Result<()> {
+        let applicable = self.applicable_time(now);
+        if self.total_weight > 0 && applicable > self.last_update_time {
+            let elapsed = (applicable - self.last_update_time) as u128;
+            let add = self
+                .reward_rate
+                .checked_mul(elapsed)
+                .ok_or(StakingError::MathOverflow)?
+                .checked_div(self.total_weight)
+                .ok_or(StakingError::MathOverflow)?;
+            self.acc_reward_per_weight = self
+                .acc_reward_per_weight
+                .checked_add(add)
+                .ok_or(StakingError::MathOverflow)?;
         }
-        let delta = reward_vault_amount - self.reward_vault_last_balance;
-        if delta == 0 || self.total_weight == 0 {
-            return Ok(0);
+        if applicable > self.last_update_time {
+            self.last_update_time = applicable;
         }
-        let scaled = (delta as u128)
+        Ok(())
+    }
+
+    /// Fold a freshly-deposited `amount` (micro-USDC) into the linear drip,
+    /// rolling any not-yet-dripped remainder of the current window into the new
+    /// rate (Synthetix `notifyRewardAmount`). MUST be called after
+    /// `update_rewards(now)`. A balance below the recorded one can only mean
+    /// ledger corruption (claims decrement it in lockstep), handled by the caller.
+    pub fn notify_reward(&mut self, amount: u64, now: i64) -> Result<()> {
+        let duration = self.reward_duration as u128;
+        let amount_scaled = (amount as u128)
             .checked_mul(ACC_SCALE)
-            .ok_or(StakingError::MathOverflow)?
-            .checked_div(self.total_weight)
             .ok_or(StakingError::MathOverflow)?;
-        self.acc_reward_per_weight = self
-            .acc_reward_per_weight
-            .checked_add(scaled)
+        let new_rate = if now >= self.period_finish {
+            amount_scaled
+                .checked_div(duration)
+                .ok_or(StakingError::MathOverflow)?
+        } else {
+            let remaining = (self.period_finish - now) as u128;
+            let leftover = self
+                .reward_rate
+                .checked_mul(remaining)
+                .ok_or(StakingError::MathOverflow)?;
+            amount_scaled
+                .checked_add(leftover)
+                .ok_or(StakingError::MathOverflow)?
+                .checked_div(duration)
+                .ok_or(StakingError::MathOverflow)?
+        };
+        self.reward_rate = new_rate;
+        self.last_update_time = now;
+        self.period_finish = now
+            .checked_add(self.reward_duration)
             .ok_or(StakingError::MathOverflow)?;
-        self.total_rewards_distributed = self
-            .total_rewards_distributed
-            .checked_add(delta)
-            .ok_or(StakingError::MathOverflow)?;
-        self.reward_vault_last_balance = reward_vault_amount;
-        Ok(delta)
+        Ok(())
     }
 
     pub fn weight_for(&self, amount: u64, tier_index: u8) -> Result<u128> {

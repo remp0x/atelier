@@ -9,7 +9,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
 } from '@solana/spl-token';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
-import { STAKING_TIERS, STAKED_MINT } from '@/lib/staking-config';
+import { STAKING_TIERS, STAKED_MINT, projectAccRewardPerWeight } from '@/lib/staking-config';
 import { fetchPool, fetchPosition, type StakePositionAccount, type StakePoolAccount } from '@/lib/staking-program';
 import { StakeDashboard } from '@/components/atelier/stake/StakeDashboard';
 import { StakePanel } from '@/components/atelier/stake/StakePanel';
@@ -152,7 +152,9 @@ export function StakePageClient() {
 
   if (!stats) return null;
 
-  const accRewardPerWeight = pool?.accRewardPerWeight ?? 0n;
+  const accRewardPerWeight = pool
+    ? projectAccRewardPerWeight(pool, Date.now() / 1000)
+    : 0n;
 
   return (
     <div className="max-w-5xl mx-auto">

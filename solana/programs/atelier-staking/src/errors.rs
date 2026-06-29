@@ -24,4 +24,6 @@ pub enum StakingError {
     RewardVaultBalanceMismatch,
     #[msg("Only the program upgrade authority may initialize a pool")]
     Unauthorized,
+    #[msg("Reward duration must be greater than zero and within bounds")]
+    InvalidRewardDuration,
 }

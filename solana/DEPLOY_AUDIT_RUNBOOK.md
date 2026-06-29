@@ -12,12 +12,13 @@ program custodies user funds.
 
 ## Build status (2026-06-29) -- BUILDS + TESTS PASS
 
-The program compiles to BPF, deploys to a local validator, and **all 7 Anchor
-tests pass** (init, sole-staker rewards, weighted reward split across tiers, lock
-enforcement, flexible unstake, Token-2022 unsafe-extension rejection, and
-init-rejection for a non-upgrade-authority). Host `cargo check` is also clean.
-An independent security review (2026-06-29) found no Critical/High issues; its
-findings and resolutions are recorded in `SECURITY.md`.
+The program compiles to BPF, deploys to a local validator, and **all 8 Anchor
+tests pass** (init, sole-staker rewards after the drip, weighted reward split,
+the drip/JIT-resistance test, lock enforcement, flexible unstake, Token-2022
+unsafe-extension rejection, and init-rejection for a non-upgrade-authority). Host
+`cargo check` is also clean. Two independent security reviews (2026-06-29) -- the
+second found a HIGH lump-distribution flaw, fixed by a Synthetix-style reward
+drip -- are recorded in `SECURITY.md`.
 
 The SBF toolchain in this environment caps at Rust 1.84, so a few modern deps
 that declare `edition2024` are pinned down in the committed `Cargo.lock`:
@@ -106,9 +107,13 @@ two extra accounts -- `program` (the program id) and `program_data` (the
 ProgramData PDA = `findProgramAddress([programId], BPFLoaderUpgradeable)`). On
 devnet/mainnet the deploying wallet is the upgrade authority, so initialize from
 that wallet. Initialize a pool against a **devnet test mint** (do not use the
-mainnet $ATELIER mint on devnet). Tiers (flexible 1x / 90d 4x / 180d 8x) are
-passed as `[{duration_secs, multiplier_bps}]`:
-`[{0, 10000}, {7776000, 40000}, {15552000, 80000}]`.
+mainnet $ATELIER mint on devnet). `initialize_pool` takes `(tiers,
+reward_duration_secs)`. Tiers (flexible 1x / 90d 4x / 180d 8x) are
+`[{duration_secs, multiplier_bps}]`:
+`[{0, 10000}, {7776000, 40000}, {15552000, 80000}]`, and `reward_duration_secs`
+is the linear-drip window (production: e.g. `604800` = 7 days; keep it >> slot
+time and ideally >= the funding cadence, or the JIT vector reopens). The init
+call also passes `program` + `program_data` (the upgrade-authority gate, s.4.2).
 
 Exercise stake -> fund (transfer USDC to the reward vault) -> `crank_sync` ->
 claim -> unstake end to end with the web app pointed at devnet.
@@ -143,7 +148,8 @@ anchor deploy --provider.cluster mainnet
 Initialize the real pool: `admin` **must be the program upgrade authority** (the
 deploying wallet), and the call passes `program` + `program_data` (see s.3).
 staked_mint = $ATELIER, reward_mint = USDC
-(`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`), tiers as above.
+(`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`), tiers as above, and
+`reward_duration_secs` (e.g. `604800` = 7 days).
 
 Ordering matters with the init gate: **initialize the pool while you still hold
 the upgrade authority, before** moving it to the multisig (s.4.3) or making the
@@ -170,7 +176,20 @@ vault, then cranks the accumulator. It is idempotent within ~6 days and no-ops
 (green) when the budget is zero or the treasury is short. To smooth reward-timing
 incentives you can split the weekly budget into several smaller cron runs.
 
-## Outstanding integration TODO
+## Outstanding integration TODO (a decision, not just code)
 
-- Wire `getEpochRevenueMicroUsdc()` in `staking-rewards.ts` to the live fee
-  ledger (`fee-indexer.ts` / `/api/fees`) instead of the env placeholder.
+Wiring `getEpochRevenueMicroUsdc()` in `staking-rewards.ts` to a live feed needs
+two product decisions first -- it directly controls how much USDC is distributed,
+so it is deliberately left manual (set `STAKING_EPOCH_REVENUE_USDC` or the
+`STAKING_EPOCH_USDC` budget override) until decided:
+
+1. **Which revenue stream funds staking.** The existing `fee-indexer.ts`
+   (`getTotalIndexedWithdrawals`) tracks pump.fun creator-fee income in **lamports
+   (SOL)** and is **cumulative all-time**. Order platform fees are in
+   `service_orders.platform_fee_usd` (**USD**). Pick the stream(s).
+2. **Denomination + windowing.** Rewards pay USDC; a SOL stream needs a SOL->USDC
+   rate, and "epoch revenue" must be the **delta** over the window (cumulative-now
+   minus cumulative-at-last-run; `staking_reward_funding.revenue_micro_usdc`
+   already records per-run revenue to support this).
+
+Also decide the staker share `STAKING_REWARD_SHARE_BPS` (default 2000 = 20%).

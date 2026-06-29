@@ -37,23 +37,28 @@ frontend (/stake)
 ```
 weight              = amount * tier.multiplier_bps / 10_000
 total_weight        = sum of position weights
-acc_reward_per_weight += usdc_in * ACC_SCALE / total_weight   (on each deposit)
+# funded USDC drips linearly over reward_duration (Synthetix), not all at once:
+reward_rate         = funded * ACC_SCALE / reward_duration    (on crank/notify)
+acc_reward_per_weight += reward_rate * elapsed / total_weight (on each touch)
 position pending    += weight * acc / ACC_SCALE - reward_debt (settle)
 reward_debt          = weight * acc / ACC_SCALE               (re-anchor)
 ```
 
-Principal is returned 1:1 (never revalued). Only the USDC reward is weighted.
-`ACC_SCALE = 1e18`. See `solana/SECURITY.md` for precision/overflow analysis.
+Rewards accrue over real time, so a position must be staked across the window to
+earn -- a one-slot (JIT) position earns ~0. This is the fix for the lump-vs-drip
+HIGH finding (see `solana/SECURITY.md`). Principal is returned 1:1 (never
+revalued); only the USDC reward is weighted. `ACC_SCALE = 1e18`; `reward_duration`
+is set at init (production: e.g. 7 days).
 
 ## Instructions
 
 | Instruction | Who | Effect |
 |---|---|---|
-| `initialize_pool(tiers)` | admin (once) | Create pool + vaults; set immutable tiers; reject unsafe Token-2022 extensions. |
+| `initialize_pool(tiers, reward_duration)` | upgrade authority (once) | Create pool + vaults; set immutable tiers + reward-drip window; reject unsafe Token-2022 extensions. Gated to the program upgrade authority (anti front-run). |
 | `stake(tier_index, amount)` | user | Deposit $ATELIER into a tier; create/extend position; re-lock. |
 | `unstake(amount)` | user | Withdraw principal after lock expiry. |
 | `claim()` | user | Withdraw accrued USDC. |
-| `crank_sync()` | anyone | Fold deposited USDC into the accumulator (backend cranks after funding). |
+| `crank_sync()` | anyone | Drip accrued rewards up to now, then fold any new deposit into a fresh linear drip window (backend cranks after funding). |
 | `set_paused(paused)` | admin | Pause NEW stakes only -- never unstake/claim. |
 
 No instruction can move vault funds except the owner's own `unstake`/`claim`.
@@ -89,11 +94,13 @@ flexible (10,000 weight) earns ~$13. The 8x spread is the incentive.
 
 ## Status
 
-- Program builds to BPF; **7/7 on-chain tests pass** on a local validator; host
+- Program builds to BPF; **8/8 on-chain tests pass** on a local validator; host
   `cargo check` clean.
-- Independent security review (2026-06-29): no Critical/High. Init front-run
-  (MED-1) fixed via an upgrade-authority gate; reward-mint extension check
-  (LOW-1) and empty-pool funding guard (MED-2) added. See `solana/SECURITY.md`.
+- Two independent security reviews (2026-06-29). First: init front-run (MED-1)
+  fixed via an upgrade-authority gate; reward-mint extension check (LOW-1) added.
+  Second: found a **HIGH** lump-distribution flaw (a JIT/monopoly staker could
+  scoop a funding tranche) -- fixed by switching to a Synthetix-style linear
+  reward drip; plus checks-effects-interactions ordering. See `solana/SECURITY.md`.
 - Full web app passes `tsc`; client SDK discriminators match the generated IDL
   byte-for-byte. Generated IDL committed at `solana/idl/atelier_staking.json`.
 - Committed to branch `staking`.

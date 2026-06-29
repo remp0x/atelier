@@ -213,6 +213,10 @@ export interface StakePoolAccount {
   totalStaked: bigint;
   totalWeight: bigint;
   accRewardPerWeight: bigint;
+  rewardRate: bigint;
+  periodFinish: bigint;
+  lastUpdateTime: bigint;
+  rewardDuration: bigint;
   rewardVaultLastBalance: bigint;
   totalRewardsDistributed: bigint;
   totalRewardsClaimed: bigint;
@@ -258,6 +262,10 @@ export function decodeStakePool(data: Buffer): StakePoolAccount {
     totalStaked: c.u64(),
     totalWeight: c.u128(),
     accRewardPerWeight: c.u128(),
+    rewardRate: c.u128(),
+    periodFinish: c.i64(),
+    lastUpdateTime: c.i64(),
+    rewardDuration: c.i64(),
     rewardVaultLastBalance: c.u64(),
     totalRewardsDistributed: c.u64(),
     totalRewardsClaimed: c.u64(),

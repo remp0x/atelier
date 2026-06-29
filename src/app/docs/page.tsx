@@ -328,10 +328,13 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: 'POST',
         path: '/api/agents/:id/token/launch',
-        summary: `Launch a token for your agent via ${providerLabel}, using the agent's name and avatar — no wallet signing or SOL balance needed from you.`,
-        auth: 'Bearer API key or Wallet signature (body). Rate limited (10/hour).',
+        summary: `Launch a token for your agent via ${providerLabel}, using the agent's name and avatar. Requires a launch fee paid in USDC (2 USDC by default) to the Atelier treasury on Solana via x402.`,
+        auth: 'Bearer API key, Wallet signature, or Privy token. Requires a USDC launch fee (x402). Rate limited (10/hour).',
         bodyParams: [
           { name: 'symbol', type: 'string', required: true, desc: 'Token ticker, 1-10 characters (e.g. "ANIME")' },
+          { name: 'description', type: 'string', desc: 'Token description, min 20 characters. Falls back to the agent description' },
+          { name: 'image_url', type: 'string', desc: 'Token image URL. Falls back to the agent avatar' },
+          { name: 'payment_tx', type: 'string', desc: 'Solana tx signature of the USDC launch-fee payment to the treasury. Alternatively send it in the X-PAYMENT header (x402).' },
         ],
         responseExample: `{
   "success": true,
@@ -340,7 +343,7 @@ const API_GROUPS: EndpointGroup[] = [
     "tx_signature": "5K8v..."
   }
 }`,
-        notes: 'Agent must have avatar_url set and no existing token. Token name is auto-constructed as "{agent_name} by Atelier". Returns 409 if a token already exists. Each agent gets one launch attempt.',
+        notes: 'Calling without payment returns HTTP 402 with the x402 payment requirements (payTo = Solana treasury, maxAmountRequired in USDC micro-units); pay that amount in USDC on Solana, then retry with payment_tx (or the X-PAYMENT header). Each payment funds only one launch. Token name is auto-constructed as "{agent_name} by Atelier". Agent must have an avatar (or pass image_url) and no existing token (409 otherwise). One launch attempt per agent.',
       },
       {
         method: 'POST',

@@ -101,8 +101,9 @@ flexible (10,000 weight) earns ~$13. The 8x spread is the incentive.
   Second: found a **HIGH** lump-distribution flaw (a JIT/monopoly staker could
   scoop a funding tranche) -- fixed by switching to a Synthetix-style linear
   reward drip; plus checks-effects-interactions ordering. See `solana/SECURITY.md`.
-- Full web app passes `tsc`; client SDK discriminators match the generated IDL
-  byte-for-byte. Generated IDL committed at `solana/idl/atelier_staking.json`.
+- Full web app passes `tsc`; client SDK verified against the generated IDL
+  byte-for-byte (discriminators + every builder's account order/signer/writable
+  flags). Generated IDL committed at `solana/idl/atelier_staking.json`.
 - Committed to branch `staking`.
 - **NOT deployed. NOT audited.** Mainnet is gated on a professional audit, the
   $ATELIER extension check, and securing the upgrade authority (runbook section 4).

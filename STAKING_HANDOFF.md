@@ -10,7 +10,9 @@ per the office-hours design. Read this first.
 - **Verified end to end:** the program builds to BPF, deploys to a local
   validator, and **all 8 Anchor tests pass**. Host `cargo check` is clean. The
   entire web app passes `tsc --noEmit` (zero errors). The hand-rolled client SDK
-  discriminators match the generated IDL byte-for-byte.
+  was checked against the regenerated IDL byte-for-byte -- instruction +
+  account discriminators AND every builder's account order/signer/writable flags
+  match (the Anchor tests use `accountsPartial`, so this closes the SDK gap).
 - **Security-reviewed twice (2026-06-29):** the first pass fixed the init
   front-run (MED-1, upgrade-authority gate) and added the reward-mint extension
   check (LOW-1). The **second pass caught a HIGH** issue the first missed: the
@@ -48,7 +50,7 @@ continuous accrual, claim anytime. Full rationale in `STAKING_SPEC.md`.
 | Anchor program (`solana/`) | Builds to BPF; `cargo check` clean. |
 | On-chain tests (`solana/tests`) | **8/8 passing** on a local validator. |
 | Security self-review | `solana/SECURITY.md` -- full vuln taxonomy mapped. |
-| Client SDK + config | `src/lib/staking-{program,config}.ts` -- tsc clean; discriminators match IDL. |
+| Client SDK + config | `src/lib/staking-{program,config}.ts` -- tsc clean; discriminators + account metas verified against IDL. |
 | Reward funding cron | `src/lib/staking-rewards.ts` + `/api/cron/staking-rewards`; in `vercel.json`. |
 | Stats read model | `/api/staking/stats` -- tsc clean. |
 | Frontend `/stake` | Full page; Privy embedded-wallet signing; sidebar link. tsc clean. |

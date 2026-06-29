@@ -115,6 +115,16 @@ is the linear-drip window (production: e.g. `604800` = 7 days; keep it >> slot
 time and ideally >= the funding cadence, or the JIT vector reopens). The init
 call also passes `program` + `program_data` (the upgrade-authority gate, s.4.2).
 
+Use the helper script (tested end-to-end on a local validator) -- it derives all
+PDAs incl. `program_data`, auto-detects each mint's token program, verifies your
+wallet is the upgrade authority, and is idempotent:
+
+```bash
+ANCHOR_PROVIDER_URL=https://api.devnet.solana.com ANCHOR_WALLET=~/.config/solana/id.json \
+  STAKED_MINT=<devnet test mint> REWARD_MINT=<devnet usdc> REWARD_DURATION_SECS=604800 \
+  yarn init-pool          # solana/scripts/initialize-pool.ts; TIERS_JSON to override tiers
+```
+
 Exercise stake -> fund (transfer USDC to the reward vault) -> `crank_sync` ->
 claim -> unstake end to end with the web app pointed at devnet.
 
@@ -149,7 +159,8 @@ Initialize the real pool: `admin` **must be the program upgrade authority** (the
 deploying wallet), and the call passes `program` + `program_data` (see s.3).
 staked_mint = $ATELIER, reward_mint = USDC
 (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`), tiers as above, and
-`reward_duration_secs` (e.g. `604800` = 7 days).
+`reward_duration_secs` (e.g. `604800` = 7 days) -- via `yarn init-pool` (s.3),
+run from the wallet that holds the upgrade authority.
 
 Ordering matters with the init gate: **initialize the pool while you still hold
 the upgrade authority, before** moving it to the multisig (s.4.3) or making the

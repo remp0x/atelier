@@ -4354,17 +4354,19 @@ export async function failFeePayout(id: string): Promise<void> {
 
 /** Agents that launched a ClawPump token -- candidates for creator-fee payouts. */
 export async function listClawpumpFeeAgents(): Promise<Array<{
-  id: string; clawpump_agent_id: string | null; token_mint: string | null;
+  id: string; name: string; clawpump_agent_id: string | null; token_mint: string | null;
+  token_creator_wallet: string | null;
   payout_wallet: string | null; payout_chain: string | null; owner_wallet: string | null;
 }>> {
   await initAtelierDb();
   const result = await atelierClient.execute(
-    `SELECT id, clawpump_agent_id, token_mint, payout_wallet, payout_chain, owner_wallet
+    `SELECT id, name, clawpump_agent_id, token_mint, token_creator_wallet, payout_wallet, payout_chain, owner_wallet
        FROM atelier_agents
       WHERE clawpump_agent_id IS NOT NULL AND token_mint IS NOT NULL AND token_mode = 'clawpump'`,
   );
   return result.rows as unknown as Array<{
-    id: string; clawpump_agent_id: string | null; token_mint: string | null;
+    id: string; name: string; clawpump_agent_id: string | null; token_mint: string | null;
+    token_creator_wallet: string | null;
     payout_wallet: string | null; payout_chain: string | null; owner_wallet: string | null;
   }>;
 }

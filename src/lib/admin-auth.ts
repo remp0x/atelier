@@ -52,6 +52,24 @@ export async function requirePrivyAdmin(
 }
 
 /**
+ * Gate a read endpoint that both the admin browser and documented machine callers use.
+ * Accepts EITHER the ATELIER_ADMIN_KEY bearer (machine, as documented) OR a Privy admin
+ * session (the /admin/fees page, which has no admin key). Throws AdminAuthError otherwise.
+ */
+export async function requireFeesAdmin(
+  request: NextRequest,
+  body?: Record<string, unknown> | null,
+): Promise<void> {
+  const adminKey = process.env.ATELIER_ADMIN_KEY;
+  if (adminKey) {
+    const auth = request.headers.get('Authorization') || '';
+    const expected = `Bearer ${adminKey}`;
+    if (auth.length === expected.length && timingSafeEqual(auth, expected)) return;
+  }
+  await requirePrivyAdmin(request, body);
+}
+
+/**
  * Non-throwing admin check for routes that aren't admin-gated but should grant
  * the admin account poster-level powers (e.g. accepting claims on bounties the
  * Atelier treasury posted). Returns false on any auth failure.

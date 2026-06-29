@@ -34,8 +34,10 @@ const BASE58_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 type FeeAgent = {
   id: string;
+  name?: string;
   clawpump_agent_id: string | null;
   token_mint: string | null;
+  token_creator_wallet?: string | null;
   payout_wallet: string | null;
   payout_chain: string | null;
   owner_wallet: string | null;
@@ -70,6 +72,12 @@ export type ClawpumpPayoutResult = {
 export async function payoutAgentClawpumpFees(agent: FeeAgent): Promise<ClawpumpPayoutResult> {
   if (!agent.clawpump_agent_id || !agent.token_mint) {
     return { agentId: agent.id, status: 'skipped', reason: 'no clawpump token' };
+  }
+  // Legacy sponsored launches set a ClawPump-custodied wallet as creator-of-record: ClawPump
+  // pushes their 65% to that wallet, never to the Atelier wallet. Paying them out from the
+  // Atelier wallet would spend funds we never received, so skip them (surfaced as "stuck").
+  if (agent.token_creator_wallet && agent.token_creator_wallet !== ATELIER_PUBKEY.toBase58()) {
+    return { agentId: agent.id, status: 'skipped', reason: 'custodied creator wallet -- fees not pushed to Atelier' };
   }
   const target = solanaPayoutWallet(agent);
   if (!target) {
@@ -155,4 +163,109 @@ export async function previewAgentClawpumpClaim(agent: FeeAgent): Promise<Clawpu
     minClaimSol,
     payoutWallet,
   };
+}
+
+export interface ClawpumpFeeSummaryToken {
+  agentId: string;
+  name: string;
+  mint: string;
+  earnedSol: number;
+  sentSol: number;
+  pendingSol: number;
+  claimableSol: number;
+  payoutWallet: string | null;
+  eligible: boolean;
+}
+
+export interface ClawpumpFeeSummary {
+  totals: {
+    earnedSol: number;
+    sentSol: number;
+    pendingSol: number;
+    claimableSol: number;
+    eligibleCount: number;
+    tokenCount: number;
+    queriedCount: number;
+    failedCount: number;
+  };
+  perToken: ClawpumpFeeSummaryToken[];
+  stuck: Array<{ agentId: string; name: string; mint: string; creatorWallet: string | null }>;
+  minClaimSol: number;
+}
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let cursor = 0;
+  async function worker(): Promise<void> {
+    while (cursor < items.length) {
+      const i = cursor++;
+      out[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+/**
+ * Read-only ClawPump fee picture for the admin dashboard: aggregate earned/sent/pending across
+ * every self-funded ClawPump token (creator = Atelier wallet), the per-token claimable breakdown,
+ * and the "stuck" custodied tokens whose 65% never reaches us. Queries ClawPump's earnings API per
+ * agent with bounded concurrency; a failed query drops that token from totals (counted separately).
+ */
+export async function summarizeClawpumpFees(): Promise<ClawpumpFeeSummary> {
+  const minClaimSol = MIN_CLAWPUMP_PAYOUT_LAMPORTS / LAMPORTS_PER_SOL;
+  const agents = await listClawpumpFeeAgents();
+  const atelier = ATELIER_PUBKEY.toBase58();
+
+  const stuck = agents
+    .filter((a) => a.token_creator_wallet && a.token_creator_wallet !== atelier)
+    .map((a) => ({ agentId: a.id, name: a.name, mint: a.token_mint as string, creatorWallet: a.token_creator_wallet ?? null }));
+
+  const selfFunded = agents.filter((a) => a.clawpump_agent_id && (!a.token_creator_wallet || a.token_creator_wallet === atelier));
+
+  const rows = await mapWithConcurrency(selfFunded, 8, async (a) => {
+    try {
+      const earnings = await getClawpumpAgentEarnings(a.clawpump_agent_id as string);
+      const reserved = await getReservedFeeLamportsForAgent(a.id);
+      const sentLamports = Math.floor(earnings.totalSentSol * LAMPORTS_PER_SOL);
+      const claimableLamports = Math.max(0, sentLamports - reserved);
+      const payoutWallet = solanaPayoutWallet(a);
+      const eligible = claimableLamports >= MIN_CLAWPUMP_PAYOUT_LAMPORTS && payoutWallet !== null;
+      const token: ClawpumpFeeSummaryToken = {
+        agentId: a.id,
+        name: a.name,
+        mint: a.token_mint as string,
+        earnedSol: earnings.totalEarnedSol,
+        sentSol: earnings.totalSentSol,
+        pendingSol: earnings.totalPendingSol,
+        claimableSol: claimableLamports / LAMPORTS_PER_SOL,
+        payoutWallet,
+        eligible,
+      };
+      return { token };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  const perToken: ClawpumpFeeSummaryToken[] = [];
+  let failedCount = 0;
+  for (const r of rows) {
+    if ('token' in r && r.token) perToken.push(r.token);
+    else failedCount++;
+  }
+  perToken.sort((a, b) => b.claimableSol - a.claimableSol);
+
+  const totals = {
+    earnedSol: perToken.reduce((s, t) => s + t.earnedSol, 0),
+    sentSol: perToken.reduce((s, t) => s + t.sentSol, 0),
+    pendingSol: perToken.reduce((s, t) => s + t.pendingSol, 0),
+    claimableSol: perToken.filter((t) => t.eligible).reduce((s, t) => s + t.claimableSol, 0),
+    eligibleCount: perToken.filter((t) => t.eligible).length,
+    tokenCount: selfFunded.length,
+    queriedCount: perToken.length,
+    failedCount,
+  };
+
+  return { totals, perToken, stuck, minClaimSol };
 }

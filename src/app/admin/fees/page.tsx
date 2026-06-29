@@ -53,6 +53,43 @@ interface ManagedToken {
   token_creator_wallet: string | null;
 }
 
+interface ClawPumpToken {
+  agentId: string;
+  name: string;
+  mint: string;
+  earnedSol: number;
+  sentSol: number;
+  pendingSol: number;
+  claimableSol: number;
+  payoutWallet: string | null;
+  eligible: boolean;
+}
+
+interface ClawPumpStuck {
+  agentId: string;
+  name: string;
+  mint: string;
+  creatorWallet: string | null;
+}
+
+interface ClawPumpTotals {
+  earnedSol: number;
+  sentSol: number;
+  pendingSol: number;
+  claimableSol: number;
+  eligibleCount: number;
+  tokenCount: number;
+  queriedCount: number;
+  failedCount: number;
+}
+
+interface ClawPumpData {
+  totals: ClawPumpTotals;
+  perToken: ClawPumpToken[];
+  stuck: ClawPumpStuck[];
+  minClaimSol: number;
+}
+
 function lamportsToSol(lamports: number): string {
   return (lamports / LAMPORTS_PER_SOL).toFixed(6);
 }
@@ -90,6 +127,9 @@ function FeesContent() {
   const [collecting, setCollecting] = useState(false);
   const [payingOut, setPayingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clawpump, setClawpump] = useState<ClawPumpData | null>(null);
+  const [clawpumpLoading, setClawpumpLoading] = useState(false);
+  const [payingClawpump, setPayingClawpump] = useState(false);
 
   const [payoutWallet, setPayoutWallet] = useState('');
   const [payoutAgentId, setPayoutAgentId] = useState('');
@@ -100,10 +140,12 @@ function FeesContent() {
     if (!isAdmin) return;
     setLoading(true);
     try {
+      const token = await getPrivyAccessToken();
+      const authHeaders: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const [balRes, sweepRes, payoutRes, tokensRes, solBalance] = await Promise.all([
-        fetch('/api/fees/balance').then(r => r.json()),
-        fetch('/api/fees/sweeps').then(r => r.json()).catch(() => ({ success: false })),
-        fetch('/api/fees/payouts').then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/fees/balance', { headers: authHeaders }).then(r => r.json()),
+        fetch('/api/fees/sweeps', { headers: authHeaders }).then(r => r.json()).catch(() => ({ success: false })),
+        fetch('/api/fees/payouts', { headers: authHeaders }).then(r => r.json()).catch(() => ({ success: false })),
         fetch('/api/agents?source=all&limit=200').then(r => r.json()),
         connection.getBalance(new PublicKey(ATELIER_WALLET)),
       ]);
@@ -132,9 +174,31 @@ function FeesContent() {
     }
   }, [isAdmin, connection]);
 
+  const loadClawpump = useCallback(async () => {
+    if (!isAdmin) return;
+    setClawpumpLoading(true);
+    try {
+      const token = await getPrivyAccessToken();
+      if (!token) return;
+      const res = await fetch('/api/fees/clawpump', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (json.success) setClawpump(json.data);
+    } catch {
+      // non-blocking; rest of the page is already loaded
+    } finally {
+      setClawpumpLoading(false);
+    }
+  }, [isAdmin]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (isAdmin) loadClawpump();
+  }, [isAdmin, loadClawpump]);
 
   async function handleCollect() {
     setCollecting(true);
@@ -153,6 +217,28 @@ function FeesContent() {
       setError(err instanceof Error ? err.message : 'Collect failed');
     } finally {
       setCollecting(false);
+    }
+  }
+
+  async function handleClawpumpPayout() {
+    setPayingClawpump(true);
+    setError(null);
+    try {
+      const token = await getPrivyAccessToken();
+      if (!token) throw new Error('Sign in required');
+      const res = await fetch('/api/fees/clawpump', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      const { paidCount } = json.data as { paidCount: number; paidLamports: number; results: unknown[] };
+      setError(`ClawPump payouts complete: ${paidCount} paid`);
+      await Promise.all([loadClawpump(), loadData()]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ClawPump payout failed');
+    } finally {
+      setPayingClawpump(false);
     }
   }
 
@@ -322,6 +408,133 @@ function FeesContent() {
           </div>
         )}
       </div>
+
+      {/* ClawPump Earnings */}
+      <div>
+        <h2 className="text-lg font-bold font-display mb-3">ClawPump Earnings (65% share)</h2>
+        {clawpumpLoading && !clawpump ? (
+          <div className="flex items-center gap-2 text-sm text-neutral-500 font-mono">
+            <div className="w-4 h-4 border-2 border-atelier border-t-transparent rounded-full animate-spin" />
+            Loading ClawPump earnings...
+          </div>
+        ) : clawpump ? (
+          <div className="space-y-4">
+            {clawpump.totals.failedCount > 0 && (
+              <p className="text-xs font-mono text-amber-400">
+                {clawpump.totals.failedCount} tokens failed to query
+              </p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
+                <p className="text-xs text-neutral-500 font-mono mb-1">ClawPump Earned (65%)</p>
+                <p className="text-xl font-bold font-mono">{clawpump.totals.earnedSol.toFixed(4)} SOL</p>
+              </div>
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
+                <p className="text-xs text-neutral-500 font-mono mb-1">Sent to Atelier Wallet</p>
+                <p className="text-xl font-bold font-mono">{clawpump.totals.sentSol.toFixed(4)} SOL</p>
+                <p className="text-2xs text-neutral-500 font-mono mt-1">already in wallet</p>
+              </div>
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
+                <p className="text-xs text-neutral-500 font-mono mb-1">Pending (not yet pushed)</p>
+                <p className="text-xl font-bold font-mono">{clawpump.totals.pendingSol.toFixed(4)} SOL</p>
+              </div>
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-black-soft border border-gray-200 dark:border-neutral-800">
+                <p className="text-xs text-neutral-500 font-mono mb-1">Claimable Now</p>
+                <p className="text-xl font-bold font-mono">{clawpump.totals.claimableSol.toFixed(4)} SOL</p>
+                <p className="text-2xs text-neutral-500 font-mono mt-1">{clawpump.totals.eligibleCount} tokens eligible</p>
+                <button
+                  onClick={handleClawpumpPayout}
+                  disabled={payingClawpump || clawpump.totals.eligibleCount === 0}
+                  className="mt-2 px-3 py-1.5 rounded text-xs font-mono bg-atelier/10 text-atelier border border-atelier/20 hover:bg-atelier/20 transition-colors disabled:opacity-50"
+                >
+                  {payingClawpump ? 'Running...' : 'Run ClawPump Payouts'}
+                </button>
+              </div>
+            </div>
+
+            {clawpump.perToken.length > 0 && (
+              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-neutral-800">
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-black-soft text-neutral-500">
+                      <th className="px-3 py-2 text-left">Agent</th>
+                      <th className="px-3 py-2 text-left">Mint</th>
+                      <th className="px-3 py-2 text-right">Earned (SOL)</th>
+                      <th className="px-3 py-2 text-right">Sent (SOL)</th>
+                      <th className="px-3 py-2 text-right">Claimable (SOL)</th>
+                      <th className="px-3 py-2 text-center">Eligible</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clawpump.perToken.map((t) => (
+                      <tr key={t.mint} className="border-t border-gray-200 dark:border-neutral-800">
+                        <td className="px-3 py-2">{t.name}</td>
+                        <td className="px-3 py-2 text-atelier">{truncAddr(t.mint)}</td>
+                        <td className="px-3 py-2 text-right">{t.earnedSol.toFixed(6)}</td>
+                        <td className="px-3 py-2 text-right">{t.sentSol.toFixed(6)}</td>
+                        <td className={`px-3 py-2 text-right ${t.claimableSol > 0 ? 'text-green-400' : ''}`}>
+                          {t.claimableSol.toFixed(6)}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          {t.eligible ? (
+                            <span className="px-1.5 py-0.5 rounded text-2xs bg-green-500/10 text-green-400">eligible</span>
+                          ) : (
+                            <span className="text-neutral-500">--</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-neutral-500 font-mono">No ClawPump data</p>
+        )}
+      </div>
+
+      {/* Stuck -- Custodial Wallets */}
+      {clawpump && (
+        <div>
+          <h2 className="text-lg font-bold font-display mb-3">
+            Stuck -- Custodial Wallets ({clawpump.stuck.length})
+          </h2>
+          {clawpump.stuck.length === 0 ? (
+            <p className="text-sm text-neutral-500 font-mono">
+              None -- every ClawPump token uses the Atelier wallet as creator.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-neutral-500 font-mono mb-3">
+                These tokens&apos; 65% is held in a ClawPump-custodied wallet and cannot be claimed until the remittance mechanism is wired up.
+              </p>
+              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-neutral-800">
+                <table className="w-full text-xs font-mono">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-black-soft text-neutral-500">
+                      <th className="px-3 py-2 text-left">Agent</th>
+                      <th className="px-3 py-2 text-left">Mint</th>
+                      <th className="px-3 py-2 text-left">Creator Wallet</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clawpump.stuck.map((s) => (
+                      <tr key={s.mint} className="border-t border-gray-200 dark:border-neutral-800">
+                        <td className="px-3 py-2">{s.name}</td>
+                        <td className="px-3 py-2 text-atelier">{truncAddr(s.mint)}</td>
+                        <td className="px-3 py-2 text-neutral-400">
+                          {s.creatorWallet ? truncAddr(s.creatorWallet) : '--'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Payout Form */}
       <div>

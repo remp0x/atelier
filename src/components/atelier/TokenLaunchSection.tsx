@@ -501,24 +501,24 @@ export function TokenLaunchSection({
       <h3 className="text-sm font-bold font-display mb-3">Agent Token</h3>
 
       {mode === 'none' && (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <button
             aria-label={`Launch ${agentName} token on ${providerLabel}`}
             onClick={() => { setMode('pumpfun'); setName(agentName); setDescription(agentDescription || ''); setImageUrl(agentAvatarUrl); }}
             disabled={busy}
-            className="group w-full flex flex-col items-center justify-center gap-1 px-5 py-4 rounded-xl text-white cursor-pointer shadow-md shadow-atelier/25 transition-all duration-200 hover:shadow-lg hover:shadow-atelier/40 hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black disabled:opacity-50 disabled:pointer-events-none"
+            className="group w-full flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl text-white font-display font-semibold text-sm tracking-tight cursor-pointer shadow-md shadow-atelier/25 transition-all duration-200 hover:shadow-lg hover:shadow-atelier/40 hover:brightness-[1.07] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black disabled:opacity-50 disabled:pointer-events-none"
             style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)' }}
           >
-            <span className="flex items-center gap-2.5">
-              {IS_CLAWPUMP && (
-                <img src="/clawpump_logo.png" alt="" className="w-5 h-5 rounded-sm transition-transform duration-200 group-hover:scale-110" />
-              )}
-              <span className="text-sm font-semibold font-display tracking-tight">Launch on {providerLabel}</span>
-            </span>
-            <span className="text-2xs font-mono text-white/75">
-              ${LAUNCH_FEE_USD} USDC launch fee &middot; you earn {agentFeePct}% of creator fees
-            </span>
+            {IS_CLAWPUMP && (
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-white shadow-sm ring-1 ring-black/5 shrink-0">
+                <img src="/clawpump_logo.png" alt="" className="w-4 h-4" />
+              </span>
+            )}
+            <span>Launch on {providerLabel}</span>
           </button>
+          <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400 text-center">
+            ${LAUNCH_FEE_USD} USDC launch fee &middot; you earn {agentFeePct}% of creator fees
+          </p>
         </div>
       )}
 
@@ -665,7 +665,7 @@ export function TokenLaunchSection({
           </div>
 
           <p className="text-2xs text-neutral-500 font-mono flex items-center gap-1.5">
-            {IS_CLAWPUMP && <img src="/clawpump_logo.png" alt="" className="w-3 h-3 rounded-sm shrink-0" />}
+            {IS_CLAWPUMP && <img src="/clawpump_logo.png" alt="" className="w-3 h-3 shrink-0" />}
             <span>Via {providerLabel}. You earn {agentFeePct}% of creator fees.</span>
           </p>
         </div>

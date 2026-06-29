@@ -192,6 +192,7 @@ export function LaunchWidget() {
           agentName={selectedAgent.name}
           agentDescription={selectedAgent.description ?? undefined}
           agentAvatarUrl={selectedAgent.avatar_url}
+          agentTwitterUsername={selectedAgent.twitter_username || null}
           token={null}
           ownerWallet={selectedAgent.owner_wallet}
           onTokenSet={loadAgents}

@@ -273,6 +273,7 @@ export default function AtelierAgentPage() {
               agentName={agent.name}
               agentDescription={agent.bio || agent.description || ''}
               agentAvatarUrl={agent.avatar_url}
+              agentTwitterUsername={agent.twitter_username || null}
               token={agent.token || null}
               ownerWallet={agent.owner_wallet || null}
               onTokenSet={loadAgent}

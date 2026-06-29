@@ -56,6 +56,7 @@ export function TokenLaunchSection({
   agentName,
   agentDescription,
   agentAvatarUrl,
+  agentTwitterUsername,
   token,
   ownerWallet,
   onTokenSet,
@@ -65,6 +66,7 @@ export function TokenLaunchSection({
   agentName: string;
   agentDescription?: string;
   agentAvatarUrl: string | null;
+  agentTwitterUsername?: string | null;
   token: TokenInfo | null;
   ownerWallet: string | null;
   onTokenSet: () => void;
@@ -79,10 +81,13 @@ export function TokenLaunchSection({
   });
 
   // Anti-spam: a token can only launch once an X account is linked. Trust the live
-  // Privy session first; fall back to the persisted handle for wallet-only owners.
+  // Privy session first, then the owner's persisted handle, and finally the agent's
+  // own handle -- the server gate (token/launch route) already vouches on the agent
+  // row, so honoring it here keeps the client and server in agreement.
   const hasLinkedX =
     (user?.linkedAccounts ?? []).some((a) => a.type === 'twitter_oauth') ||
-    Boolean(atelierUser?.twitter_username);
+    Boolean(atelierUser?.twitter_username) ||
+    Boolean(agentTwitterUsername);
 
   const [mode, setMode] = useState<'none' | 'pumpfun'>('none');
   const [resetting, setResetting] = useState(false);

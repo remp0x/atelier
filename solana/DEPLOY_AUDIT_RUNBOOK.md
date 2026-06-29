@@ -122,7 +122,7 @@ wallet is the upgrade authority, and is idempotent:
 ```bash
 ANCHOR_PROVIDER_URL=https://api.devnet.solana.com ANCHOR_WALLET=~/.config/solana/id.json \
   STAKED_MINT=<devnet test mint> REWARD_MINT=<devnet usdc> REWARD_DURATION_SECS=604800 \
-  yarn init-pool          # solana/scripts/initialize-pool.ts; TIERS_JSON to override tiers
+  yarn init-pool          # solana/migrations/initialize-pool.ts; TIERS_JSON to override tiers
 ```
 
 Exercise stake -> fund (transfer USDC to the reward vault) -> `crank_sync` ->

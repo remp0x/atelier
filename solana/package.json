@@ -5,7 +5,7 @@
   "scripts": {
     "test": "anchor test",
     "lint": "tsc --noEmit -p ./tsconfig.json",
-    "init-pool": "ts-node scripts/initialize-pool.ts"
+    "init-pool": "ts-node migrations/initialize-pool.ts"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "0.31.1",

@@ -173,6 +173,20 @@ leak into `unstake`/`claim`; the accumulator cannot be over-drawn; principal is
 | LOW (info) | Pool `admin` (the `set_paused` key) does not follow the upgrade authority; a post-multisig compromise of the original deploy wallet could pause NEW stakes (availability only -- `unstake`/`claim` never check `paused`). | **Accepted** (residual #4). No fund access. Consider a multisig-gated `set_admin` later. |
 | LOW (info) | `update_rewards` floors `reward_rate * elapsed / total_weight`; with an extreme high-supply/high-multiplier mint (`total_weight > 1e18`) per-tick remainders could accrue slowly. Not reachable for $ATELIER (`total_weight <= ~1e16`). | **Accepted.** Bounded, vault-favoring; documented for the auditor. |
 
+### Drip verification (third pass, 2026-06-29)
+
+An independent pass re-derived the drip math: **conservation is proven** -- total
+claimable <= total funded micro-USDC for arbitrary weight changes and re-fundings
+(every rounding floors in the vault's favor), so there is no over-draw or
+insolvency; ordering, leftover rollover, empty-pool skip, overflow bounds, time
+edge cases (incl. clock-backwards), the CEI reorder, and the client mirror
+(`projectAccRewardPerWeight`, `decodeStakePool` offsets) all check out, and every
+earlier fix remains intact. **No Critical/High.** One new LOW:
+
+| ID | Issue | Resolution |
+|---|---|---|
+| LOW (grief) | `crank_sync`/`notify_reward` are permissionless, so anyone can donate dust + crank to repeatedly reset `period_finish` and stretch the drip into a slower tail. **Value is fully conserved** (nothing stolen/destroyed); the attacker pays fees for zero gain and must land a tx ~every second for days to matter. Known Synthetix `notifyRewardAmount` property (they gate it to a distributor role). | **Accepted / documented.** A code fix means gating who may fund -- restrict `notify_reward` to `pool.admin` (or a dedicated funder), or ignore sub-threshold deltas, or never extend `period_finish` when the new rate would drop. All change the permission model and would require the funding cron's signer to be that authority (today the cron signs as the treasury, which need not equal `admin`), so this is a deploy-time role decision left to the operator rather than hardcoded. |
+
 ## Known residual items for the auditor
 
 1. The program upgrade authority remains the top centralization risk until moved

@@ -161,6 +161,21 @@
           "signer": true
         },
         {
+          "name": "program",
+          "docs": [
+            "This program, used to reach its ProgramData. Closes the init front-run",
+            "vector: the pool PDA is deterministic per mint, so without this gate",
+            "anyone could create the canonical pool first and seize `admin` forever."
+          ],
+          "address": "5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq"
+        },
+        {
+          "name": "program_data",
+          "docs": [
+            "Only the program's upgrade authority may initialize a pool."
+          ]
+        },
+        {
           "name": "staked_mint"
         },
         {
@@ -653,6 +668,11 @@
       "code": 6009,
       "name": "RewardVaultBalanceMismatch",
       "msg": "Reward vault balance is inconsistent with the ledger"
+    },
+    {
+      "code": 6010,
+      "name": "Unauthorized",
+      "msg": "Only the program upgrade authority may initialize a pool"
     }
   ],
   "types": [

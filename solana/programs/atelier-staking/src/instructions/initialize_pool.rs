@@ -4,13 +4,30 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 use crate::constants::*;
 use crate::errors::StakingError;
 use crate::events::PoolInitialized;
-use crate::instructions::assert_safe_staked_mint;
+use crate::instructions::assert_safe_mint;
+use crate::program::AtelierStaking;
 use crate::state::{StakePool, Tier};
 
 #[derive(Accounts)]
 pub struct InitializePool<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
+
+    /// This program, used to reach its ProgramData. Closes the init front-run
+    /// vector: the pool PDA is deterministic per mint, so without this gate
+    /// anyone could create the canonical pool first and seize `admin` forever.
+    #[account(
+        constraint = program.programdata_address()? == Some(program_data.key())
+            @ StakingError::Unauthorized,
+    )]
+    pub program: Program<'info, AtelierStaking>,
+
+    /// Only the program's upgrade authority may initialize a pool.
+    #[account(
+        constraint = program_data.upgrade_authority_address == Some(admin.key())
+            @ StakingError::Unauthorized,
+    )]
+    pub program_data: Account<'info, ProgramData>,
 
     pub staked_mint: InterfaceAccount<'info, Mint>,
     pub reward_mint: InterfaceAccount<'info, Mint>,
@@ -69,7 +86,8 @@ pub fn handler(ctx: Context<InitializePool>, tiers: [Tier; TIER_COUNT]) -> Resul
         );
     }
 
-    assert_safe_staked_mint(&ctx.accounts.staked_mint.to_account_info())?;
+    assert_safe_mint(&ctx.accounts.staked_mint.to_account_info())?;
+    assert_safe_mint(&ctx.accounts.reward_mint.to_account_info())?;
 
     let pool = &mut ctx.accounts.pool;
     pool.admin = ctx.accounts.admin.key();

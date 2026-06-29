@@ -24,17 +24,19 @@ pub use set_paused::*;
 pub use stake::*;
 pub use unstake::*;
 
-/// Reject staked mints whose Token-2022 extensions would break the program's
-/// accounting or custody assumptions:
-/// - TransferFee: amount received != amount sent -> vault would go insolvent.
-/// - TransferHook: arbitrary CPI on every transfer -> reentrancy surface.
-/// - PermanentDelegate: a third party could move staked tokens out of the vault.
+/// Reject mints (staked or reward) whose Token-2022 extensions would break the
+/// program's accounting or custody assumptions:
+/// - TransferFee: amount received != amount sent -> staked vault goes insolvent;
+///   reward claims underpay.
+/// - TransferHook: arbitrary CPI on every transfer -> reentrancy surface; claims
+///   would revert (no hook accounts are passed on the payout CPI).
+/// - PermanentDelegate: a third party could move tokens out of a vault.
 /// - ConfidentialTransfer: balances are not plaintext-readable.
 /// - DefaultAccountState / NonTransferable / MintCloseAuthority: can freeze or
-///   brick the vault.
+///   brick a vault.
 ///
 /// Legacy SPL Token mints have no extensions and pass trivially.
-pub fn assert_safe_staked_mint(mint_ai: &AccountInfo) -> Result<()> {
+pub fn assert_safe_mint(mint_ai: &AccountInfo) -> Result<()> {
     if mint_ai.owner == &anchor_spl::token::ID {
         return Ok(());
     }

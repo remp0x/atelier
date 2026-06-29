@@ -89,8 +89,11 @@ flexible (10,000 weight) earns ~$13. The 8x spread is the incentive.
 
 ## Status
 
-- Program builds to BPF; **6/6 on-chain tests pass** on a local validator; host
+- Program builds to BPF; **7/7 on-chain tests pass** on a local validator; host
   `cargo check` clean.
+- Independent security review (2026-06-29): no Critical/High. Init front-run
+  (MED-1) fixed via an upgrade-authority gate; reward-mint extension check
+  (LOW-1) and empty-pool funding guard (MED-2) added. See `solana/SECURITY.md`.
 - Full web app passes `tsc`; client SDK discriminators match the generated IDL
   byte-for-byte. Generated IDL committed at `solana/idl/atelier_staking.json`.
 - Committed to branch `staking`.

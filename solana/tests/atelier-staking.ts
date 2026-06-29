@@ -31,6 +31,16 @@ describe("atelier-staking", () => {
   const connection = provider.connection;
   const payer = (provider.wallet as anchor.Wallet).payer;
 
+  // The deploying wallet (provider) is the program's upgrade authority on
+  // localnet; initialize_pool is gated to it (see MED-1 fix).
+  const BPF_LOADER_UPGRADEABLE = new PublicKey(
+    "BPFLoaderUpgradeab1e11111111111111111111111",
+  );
+  const programDataPda = PublicKey.findProgramAddressSync(
+    [program.programId.toBuffer()],
+    BPF_LOADER_UPGRADEABLE,
+  )[0];
+
   const POOL_SEED = Buffer.from("pool");
   const STAKED_VAULT_SEED = Buffer.from("staked_vault");
   const REWARD_VAULT_SEED = Buffer.from("reward_vault");
@@ -78,6 +88,8 @@ describe("atelier-staking", () => {
       .initializePool(TIERS as never)
       .accountsPartial({
         admin: payer.publicKey,
+        program: program.programId,
+        programData: programDataPda,
         stakedMint,
         rewardMint,
         pool,
@@ -227,7 +239,7 @@ describe("atelier-staking", () => {
         stakedTokenProgram: TOKEN_2022_PROGRAM_ID,
       })
       .signers([a.kp])
-      .rpc({ commitment: "confirmed" });
+      .rpc({ commitment: "confirmed", skipPreflight: true });
     const back = await getAccount(connection, a.ata, "confirmed", TOKEN_2022_PROGRAM_ID);
     assert.equal(back.amount.toString(), "400000");
   });
@@ -265,6 +277,8 @@ describe("atelier-staking", () => {
         .initializePool(TIERS as never)
         .accountsPartial({
           admin: payer.publicKey,
+          program: program.programId,
+          programData: programDataPda,
           stakedMint: mintKp.publicKey,
           rewardMint,
           pool,
@@ -281,5 +295,45 @@ describe("atelier-staking", () => {
       assert.include(`${err}`, "UnsafeMintExtension");
     }
     assert.isTrue(failed, "expected initialize to reject transfer-fee mint");
+  });
+
+  it("rejects initialize_pool from a non-upgrade-authority", async () => {
+    const attacker = Keypair.generate();
+    await airdrop(attacker.publicKey);
+    const stakedMint = await createMint(
+      connection, payer, payer.publicKey, null, 6, Keypair.generate(), undefined, TOKEN_2022_PROGRAM_ID,
+    );
+    const rewardMint = await createMint(
+      connection, payer, payer.publicKey, null, 6, Keypair.generate(), undefined, TOKEN_PROGRAM_ID,
+    );
+    const pool = pda([POOL_SEED, stakedMint.toBuffer()]);
+    const stakedVault = pda([STAKED_VAULT_SEED, pool.toBuffer()]);
+    const rewardVault = pda([REWARD_VAULT_SEED, pool.toBuffer()]);
+
+    let failed = false;
+    try {
+      await program.methods
+        .initializePool(TIERS as never)
+        .accountsPartial({
+          admin: attacker.publicKey,
+          program: program.programId,
+          programData: programDataPda,
+          stakedMint,
+          rewardMint,
+          pool,
+          stakedVault,
+          rewardVault,
+          stakedTokenProgram: TOKEN_2022_PROGRAM_ID,
+          rewardTokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: SYSVAR_RENT_PUBKEY,
+        })
+        .signers([attacker])
+        .rpc();
+    } catch (err) {
+      failed = true;
+      assert.include(`${err}`, "Unauthorized");
+    }
+    assert.isTrue(failed, "expected init by a non-upgrade-authority to fail");
   });
 });

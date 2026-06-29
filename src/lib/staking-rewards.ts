@@ -22,6 +22,7 @@ import {
   findPoolPda,
   findRewardVaultPda,
 } from './staking-config';
+import { fetchPool } from './staking-program';
 
 /**
  * Server-side reward funding for atelier-staking.
@@ -154,9 +155,18 @@ export async function fundStakingRewards(): Promise<FundingResult> {
   const [pool] = findPoolPda();
   const [rewardVault] = findRewardVaultPda(pool);
 
-  const poolInfo = await connection.getAccountInfo(pool);
-  if (!poolInfo) {
+  const poolAccount = await fetchPool(connection);
+  if (!poolAccount) {
     return { status: 'skipped', reason: 'pool not initialized on-chain' };
+  }
+  // Never deposit a tranche into a pool with no staked weight: sync_rewards
+  // holds it for the next staker, who an attacker can deterministically be
+  // (stake 1 atom + crank + claim + unstake in one tx). Wait for real stake.
+  if (poolAccount.totalWeight === 0n) {
+    return {
+      status: 'skipped',
+      reason: 'no active stake weight -- not funding an empty pool',
+    };
   }
 
   const sourceAta = await getAssociatedTokenAddress(USDC_MINT, payer.publicKey);

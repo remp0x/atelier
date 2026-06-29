@@ -12,10 +12,12 @@ program custodies user funds.
 
 ## Build status (2026-06-29) -- BUILDS + TESTS PASS
 
-The program compiles to BPF, deploys to a local validator, and **all 6 Anchor
+The program compiles to BPF, deploys to a local validator, and **all 7 Anchor
 tests pass** (init, sole-staker rewards, weighted reward split across tiers, lock
-enforcement, flexible unstake, Token-2022 unsafe-extension rejection). Host
-`cargo check` is also clean.
+enforcement, flexible unstake, Token-2022 unsafe-extension rejection, and
+init-rejection for a non-upgrade-authority). Host `cargo check` is also clean.
+An independent security review (2026-06-29) found no Critical/High issues; its
+findings and resolutions are recorded in `SECURITY.md`.
 
 The SBF toolchain in this environment caps at Rust 1.84, so a few modern deps
 that declare `edition2024` are pinned down in the committed `Cargo.lock`:
@@ -25,13 +27,24 @@ that declare `edition2024` are pinned down in the committed `Cargo.lock`:
 ```bash
 # 1. build the .so (skip the IDL step -- it is host-side and rejects --tools-version)
 anchor build --no-idl -- --tools-version v1.50
-anchor keys sync                                  # sync declared id to the keypair
-anchor build --no-idl -- --tools-version v1.50    # rebuild so the .so embeds the id
-# 2. build the IDL on the host toolchain (rustc 1.96 handles edition2024)
-anchor idl build -o target/idl/atelier_staking.json
-# 3. run the suite against a local validator using the prebuilt .so
-anchor test --skip-build
+# (declare_id already matches the keypair; `anchor keys sync` is a no-op here)
+# 2. build the IDL + TS types on the host toolchain (rustc 1.96 handles edition2024)
+anchor idl build -o target/idl/atelier_staking.json --out-ts target/types/atelier_staking.ts
+cp target/idl/atelier_staking.json idl/atelier_staking.json
+# 3. run the suite -- deploy explicitly so the provider wallet is the upgrade
+#    authority (see note below); `anchor test` does NOT arrange this.
+solana-test-validator --reset --quiet &            # wait until it answers RPC
+solana airdrop 100 ~/.config/solana/id.json --url localhost
+anchor deploy --provider.cluster localnet          # authority = provider wallet
+ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 ANCHOR_WALLET=~/.config/solana/id.json \
+  yarn run ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'
 ```
+
+Why not `anchor test`? `initialize_pool` is now gated to the program upgrade
+authority. `anchor test` loads the program into its validator with an upgrade
+authority that is NOT the provider wallet, so every pool init would fail
+`Unauthorized`. Deploying explicitly with `anchor deploy` sets the upgrade
+authority to the provider wallet, which the tests use as `admin`.
 
 Cleaner long-term: install platform-tools with Rust >= 1.85 and a plain
 `anchor build` works with no pins. The canonical IDL is committed at
@@ -74,13 +87,27 @@ enforcement, claim accounting, empty-pool guard, unsafe-extension rejection.
 
 ```bash
 solana config set --url devnet
-solana airdrop 2
+solana airdrop 3                       # deploy needs ~3 SOL (432 KB program)
 anchor deploy --provider.cluster devnet
 ```
 
-Initialize a pool against a **devnet test mint** (do not use the mainnet
-$ATELIER mint on devnet). Tiers (flexible 1x / 90d 4x / 180d 8x) are passed as
-`[{duration_secs, multiplier_bps}]`:
+The deploy mechanics are verified against a real BPFLoaderUpgradeable cluster
+(local validator: clean deploy, ProgramData created, upgrade authority = the
+deploying wallet). The only blocker observed on 2026-06-29 was the **public
+devnet faucet rate-limiting this host** -- `solana airdrop` was refused
+repeatedly, so the deploy could not be funded here. If that happens, fund the
+deploy wallet (`solana address`) with ~3 devnet SOL from https://faucet.solana.com
+or another source, then re-run `anchor deploy`. This is purely a faucet limit,
+not a program/deploy issue.
+
+**Init now requires the upgrade authority.** `initialize_pool` is gated: the
+signer (`admin`) must be the program's upgrade authority, and the call must pass
+two extra accounts -- `program` (the program id) and `program_data` (the
+ProgramData PDA = `findProgramAddress([programId], BPFLoaderUpgradeable)`). On
+devnet/mainnet the deploying wallet is the upgrade authority, so initialize from
+that wallet. Initialize a pool against a **devnet test mint** (do not use the
+mainnet $ATELIER mint on devnet). Tiers (flexible 1x / 90d 4x / 180d 8x) are
+passed as `[{duration_secs, multiplier_bps}]`:
 `[{0, 10000}, {7776000, 40000}, {15552000, 80000}]`.
 
 Exercise stake -> fund (transfer USDC to the reward vault) -> `crank_sync` ->
@@ -111,9 +138,16 @@ solana config set --url mainnet-beta
 anchor deploy --provider.cluster mainnet
 ```
 
-Initialize the real pool: admin = the ops wallet you control, staked_mint =
-$ATELIER, reward_mint = USDC (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`),
-tiers as above.
+Initialize the real pool: `admin` **must be the program upgrade authority** (the
+deploying wallet), and the call passes `program` + `program_data` (see s.3).
+staked_mint = $ATELIER, reward_mint = USDC
+(`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`), tiers as above.
+
+Ordering matters with the init gate: **initialize the pool while you still hold
+the upgrade authority, before** moving it to the multisig (s.4.3) or making the
+program immutable. An immutable program has no upgrade authority, which makes
+`initialize_pool` permanently uncallable. If you move the authority to a multisig
+first, the multisig must sign the init.
 
 ## 6. Env vars (web app / Vercel)
 

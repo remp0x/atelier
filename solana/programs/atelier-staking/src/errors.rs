@@ -22,4 +22,6 @@ pub enum StakingError {
     MathOverflow,
     #[msg("Reward vault balance is inconsistent with the ledger")]
     RewardVaultBalanceMismatch,
+    #[msg("Only the program upgrade authority may initialize a pool")]
+    Unauthorized,
 }

@@ -264,6 +264,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     protocolVersion: PROTOCOL_VERSION,
     transport: 'http',
     endpoint: `${origin}/api/x402/mcp`,
+    deprecated: true,
+    canonical_endpoint: `${origin}/mcp`,
+    note: 'Deprecated: this 2-tool, unauthenticated endpoint is kept for back-compat. Use the full Streamable HTTP MCP server at /mcp (the entire marketplace surface, auth via Bearer atelier_ key or OAuth).',
     tools: TOOLS.map((t) => ({ name: t.name, description: t.description })),
   });
 }

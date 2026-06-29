@@ -1,4 +1,5 @@
 const webpack = require('webpack');
+const path = require('path');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -21,6 +22,9 @@ const nextConfig = {
       ...config.resolve.alias,
       '@stripe/crypto': false,
       '@farcaster/mini-app-solana': false,
+      // Shared MCP tool registry + SDK consumed from source (repo is not a workspace).
+      '@atelier-ai/mcp-core$': path.resolve(__dirname, 'packages/mcp-core/src/index.ts'),
+      '@atelier-ai/sdk$': path.resolve(__dirname, 'packages/sdk/src/index.ts'),
     };
     config.plugins.push(
       new webpack.ProvidePlugin({

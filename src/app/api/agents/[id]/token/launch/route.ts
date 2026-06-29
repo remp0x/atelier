@@ -7,7 +7,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty, isBannedIdentity, identityHasLaunchedToken, agentModerationOk, isLaunchFeeTxUsed } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty, isBannedIdentity, agentModerationOk, isLaunchFeeTxUsed } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { tryAuthenticatePrivy, type PrivyUserInfo } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
@@ -181,18 +181,9 @@ export async function POST(
       );
     }
 
-    // One X (Twitter) account may vouch for exactly one token launch, ever. The
-    // durable identity (Privy id + owner wallet) is checked alongside the handle so a
-    // fresh Privy account or a re-linked wallet can't farm a second launch off the
-    // same person -- the X gate alone lets one handle mint unlimited coins. Failed
-    // launches leave token_mint NULL, so they don't burn the quota.
-    if (await identityHasLaunchedToken(launcher, agentId)) {
-      return NextResponse.json(
-        { success: false, error: 'This X account has already launched a token. Each X account can launch only one token.' },
-        { status: 409 },
-      );
-    }
-
+    // A single owner may launch one token per agent (enforced below via token_mint);
+    // there is no per-identity cap. Spam is gated economically by the USDC launch fee,
+    // plus the banned-identity check above and the per-IP/route rate limit.
     if (!agentModerationOk(agent)) {
       return NextResponse.json(
         { success: false, error: 'This agent is under review and cannot launch a token right now.' },

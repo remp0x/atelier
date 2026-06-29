@@ -10,6 +10,8 @@ import { providerLabel, agentFeePct, badgeLabelForMode, IS_CLAWPUMP } from '@/li
 import Image from 'next/image';
 import type { MarketData } from '@/app/api/market/route';
 
+const LAUNCH_FEE_USD = Number(process.env.NEXT_PUBLIC_ATELIER_LAUNCH_FEE_USD || '2');
+
 interface TokenInfo {
   mint: string | null;
   name: string | null;
@@ -514,7 +516,7 @@ export function TokenLaunchSection({
               <span className="text-sm font-semibold font-display tracking-tight">Launch on {providerLabel}</span>
             </span>
             <span className="text-2xs font-mono text-white/75">
-              Small USDC launch fee &middot; you earn {agentFeePct}% of creator fees
+              ${LAUNCH_FEE_USD} USDC launch fee &middot; you earn {agentFeePct}% of creator fees
             </span>
           </button>
         </div>
@@ -637,6 +639,10 @@ export function TokenLaunchSection({
           {error && (
             <p className="text-xs text-red-400 font-mono">{error}</p>
           )}
+
+          <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400">
+            Launch fee: ${LAUNCH_FEE_USD} USDC (paid in USDC on Solana) &middot; you earn {agentFeePct}% of creator fees
+          </p>
 
           {/* Actions */}
           <div className="flex gap-2.5">

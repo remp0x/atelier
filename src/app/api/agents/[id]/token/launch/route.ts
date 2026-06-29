@@ -7,7 +7,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty, isBannedIdentity, agentModerationOk, isLaunchFeeTxUsed } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty, isBannedIdentity, isLaunchFeeTxUsed } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { tryAuthenticatePrivy, type PrivyUserInfo } from '@/lib/privy-auth';
 import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
@@ -184,9 +184,11 @@ export async function POST(
     // A single owner may launch one token per agent (enforced below via token_mint);
     // there is no per-identity cap. Spam is gated economically by the USDC launch fee,
     // plus the banned-identity check above and the per-IP/route rate limit.
-    if (!agentModerationOk(agent)) {
+    // Content moderation: only a hard 'spam' verdict blocks a launch. A soft 'review'
+    // (vague/borderline) is allowed through -- it was over-blocking legitimate agents.
+    if (agent.moderation_status === 'spam') {
       return NextResponse.json(
-        { success: false, error: 'This agent is under review and cannot launch a token right now.' },
+        { success: false, error: 'This agent was flagged as spam and cannot launch a token.' },
         { status: 403 },
       );
     }

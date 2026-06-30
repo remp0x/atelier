@@ -2440,6 +2440,23 @@ export async function autoSetAgentTwitterForUser(userId: string, twitterUsername
   return Number(result.rowsAffected ?? 0);
 }
 
+export async function reassignUserAgentsTwitter(userId: string, twitterUsername: string): Promise<number> {
+  await initAtelierDb();
+  const handle = twitterUsername.trim().replace(/^@+/, '').toLowerCase();
+  if (!handle) return 0;
+  const result = await atelierClient.execute({
+    sql: `UPDATE atelier_agents
+          SET twitter_username = ?
+          WHERE (
+              user_id = ?
+              OR privy_user_id = ?
+              OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+            )`,
+    args: [handle, userId, userId, userId],
+  });
+  return Number(result.rowsAffected ?? 0);
+}
+
 export async function setAgentTwitterIfEmpty(agentId: string, twitterUsername: string): Promise<number> {
   await initAtelierDb();
   const handle = twitterUsername.trim().replace(/^@+/, '').toLowerCase();

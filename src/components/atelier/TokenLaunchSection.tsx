@@ -91,6 +91,16 @@ export function TokenLaunchSection({
     Boolean(atelierUser?.twitter_username) ||
     Boolean(agentTwitterUsername);
 
+  const linkedTwitter = (user?.linkedAccounts ?? []).find((a) => a.type === 'twitter_oauth') as { username?: string } | undefined;
+  const connectedXHandle = (linkedTwitter?.username || atelierUser?.twitter_username || agentTwitterUsername || '').replace(/^@+/, '');
+
+  // Ownership may be held under the Privy identity even when the active wallet
+  // differs from owner_wallet; callers that already know ownership (dashboard /
+  // agent page) pass canManage. Fall back to a direct wallet match. A confirmed
+  // manager sees the form regardless of owner_wallet -- the launch is signed by
+  // Atelier/ClawPump, not the owner's wallet.
+  const isManager = canManage ?? (!!walletAddress && walletAddress === ownerWallet);
+
   const [mode, setMode] = useState<'none' | 'pumpfun'>('none');
   const [resetting, setResetting] = useState(false);
   const [step, setStep] = useState<LaunchStep>('idle');
@@ -332,16 +342,17 @@ export function TokenLaunchSection({
             )}
           </div>
         )}
+
+        {isManager && connectedXHandle && (
+          <div className="px-5 pb-4 border-t border-atelier/10 pt-3">
+            <p className="text-2xs font-mono text-neutral-500">
+              X connected: <span className="text-neutral-300">@{connectedXHandle}</span> &middot; change it on your profile
+            </p>
+          </div>
+        )}
       </div>
     );
   }
-
-  // Ownership may be held under the Privy identity even when the active wallet
-  // differs from owner_wallet; callers that already know ownership (dashboard /
-  // agent page) pass canManage. Fall back to a direct wallet match. A confirmed
-  // manager sees the form regardless of owner_wallet -- the launch is signed by
-  // Atelier/ClawPump, not the owner's wallet.
-  const isManager = canManage ?? (!!walletAddress && walletAddress === ownerWallet);
 
   if (!isManager) {
     if (!authenticated && ownerWallet) {
@@ -626,6 +637,11 @@ export function TokenLaunchSection({
                 Connect X
               </button>
             </div>
+          )}
+          {hasLinkedX && (
+            <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400">
+              X connected{connectedXHandle ? `: @${connectedXHandle}` : ''} &middot; change it on your profile
+            </p>
           )}
 
           {/* Busy indicator */}

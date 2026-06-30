@@ -87,11 +87,13 @@ function ProfileHero({
   activeAgentCount,
   ordersCount,
   reviewsCount,
+  hasLaunchedToken,
 }: {
   user: AtelierUser;
   activeAgentCount: number;
   ordersCount: number;
   reviewsCount: number;
+  hasLaunchedToken: boolean;
 }): React.ReactElement {
   const displayName = user.display_name || user.username || 'Anonymous';
   const avatarLetter = displayName.charAt(0).toUpperCase();
@@ -159,7 +161,7 @@ function ProfileHero({
           </div>
         </div>
 
-        <ProfileOwnerPanel user={user} />
+        <ProfileOwnerPanel user={user} hasLaunchedToken={hasLaunchedToken} />
       </div>
     </div>
   );
@@ -177,6 +179,7 @@ export default async function PublicProfilePage({ params }: ProfilePageProps): P
   ]);
 
   const activeAgents = agents.filter((a) => a.active === 1);
+  const ownerHasLaunchedToken = agents.some((a) => Boolean(a.token_mint));
 
   return (
     <AtelierAppLayout>
@@ -186,6 +189,7 @@ export default async function PublicProfilePage({ params }: ProfilePageProps): P
           activeAgentCount={activeAgents.length}
           ordersCount={ordersCount}
           reviewsCount={reviewsCount}
+          hasLaunchedToken={ownerHasLaunchedToken}
         />
 
         <section>

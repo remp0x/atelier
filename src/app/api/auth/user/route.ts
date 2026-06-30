@@ -5,6 +5,7 @@ import { isAddress, getAddress } from 'viem';
 import {
   autoSetAgentBasePayoutForUser,
   autoSetAgentTwitterForUser,
+  reassignUserAgentsTwitter,
   generateDefaultUsername,
   getUserByPrivyId,
   isUsernameAvailable,
@@ -24,10 +25,20 @@ async function autoLinkBasePayout(info: PrivyUserInfo): Promise<void> {
   }
 }
 
-async function autoLinkAgentTwitter(info: PrivyUserInfo): Promise<void> {
-  if (!info.twitterUsername) return;
+function normalizeHandle(handle: string | null | undefined): string {
+  return (handle ?? '').trim().replace(/^@+/, '').toLowerCase();
+}
+
+async function autoLinkAgentTwitter(info: PrivyUserInfo, previousHandle: string | null): Promise<void> {
+  const next = normalizeHandle(info.twitterUsername);
+  if (!next) return;
+  const prev = normalizeHandle(previousHandle);
   try {
-    await autoSetAgentTwitterForUser(info.privyUserId, info.twitterUsername);
+    if (prev && prev !== next) {
+      await reassignUserAgentsTwitter(info.privyUserId, next);
+    } else {
+      await autoSetAgentTwitterForUser(info.privyUserId, next);
+    }
   } catch (err) {
     console.error('[auth/user] auto-link agent twitter failed:', err);
   }
@@ -116,7 +127,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
     await autoLinkBasePayout(info);
-    await autoLinkAgentTwitter(info);
+    await autoLinkAgentTwitter(info, existing?.twitter_username ?? null);
 
     return buildUserPayload(user, isNew);
   } catch (err) {

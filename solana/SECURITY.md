@@ -42,8 +42,11 @@ for an audit.
 ## Accounting math
 
 - **Overflow:** every arithmetic op uses `checked_*` and maps to
-  `MathOverflow`. `Cargo.toml` also sets `overflow-checks = true` in release as
-  defense in depth.
+  `MathOverflow`. The accumulator products `weight * acc_reward_per_weight` and
+  `reward_rate * elapsed` are computed via a 256-bit `mul_div_floor` (`math.rs`,
+  unit-tested) so the intermediate can never overflow u128 -- a plain u128 product
+  would revert once `acc_reward_per_weight` grew large and permanently cap future
+  stake sizes (external-audit P1; see "External audit" below).
 - **Accumulator pattern:** MasterChef/Synthetix `acc_reward_per_weight`. On every
   money operation the position is `settle`d against the current accumulator
   before its weight changes, then `reward_debt` is re-anchored to the new weight
@@ -115,6 +118,10 @@ for an audit.
   `reward_duration >>` slot time (and ideally >= the funding cadence) is what
   makes the window meaningful; a very short duration re-opens the JIT vector.
   Streaming the budget in smaller increments remains an optional extra smoother.
+  A minimum `reward_duration` (`MIN_REWARD_DURATION_SECS = 60`) is now **enforced
+  on-chain** at init so the security assumption no longer rests on an unchecked
+  parameter (external-audit P3); the init tooling additionally refuses anything
+  below 1 day for production.
 - **First-staker inflation / donation attack:** not applicable -- this is a
   reward-accumulator design, not an ERC4626 share-price design, so there is no
   share price to manipulate by donating to the vault. Principal is tracked 1:1.
@@ -185,7 +192,21 @@ earlier fix remains intact. **No Critical/High.** One new LOW:
 
 | ID | Issue | Resolution |
 |---|---|---|
-| LOW (grief) | `crank_sync`/`notify_reward` are permissionless, so anyone can donate dust + crank to repeatedly reset `period_finish` and stretch the drip into a slower tail. **Value is fully conserved** (nothing stolen/destroyed); the attacker pays fees for zero gain and must land a tx ~every second for days to matter. Known Synthetix `notifyRewardAmount` property (they gate it to a distributor role). | **Accepted / documented.** A code fix means gating who may fund -- restrict `notify_reward` to `pool.admin` (or a dedicated funder), or ignore sub-threshold deltas, or never extend `period_finish` when the new rate would drop. All change the permission model and would require the funding cron's signer to be that authority (today the cron signs as the treasury, which need not equal `admin`), so this is a deploy-time role decision left to the operator rather than hardcoded. |
+| LOW (grief) | `crank_sync`/`notify_reward` are permissionless, so anyone can donate dust + crank to repeatedly reset `period_finish` and stretch the drip into a slower tail. **Value is fully conserved** (nothing stolen/destroyed); the attacker pays fees for zero gain and must land a tx ~every second for days to matter. Known Synthetix `notifyRewardAmount` property (they gate it to a distributor role). | **Fixed** (escalated to P2 by the external audit). `crank_sync` is now gated to `pool.funder` (`has_one = funder`), set at init to the backend funding wallet -- the Synthetix distributor-role approach. The funding cron signs as that funder. See "External audit" below. |
+
+### External audit (Codex, 2026-06-29)
+
+A third-party automated audit (Codex) ran `cargo test`/`cargo check` and traced
+the accumulator math, the permission model, and the init parameters. It confirmed
+the custody model (no admin path to vault funds; outflows only via `claim`/
+`unstake`; CEI ordering; the upgrade-authority init gate). Findings + resolutions:
+
+| ID | Severity | Issue | Resolution |
+|---|---|---|---|
+| P1 | High-class | `weight * acc_reward_per_weight` was a plain u128 multiply. `acc_reward_per_weight` grows unboundedly (it accumulates `reward_rate * elapsed / total_weight`, so a tiny-TVL period inflates it). Once large, `reset_reward_debt`/`settle` would revert via `checked_mul` for big future stakes -- permanently capping stake sizes until upgrade (a tiny dust staker funding ~$42 could block a 1M-token 8x stake). | **Fixed.** `accumulated()` and the `update_rewards` increment now use a 256-bit `mul_div_floor` (`math.rs`) so the product never overflows; it returns an error only if the *final* quotient exceeds u128 (unreachable within USDC supply). Unit-tested (7 cases incl. the overflow-but-quotient-fits scenario) plus the full reward suite. No min-TVL gate is needed: with 256-bit math a large `acc` is harmless, and `acc` is bounded by total USDC funded. |
+| P2 | Med-class | Permissionless re-notify griefing (the LOW grief above) -- dust donation + crank repeatedly resets `period_finish`, delaying unvested rewards. | **Fixed.** `crank_sync` gated to `pool.funder` (`has_one = funder`). Covered by the `rejects crank_sync from a non-funder` test. |
+| P3 | Low | `reward_duration_secs = 1` was allowed (init only checked `> 0` and the max); a sub-slot window reopens JIT capture, so the security assumption rested on an unenforced parameter. | **Fixed.** `MIN_REWARD_DURATION_SECS = 60` enforced on-chain; init tooling refuses `< 1 day` for production (override only for devnet/tests). Covered by the `rejects a reward duration below the on-chain minimum` test. |
+| P3 (doc) | Low | `AUDIT.md` overstated the overflow review ("no High remained" while the u128 product overflow was still present). | **Fixed.** `AUDIT.md` updated to record P1 and its fix so the external auditor does not inherit a false "cleared" premise. |
 
 ## Known residual items for the auditor
 

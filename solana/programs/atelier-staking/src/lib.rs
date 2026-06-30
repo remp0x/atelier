@@ -4,6 +4,7 @@ pub mod constants;
 pub mod errors;
 pub mod events;
 pub mod instructions;
+pub mod math;
 pub mod state;
 
 use instructions::*;
@@ -30,14 +31,16 @@ pub mod atelier_staking {
     use super::*;
 
     /// One-time pool creation for a given staked mint. Sets the three lock
-    /// tiers and the reward-drip window (both immutable thereafter) and rejects
-    /// unsafe Token-2022 extensions.
+    /// tiers, the reward-drip window, and the `funder` allowed to crank (all
+    /// immutable thereafter) and rejects unsafe Token-2022 extensions. A
+    /// `funder` of `Pubkey::default()` defaults to `admin`.
     pub fn initialize_pool(
         ctx: Context<InitializePool>,
         tiers: [Tier; 3],
         reward_duration_secs: i64,
+        funder: Pubkey,
     ) -> Result<()> {
-        instructions::initialize_pool::handler(ctx, tiers, reward_duration_secs)
+        instructions::initialize_pool::handler(ctx, tiers, reward_duration_secs, funder)
     }
 
     /// Stake `amount` into `tier_index`. Creates the position on first use,
@@ -56,8 +59,10 @@ pub mod atelier_staking {
         instructions::claim::handler(ctx)
     }
 
-    /// Permissionless: fold any USDC sitting in the reward vault into the
-    /// accumulator. Anyone can call this (the backend cranks it after funding).
+    /// Fold any USDC sitting in the reward vault into the accumulator and start
+    /// its linear drip. Restricted to the pool `funder`: notify resets the drip
+    /// window, so leaving it open let anyone re-notify with dust and stretch
+    /// unvested rewards (griefing). The backend funder cranks after each deposit.
     pub fn crank_sync(ctx: Context<CrankSync>) -> Result<()> {
         instructions::crank::handler(ctx)
     }

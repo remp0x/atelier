@@ -8,18 +8,22 @@ per the office-hours design. Read this first.
 - A complete **Anchor (Solana) staking program** + TypeScript client SDK +
   reward-funding cron + a full `/stake` frontend + tests + docs.
 - **Verified end to end:** the program builds to BPF, deploys to a local
-  validator, and **all 8 Anchor tests pass**. Host `cargo check` is clean. The
-  entire web app passes `tsc --noEmit` (zero errors). The hand-rolled client SDK
-  was checked against the regenerated IDL byte-for-byte -- instruction +
-  account discriminators AND every builder's account order/signer/writable flags
-  match (the Anchor tests use `accountsPartial`, so this closes the SDK gap).
-- **Security-reviewed twice (2026-06-29):** the first pass fixed the init
-  front-run (MED-1, upgrade-authority gate) and added the reward-mint extension
-  check (LOW-1). The **second pass caught a HIGH** issue the first missed: the
-  original lump reward distribution let a JIT/monopoly staker scoop a funding
-  tranche. Fixed by switching to a **Synthetix-style linear reward drip**
-  (rewards now vest over a `reward_duration` window) plus checks-effects-
-  interactions ordering. Full findings + resolutions in `solana/SECURITY.md`.
+  validator, and **all 10 Anchor tests pass** (+ 7 `math.rs` unit tests via
+  `cargo test`). Host `cargo check` is clean. The entire web app passes
+  `tsc --noEmit` (zero errors). The hand-rolled client SDK was checked against the
+  regenerated IDL byte-for-byte -- instruction + account discriminators AND every
+  builder's account order/signer/writable flags match (the Anchor tests use
+  `accountsPartial`, so this closes the SDK gap).
+- **Security-reviewed three times + one external audit (2026-06-29):** internal
+  passes fixed the init front-run (MED-1, upgrade-authority gate), the reward-mint
+  extension check (LOW-1), and a **HIGH** lump-distribution flaw (fixed by the
+  Synthetix-style linear drip + CEI ordering). An external automated audit
+  (Codex) then found a **u128 accumulator-overflow (P1, High-class)** that could
+  permanently cap future stake sizes -- fixed with a 256-bit `mul_div_floor`
+  (`math.rs`, unit-tested); **re-notify griefing (P2)** -- fixed by gating
+  `crank_sync` to a `pool.funder`; and an **unenforced minimum drip duration
+  (P3)** -- now enforced on-chain (`MIN_REWARD_DURATION_SECS = 60`) + a 1-day
+  tooling floor. Full findings + resolutions in `solana/SECURITY.md`.
 - **Heads-up -- reward semantics changed by the HIGH fix:** rewards no longer
   become claimable in full right after a crank; they drip linearly over
   `reward_duration` (set at init, e.g. 7 days). This is required to defeat the
@@ -57,15 +61,17 @@ continuous accrual, claim anytime. Full rationale in `STAKING_SPEC.md`.
 | Generated IDL | committed at `solana/idl/atelier_staking.json`. |
 | Deploy / audit | **Not done.** Gated -- see runbook. |
 
-## What the 8 tests prove
+## What the 10 tests prove
 
 init with 3 tiers; a sole flexible staker collects ~all funded USDC after the
 drip; rewards split correctly by weighted stake (1x vs 8x across tiers); rewards
 **drip over time, not instantly** (the JIT/monopoly-resistance test); locked
 positions cannot unstake early; flexible positions unstake immediately; a
-Token-2022 mint carrying a transfer-fee extension is rejected at pool init; and
-an init attempt by a wallet that is not the program upgrade authority is rejected
-(the MED-1 front-run fix).
+Token-2022 mint carrying a transfer-fee extension is rejected at pool init; an
+init attempt by a wallet that is not the program upgrade authority is rejected
+(the MED-1 front-run fix); a reward duration below the on-chain minimum is
+rejected (P3); and a `crank_sync` by a non-funder is rejected (P2). Plus 7
+`math.rs` unit tests for the 256-bit `mul_div_floor` (P1).
 
 ## Build note
 

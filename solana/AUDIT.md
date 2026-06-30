@@ -15,9 +15,9 @@ weighted. PDA-owned vaults; the pool PDA is the sole vault authority.
 
 ## Scope
 
-- `programs/atelier-staking/src/` (~6 files, ~700 LoC): `lib.rs`, `state.rs`,
+- `programs/atelier-staking/src/` (~7 files, ~800 LoC): `lib.rs`, `state.rs`,
   `instructions/{initialize_pool,stake,unstake,claim,crank,set_paused,mod}.rs`,
-  `constants.rs`, `errors.rs`, `events.rs`.
+  `constants.rs`, `errors.rs`, `events.rs`, `math.rs` (256-bit `mul_div_floor`).
 - IDL: `idl/atelier_staking.json` (generated, committed). Program id
   `5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq`.
 - Out of scope (context only): the TS client SDK (`src/lib/staking-*.ts`) and the
@@ -35,12 +35,15 @@ anchor idl build -o target/idl/atelier_staking.json --out-ts target/types/atelie
 solana-test-validator --reset --quiet & ; solana airdrop 100 <wallet> --url localhost
 anchor deploy --provider.cluster localnet
 ANCHOR_PROVIDER_URL=http://127.0.0.1:8899 ANCHOR_WALLET=~/.config/solana/id.json \
-  yarn run ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'   # 8/8 pass
+  yarn run ts-mocha -p ./tsconfig.json -t 1000000 'tests/**/*.ts'   # 10/10 pass
+cargo test --locked math   # 7 math.rs unit tests (256-bit mul_div_floor)
 ```
 
-On Rust >= 1.85 a plain `anchor build` works with no pins. Status: 8/8 on-chain
-tests pass; deployed + full e2e verified on devnet (init -> stake -> fund ->
-crank -> drip -> claim -> unstake).
+On Rust >= 1.85 a plain `anchor build` works with no pins. Status: **10/10**
+on-chain tests pass (the two added cover the funder gate and the duration floor)
+plus 7 `math.rs` unit tests; the whole suite was re-run on a local validator
+after the external-audit fixes. Earlier full e2e was verified on devnet (init ->
+stake -> fund -> crank -> drip -> claim -> unstake).
 
 ## Trust model / invariants to confirm
 
@@ -55,36 +58,49 @@ crank -> drip -> claim -> unstake).
 4. **Principal 1:1**, lock enforced (`now >= lock_until`), Token-2022 unsafe
    extensions blocked at init on both mints.
 
-## Internal reviews (three passes, 2026-06-29) -- see SECURITY.md for detail
+## Reviews (four passes, 2026-06-29) -- see SECURITY.md for detail
+
+Three internal passes + one external automated audit (Codex):
 
 - **MED-1** init front-run -> fixed (upgrade-authority gate).
 - **LOW-1** reward-mint extension check -> fixed.
 - **HIGH-1** lump reward distribution let a JIT/monopoly staker scoop a tranche
   -> fixed by the Synthetix-style linear drip (`reward_rate`/`period_finish`/
-  `last_update_time`/`update_rewards`/`notify_reward`). **This is the central
-  change to scrutinize.**
+  `last_update_time`/`update_rewards`/`notify_reward`). **Central change to scrutinize.**
 - **LOW** checks-effects-interactions ordering in claim/unstake -> fixed.
-- Conservation of the drip was re-derived and verified; no Critical/High remained.
+- **P1 (external, High-class)** `weight * acc_reward_per_weight` was a plain u128
+  multiply; `acc_reward_per_weight` grows unboundedly, so big future stakes could
+  revert via `checked_mul` and be permanently capped. -> **Fixed:** 256-bit
+  `mul_div_floor` (`math.rs`, unit-tested) in `accumulated()` + the drip
+  increment. **The second central change to scrutinize.**
+- **P2 (external)** permissionless re-notify griefing -> **Fixed:** `crank_sync`
+  gated to `pool.funder` (`has_one = funder`).
+- **P3 (external)** `reward_duration = 1` was allowed -> **Fixed:**
+  `MIN_REWARD_DURATION_SECS = 60` enforced on-chain + tooling refuses < 1 day.
+- Drip conservation was re-derived (claimable <= funded, rounding floors toward
+  the vault). After the P1 fix, no Critical/High remains open.
 
 ## Please focus on
 
-1. **Drip conservation + accounting** (`state.rs` `update_rewards`/`notify_reward`/
-   `settle`): can anyone draw more than funded? Rounding direction. Leftover
-   rollover on re-funding. Overflow at extreme amounts/durations.
+1. **Accumulator overflow + conservation** (`math.rs` `mul_div_floor`; `state.rs`
+   `accumulated`/`update_rewards`/`notify_reward`/`settle`): verify the 256-bit
+   `mul_div_floor` is correct (the P1 fix) -- multiply, division, flooring,
+   quotient-overflow detection. Can anyone draw more than funded? Rounding
+   direction. Leftover rollover on re-funding.
 2. **Init gate** (`initialize_pool.rs`): any bypass of the ProgramData /
    upgrade-authority constraints? Footgun: an immutable program can't init.
 3. **Token-2022 blocklist** (`instructions/mod.rs` `assert_safe_mint`):
    completeness for the pinned `spl-token-2022 6.0.0` enum; behavior on version
    bump (v7 adds `Pausable`/`ScaledUiAmount`).
-4. **Permissionless `crank_sync`/`notify_reward`** (accepted LOW): re-notify can
-   stretch the drip (value-conserved griefing). Confirm no fund impact; advise on
-   funder-gating.
+4. **Funder gate** (`crank.rs` `has_one = funder`): confirm only `pool.funder`
+   can notify a tranche, and that this fully closes the re-notify griefing (P2).
 5. **Upgrade authority** is the residual centralization risk (to be moved to a
    multisig pre-mainnet); confirm no other privileged path.
 
 ## Known residuals (accepted, for the auditor to weigh)
 
-See SECURITY.md "Known residual items" + the LOW table: upgrade-authority
-centralization; Token-2022 version drift; intra-slot `reward_vault_last_balance`
-desync (found unreachable, re-verify); pool `admin` not following the upgrade
-authority; re-notify griefing.
+See SECURITY.md "Known residual items": upgrade-authority centralization;
+Token-2022 version drift; intra-slot `reward_vault_last_balance` desync (found
+unreachable, re-verify); pool `admin`/`funder` not following the upgrade authority
+(availability only -- no fund path). The re-notify griefing and the u128
+accumulator overflow are now **fixed** (external-audit P2/P1), not residual.

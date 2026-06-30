@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 use crate::constants::*;
 use crate::errors::StakingError;
+use crate::math::mul_div_floor;
 
 /// One lock tier: how long the stake is locked and the reward-weight
 /// multiplier it earns (in basis points; 10_000 = 1.0x).
@@ -17,6 +18,10 @@ pub struct Tier {
 #[derive(InitSpace)]
 pub struct StakePool {
     pub admin: Pubkey,
+    /// Only this key may `crank_sync` (fund + notify a reward tranche). Set at
+    /// init to the backend funding wallet. Gating notify defeats the
+    /// dust-donation re-notify griefing that can stretch unvested rewards.
+    pub funder: Pubkey,
     pub staked_mint: Pubkey,
     pub reward_mint: Pubkey,
     pub staked_vault: Pubkey,
@@ -74,11 +79,9 @@ impl StakePool {
         let applicable = self.applicable_time(now);
         if self.total_weight > 0 && applicable > self.last_update_time {
             let elapsed = (applicable - self.last_update_time) as u128;
-            let add = self
-                .reward_rate
-                .checked_mul(elapsed)
-                .ok_or(StakingError::MathOverflow)?
-                .checked_div(self.total_weight)
+            // 256-bit intermediate: reward_rate is ACC_SCALE-scaled, so
+            // reward_rate * elapsed would otherwise risk overflowing u128.
+            let add = mul_div_floor(self.reward_rate, elapsed, self.total_weight)
                 .ok_or(StakingError::MathOverflow)?;
             self.acc_reward_per_weight = self
                 .acc_reward_per_weight
@@ -159,11 +162,11 @@ pub struct StakePosition {
 
 impl StakePosition {
     fn accumulated(&self, acc_reward_per_weight: u128) -> Result<u128> {
-        let acc = self
-            .weight
-            .checked_mul(acc_reward_per_weight)
-            .ok_or(StakingError::MathOverflow)?
-            .checked_div(ACC_SCALE)
+        // 256-bit intermediate: `acc_reward_per_weight` grows unboundedly, so
+        // `weight * acc` can exceed u128 even though the quotient fits. Computing
+        // it in u128 would revert and permanently cap future stake sizes (audit
+        // P1). mul_div_floor returns None only if the quotient itself overflows.
+        let acc = mul_div_floor(self.weight, acc_reward_per_weight, ACC_SCALE)
             .ok_or(StakingError::MathOverflow)?;
         Ok(acc)
     }

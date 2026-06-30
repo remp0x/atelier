@@ -10,8 +10,11 @@
  * Token programs (legacy SPL vs Token-2022) are auto-detected per mint. Tiers
  * default to flexible 1x / 90d 4x / 180d 8x; override with TIERS_JSON (an array
  * of { durationSecs, multiplierBps }). REWARD_DURATION_SECS (the linear-drip
- * window) defaults to 7 days (604800); override to change it. Requires
- * `anchor build` artifacts (target/idl + target/types) to be present.
+ * window) defaults to 7 days (604800); the tooling refuses anything below 1 day
+ * unless ALLOW_UNSAFE_DURATION=1 (devnet/tests). FUNDER (base58 pubkey) is the
+ * only wallet allowed to crank/fund the pool; defaults to the admin wallet -- set
+ * it to the backend funding wallet (ATELIER_PRIVATE_KEY's pubkey) if they differ.
+ * Requires `anchor build` artifacts (target/idl + target/types) to be present.
  */
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
@@ -23,6 +26,7 @@ const BPF_LOADER_UPGRADEABLE = new PublicKey(
   "BPFLoaderUpgradeab1e11111111111111111111111",
 );
 const DAY = 24 * 60 * 60;
+const MIN_SAFE_DURATION_SECS = DAY; // production floor; below this JIT capture reopens
 const DEFAULT_TIERS = [
   { durationSecs: 0, multiplierBps: 10_000 },
   { durationSecs: 90 * DAY, multiplierBps: 40_000 },
@@ -72,6 +76,17 @@ async function main(): Promise<void> {
   if (!Number.isInteger(rewardDurationSecs) || rewardDurationSecs <= 0) {
     throw new Error("REWARD_DURATION_SECS must be a positive integer (seconds)");
   }
+  if (
+    rewardDurationSecs < MIN_SAFE_DURATION_SECS &&
+    process.env.ALLOW_UNSAFE_DURATION !== "1"
+  ) {
+    throw new Error(
+      `REWARD_DURATION_SECS ${rewardDurationSecs} is below the safe floor ${MIN_SAFE_DURATION_SECS} (1 day); a short drip reopens JIT capture. Set ALLOW_UNSAFE_DURATION=1 only for devnet/tests.`,
+    );
+  }
+  const funder = process.env.FUNDER
+    ? new PublicKey(process.env.FUNDER)
+    : admin;
   const tiersInput = process.env.TIERS_JSON
     ? (JSON.parse(process.env.TIERS_JSON) as typeof DEFAULT_TIERS)
     : DEFAULT_TIERS;
@@ -103,6 +118,7 @@ async function main(): Promise<void> {
   const authority = await upgradeAuthority(connection, programData);
   console.log("program:        ", program.programId.toBase58());
   console.log("admin (wallet): ", admin.toBase58());
+  console.log("funder:         ", funder.toBase58());
   console.log("upgrade auth:   ", authority ? authority.toBase58() : "(none / immutable)");
   console.log("pool:           ", pool.toBase58());
   console.log("staked mint:    ", stakedMint.toBase58(), `(${stakedTokenProgram.toBase58()})`);
@@ -125,7 +141,7 @@ async function main(): Promise<void> {
   }
 
   const sig = await program.methods
-    .initializePool(tiers as never, new BN(rewardDurationSecs))
+    .initializePool(tiers as never, new BN(rewardDurationSecs), funder)
     .accountsPartial({
       admin,
       program: program.programId,

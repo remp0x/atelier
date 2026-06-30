@@ -4,6 +4,7 @@ use anchor_lang::prelude::*;
 pub struct PoolInitialized {
     pub pool: Pubkey,
     pub admin: Pubkey,
+    pub funder: Pubkey,
     pub staked_mint: Pubkey,
     pub reward_mint: Pubkey,
 }

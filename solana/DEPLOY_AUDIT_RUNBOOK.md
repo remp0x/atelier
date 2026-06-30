@@ -12,13 +12,17 @@ program custodies user funds.
 
 ## Build status (2026-06-29) -- BUILDS + TESTS PASS
 
-The program compiles to BPF, deploys to a local validator, and **all 8 Anchor
+The program compiles to BPF, deploys to a local validator, and **all 10 Anchor
 tests pass** (init, sole-staker rewards after the drip, weighted reward split,
 the drip/JIT-resistance test, lock enforcement, flexible unstake, Token-2022
-unsafe-extension rejection, and init-rejection for a non-upgrade-authority). Host
-`cargo check` is also clean. Two independent security reviews (2026-06-29) -- the
-second found a HIGH lump-distribution flaw, fixed by a Synthetix-style reward
-drip -- are recorded in `SECURITY.md`.
+unsafe-extension rejection, init-rejection for a non-upgrade-authority, plus the
+two external-audit additions: sub-minimum-duration rejection and non-funder crank
+rejection), and **7 `math.rs` unit tests** pass under `cargo test`. Host
+`cargo check` is also clean. Three internal reviews + one external automated audit
+(Codex), 2026-06-29 -- which found a u128 accumulator-overflow (P1, fixed with
+256-bit math), re-notify griefing (P2, fixed with a funder gate), and an
+unenforced minimum drip duration (P3, now enforced) -- are recorded in
+`SECURITY.md`.
 
 The SBF toolchain in this environment caps at Rust 1.84, so a few modern deps
 that declare `edition2024` are pinned down in the committed `Cargo.lock`:
@@ -109,25 +113,34 @@ ProgramData PDA = `findProgramAddress([programId], BPFLoaderUpgradeable)`). On
 devnet/mainnet the deploying wallet is the upgrade authority, so initialize from
 that wallet. Initialize a pool against a **devnet test mint** (do not use the
 mainnet $ATELIER mint on devnet). `initialize_pool` takes `(tiers,
-reward_duration_secs)`. Tiers (flexible 1x / 90d 4x / 180d 8x) are
+reward_duration_secs, funder)`. Tiers (flexible 1x / 90d 4x / 180d 8x) are
 `[{duration_secs, multiplier_bps}]`:
-`[{0, 10000}, {7776000, 40000}, {15552000, 80000}]`, and `reward_duration_secs`
-is the linear-drip window (production: e.g. `604800` = 7 days; keep it >> slot
-time and ideally >= the funding cadence, or the JIT vector reopens). The init
-call also passes `program` + `program_data` (the upgrade-authority gate, s.4.2).
+`[{0, 10000}, {7776000, 40000}, {15552000, 80000}]`; `reward_duration_secs`
+is the linear-drip window (production: e.g. `604800` = 7 days; on-chain floor is
+60s and the tooling refuses < 1 day, since a short window reopens the JIT
+vector); and `funder` is the **only wallet allowed to `crank_sync` (fund a reward
+tranche)** -- set it to the backend funding wallet (`ATELIER_PRIVATE_KEY`'s
+pubkey), which the reward cron signs with. The init call also passes `program` +
+`program_data` (the upgrade-authority gate, s.4.2).
 
 Use the helper script (tested end-to-end on a local validator) -- it derives all
 PDAs incl. `program_data`, auto-detects each mint's token program, verifies your
-wallet is the upgrade authority, and is idempotent:
+wallet is the upgrade authority, defaults `funder` to the admin wallet, and is
+idempotent:
 
 ```bash
 ANCHOR_PROVIDER_URL=https://api.devnet.solana.com ANCHOR_WALLET=~/.config/solana/id.json \
   STAKED_MINT=<devnet test mint> REWARD_MINT=<devnet usdc> REWARD_DURATION_SECS=604800 \
+  FUNDER=<treasury/cron wallet pubkey> \
   yarn init-pool          # solana/migrations/initialize-pool.ts; TIERS_JSON to override tiers
+# devnet/test only: ALLOW_UNSAFE_DURATION=1 to permit a sub-1-day window.
 ```
 
-Exercise stake -> fund (transfer USDC to the reward vault) -> `crank_sync` ->
-claim -> unstake end to end with the web app pointed at devnet.
+The `funder` must equal the reward cron's signer (`ATELIER_PRIVATE_KEY`); if they
+differ, every crank reverts `Unauthorized` and the cron skips (green) with a
+"not the pool funder" reason. Exercise stake -> fund (transfer USDC to the reward
+vault) -> `crank_sync` (signed by the funder) -> claim -> unstake end to end with
+the web app pointed at devnet.
 
 ## 4. Pre-mainnet checks (BLOCKING)
 
@@ -159,9 +172,10 @@ anchor deploy --provider.cluster mainnet
 Initialize the real pool: `admin` **must be the program upgrade authority** (the
 deploying wallet), and the call passes `program` + `program_data` (see s.3).
 staked_mint = $ATELIER, reward_mint = USDC
-(`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`), tiers as above, and
-`reward_duration_secs` (e.g. `604800` = 7 days) -- via `yarn init-pool` (s.3),
-run from the wallet that holds the upgrade authority.
+(`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`), tiers as above,
+`reward_duration_secs` (e.g. `604800` = 7 days), and `FUNDER` = the reward cron's
+wallet (`ATELIER_PRIVATE_KEY`'s pubkey; only this wallet can fund/crank) -- via
+`yarn init-pool` (s.3), run from the wallet that holds the upgrade authority.
 
 Ordering matters with the init gate: **initialize the pool while you still hold
 the upgrade authority, before** moving it to the multisig (s.4.3) or making the
@@ -184,9 +198,12 @@ first, the multisig must sign the init.
 
 The Monday cron (`0 0 * * 1`) calls `fundStakingRewards()`:
 transfers the staker share of revenue (USDC) from the treasury into the reward
-vault, then cranks the accumulator. It is idempotent within ~6 days and no-ops
-(green) when the budget is zero or the treasury is short. To smooth reward-timing
-incentives you can split the weekly budget into several smaller cron runs.
+vault, then cranks the accumulator. `crank_sync` is gated to `pool.funder`, so the
+cron's signer (`ATELIER_PRIVATE_KEY`) **must be the funder set at init** -- it
+also pre-checks this and skips (green) with a clear reason if the pool's funder
+differs. It is idempotent within ~6 days and no-ops (green) when the budget is
+zero or the treasury is short. To smooth reward-timing incentives you can split
+the weekly budget into several smaller cron runs.
 
 **Revenue feed (WIRED 2026-06-29): 50% of pump.fun creator fees (SOL).**
 `getEpochRevenueMicroUsdc()` reads the cumulative creator-fee lamports indexed by

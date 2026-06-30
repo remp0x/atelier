@@ -222,10 +222,15 @@ export interface FundingResult {
   crankSig?: string;
 }
 
-function buildCrankSyncIx(pool: PublicKey, rewardVault: PublicKey): TransactionInstruction {
+function buildCrankSyncIx(
+  funder: PublicKey,
+  pool: PublicKey,
+  rewardVault: PublicKey,
+): TransactionInstruction {
   return new TransactionInstruction({
     programId: STAKING_PROGRAM_ID,
     keys: [
+      { pubkey: funder, isSigner: true, isWritable: false },
       { pubkey: pool, isSigner: false, isWritable: true },
       { pubkey: rewardVault, isSigner: false, isWritable: false },
     ],
@@ -265,6 +270,13 @@ export async function fundStakingRewards(): Promise<FundingResult> {
   if (!poolAccount) {
     return { status: 'skipped', reason: 'pool not initialized on-chain' };
   }
+  // crank_sync is gated to pool.funder on-chain; the treasury wallet must be it.
+  if (!poolAccount.funder.equals(payer.publicKey)) {
+    return {
+      status: 'skipped',
+      reason: `treasury ${payer.publicKey.toBase58()} is not the pool funder ${poolAccount.funder.toBase58()}`,
+    };
+  }
   // Don't fund a pool with no staked weight: rewards drip over time and the
   // accumulator does not advance while total_weight == 0, so a tranche funded now
   // would partly drip to nobody (wasted). Wait for real stake. (JIT/monopoly
@@ -295,7 +307,7 @@ export async function fundStakingRewards(): Promise<FundingResult> {
     [],
     TOKEN_PROGRAM_ID,
   );
-  const crankIx = buildCrankSyncIx(pool, rewardVault);
+  const crankIx = buildCrankSyncIx(payer.publicKey, pool, rewardVault);
 
   const { blockhash } = await connection.getLatestBlockhash('confirmed');
   const tx = new Transaction();

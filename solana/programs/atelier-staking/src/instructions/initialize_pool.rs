@@ -73,9 +73,11 @@ pub fn handler(
     ctx: Context<InitializePool>,
     tiers: [Tier; TIER_COUNT],
     reward_duration_secs: i64,
+    funder: Pubkey,
 ) -> Result<()> {
     require!(
-        reward_duration_secs > 0 && reward_duration_secs <= MAX_REWARD_DURATION_SECS,
+        reward_duration_secs >= MIN_REWARD_DURATION_SECS
+            && reward_duration_secs <= MAX_REWARD_DURATION_SECS,
         StakingError::InvalidRewardDuration
     );
     for tier in tiers.iter() {
@@ -99,6 +101,11 @@ pub fn handler(
 
     let pool = &mut ctx.accounts.pool;
     pool.admin = ctx.accounts.admin.key();
+    pool.funder = if funder == Pubkey::default() {
+        ctx.accounts.admin.key()
+    } else {
+        funder
+    };
     pool.staked_mint = ctx.accounts.staked_mint.key();
     pool.reward_mint = ctx.accounts.reward_mint.key();
     pool.staked_vault = ctx.accounts.staked_vault.key();
@@ -123,6 +130,7 @@ pub fn handler(
     emit!(PoolInitialized {
         pool: pool.key(),
         admin: pool.admin,
+        funder: pool.funder,
         staked_mint: pool.staked_mint,
         reward_mint: pool.reward_mint,
     });

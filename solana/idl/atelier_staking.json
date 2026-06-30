@@ -96,8 +96,10 @@
     {
       "name": "crank_sync",
       "docs": [
-        "Permissionless: fold any USDC sitting in the reward vault into the",
-        "accumulator. Anyone can call this (the backend cranks it after funding)."
+        "Fold any USDC sitting in the reward vault into the accumulator and start",
+        "its linear drip. Restricted to the pool `funder`: notify resets the drip",
+        "window, so leaving it open let anyone re-notify with dust and stretch",
+        "unvested rewards (griefing). The backend funder cranks after each deposit."
       ],
       "discriminator": [
         119,
@@ -110,6 +112,13 @@
         10
       ],
       "accounts": [
+        {
+          "name": "funder",
+          "signer": true,
+          "relations": [
+            "pool"
+          ]
+        },
         {
           "name": "pool",
           "writable": true,
@@ -142,8 +151,9 @@
       "name": "initialize_pool",
       "docs": [
         "One-time pool creation for a given staked mint. Sets the three lock",
-        "tiers and the reward-drip window (both immutable thereafter) and rejects",
-        "unsafe Token-2022 extensions."
+        "tiers, the reward-drip window, and the `funder` allowed to crank (all",
+        "immutable thereafter) and rejects unsafe Token-2022 extensions. A",
+        "`funder` of `Pubkey::default()` defaults to `admin`."
       ],
       "discriminator": [
         95,
@@ -293,6 +303,10 @@
         {
           "name": "reward_duration_secs",
           "type": "i64"
+        },
+        {
+          "name": "funder",
+          "type": "pubkey"
         }
       ]
     },
@@ -736,6 +750,10 @@
             "type": "pubkey"
           },
           {
+            "name": "funder",
+            "type": "pubkey"
+          },
+          {
             "name": "staked_mint",
             "type": "pubkey"
           },
@@ -781,6 +799,15 @@
         "fields": [
           {
             "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "funder",
+            "docs": [
+              "Only this key may `crank_sync` (fund + notify a reward tranche). Set at",
+              "init to the backend funding wallet. Gating notify defeats the",
+              "dust-donation re-notify griefing that can stretch unvested rewards."
+            ],
             "type": "pubkey"
           },
           {

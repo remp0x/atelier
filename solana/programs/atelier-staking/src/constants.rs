@@ -35,3 +35,11 @@ pub const MAX_TIER_DURATION_SECS: i64 = 4 * 365 * 24 * 60 * 60;
 /// window should be >> slot time and ideally >= the funding cadence. Capped at 1
 /// year. (A very short duration re-opens the JIT vector; see SECURITY.md.)
 pub const MAX_REWARD_DURATION_SECS: i64 = 365 * 24 * 60 * 60;
+
+/// On-chain floor on the drip window: rules out the degenerate sub-minute windows
+/// (`reward_duration_secs = 1`) that would re-open JIT capture (a one-slot stake
+/// earning a meaningful slice of a tranche). This is a backstop -- the init
+/// tooling enforces a much higher production floor, and init is restricted to the
+/// upgrade authority -- but the security assumption is now enforced in the
+/// program rather than left to an off-chain parameter.
+pub const MIN_REWARD_DURATION_SECS: i64 = 60;

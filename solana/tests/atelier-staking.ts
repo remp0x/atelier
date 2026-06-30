@@ -77,9 +77,11 @@ describe("atelier-staking", () => {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  // Rewards drip linearly over reward_duration. Tests use a short window and
-  // sleep past it so a claim collects the fully-dripped amount.
-  async function setupPool(rewardDurationSecs = 2): Promise<PoolCtx> {
+  // Rewards drip linearly over reward_duration. The on-chain floor is 60s
+  // (MIN_REWARD_DURATION_SECS), so tests use a 60s window and sleep past it to
+  // collect the fully-dripped amount. The provider wallet is both admin and
+  // funder here.
+  async function setupPool(rewardDurationSecs = 60): Promise<PoolCtx> {
     const stakedMint = await createMint(
       connection, payer, payer.publicKey, null, 6, Keypair.generate(), undefined, TOKEN_2022_PROGRAM_ID,
     );
@@ -91,7 +93,7 @@ describe("atelier-staking", () => {
     const rewardVault = pda([REWARD_VAULT_SEED, pool.toBuffer()]);
 
     await program.methods
-      .initializePool(TIERS as never, new BN(rewardDurationSecs))
+      .initializePool(TIERS as never, new BN(rewardDurationSecs), payer.publicKey)
       .accountsPartial({
         admin: payer.publicKey,
         program: program.programId,
@@ -143,7 +145,10 @@ describe("atelier-staking", () => {
 
   async function fundRewards(ctx: PoolCtx, usdc: number): Promise<void> {
     await mintTo(connection, payer, ctx.rewardMint, ctx.rewardVault, payer, usdc, [], undefined, TOKEN_PROGRAM_ID);
-    await program.methods.crankSync().accountsPartial({ pool: ctx.pool, rewardVault: ctx.rewardVault }).rpc();
+    await program.methods
+      .crankSync()
+      .accountsPartial({ funder: payer.publicKey, pool: ctx.pool, rewardVault: ctx.rewardVault })
+      .rpc();
   }
 
   async function claim(ctx: PoolCtx, staker: { kp: Keypair }, tier: number): Promise<bigint> {
@@ -173,49 +178,53 @@ describe("atelier-staking", () => {
     assert.equal(acct.tiers.length, 3);
     assert.equal(acct.tiers[2].multiplierBps.toNumber(), 80_000);
     assert.equal(acct.totalStaked.toNumber(), 0);
-    assert.equal(acct.rewardDuration.toNumber(), 2);
+    assert.equal(acct.rewardDuration.toNumber(), 60);
+    assert.isTrue(acct.funder.equals(payer.publicKey));
     assert.isFalse(acct.paused);
   });
 
   it("sole flexible staker collects ~all funded rewards (after the drip)", async () => {
-    const ctx = await setupPool(2);
+    const ctx = await setupPool(60);
     const a = await makeStaker(ctx, 1_000_000);
     await stake(ctx, a, 0, 1_000_000);
-    await fundRewards(ctx, 500_000); // starts a 2s linear drip
-    await sleep(5000); // wait past period_finish so the full tranche has dripped
+    await fundRewards(ctx, 500_000); // starts a 60s linear drip
+    await sleep(66_000); // wait past period_finish so the full tranche has dripped
     const got = await claim(ctx, a, 0);
     // sole staker -> ~100% (allow rounding dust)
     assert.isTrue(got >= 499_999n && got <= 500_000n, `got ${got}`);
   });
 
   it("splits rewards by weighted stake across tiers", async () => {
-    const ctx = await setupPool(2);
+    const ctx = await setupPool(60);
     const a = await makeStaker(ctx, 1_000_000); // flexible 1x
     const b = await makeStaker(ctx, 1_000_000); // 180d 8x
     await stake(ctx, a, 0, 1_000_000);
     await stake(ctx, b, 2, 1_000_000);
     // weights: a=1_000_000, b=8_000_000, total=9_000_000
     await fundRewards(ctx, 9_000_000);
-    await sleep(5000); // both held the full window -> split strictly by weight
+    // Both held the same partial window, so the 1:8 weight ratio holds at any
+    // point in the drip -- assert the ratio rather than waiting the full 60s.
+    await sleep(6000);
     const aGot = await claim(ctx, a, 0);
     const bGot = await claim(ctx, b, 2);
-    // a ~ 1/9, b ~ 8/9
-    assert.isTrue(aGot >= 999_000n && aGot <= 1_000_000n, `a ${aGot}`);
-    assert.isTrue(bGot >= 7_999_000n && bGot <= 8_000_000n, `b ${bGot}`);
+    assert.isTrue(aGot > 0n && bGot > 0n, `partial drip a ${aGot} b ${bGot}`);
+    // b should be ~8x a (allow a small band for inter-claim drift + rounding).
+    const ratio = Number(bGot) / Number(aGot);
+    assert.isTrue(ratio > 7.5 && ratio < 8.5, `ratio ${ratio} (a ${aGot} b ${bGot})`);
   });
 
   it("drips rewards over time, not instantly (JIT / monopoly resistance)", async () => {
-    const ctx = await setupPool(10); // 10s drip window
+    const ctx = await setupPool(60); // 60s drip window
     const a = await makeStaker(ctx, 1_000_000);
     await stake(ctx, a, 0, 1_000_000);
-    await fundRewards(ctx, 1_000_000); // funds a 10s drip; NOT claimable all at once
-    await sleep(2500);
+    await fundRewards(ctx, 1_000_000); // funds a 60s drip; NOT claimable all at once
+    await sleep(6000);
     const afterFirst = await claim(ctx, a, 0); // cumulative; only a fraction dripped
     assert.isTrue(
-      afterFirst > 0n && afterFirst < 800_000n,
+      afterFirst > 0n && afterFirst < 700_000n,
       `expected a partial drip, got ${afterFirst}`,
     );
-    await sleep(9000); // now past period_finish -> remainder dripped
+    await sleep(62_000); // now past period_finish -> remainder dripped
     const afterSecond = await claim(ctx, a, 0); // cumulative full
     assert.isTrue(
       afterSecond >= 990_000n && afterSecond <= 1_000_000n,
@@ -302,7 +311,7 @@ describe("atelier-staking", () => {
     let failed = false;
     try {
       await program.methods
-        .initializePool(TIERS as never, new BN(2))
+        .initializePool(TIERS as never, new BN(60), payer.publicKey)
         .accountsPartial({
           admin: payer.publicKey,
           program: program.programId,
@@ -341,7 +350,7 @@ describe("atelier-staking", () => {
     let failed = false;
     try {
       await program.methods
-        .initializePool(TIERS as never, new BN(2))
+        .initializePool(TIERS as never, new BN(60), payer.publicKey)
         .accountsPartial({
           admin: attacker.publicKey,
           program: program.programId,
@@ -363,5 +372,65 @@ describe("atelier-staking", () => {
       assert.include(`${err}`, "Unauthorized");
     }
     assert.isTrue(failed, "expected init by a non-upgrade-authority to fail");
+  });
+
+  it("rejects a reward duration below the on-chain minimum", async () => {
+    const stakedMint = await createMint(
+      connection, payer, payer.publicKey, null, 6, Keypair.generate(), undefined, TOKEN_2022_PROGRAM_ID,
+    );
+    const rewardMint = await createMint(
+      connection, payer, payer.publicKey, null, 6, Keypair.generate(), undefined, TOKEN_PROGRAM_ID,
+    );
+    const pool = pda([POOL_SEED, stakedMint.toBuffer()]);
+    const stakedVault = pda([STAKED_VAULT_SEED, pool.toBuffer()]);
+    const rewardVault = pda([REWARD_VAULT_SEED, pool.toBuffer()]);
+
+    let failed = false;
+    try {
+      await program.methods
+        .initializePool(TIERS as never, new BN(30), payer.publicKey) // < 60s floor
+        .accountsPartial({
+          admin: payer.publicKey,
+          program: program.programId,
+          programData: programDataPda,
+          stakedMint,
+          rewardMint,
+          pool,
+          stakedVault,
+          rewardVault,
+          stakedTokenProgram: TOKEN_2022_PROGRAM_ID,
+          rewardTokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+          rent: SYSVAR_RENT_PUBKEY,
+        })
+        .rpc();
+    } catch (err) {
+      failed = true;
+      assert.include(`${err}`, "InvalidRewardDuration");
+    }
+    assert.isTrue(failed, "expected init with a sub-minimum duration to fail");
+  });
+
+  it("rejects crank_sync from a non-funder", async () => {
+    const ctx = await setupPool(60);
+    const a = await makeStaker(ctx, 1_000_000);
+    await stake(ctx, a, 0, 1_000_000);
+    // Put USDC in the vault, then have a non-funder try to notify it.
+    await mintTo(connection, payer, ctx.rewardMint, ctx.rewardVault, payer, 100_000, [], undefined, TOKEN_PROGRAM_ID);
+    const attacker = Keypair.generate();
+    await airdrop(attacker.publicKey);
+
+    let failed = false;
+    try {
+      await program.methods
+        .crankSync()
+        .accountsPartial({ funder: attacker.publicKey, pool: ctx.pool, rewardVault: ctx.rewardVault })
+        .signers([attacker])
+        .rpc();
+    } catch (err) {
+      failed = true;
+      assert.include(`${err}`, "Unauthorized");
+    }
+    assert.isTrue(failed, "expected crank by a non-funder to fail");
   });
 });

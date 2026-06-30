@@ -6,13 +6,18 @@ use crate::errors::StakingError;
 use crate::events::RewardsSynced;
 use crate::state::StakePool;
 
-/// Permissionless: anyone can fold freshly-deposited USDC into the accumulator.
+/// Funder-only: fold freshly-deposited USDC into the accumulator and (re)start
+/// its drip. Gated to `pool.funder` because notify resets the drip window --
+/// leaving it open lets anyone re-notify with dust and stretch unvested rewards.
 #[derive(Accounts)]
 pub struct CrankSync<'info> {
+    pub funder: Signer<'info>,
+
     #[account(
         mut,
         seeds = [POOL_SEED, pool.staked_mint.as_ref()],
         bump = pool.bump,
+        has_one = funder @ StakingError::Unauthorized,
     )]
     pub pool: Account<'info, StakePool>,
 

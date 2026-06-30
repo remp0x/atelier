@@ -146,12 +146,13 @@ export function ensureRewardAtaIx(owner: PublicKey, payer: PublicKey): Transacti
   );
 }
 
-export function buildCrankSyncIx(): TransactionInstruction {
+export function buildCrankSyncIx(funder: PublicKey): TransactionInstruction {
   const [pool] = findPoolPda();
   const [rewardVault] = findRewardVaultPda(pool);
   return new TransactionInstruction({
     programId: STAKING_PROGRAM_ID,
     keys: [
+      { pubkey: funder, isSigner: true, isWritable: false },
       { pubkey: pool, isSigner: false, isWritable: true },
       { pubkey: rewardVault, isSigner: false, isWritable: false },
     ],
@@ -205,6 +206,7 @@ export interface StakeTierConfig {
 
 export interface StakePoolAccount {
   admin: PublicKey;
+  funder: PublicKey;
   stakedMint: PublicKey;
   rewardMint: PublicKey;
   stakedVault: PublicKey;
@@ -244,6 +246,7 @@ export function decodeStakePool(data: Buffer): StakePoolAccount {
   assertDiscriminator(data, ACCT_STAKE_POOL, 'StakePool');
   const c = new Cursor(data.subarray(8));
   const admin = c.pubkey();
+  const funder = c.pubkey();
   const stakedMint = c.pubkey();
   const rewardMint = c.pubkey();
   const stakedVault = c.pubkey();
@@ -254,6 +257,7 @@ export function decodeStakePool(data: Buffer): StakePoolAccount {
   }
   return {
     admin,
+    funder,
     stakedMint,
     rewardMint,
     stakedVault,

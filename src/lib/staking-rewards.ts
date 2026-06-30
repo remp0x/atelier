@@ -10,7 +10,7 @@ import {
   getAccount,
   createTransferCheckedInstruction,
 } from '@solana/spl-token';
-import { atelierClient } from './atelier-db';
+import { atelierClient, getTotalIndexedWithdrawals } from './atelier-db';
 import {
   getAtelierKeypair,
   getServerConnection,
@@ -23,6 +23,7 @@ import {
   findRewardVaultPda,
 } from './staking-config';
 import { fetchPool } from './staking-program';
+import { getSolPriceUsd } from './sol-price';
 
 /**
  * Server-side reward funding for atelier-staking.
@@ -35,8 +36,10 @@ import { fetchPool } from './staking-program';
  */
 
 const USDC_DECIMALS = 6;
-const DEFAULT_SHARE_BPS = 2000; // 20% of platform revenue to stakers
+const DEFAULT_SHARE_BPS = 5000; // 50% of creator-fee revenue to stakers
 const MIN_FUNDING_INTERVAL_SECS = 6 * 24 * 60 * 60; // weekly cadence, 1-day slack
+const LAMPORTS_PER_SOL = 1_000_000_000n;
+const REVENUE_CURSOR_ID = 'creator_fees';
 
 let initialized = false;
 
@@ -53,53 +56,120 @@ async function initStakingRewardsDb(): Promise<void> {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS staking_revenue_cursor (
+      id TEXT PRIMARY KEY,
+      cumulative_lamports TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
   initialized = true;
+}
+
+async function getRevenueCursorLamports(): Promise<bigint | null> {
+  const rows = await atelierClient.execute({
+    sql: `SELECT cumulative_lamports FROM staking_revenue_cursor WHERE id = ?`,
+    args: [REVENUE_CURSOR_ID],
+  });
+  if (rows.rows.length === 0) return null;
+  const raw = rows.rows[0].cumulative_lamports;
+  if (typeof raw !== 'string') return null;
+  try {
+    return BigInt(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function setRevenueCursorLamports(value: bigint): Promise<void> {
+  await atelierClient.execute({
+    sql: `INSERT INTO staking_revenue_cursor (id, cumulative_lamports, updated_at)
+          VALUES (?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(id) DO UPDATE SET
+            cumulative_lamports = excluded.cumulative_lamports,
+            updated_at = CURRENT_TIMESTAMP`,
+    args: [REVENUE_CURSOR_ID, value.toString()],
+  });
 }
 
 function anchorDiscriminator(ixName: string): Buffer {
   return createHash('sha256').update(`global:${ixName}`).digest().subarray(0, 8);
 }
 
+interface EpochRevenue {
+  revenueMicroUsdc: bigint;
+  cumulativeLamports: bigint;
+  baseline: boolean;
+  fromFeed: boolean;
+}
+
 /**
- * Platform revenue (in micro-USDC) attributable to the epoch just ended.
+ * Platform revenue (micro-USDC) attributable to the epoch just ended.
  *
- * Reads STAKING_EPOCH_REVENUE_USDC so the cron is safe-by-default: with nothing
- * configured it returns 0 and the cron no-ops -- it never distributes a
- * fabricated amount. This is the seam for a live revenue feed, but wiring it is a
- * DECISION, not a mechanical TODO -- two things must be settled first:
+ * Source: pump.fun creator-fee income, indexed in lamports (SOL) by
+ * `fee-indexer.ts` as a CUMULATIVE all-time total. Per-epoch revenue is the DELTA
+ * since the last funding run (a lamports cursor in `staking_revenue_cursor`),
+ * converted to USDC at the current SOL price; the on-chain drip then vests it.
  *
- *   1. WHICH revenue stream funds staking. The existing ledger (`fee-indexer.ts`,
- *      `getTotalIndexedWithdrawals`) tracks pump.fun creator-fee income in
- *      LAMPORTS (SOL), not USDC, and is CUMULATIVE all-time. Order platform fees
- *      live in `service_orders.platform_fee_usd` (USD). Pick the stream(s) that
- *      should accrue to stakers.
- *   2. DENOMINATION + windowing. Rewards pay USDC, so a SOL-denominated stream
- *      needs a SOL->USDC rate (oracle or manual), and "epoch revenue" must be the
- *      DELTA over the window (e.g. cumulative-now minus cumulative-at-last-run;
- *      `staking_reward_funding.revenue_micro_usdc` already records per-run revenue
- *      for this).
+ * - Baseline: on the first run no cursor exists. We report `baseline` and set the
+ *   cursor to the current cumulative WITHOUT distributing the historical backlog;
+ *   accrual starts from launch.
+ * - Carry-over: the cursor only advances on a successful fund, so revenue earned
+ *   while the pool is empty, the treasury is short, or the SOL price is briefly
+ *   unavailable rolls into the next epoch instead of being lost.
+ * - Rounding floors in the vault's favor (never distributes more than was earned).
  *
- * Until both are decided, set STAKING_EPOCH_REVENUE_USDC (or the explicit
- * STAKING_EPOCH_USDC budget override) manually. See runbook "Outstanding
- * integration TODO".
+ * `STAKING_EPOCH_REVENUE_USDC` (already-USDC) still wins as a manual override for
+ * bootstrap/testing and bypasses the feed cursor entirely.
  */
-async function getEpochRevenueMicroUsdc(): Promise<bigint> {
-  const configured = process.env.STAKING_EPOCH_REVENUE_USDC;
-  if (!configured) return 0n;
-  const parsed = Number(configured);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0n;
-  return BigInt(Math.floor(parsed * 10 ** USDC_DECIMALS));
+async function getEpochRevenueMicroUsdc(): Promise<EpochRevenue> {
+  const manual = process.env.STAKING_EPOCH_REVENUE_USDC;
+  if (manual) {
+    const parsed = Number(manual);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return {
+        revenueMicroUsdc: BigInt(Math.floor(parsed * 10 ** USDC_DECIMALS)),
+        cumulativeLamports: 0n,
+        baseline: false,
+        fromFeed: false,
+      };
+    }
+  }
+
+  const cumulativeLamports = BigInt(Math.trunc(await getTotalIndexedWithdrawals()));
+  const cursor = await getRevenueCursorLamports();
+  if (cursor === null) {
+    return { revenueMicroUsdc: 0n, cumulativeLamports, baseline: true, fromFeed: true };
+  }
+
+  const deltaLamports = cumulativeLamports > cursor ? cumulativeLamports - cursor : 0n;
+  if (deltaLamports === 0n) {
+    return { revenueMicroUsdc: 0n, cumulativeLamports, baseline: false, fromFeed: true };
+  }
+
+  const solPriceUsd = await getSolPriceUsd();
+  if (!(solPriceUsd > 0)) {
+    return { revenueMicroUsdc: 0n, cumulativeLamports, baseline: false, fromFeed: true };
+  }
+  const priceMicroUsdPerSol = BigInt(Math.floor(solPriceUsd * 10 ** USDC_DECIMALS));
+  const revenueMicroUsdc = (deltaLamports * priceMicroUsdPerSol) / LAMPORTS_PER_SOL;
+  return { revenueMicroUsdc, cumulativeLamports, baseline: false, fromFeed: true };
+}
+
+export interface StakingEpochBudget {
+  budget: bigint;
+  revenue: bigint;
+  shareBps: number;
+  feed: { cumulativeLamports: bigint; baseline: boolean } | null;
 }
 
 /**
  * USDC (micro) to distribute this epoch. An explicit STAKING_EPOCH_USDC override
  * wins (bootstrap/manual top-ups); otherwise it is `shareBps` of epoch revenue.
+ * `feed` is non-null only in feed mode and carries the lamports cursor the caller
+ * advances after a successful fund (or sets as the baseline on the first run).
  */
-export async function computeStakingEpochBudgetMicroUsdc(): Promise<{
-  budget: bigint;
-  revenue: bigint;
-  shareBps: number;
-}> {
+export async function computeStakingEpochBudgetMicroUsdc(): Promise<StakingEpochBudget> {
   const override = process.env.STAKING_EPOCH_USDC;
   if (override) {
     const parsed = Number(override);
@@ -108,13 +178,25 @@ export async function computeStakingEpochBudgetMicroUsdc(): Promise<{
         budget: BigInt(Math.floor(parsed * 10 ** USDC_DECIMALS)),
         revenue: 0n,
         shareBps: 0,
+        feed: null,
       };
     }
   }
-  const shareBps = Number(process.env.STAKING_REWARD_SHARE_BPS || DEFAULT_SHARE_BPS);
-  const revenue = await getEpochRevenueMicroUsdc();
-  const budget = (revenue * BigInt(shareBps)) / 10_000n;
-  return { budget, revenue, shareBps };
+  const rawShare = Number(process.env.STAKING_REWARD_SHARE_BPS ?? DEFAULT_SHARE_BPS);
+  const shareBps =
+    Number.isFinite(rawShare) && rawShare >= 0 && rawShare <= 10_000
+      ? Math.floor(rawShare)
+      : DEFAULT_SHARE_BPS;
+  const epoch = await getEpochRevenueMicroUsdc();
+  const budget = (epoch.revenueMicroUsdc * BigInt(shareBps)) / 10_000n;
+  return {
+    budget,
+    revenue: epoch.revenueMicroUsdc,
+    shareBps,
+    feed: epoch.fromFeed
+      ? { cumulativeLamports: epoch.cumulativeLamports, baseline: epoch.baseline }
+      : null,
+  };
 }
 
 async function recentlyFunded(): Promise<boolean> {
@@ -163,7 +245,13 @@ export async function fundStakingRewards(): Promise<FundingResult> {
     return { status: 'skipped', reason: 'already funded this interval' };
   }
 
-  const { budget, revenue, shareBps } = await computeStakingEpochBudgetMicroUsdc();
+  const { budget, revenue, shareBps, feed } = await computeStakingEpochBudgetMicroUsdc();
+
+  if (feed?.baseline) {
+    await setRevenueCursorLamports(feed.cumulativeLamports);
+    return { status: 'skipped', reason: 'revenue cursor baseline established' };
+  }
+
   if (budget <= 0n) {
     return { status: 'skipped', reason: 'zero budget' };
   }
@@ -218,6 +306,13 @@ export async function fundStakingRewards(): Promise<FundingResult> {
 
   const sig = await connection.sendRawTransaction(tx.serialize());
   await pollTransactionConfirmation(connection, sig);
+
+  // Advance the feed cursor BEFORE the audit row: the transfer is irreversible, so
+  // the cursor (cross-run idempotency for the feed) is the tighter guard -- if the
+  // audit insert later fails, the next run still sees delta 0 and won't re-fund.
+  if (feed) {
+    await setRevenueCursorLamports(feed.cumulativeLamports);
+  }
 
   const id = `stkfund_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
   await atelierClient.execute({

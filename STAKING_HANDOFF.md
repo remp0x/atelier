@@ -93,12 +93,20 @@ works with no pins.
    (authorities disabled, mint/freeze revoked) -- passes `assert_safe_mint`.
    Re-verify before mainnet in case the mint changes. (runbook s.4.2)
 5. **Get a professional audit** before mainnet; move the program upgrade
-   authority to a multisig.
-6. Wire the cron's revenue tally to the real fee ledger (TODO in
-   `staking-rewards.ts`); set `STAKING_*` env vars (runbook s.6).
+   authority to a multisig. Auditor brief: `solana/AUDIT.md`.
+6. ~~Wire the cron's revenue tally to the real fee ledger~~ **DONE (2026-06-29):**
+   the feed is **50% of pump.fun creator fees (SOL)**. `getEpochRevenueMicroUsdc()`
+   reads the cumulative creator-fee lamports (`fee-indexer.ts`), takes the delta
+   since the last funded run (cursor in `staking_revenue_cursor`), converts to USDC
+   at the live SOL price, and applies `STAKING_REWARD_SHARE_BPS` (default 5000 =
+   50%). No backlog dump (first run sets a baseline), carry-over on skip, rounds in
+   the vault's favor. Still set `STAKING_*` env vars + keep treasury USDC topped up
+   (runbook s.6-7).
 
-## Open design choice still on the table
+## Open design choice -- RESOLVED
 
-You haven't funded a rewards source yet. The cron is safe-by-default: with no
-`STAKING_EPOCH_USDC` / revenue wiring it no-ops (distributes nothing) rather than
-guessing. Decide the staker share (default 20%) and the revenue feed when ready.
+Revenue source decided: **50% of creator fees (SOL)**, wired into the cron (see
+step 6). The cron stays safe-by-default: the first run only establishes the
+cursor baseline (distributes nothing), and it no-ops (green) when there is no new
+revenue, no stake, or insufficient treasury USDC. Fees accrue in SOL but pay out
+in USDC, so keep the treasury wallet funded with USDC.

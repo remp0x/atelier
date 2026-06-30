@@ -176,9 +176,9 @@ first, the multisig must sign the init.
 | `NEXT_PUBLIC_STAKING_PROGRAM_ID` | Deployed program id (client + server). |
 | `ATELIER_PRIVATE_KEY` | Treasury signer for the funding cron (already set; must hold USDC). |
 | `CRON_SECRET` | Auth for `/api/cron/staking-rewards` (already set). |
-| `STAKING_REWARD_SHARE_BPS` | Staker share of revenue, default 2000 (20%). |
-| `STAKING_EPOCH_USDC` | Optional explicit per-run budget override (bootstrap). |
-| `STAKING_EPOCH_REVENUE_USDC` | Temporary revenue input until the fee ledger is wired (see TODO in `staking-rewards.ts`). |
+| `STAKING_REWARD_SHARE_BPS` | Staker share of creator-fee revenue. **Default 5000 (50%)** -- the decided value; set only to change it. |
+| `STAKING_EPOCH_USDC` | Optional explicit per-run budget override (bootstrap); bypasses the feed entirely. |
+| `STAKING_EPOCH_REVENUE_USDC` | Optional manual revenue input (already-USDC); overrides the creator-fee feed for testing/bootstrap. |
 
 ## 7. Funding operations
 
@@ -188,20 +188,25 @@ vault, then cranks the accumulator. It is idempotent within ~6 days and no-ops
 (green) when the budget is zero or the treasury is short. To smooth reward-timing
 incentives you can split the weekly budget into several smaller cron runs.
 
-## Outstanding integration TODO (a decision, not just code)
+**Revenue feed (WIRED 2026-06-29): 50% of pump.fun creator fees (SOL).**
+`getEpochRevenueMicroUsdc()` reads the cumulative creator-fee lamports indexed by
+`fee-indexer.ts` (`getTotalIndexedWithdrawals`), takes the **delta** since the last
+funded run (a lamports cursor in `staking_revenue_cursor`), converts it to USDC at
+the current SOL price (`sol-price.ts`), and `STAKING_REWARD_SHARE_BPS` (default
+**5000 = 50%**) is applied to that. Properties:
 
-Wiring `getEpochRevenueMicroUsdc()` in `staking-rewards.ts` to a live feed needs
-two product decisions first -- it directly controls how much USDC is distributed,
-so it is deliberately left manual (set `STAKING_EPOCH_REVENUE_USDC` or the
-`STAKING_EPOCH_USDC` budget override) until decided:
+- **No backlog dump.** The first cron run sets the cursor baseline to the current
+  cumulative and distributes nothing; accrual starts from launch.
+- **Carry-over.** The cursor advances only on a successful fund, so revenue earned
+  while the pool is empty, the treasury is short on USDC, or the SOL price is
+  briefly unavailable rolls into the next epoch rather than being lost.
+- **Rounding floors in the vault's favor.**
+- **Treasury must hold USDC.** Fees are earned in SOL but paid to stakers in USDC,
+  so the treasury (`ATELIER_PRIVATE_KEY`) needs a USDC balance >= the budget; the
+  cron skips (green) if short. Keep it topped up (e.g. periodically swap a slice of
+  creator-fee SOL to USDC).
 
-1. **Which revenue stream funds staking.** The existing `fee-indexer.ts`
-   (`getTotalIndexedWithdrawals`) tracks pump.fun creator-fee income in **lamports
-   (SOL)** and is **cumulative all-time**. Order platform fees are in
-   `service_orders.platform_fee_usd` (**USD**). Pick the stream(s).
-2. **Denomination + windowing.** Rewards pay USDC; a SOL stream needs a SOL->USDC
-   rate, and "epoch revenue" must be the **delta** over the window (cumulative-now
-   minus cumulative-at-last-run; `staking_reward_funding.revenue_micro_usdc`
-   already records per-run revenue to support this).
-
-Also decide the staker share `STAKING_REWARD_SHARE_BPS` (default 2000 = 20%).
+**Prerequisite:** the creator-fee indexer must be running so the feed has data
+(it populates `creator_fee_index`; the staking cursor reads its cumulative sum).
+For testing/bootstrap, `STAKING_EPOCH_REVENUE_USDC` (manual USDC revenue) or
+`STAKING_EPOCH_USDC` (explicit budget) override the feed.

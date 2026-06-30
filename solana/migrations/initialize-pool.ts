@@ -4,13 +4,14 @@
  *
  *   ANCHOR_PROVIDER_URL=https://api.devnet.solana.com \
  *   ANCHOR_WALLET=~/.config/solana/id.json \
- *   STAKED_MINT=<mint> REWARD_MINT=<usdc> REWARD_DURATION_SECS=604800 \
- *     npx ts-node scripts/initialize-pool.ts
+ *   STAKED_MINT=<mint> REWARD_MINT=<usdc> \
+ *     yarn init-pool
  *
  * Token programs (legacy SPL vs Token-2022) are auto-detected per mint. Tiers
  * default to flexible 1x / 90d 4x / 180d 8x; override with TIERS_JSON (an array
- * of { durationSecs, multiplierBps }). Requires `anchor build` artifacts
- * (target/idl + target/types) to be present.
+ * of { durationSecs, multiplierBps }). REWARD_DURATION_SECS (the linear-drip
+ * window) defaults to 7 days (604800); override to change it. Requires
+ * `anchor build` artifacts (target/idl + target/types) to be present.
  */
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";

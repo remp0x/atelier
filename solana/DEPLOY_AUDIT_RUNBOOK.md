@@ -92,14 +92,15 @@ solana airdrop 3                       # deploy needs ~3 SOL (432 KB program)
 anchor deploy --provider.cluster devnet
 ```
 
-The deploy mechanics are verified against a real BPFLoaderUpgradeable cluster
-(local validator: clean deploy, ProgramData created, upgrade authority = the
-deploying wallet). The only blocker observed on 2026-06-29 was the **public
-devnet faucet rate-limiting this host** -- `solana airdrop` was refused
-repeatedly, so the deploy could not be funded here. If that happens, fund the
-deploy wallet (`solana address`) with ~3 devnet SOL from https://faucet.solana.com
-or another source, then re-run `anchor deploy`. This is purely a faucet limit,
-not a program/deploy issue.
+**Done on devnet (2026-06-29).** Once the wallet was funded via the web faucet,
+the program deployed cleanly (program `5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq`,
+authority `DqCZ7r6cxediYCRZoKTCPuusSzrpnsBwRe6HZZJ1HbkN`, ProgramData
+`35479Cpwaf6MCASVsQaWZDHYVk8yeHNxrrSugboPnTyv`) and the full flow ran end to end
+against the live cluster (init -> stake -> fund + crank -> 30s drip -> claim
+499,999 of 500,000 -> unstake 1:1). The earlier blocker was only the public
+faucet rate-limiting the build host's IP; fund the deploy wallet
+(`solana address`) with ~3 devnet SOL from https://faucet.solana.com if
+`solana airdrop` is refused.
 
 **Init now requires the upgrade authority.** `initialize_pool` is gated: the
 signer (`admin`) must be the program's upgrade authority, and the call must pass

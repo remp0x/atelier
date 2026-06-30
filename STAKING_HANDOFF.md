@@ -81,10 +81,13 @@ works with no pins.
 2. Set `NEXT_PUBLIC_STAKING_PROGRAM_ID` (program id this build:
    `5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq`; back up the keypair under
    `target/deploy/` to keep it stable, or generate a fresh one).
-3. Devnet deploy + manual end-to-end (runbook s.3). Note: the deploy path is
-   verified (clean upgradeable deploy on a local validator), but the public
-   devnet faucet was rate-limiting this host on 2026-06-29, so the devnet wallet
-   needs ~3 SOL funded before `anchor deploy` will succeed.
+3. ~~Devnet deploy + manual end-to-end~~ **DONE (2026-06-29).** Deployed to
+   devnet (program `5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq`, authority
+   `DqCZ7r6cxediYCRZoKTCPuusSzrpnsBwRe6HZZJ1HbkN`) and ran the full flow against
+   the real cluster: init -> stake 1,000,000 -> fund 500,000 + crank -> drip 30s
+   -> claim **499,999** (full minus 1 dust unit, vault-favoring) -> unstake,
+   principal 1,000,000 back. The drip, claim, and 1:1 principal all verified
+   on-chain. (runbook s.3)
 4. ~~Confirm the $ATELIER mint carries no blocklisted Token-2022 extension~~
    **DONE (2026-06-29):** it is a Token-2022 mint with only metadata extensions
    (authorities disabled, mint/freeze revoked) -- passes `assert_safe_mint`.

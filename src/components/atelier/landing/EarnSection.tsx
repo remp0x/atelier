@@ -1,109 +1,316 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { appUrl } from '@/lib/routing';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
+import {
+  categoryConstituents,
+  formatAprPct,
+  microToUsd,
+  compactUsd,
+} from '@/components/atelier/earn/types';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
-const POINTS = [
-  {
-    label: 'DEPOSIT',
-    text: 'Move idle USDC from your Atelier wallet into any of ~24 Parquet markets -- US stocks and ETFs like NVDA, TSLA, and SPY, 24/7 on Solana.',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="w-5 h-5" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-      </svg>
-    ),
-  },
-  {
-    label: 'EARN',
-    text: "LPs receive 60% of the pool's trading fees. Parquet's traders pay the fees; you earn from the flow.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="w-5 h-5" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
-      </svg>
-    ),
-  },
-  {
-    label: 'WITHDRAW',
-    text: 'No lock-up, no withdrawal fee. Pull your deposit whenever you want.',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="w-5 h-5" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" />
-      </svg>
-    ),
-  },
-] as const;
+// --- API types ---
 
-function EarnVisual() {
+interface EarnApiProduct {
+  id: string;
+  kind: 'lending' | 'liquidity_provision';
+  label: string;
+  risk: 'lower' | 'higher';
+  apr_label: string;
+  headline_apr_pct: number | null;
+  total_tvl_micro: string;
+  markets: Array<Record<string, unknown>>;
+}
+
+interface EarnApiResponse {
+  success: boolean;
+  data?: {
+    enabled: string[];
+    markets: Array<{
+      market: string;
+      venue: string;
+      key: string;
+      fee_apr_pct: number | null;
+      total_usdc_micro: string;
+    }>;
+    products: EarnApiProduct[];
+  };
+}
+
+// --- Static strategy catalog (lower risk first) ---
+
+type StrategyKind = 'lending' | 'liquidity_provision' | 'agent_trading';
+
+interface StaticStrategy {
+  kind: StrategyKind;
+  label: string;
+  risk: 'lower' | 'higher';
+  apr_label: string;
+  pitch: string;
+}
+
+const STRATEGIES: StaticStrategy[] = [
+  {
+    kind: 'lending',
+    label: 'Lending',
+    risk: 'lower',
+    apr_label: 'Supply APY',
+    pitch:
+      'Supply USDC to money markets (Solend, Kamino, Meteora) and earn interest as borrowers pay. Steadier yield, lower volatility.',
+  },
+  {
+    kind: 'liquidity_provision',
+    label: 'Liquidity Provision',
+    risk: 'higher',
+    apr_label: 'Fee APR',
+    pitch:
+      'Provide liquidity to Parquet perpetuals pools -- US equities and crypto perps -- and collect a share of every trading fee.',
+  },
+  {
+    kind: 'agent_trading',
+    label: 'Autonomous Trading',
+    risk: 'higher',
+    apr_label: 'Autonomous',
+    pitch:
+      "Let your agent trade DeFi autonomously -- swaps, snipes and arbitrage across DEXes, 24/7. You set the strategy and risk; it executes.",
+  },
+];
+
+// --- Icons ---
+
+const STRATEGY_ICON: Record<StrategyKind, React.ReactNode> = {
+  lending: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
+    </svg>
+  ),
+  liquidity_provision: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
+    </svg>
+  ),
+  agent_trading: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 8.5A1.5 1.5 0 018.5 7h7A1.5 1.5 0 0117 8.5v7a1.5 1.5 0 01-1.5 1.5h-7A1.5 1.5 0 017 15.5v-7z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 4v3M12 4v3M15 4v3M9 17v3M12 17v3M15 17v3M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3" />
+    </svg>
+  ),
+};
+
+// --- Sub-components ---
+
+function RiskBadge({ risk }: { risk: 'lower' | 'higher' }) {
+  if (risk === 'lower') {
+    return (
+      <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 font-mono text-[9px] text-emerald-600 dark:text-emerald-400 shrink-0">
+        <span className="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
+        Lower risk
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 h-5 px-2 rounded-full bg-amber-500/10 border border-amber-500/20 font-mono text-[9px] text-amber-600 dark:text-amber-400 shrink-0">
+      <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0" />
+      Higher risk
+    </span>
+  );
+}
+
+function StrategyCard({
+  strategy,
+  liveProduct,
+  enabledCategories,
+  loaded,
+}: {
+  strategy: StaticStrategy;
+  liveProduct: EarnApiProduct | null;
+  enabledCategories: string[];
+  loaded: boolean;
+}) {
+  const isAutoTrading = strategy.kind === 'agent_trading';
+
+  const aprDisplay: string = (() => {
+    if (isAutoTrading) return '';
+    if (!loaded) return '—';
+    if (!liveProduct) return 'Variable';
+    return liveProduct.headline_apr_pct !== null
+      ? formatAprPct(liveProduct.headline_apr_pct)
+      : 'Variable';
+  })();
+
+  const aprPositive =
+    !isAutoTrading &&
+    liveProduct?.headline_apr_pct != null &&
+    liveProduct.headline_apr_pct > 0;
+
+  const marketCount = liveProduct?.markets.length ?? null;
+  const tvlUsd = liveProduct ? microToUsd(liveProduct.total_tvl_micro) : null;
+
+  // Drive tickers from enabled categories. Default both before API responds.
+  const activeEnabled = loaded ? enabledCategories : ['equity-us', 'crypto-usd'];
+  const cryptoTickers = activeEnabled.includes('crypto-usd')
+    ? categoryConstituents('crypto-usd')
+    : [];
+  const equityTickers = activeEnabled.includes('equity-us')
+    ? categoryConstituents('equity-us')
+    : [];
+  const equitySample = equityTickers.slice(0, 5);
+  const equityRemainder = equityTickers.length - equitySample.length;
+
   return (
     <div
-      className="relative rounded-xl border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-black-soft overflow-hidden"
-      style={{ minHeight: '340px' }}
+      className={`rounded-xl border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0d0d0d] overflow-hidden transition-colors duration-200 ${
+        isAutoTrading ? 'opacity-60' : 'hover:border-atelier/30'
+      }`}
     >
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: 'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(250,76,20,0.10), transparent 70%)',
-      }} />
+      <div className="px-4 pt-4 pb-4">
 
-      <div className="absolute top-3.5 left-4 right-4 flex justify-between items-center z-[3]">
-        <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-gray-400 dark:text-neutral-500">
-          Parquet Markets / USDC Pools
-        </span>
-        <span className="font-mono text-[10px] text-green-500 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          24/7 on Solana
-        </span>
-      </div>
-
-      <div className="pt-12 pb-6 px-5 flex flex-col gap-2.5">
-        <div className="mb-1">
-          <div className="font-mono text-[10px] text-gray-500 dark:text-neutral-500 uppercase tracking-[0.12em] mb-2.5">Markets</div>
-          <div className="flex flex-wrap gap-1.5">
-            {['NVDA', 'TSLA', 'SPY', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'COIN'].map((ticker) => (
-              <span
-                key={ticker}
-                className="font-mono text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 border border-gray-200 dark:border-neutral-700 rounded px-2 py-0.5 bg-white/70 dark:bg-neutral-900/60 cursor-default"
-              >
-                {ticker}
-              </span>
-            ))}
-            <span className="font-mono text-[11px] text-gray-500 dark:text-neutral-500 border border-gray-200 dark:border-neutral-800 rounded px-2 py-0.5 bg-white/50 dark:bg-neutral-900/30 cursor-default">
-              +16 more
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-atelier/10 border border-atelier/20 text-atelier shrink-0">
+              {STRATEGY_ICON[strategy.kind]}
             </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-display font-bold text-[15px] text-black dark:text-white leading-tight tracking-[-0.01em]">
+                {strategy.label}
+              </span>
+              <RiskBadge risk={strategy.risk} />
+            </div>
           </div>
+
+          {isAutoTrading ? (
+            <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-gray-100 dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 font-mono text-[10px] text-gray-500 dark:text-neutral-400 shrink-0">
+              Coming soon
+            </span>
+          ) : (
+            <div className="text-right shrink-0">
+              <p
+                className={`font-mono text-[18px] font-semibold tabular-nums leading-none ${
+                  aprPositive
+                    ? 'text-emerald-500 dark:text-emerald-400'
+                    : 'text-gray-400 dark:text-neutral-500'
+                }`}
+              >
+                {aprDisplay}
+              </p>
+              <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 mt-0.5">
+                {strategy.apr_label}
+              </p>
+            </div>
+          )}
         </div>
 
-        <div className="mt-3 pt-3.5 border-t border-gray-200 dark:border-neutral-800 flex items-center justify-between">
-          <div>
-            <div className="font-mono text-[10px] text-gray-500 dark:text-neutral-500 uppercase tracking-[0.12em] mb-0.5">LP fee share</div>
-            <div className="font-mono text-[18px] font-bold text-atelier">60%</div>
-          </div>
-          <div>
-            <div className="font-mono text-[10px] text-gray-500 dark:text-neutral-500 uppercase tracking-[0.12em] mb-0.5 text-right">Withdrawal fee</div>
-            <div className="font-mono text-[18px] font-bold text-black dark:text-white">$0</div>
-          </div>
-          <div>
-            <div className="font-mono text-[10px] text-gray-500 dark:text-neutral-500 uppercase tracking-[0.12em] mb-0.5 text-right">Lock-up</div>
-            <div className="font-mono text-[18px] font-bold text-black dark:text-white">None</div>
-          </div>
-        </div>
-      </div>
+        {/* Pitch */}
+        <p className="text-[12px] text-gray-500 dark:text-neutral-400 leading-[1.5] mb-3">
+          {strategy.pitch}
+        </p>
 
-      <div className="absolute bottom-3 left-4 right-4 flex justify-between font-mono text-[10px] text-gray-400 dark:text-neutral-500 z-[3]">
-        <span>~24 markets available at launch</span>
-        <span className="text-atelier">powered by Parquet</span>
+        {/* Footer */}
+        {strategy.kind === 'liquidity_provision' && (
+          <div className="space-y-2">
+            {cryptoTickers.length > 0 && (
+              <div>
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-gray-500 dark:text-neutral-500 mb-1">
+                  Crypto
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {cryptoTickers.map(({ ticker }) => (
+                    <span
+                      key={ticker}
+                      className="font-mono text-[11px] font-semibold text-atelier border border-atelier/30 rounded px-1.5 py-0.5 bg-atelier/5"
+                    >
+                      {ticker}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {equityTickers.length > 0 && (
+              <div>
+                <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-gray-500 dark:text-neutral-500 mb-1">
+                  US Equities
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {equitySample.map(({ ticker }) => (
+                    <span
+                      key={ticker}
+                      className="font-mono text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 border border-gray-200 dark:border-neutral-700 rounded px-1.5 py-0.5 bg-white/70 dark:bg-neutral-900/60"
+                    >
+                      {ticker}
+                    </span>
+                  ))}
+                  {equityRemainder > 0 && (
+                    <span className="font-mono text-[11px] text-gray-500 dark:text-neutral-500 border border-gray-200 dark:border-neutral-800 rounded px-1.5 py-0.5 bg-white/50 dark:bg-neutral-900/30">
+                      +{equityRemainder} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            {loaded && marketCount !== null && (
+              <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums">
+                {marketCount} market{marketCount === 1 ? '' : 's'}
+                {tvlUsd !== null && tvlUsd > 0 ? <> &middot; {compactUsd(tvlUsd)} pooled</> : null}
+              </p>
+            )}
+          </div>
+        )}
+
+        {strategy.kind === 'lending' && (
+          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600 tabular-nums">
+            {loaded && marketCount !== null ? (
+              <>
+                {marketCount} market{marketCount === 1 ? '' : 's'}
+                {tvlUsd !== null && tvlUsd > 0 ? <> &middot; {compactUsd(tvlUsd)} pooled</> : null}
+              </>
+            ) : (
+              <>Solend &middot; Kamino &middot; Meteora</>
+            )}
+          </p>
+        )}
+
+        {strategy.kind === 'agent_trading' && (
+          <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-600">
+            Coming soon &middot; agent-run, no manual trading
+          </p>
+        )}
+
       </div>
     </div>
   );
 }
 
+// --- Main section ---
+
 export function EarnSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const visualRef = useRef<HTMLDivElement>(null);
+
+  const [liveProducts, setLiveProducts] = useState<EarnApiProduct[]>([]);
+  const [enabledCategories, setEnabledCategories] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/earn/parquet/markets')
+      .then((r) => r.json())
+      .then((res: EarnApiResponse) => {
+        if (res.success && res.data) {
+          setLiveProducts(res.data.products);
+          setEnabledCategories(res.data.enabled);
+        }
+        setLoaded(true);
+      })
+      .catch(() => {
+        setLoaded(true);
+      });
+  }, []);
 
   useGSAP(
     () => {
@@ -128,6 +335,19 @@ export function EarnSection() {
         scrollTrigger: {
           trigger: '[data-earn-visual]',
           start: 'top 80%',
+          once: true,
+        },
+      });
+
+      gsap.from('[data-earn-card]', {
+        y: 20,
+        autoAlpha: 0,
+        duration: 0.6,
+        stagger: 0.12,
+        ease: 'power3.out',
+        scrollTrigger: {
+          trigger: '[data-earn-visual]',
+          start: 'top 78%',
           once: true,
         },
       });
@@ -169,6 +389,7 @@ export function EarnSection() {
       <div className="relative max-w-[1280px] mx-auto px-7">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.1fr] gap-10 lg:gap-14 items-center">
 
+          {/* Left: copy */}
           <div data-earn-copy>
             <p className="font-mono text-[11px] font-semibold tracking-[0.18em] text-atelier mb-3 flex items-center gap-2">
               ATELIER EARN
@@ -176,47 +397,72 @@ export function EarnSection() {
                 LIVE
               </span>
             </p>
+
             <h2
               className="font-display font-extrabold tracking-[-0.02em] leading-[1.08] mb-4"
               style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)' }}
             >
-              Your idle USDC earns.
+              3 ways your idle USDC
               <br />
-              Put it to work.
+              earns on Solana.
             </h2>
+
             <p className="text-[15px] leading-[1.6] text-gray-600 dark:text-neutral-300 max-w-[480px] mb-6">
-              Deposit from your Atelier wallet into a Parquet liquidity pool and earn a share of that market&apos;s trading fees. Withdraw anytime. No deposit or withdrawal fee.
+              Deposit from your Atelier wallet into a lending market or a Parquet liquidity pool --
+              US equities and crypto perps both available. Or let your agent trade
+              autonomously. Withdraw anytime, no fees.
             </p>
 
-            <ul className="flex flex-col gap-4 mb-7">
-              {POINTS.map(({ label, text, icon }) => (
-                <li key={label} className="flex items-start gap-3">
-                  <div className="mt-0.5 shrink-0 w-8 h-8 rounded-md flex items-center justify-center border border-atelier/30 text-atelier bg-atelier/5">
-                    {icon}
-                  </div>
-                  <div>
-                    <span className="block font-mono text-[10px] font-semibold tracking-[0.14em] text-atelier mb-0.5">
-                      {label}
-                    </span>
-                    <span className="text-[13px] leading-[1.55] text-gray-500 dark:text-neutral-400">
-                      {text}
-                    </span>
-                  </div>
-                </li>
-              ))}
+            <ul className="flex flex-col gap-3 mb-7">
+              <li className="flex items-center gap-2 font-mono text-[11px] text-gray-500 dark:text-neutral-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                No lock-up, no withdrawal fee
+              </li>
+              <li className="flex items-center gap-2 font-mono text-[11px] text-gray-500 dark:text-neutral-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                Yield from real on-chain activity
+              </li>
+              <li className="flex items-center gap-2 font-mono text-[11px] text-gray-500 dark:text-neutral-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0" />
+                24/7 on Solana -- deposit in seconds
+              </li>
             </ul>
 
             <Link
               href={appUrl('/earn')}
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded bg-atelier text-white font-mono text-[12px] font-medium tracking-wide cursor-pointer transition-all duration-150 hover:bg-atelier-bright hover:shadow-[0_0_20px_rgba(250,76,20,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
-              Explore Earn →
+              Explore Earn &#8594;
             </Link>
-
           </div>
 
-          <div data-earn-visual ref={visualRef} className="will-change-transform">
-            <EarnVisual />
+          {/* Right: 3 strategy cards */}
+          <div data-earn-visual ref={visualRef} className="relative will-change-transform">
+            <div
+              className="absolute inset-0 pointer-events-none rounded-xl"
+              style={{
+                background:
+                  'radial-gradient(ellipse 70% 60% at 50% 0%, rgba(250,76,20,0.07), transparent 70%)',
+              }}
+            />
+            <div className="relative space-y-3">
+              {STRATEGIES.map((strategy) => {
+                const liveProduct =
+                  strategy.kind !== 'agent_trading'
+                    ? (liveProducts.find((p) => p.kind === strategy.kind) ?? null)
+                    : null;
+                return (
+                  <div key={strategy.kind} data-earn-card>
+                    <StrategyCard
+                      strategy={strategy}
+                      liveProduct={liveProduct}
+                      enabledCategories={enabledCategories}
+                      loaded={loaded}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
         </div>

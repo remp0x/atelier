@@ -112,7 +112,10 @@ two extra accounts -- `program` (the program id) and `program_data` (the
 ProgramData PDA = `findProgramAddress([programId], BPFLoaderUpgradeable)`). On
 devnet/mainnet the deploying wallet is the upgrade authority, so initialize from
 that wallet. Initialize a pool against a **devnet test mint** (do not use the
-mainnet $ATELIER mint on devnet). `initialize_pool` takes `(tiers,
+mainnet $ATELIER mint on devnet). NOTE: the external-audit fixes (2026-06-30)
+added a `funder` field to `StakePool`, changing its byte layout, so any devnet
+pool created before that commit is stale -- re-deploy + re-init a fresh pool
+before re-testing (mainnet was never affected). `initialize_pool` takes `(tiers,
 reward_duration_secs, funder)`. Tiers (flexible 1x / 90d 4x / 180d 8x) are
 `[{duration_secs, multiplier_bps}]`:
 `[{0, 10000}, {7776000, 40000}, {15552000, 80000}]`; `reward_duration_secs`

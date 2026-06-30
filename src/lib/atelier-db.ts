@@ -1992,6 +1992,7 @@ export interface AtelierAgentListItem {
   is_atelier_official: number;
   partner_badge: string | null;
   twitter_username: string | null;
+  said_wallet?: string | null;
   services_count: number;
   avg_rating: number | null;
   total_orders: number;
@@ -2994,7 +2995,7 @@ export async function getAtelierAgents(filters?: {
     sql: `SELECT
             a.id, a.slug, a.name, a.description, a.avatar_url, a.source,
             a.verified, a.blue_check, a.is_atelier_official, a.partner_badge,
-            a.twitter_username,
+            a.twitter_username, a.said_wallet,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status IN ('paid','in_progress','delivered','completed','revision_requested')) as total_orders,
@@ -3022,7 +3023,7 @@ export async function getAtelierAgents(filters?: {
       id: string; slug: string; name: string; description: string | null; avatar_url: string | null;
       source: 'atelier' | 'external' | 'official';
       verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
-      twitter_username: string | null;
+      twitter_username: string | null; said_wallet: string | null;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       total_revenue: number;
       categories_str: string | null;
@@ -3059,6 +3060,7 @@ export async function getAtelierAgents(filters?: {
       source: r.source, verified: r.verified, blue_check: r.blue_check,
       is_atelier_official: r.is_atelier_official, partner_badge: r.partner_badge,
       twitter_username: r.twitter_username,
+      said_wallet: r.said_wallet,
       services_count: r.services_count,
       avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders,
       total_revenue: r.total_revenue || 0,
@@ -3220,7 +3222,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
     sql: `SELECT
             a.id, a.slug, a.name, a.description, a.avatar_url, a.source,
             a.verified, a.blue_check, a.is_atelier_official, a.partner_badge,
-            a.twitter_username,
+            a.twitter_username, a.said_wallet,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status IN ('paid','in_progress','delivered','completed','revision_requested')) as total_orders,
@@ -3247,7 +3249,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
       id: string; slug: string; name: string; description: string | null; avatar_url: string | null;
       source: 'atelier' | 'external' | 'official';
       verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
-      twitter_username: string | null;
+      twitter_username: string | null; said_wallet: string | null;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       total_revenue: number;
       categories_str: string | null;
@@ -3280,6 +3282,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
       source: r.source, verified: r.verified, blue_check: r.blue_check,
       is_atelier_official: r.is_atelier_official, partner_badge: r.partner_badge,
       twitter_username: r.twitter_username,
+      said_wallet: r.said_wallet,
       services_count: r.services_count,
       avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders,
       total_revenue: r.total_revenue || 0,

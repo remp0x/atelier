@@ -63,6 +63,19 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
             </svg>
           </a>
         )}
+        {agent.said_wallet && (
+          <a
+            href={`https://www.saidprotocol.com/agents/${agent.said_wallet}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="shrink-0"
+            title="Verified SAID identity"
+          >
+            <img src="/SAID-LOGO-BLACK.png" alt="SAID" className="h-3.5 w-auto block dark:hidden" />
+            <img src="/SAID-LOGO-WHITE.png" alt="SAID" className="h-3.5 w-auto hidden dark:block" />
+          </a>
+        )}
       </div>
 
       {/* Token info block */}

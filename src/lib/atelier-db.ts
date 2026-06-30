@@ -113,6 +113,11 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_pda TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_secret_key TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_tx_hash TEXT`).catch(() => {});
+  // The USDC payment that funded this agent's user-paid SAID mint. UNIQUE so one
+  // payment can't be replayed to mint identities on multiple agents; cleared on a
+  // pre-mint failure so the owner can retry with the same payment.
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_fee_tx TEXT`).catch(() => {});
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_said_fee_tx ON atelier_agents(said_fee_tx)').catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN privy_user_id TEXT`).catch(() => {});
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_privy_user_id ON atelier_agents(privy_user_id)').catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN webhook_secret TEXT`).catch(() => {});
@@ -1951,6 +1956,7 @@ export interface AtelierAgent {
   said_pda: string | null;
   said_secret_key: string | null;
   said_tx_hash: string | null;
+  said_fee_tx: string | null;
   privy_user_id: string | null;
   user_id: string | null;
   webhook_secret: string | null;
@@ -2803,6 +2809,46 @@ export async function setSAIDIdentity(
     sql: `UPDATE atelier_agents SET said_wallet = ?, said_pda = ?, said_secret_key = ?, said_tx_hash = ? WHERE id = ?`,
     args: [data.wallet, data.pda, data.secretKey, data.txHash, agentId],
   });
+}
+
+export async function isSAIDFeeTxUsed(txRef: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT COUNT(*) as cnt FROM atelier_agents WHERE said_fee_tx = ?',
+    args: [txRef],
+  });
+  return Number((result.rows[0] as unknown as { cnt: number }).cnt) > 0;
+}
+
+export type SAIDMintLockResult = 'ok' | 'locked' | 'fee_tx_used';
+
+// Reserves the user-paid SAID mint for an agent and records the funding payment in
+// one atomic write. The UNIQUE index on said_fee_tx is the replay guard: a payment
+// already tied to another agent makes the UPDATE throw -> 'fee_tx_used'. A row that
+// already carries a said_wallet or a reserved said_fee_tx no longer matches -> 'locked'.
+export async function reserveSAIDMint(agentId: string, feeTx: string): Promise<SAIDMintLockResult> {
+  await initAtelierDb();
+  try {
+    const result = await atelierClient.execute({
+      sql: `UPDATE atelier_agents SET said_fee_tx = ? WHERE id = ? AND (said_wallet IS NULL OR said_wallet = '') AND said_fee_tx IS NULL`,
+      args: [feeTx, agentId],
+    });
+    return result.rowsAffected > 0 ? 'ok' : 'locked';
+  } catch (e) {
+    if (/UNIQUE constraint failed/i.test(String(e))) return 'fee_tx_used';
+    throw e;
+  }
+}
+
+// Releases a SAID mint reservation after a pre-mint failure so the owner can retry
+// with the same payment. Only clears when no identity was actually recorded.
+export async function releaseSAIDMint(agentId: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `UPDATE atelier_agents SET said_fee_tx = NULL WHERE id = ? AND (said_wallet IS NULL OR said_wallet = '')`,
+    args: [agentId],
+  });
+  return result.rowsAffected > 0;
 }
 
 export async function getAgentsWithoutSAID(): Promise<AtelierAgent[]> {

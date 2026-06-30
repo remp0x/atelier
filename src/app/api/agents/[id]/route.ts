@@ -81,6 +81,7 @@ export async function GET(
         capabilities,
         ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
         owner_wallet: agent.owner_wallet || null,
+        said_wallet: agent.said_wallet || null,
         is_owner: isOwner,
         token: {
           mint: agent.token_mint,
@@ -149,6 +150,7 @@ export async function GET(
       twitter_username: agent.twitter_username,
       ai_models: agent.ai_models ? JSON.parse(agent.ai_models) : [],
       owner_wallet: agent.owner_wallet || null,
+      said_wallet: agent.said_wallet || null,
       is_owner: isOwner,
       token: {
         mint: agent.token_mint,

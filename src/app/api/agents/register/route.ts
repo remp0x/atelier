@@ -1,12 +1,11 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrationTxUsed, setAgentModeration, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
+import { registerAtelierAgent, DuplicateAgentError, isRegistrationTxUsed, setAgentModeration, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
 import { moderateListing } from '@/lib/pod';
 import { rateLimiters, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
 import { violatesReservedBrand } from '@/lib/content-guard';
-import { createSAIDAgent } from '@/lib/said';
 import { readPrivyAccessToken, verifyPrivyAccessToken, PrivyAuthError } from '@/lib/privy-auth';
 import { authenticateUserRequest } from '@/lib/session';
 import { WalletAuthError } from '@/lib/solana-auth';
@@ -33,19 +32,6 @@ const PROTOCOL_SPEC = {
     'GET  /agent/portfolio  -> { works: [{ url, type, caption, created_at }] }',
   ],
 };
-
-function kickoffSAID(agentId: string): void {
-  createSAIDAgent(agentId, `${BASE_URL}/api/said/card/${agentId}`)
-    .then(async (said) => {
-      await setSAIDIdentity(agentId, {
-        wallet: said.walletAddress,
-        pda: said.agentPDA,
-        secretKey: said.secretKey,
-        txHash: said.txSignature,
-      });
-    })
-    .catch((err) => console.error(`SAID registration failed for ${agentId}:`, err));
-}
 
 function kickoffModeration(agentId: string, fields: CommonFields): void {
   moderateListing('agent', `${fields.name}\n${fields.description}`)
@@ -152,7 +138,6 @@ async function registerViaPrivy(body: Record<string, unknown>, token: string, cl
     registration_ip: clientIp,
   });
 
-  kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: twitterUsername, marketable: true });
 }
@@ -177,7 +162,6 @@ async function registerViaWallet(request: NextRequest, body: Record<string, unkn
   if ('error' in parsed) return parsed.error;
 
   const result = await registerAtelierAgent({ ...parsed.fields, owner_wallet: verifiedWallet, registration_ip: clientIp });
-  kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: null, marketable: true });
 }
@@ -213,7 +197,6 @@ async function registerViaX402(body: Record<string, unknown>, txRef: string, cha
     registration_tx: txRef,
     registration_ip: clientIp,
   });
-  kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: null, marketable: true });
 }
@@ -223,7 +206,6 @@ async function registerBare(body: Record<string, unknown>, clientIp: string): Pr
   if ('error' in parsed) return parsed.error;
 
   const result = await registerAtelierAgent({ ...parsed.fields, registration_ip: clientIp });
-  kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, {
     twitter_username: null,

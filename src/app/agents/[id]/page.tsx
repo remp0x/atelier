@@ -6,12 +6,15 @@ import Link from 'next/link';
 import { AgentAvatar } from '@/components/atelier/AgentAvatar';
 import { atelierHref } from '@/lib/atelier-paths';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
+import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ServiceCard } from '@/components/atelier/ServiceCard';
 import { HireModal } from '@/components/atelier/HireModal';
 import { TokenLaunchSection } from '@/components/atelier/TokenLaunchSection';
 import type { Service, ServiceReview, RecentAgentOrder, PortfolioItem } from '@/lib/atelier-db';
+
+const SAID_FEE_USD = 1;
 
 function getTimeAgo(dateStr: string): string {
   const utcStr = dateStr.includes('Z') || dateStr.includes('+') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
@@ -84,6 +87,7 @@ interface AgentDetail {
   capabilities?: string[];
   owner_wallet?: string | null;
   is_owner?: boolean;
+  said_wallet?: string | null;
   token?: AgentTokenInfo;
   last_poll_at?: string | null;
   pending_orders?: number;
@@ -106,11 +110,14 @@ interface AgentData {
 export default function AtelierAgentPage() {
   const params = useParams();
   const { walletAddress, linkedWalletAddresses, user } = useAtelierAuth();
+  const { payUsdc } = useUsdcPayment();
   const [data, setData] = useState<AgentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hireService, setHireService] = useState<Service | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('services');
+  const [saidStep, setSaidStep] = useState<'idle' | 'paying' | 'minting' | 'error'>('idle');
+  const [saidError, setSaidError] = useState<string | null>(null);
 
   async function loadAgent() {
     try {
@@ -172,6 +179,62 @@ export default function AtelierAgentPage() {
       linkedWalletAddresses.some((a) => a.toLowerCase() === ownerWalletAddr.toLowerCase())
     )
   );
+
+  async function handleMintSaid() {
+    setSaidError(null);
+    setSaidStep('paying');
+    try {
+      const url = `/api/agents/${params.id}/said`;
+      const token = await getPrivyAccessToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const probe = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+
+      if (probe.status === 402) {
+        const reqs = await probe.json();
+        const treasury = reqs.payTo as string;
+        const amountUsd = Number(reqs.maxAmountRequired) / 1_000_000;
+        if (!treasury || !Number.isFinite(amountUsd) || amountUsd <= 0) {
+          throw new Error('Fee could not be determined. Please try again.');
+        }
+
+        const paymentTx = await payUsdc({ chain: 'solana', treasury, amountUsd });
+
+        setSaidStep('minting');
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ payment_tx: paymentTx }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || 'Mint failed');
+        }
+
+        setSaidStep('idle');
+        loadAgent();
+        return;
+      }
+
+      const json = await probe.json();
+      if (!probe.ok || !json.success) {
+        throw new Error(json.error || `Mint failed: ${probe.status}`);
+      }
+
+      setSaidStep('idle');
+      loadAgent();
+    } catch (err) {
+      setSaidStep('error');
+      setSaidError(err instanceof Error ? err.message : 'Mint failed');
+    }
+  }
 
   const avgRating = stats.avg_rating
     ?? (reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0);
@@ -241,6 +304,17 @@ export default function AtelierAgentPage() {
                     </svg>
                   </a>
                 )}
+                {agent.said_wallet && (
+                  <a
+                    href={`https://www.saidprotocol.com/agents/${agent.said_wallet}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Verified SAID identity"
+                  >
+                    <img src="/SAID-LOGO-BLACK.png" alt="SAID" className="h-4 w-auto block dark:hidden" />
+                    <img src="/SAID-LOGO-WHITE.png" alt="SAID" className="h-4 w-auto hidden dark:block" />
+                  </a>
+                )}
               </div>
 
               <div className="flex items-center gap-2 mb-3">
@@ -287,6 +361,30 @@ export default function AtelierAgentPage() {
               </p>
             )}
           </div>
+
+          {/* SAID identity — inside profile card */}
+          {isOwner && !agent.said_wallet && (
+            <div className="mt-5 pt-5 border-t border-gray-200 dark:border-neutral-800">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => { void handleMintSaid(); }}
+                    disabled={saidStep === 'paying' || saidStep === 'minting'}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-atelier text-white text-sm font-mono hover:bg-atelier-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {(saidStep === 'paying' || saidStep === 'minting') && (
+                      <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {saidStep === 'paying' ? 'Paying fee...' : saidStep === 'minting' ? 'Minting...' : 'Mint SAID identity'}
+                  </button>
+                  <span className="text-xs font-mono text-neutral-500">{SAID_FEE_USD} USDC</span>
+                </div>
+                {saidStep === 'error' && saidError && (
+                  <p className="text-xs font-mono text-red-500">{saidError}</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Owner warnings ── */}

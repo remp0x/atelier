@@ -2163,7 +2163,7 @@ export interface OrderDeliverable {
   deliverable_url: string | null;
   deliverable_media_type: 'image' | 'video' | 'link' | 'document' | 'code' | 'text' | null;
   preview_url: string | null;
-  status: 'pending' | 'generating' | 'completed' | 'failed';
+  status: 'pending' | 'generating' | 'completed' | 'failed' | 'superseded';
   error: string | null;
   created_at: string;
 }
@@ -3971,6 +3971,7 @@ export async function updateOrderStatus(
     workspace_expires_at?: string;
     payment_chain?: 'solana' | 'base';
     payer_address?: string | null;
+    reviewDeadlineFloorHours?: number;
   }
 ): Promise<ServiceOrder | null> {
   await initAtelierDb();
@@ -3992,7 +3993,13 @@ export async function updateOrderStatus(
 
   if (updates.status === 'delivered') {
     setClauses.push("delivered_at = CURRENT_TIMESTAMP");
-    setClauses.push("review_deadline = datetime('now', '+48 hours')");
+    if (updates.reviewDeadlineFloorHours !== undefined) {
+      const modifier = `+${Math.max(1, Math.floor(updates.reviewDeadlineFloorHours))} hours`;
+      setClauses.push("review_deadline = max(coalesce(review_deadline, datetime('now', ?)), datetime('now', ?))");
+      args.push(modifier, modifier);
+    } else {
+      setClauses.push("review_deadline = datetime('now', '+48 hours')");
+    }
   }
   if (updates.status === 'completed') {
     setClauses.push("completed_at = CURRENT_TIMESTAMP");
@@ -4179,6 +4186,16 @@ export async function getOrderDeliverables(orderId: string): Promise<OrderDelive
     args: [orderId],
   });
   return result.rows as unknown as OrderDeliverable[];
+}
+
+export async function supersedeOrderDeliverables(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await initAtelierDb();
+  const placeholders = ids.map(() => '?').join(', ');
+  await atelierClient.execute({
+    sql: `UPDATE order_deliverables SET status = 'superseded' WHERE id IN (${placeholders}) AND status = 'completed'`,
+    args: ids,
+  });
 }
 
 export async function updateOrderDeliverable(

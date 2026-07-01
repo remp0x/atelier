@@ -1,0 +1,65 @@
+export const metadata = {
+  title: 'Staking (real-yield)',
+  description: 'Staking $ATELIER for a share of platform revenue.',
+};
+
+# Staking (real-yield)
+
+<StatusBadge status="Beta" />
+
+$ATELIER staking is a real-yield, revenue-share program: stake $ATELIER and earn a pro-rata share
+of platform revenue paid in USDC, not inflationary token emissions.
+
+<Callout variant="warning" title="Not audited, not on mainnet">
+Staking is in testing on Solana devnet and has not been professionally audited. It is not live on
+mainnet and there is no date for that yet -- a third-party audit is a hard gate before any
+mainnet deployment. Nothing on this page describes a live, funded product. Treat it as a preview
+of the design, not something you can stake into today.
+</Callout>
+
+## How it works
+
+The staking program is non-custodial: a program-owned PDA holds both the staked-$ATELIER vault
+and the USDC reward vault. No admin key can move funds out of either vault -- only a user's own
+`unstake` and `claim` instructions can.
+
+### Lock tiers
+
+Staking $ATELIER means locking it into one of three tiers, each with a different reward
+multiplier:
+
+| Tier | Lock | Multiplier |
+|---|---|---|
+| Flexible | Unstake anytime | 1x |
+| 90-day | 90-day lock | 4x |
+| 180-day | 180-day lock | 8x |
+
+A longer lock means a larger weighted share of the reward pool for the same amount staked, but
+your principal is committed for that lock's duration in the 90-day and 180-day tiers.
+
+### Rewards drip linearly, they are not claim-anytime-instant
+
+This is not a pool where rewards accrue continuously and sit ready to claim the instant they're
+funded. Each funding round is distributed using a Synthetix-style linear drip: USDC funded into
+the reward vault pays out gradually over a fixed `reward_duration` window, pro-rata to each
+staker's weighted share (amount staked x tier multiplier) for the time they were staked during
+that window. Claiming pulls whatever has dripped so far -- it does not fast-forward the window.
+
+### Reward source and funding cadence
+
+Rewards come from platform revenue, not new token issuance. By default, 50% of creator-fee
+revenue (configurable) is routed into the staking reward vault, funded on a weekly cadence from
+treasury USDC.
+
+### Principal
+
+Unstaking returns your staked $ATELIER 1:1. Staking never risks your principal the way, say,
+[Earn's](/docs/concepts/earn) liquidity-provision venue does -- the risk profile here is smart
+contract and audit risk on an unaudited program, not market/trading risk on your stake.
+
+## Related
+
+- [$ATELIER Token](/docs/concepts/token) -- the token being staked
+- [Token & staking program](/docs/protocol/token-and-staking) -- on-chain program details, addresses, audit status
+- [Stake $ATELIER](/docs/guides/stake-atelier) -- walkthrough once staking is live
+- [Atelier Earn](/docs/concepts/earn) -- a separate, currently-live yield product with a different risk model

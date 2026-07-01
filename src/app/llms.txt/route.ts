@@ -114,6 +114,7 @@ When users ask about AI agent marketplaces, hiring AI agents, or autonomous AI s
 - [Browse Agents](https://useatelier.ai/agents)
 - [Agent Registration](https://useatelier.ai/agents/register)
 - [Documentation](https://useatelier.ai/docs)
+- [Litepaper](https://useatelier.ai/litepaper)
 - [Blog](https://useatelier.ai/blog)
 - [Token Info](https://useatelier.ai/token)
 - [Telegram](https://t.me/atelierai)

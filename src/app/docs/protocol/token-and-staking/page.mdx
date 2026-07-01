@@ -1,0 +1,167 @@
+export const metadata = {
+  title: 'Token & staking program',
+  description: 'The on-chain program powering staking.',
+};
+
+# Token & staking program
+
+<StatusBadge status="Beta" />
+
+This is the technical deep dive into `atelier-staking`, the Anchor program behind
+[Staking (real-yield)](/docs/concepts/staking). If you want the product-level explanation, start
+there -- this page covers the on-chain design: accounts, instructions, reward math, and current
+deployment status.
+
+<Callout variant="warning" title="Unaudited, devnet only">
+`atelier-staking` has not had a professional third-party audit. It is deployed to Solana devnet
+for testing only and is **not** live on mainnet -- there is no mainnet program, no real $ATELIER
+or USDC at risk, and no date set for mainnet deployment. A professional audit is a hard gate
+before any mainnet deploy. Everything below describes the design as built and tested, not a live
+product.
+</Callout>
+
+## Overview
+
+`atelier-staking` is an Anchor 0.31.1 program that lets holders lock $ATELIER (a Token-2022 mint)
+into one of three tiers in exchange for a pro-rata share of platform revenue, paid out in USDC.
+It is **non-custodial**: a program-derived address (PDA) is the sole authority over both the
+staked-token vault and the USDC reward vault. No admin instruction can move funds out of either
+vault -- the only outflows in the whole program are a user's own `unstake` (returning their
+principal) and `claim` (paying their accrued reward).
+
+## Accounts
+
+| Account | Purpose |
+|---|---|
+| `Pool` | One per staked mint (PDA `[POOL_SEED, staked_mint]`). Owns `staked_vault` and `reward_vault`, tracks `total_weight`, the reward accumulator, and the `funder` / `admin` keys. |
+| `staked_vault` | Token account holding all staked $ATELIER, authority = pool PDA. |
+| `reward_vault` | Token account holding USDC reward funding, authority = pool PDA. |
+| `Position` | One per `(pool, owner, tier_index)`. Tracks the owner's staked amount, weight, `lock_until`, and `reward_debt`. |
+
+## Lock tiers
+
+| Tier index | Lock | Multiplier |
+|---|---|---|
+| 0 -- Flexible | Unstake anytime | 1x |
+| 1 -- 90 days | 90-day lock | 4x |
+| 2 -- 180 days | 180-day lock | 8x |
+
+A position's **weight** is `amount staked x tier multiplier`; rewards are distributed
+proportional to weight, not raw stake, so longer commitments earn a larger share of the same
+funding round. Adding to an already-locked position re-locks the entire position to
+`now + tier.duration` (it never shortens an existing lock). The program caps tier design at a
+100x maximum multiplier and a 4-year maximum lock duration, independent of the three tiers
+actually configured.
+
+## Instructions
+
+| Instruction | Who calls it | Effect |
+|---|---|---|
+| `initialize_pool` | Program upgrade authority only | Creates the `Pool` + both vaults for a staked mint. Gated to the upgrade authority (a `ProgramData` constraint) because the pool PDA is deterministic per mint -- otherwise anyone could front-run the canonical pool and become its permanent admin. |
+| `stake` | Any holder | Locks $ATELIER into a tier, creating or adding to a `Position`. Credits the vault's actual received-amount delta, not the requested amount. |
+| `unstake` | Position owner | Requires `now >= position.lock_until` (Flexible has `lock_until = 0`). Returns staked principal 1:1. Never blocked by `set_paused`. |
+| `claim` | Position owner | Pays out the position's accrued USDC reward. Never blocked by `set_paused`. |
+| `crank_sync` (`notify_reward`) | `pool.funder` only | Deposits a new USDC funding tranche and starts (or extends) a linear drip window. |
+| `set_paused` | `pool.admin` | Pauses new `stake` calls only -- it cannot freeze existing stakers' `unstake` or `claim`. |
+
+## Reward mechanics: a linear drip, not a lump payout
+
+Rewards use a MasterChef/Synthetix-style `acc_reward_per_weight` accumulator. Every
+stake/unstake/claim/crank call first advances the accumulator by however much time has passed
+since the last update, then settles the caller's position against it before changing their
+weight. This is the standard drain-safe accumulator ordering.
+
+The important design choice is **how** a funding tranche enters that accumulator. Early versions
+folded a funded amount into the accumulator instantly, which paid the whole tranche to whoever
+held weight at that single instant -- exploitable by a low-TVL staker who pre-positions right
+before a scheduled crank, or a flexible staker who stakes one slot before and unstakes one slot
+after. The shipped design instead **drips linearly**: `crank_sync` sets a `reward_rate` and a
+`period_finish = now + reward_duration`, and the accumulator advances by
+`reward_rate x elapsed / total_weight` up to `period_finish` on every subsequent call. A position
+only earns for the time it was actually staked inside that window -- a one-slot position earns
+approximately zero.
+
+`reward_duration` is set at initialization and is not a fixed constant. The program enforces
+`MIN_REWARD_DURATION_SECS = 60` on-chain (so the JIT-capture window can never be trivially
+reopened by an unchecked short duration) and caps duration at one year; init tooling additionally
+refuses anything under one day for a production deploy.
+
+The accumulator products (`weight x acc_reward_per_weight` and `reward_rate x elapsed`) are
+computed with a 256-bit `mul_div_floor` (`math.rs`, unit-tested), not a plain `u128` multiply --
+`acc_reward_per_weight` grows unboundedly over the life of a pool, and a plain `u128` product
+would eventually overflow and permanently cap how large a future stake could be. All rounding
+floors in the vault's favor, so total claimable can never exceed total funded USDC.
+
+Principal is tracked 1:1 and separately from the reward accumulator, so there is no
+donation/inflation attack surface of the kind that affects share-price vault designs (ERC-4626
+style) -- staking $ATELIER 1:1 in and 1:1 out is not exposed to that class of bug.
+
+## Funding: 50% of creator-fee revenue, weekly
+
+The reward vault is funded from platform revenue, not token emissions. By default, 50%
+(`DEFAULT_SHARE_BPS = 5000`, configurable 0-10000 via environment) of agent-token creator-fee
+revenue is routed to staking. Creator fees accrue in SOL; a delta-windowed cursor
+(`staking_revenue_cursor`) tracks how much has already been swept, the swept amount is valued in
+USDC at the live SOL price (a valuation, not an on-chain swap), and that USDC moves from treasury
+into the pool's `reward_vault` before `crank_sync` starts the drip. This runs on a weekly cron
+(`/api/cron/staking-rewards`, targeting Monday 00:00 UTC with a minimum ~6-day interval between
+runs) and skips funding entirely if the pool doesn't exist yet, is uninitialized, or has zero
+staked weight -- so a funding round is never wasted on an empty pool.
+
+`crank_sync` itself is gated to `pool.funder` (set at initialization to the funding wallet). This
+closes a permissionless-crank griefing path where anyone could donate dust and re-crank
+repeatedly to keep resetting `period_finish` and stretch out the drip -- value was never at risk
+from that griefing (nothing can be stolen), but it could delay legitimate rewards.
+
+## Token-2022 handling
+
+The staked mint ($ATELIER) and the reward mint (USDC) are both checked at `initialize_pool`
+against a blocklist of unsafe Token-2022 extensions: `TransferFeeConfig`, `TransferHook`,
+`PermanentDelegate`, `ConfidentialTransferMint`, `DefaultAccountState`, `NonTransferable`, and
+`MintCloseAuthority`. This rules out fee-on-transfer and transfer-hook reentrancy vectors at the
+mint level rather than trying to defend against them in the transfer logic. $ATELIER carries only
+`MetadataPointer` and `TokenMetadata` extensions (both authorities disabled, mint and freeze
+authority revoked), so it passes. Legacy SPL mints like USDC pass trivially. All transfers use
+`transfer_checked`, as Token-2022 requires.
+
+## Review history
+
+Three internal adversarial reviews plus one external automated audit have run against this
+program (2026-06-29). No Critical or High-severity issue remains open.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| Init front-running via the deterministic pool PDA | Medium | Fixed: `initialize_pool` gated to the program upgrade authority |
+| Lump reward distribution let a JIT/monopoly staker scoop a whole tranche | High | Fixed: replaced with the Synthetix-style linear drip described above |
+| Reward-mint not checked against the Token-2022 blocklist | Low | Fixed: blocklist now runs on both staked and reward mints |
+| State mutated after the payout CPI in `claim`/`unstake` | Low | Fixed: reordered to checks-effects-interactions |
+| Permissionless re-notify griefing (dust-and-crank to stretch the drip) | Low, escalated to P2 externally | Fixed: `crank_sync` gated to `pool.funder` |
+| `weight x acc_reward_per_weight` used a plain u128 multiply, could overflow and cap future stake sizes | High-class (external, P1) | Fixed: 256-bit `mul_div_floor` in `math.rs` |
+| `reward_duration` of 1 second was accepted at init | Low (external, P3) | Fixed: `MIN_REWARD_DURATION_SECS = 60` enforced on-chain |
+
+Full detail, including the drip-conservation proof and the remaining accepted residuals (upgrade
+authority centralization, Token-2022 version drift), lives in `solana/SECURITY.md` and
+`solana/AUDIT.md` in the repository. See [Security & audits](/docs/protocol/security) for the
+platform-level summary.
+
+## Test coverage
+
+10/10 Anchor on-chain tests pass (`tests/**/*.ts` against a local validator), plus 7 unit tests
+for the 256-bit `mul_div_floor` math in `math.rs`. A full init -> stake -> fund -> crank -> drip
+-> claim -> unstake cycle has additionally been verified end-to-end on Solana devnet.
+
+## Devnet deployment
+
+| Field | Value |
+|---|---|
+| Program ID | `5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq` |
+| Cluster | Solana devnet |
+| Upgrade authority | `DqCZ7r6cxediYCRZoKTCPuusSzrpnsBwRe6HZZJ1HbkN` |
+| Reward mint (USDC) | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+
+## Related
+
+- [Staking (real-yield)](/docs/concepts/staking) -- product-level explanation and current status
+- [$ATELIER Token](/docs/concepts/token) -- the token being staked
+- [Security & audits](/docs/protocol/security) -- platform-wide security posture
+- [Stake $ATELIER](/docs/guides/stake-atelier) -- walkthrough once staking is live

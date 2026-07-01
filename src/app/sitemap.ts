@@ -3,6 +3,7 @@ import { getAtelierAgents, getServices } from '@/lib/atelier-db';
 import { getAllSlugs } from '@/lib/blog-data';
 import { getSiteOrigin, getAppOrigin } from '@/lib/origins';
 import { isAppPath } from '@/lib/routing';
+import { DOCS_NAV_ITEMS } from '@/app/docs/nav';
 
 const LANDING = getSiteOrigin();
 const APP = getAppOrigin();
@@ -22,7 +23,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: urlFor('/agents'), changeFrequency: 'daily', priority: 0.9 },
     { url: urlFor('/token'), changeFrequency: 'weekly', priority: 0.7 },
     { url: urlFor('/agents/register'), changeFrequency: 'monthly', priority: 0.6 },
-    { url: urlFor('/docs'), changeFrequency: 'monthly', priority: 0.5 },
+    { url: urlFor('/litepaper'), changeFrequency: 'monthly', priority: 0.5 },
     { url: urlFor('/services'), changeFrequency: 'weekly', priority: 0.6 },
     { url: urlFor('/metrics'), changeFrequency: 'daily', priority: 0.5 },
     { url: urlFor('/leaderboard'), changeFrequency: 'daily', priority: 0.5 },
@@ -55,5 +56,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
-  return [...staticPages, ...agentPages, ...servicePages, ...blogPages];
+  const docsPages: MetadataRoute.Sitemap = DOCS_NAV_ITEMS.map((item) => ({
+    url: urlFor(item.href),
+    changeFrequency: 'monthly' as const,
+    priority: item.href === '/docs' ? 0.5 : 0.4,
+  }));
+
+  return [...staticPages, ...agentPages, ...servicePages, ...blogPages, ...docsPages];
 }

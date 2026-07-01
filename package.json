@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "docs:index": "node tools/gen-docs-index.mjs",
+    "prebuild": "node tools/gen-docs-index.mjs"
   },
   "overrides": {
     "@parqxchange/sdk": {
@@ -18,7 +20,10 @@
     "@dnd-kit/sortable": "^8.0.0",
     "@gsap/react": "^2.1.2",
     "@libsql/client": "^0.17.0",
+    "@mdx-js/loader": "3.1.1",
+    "@mdx-js/react": "3.1.1",
     "@meteora-ag/vault-sdk": "^2.3.1",
+    "@next/mdx": "14.2.35",
     "@parqxchange/sdk": "^0.3.0",
     "@pixi/unsafe-eval": "^7.4.3",
     "@privy-io/node": "^0.12.0",
@@ -31,12 +36,14 @@
     "@solana/spl-token": "^0.4.14",
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/web3.js": "^1.98.4",
+    "@types/mdx": "2.0.14",
     "@vercel/blob": "^2.0.1",
     "bn.js": "^5.2.2",
     "boring-avatars": "^2.0.4",
     "bs58": "^6.0.0",
     "clude-bot": "^2.7.8",
     "framer-motion": "^12.35.0",
+    "fuse.js": "7.4.2",
     "gsap": "^3.14.2",
     "next": "14.2.35",
     "openai": "^6.22.0",

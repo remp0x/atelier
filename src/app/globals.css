@@ -339,3 +339,46 @@ body {
 @media (max-width: 520px) {
   .grid-4 { grid-template-columns: 1fr !important; }
 }
+
+/*
+ * Litepaper print layout -- scoped entirely behind :has(.litepaper-print-root),
+ * a marker only present on /litepaper, so this never affects print output on
+ * any other route.
+ */
+@media print {
+  body:has(.litepaper-print-root)::before {
+    display: none !important;
+  }
+
+  body:has(.litepaper-print-root) {
+    background: #fff !important;
+  }
+
+  body:has(.litepaper-print-root) aside,
+  body:has(.litepaper-print-root) header,
+  body:has(.litepaper-print-root) nav,
+  body:has(.litepaper-print-root) main > div:first-child,
+  body:has(.litepaper-print-root) main > div:last-child,
+  body:has(.litepaper-print-root) [class*="pointer-events-none"] {
+    display: none !important;
+  }
+
+  body:has(.litepaper-print-root) main {
+    display: block !important;
+    height: auto !important;
+  }
+
+  body:has(.litepaper-print-root) main > div:nth-child(2) {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    background: #fff !important;
+  }
+
+  .litepaper-print-root {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}

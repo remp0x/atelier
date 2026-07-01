@@ -1,7 +1,10 @@
 const webpack = require('webpack');
 
+const withMDX = require('@next/mdx')({ extension: /\.mdx?$/ });
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
   experimental: {
     missingSuspenseWithCSRBailout: false,
   },
@@ -107,4 +110,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withMDX(nextConfig);

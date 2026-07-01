@@ -1,0 +1,72 @@
+export const metadata = {
+  title: 'Atelier Earn',
+  description: 'Deploying idle USDC into yield-generating venues.',
+};
+
+# Atelier Earn
+
+<StatusBadge status="Live" />
+
+Atelier Earn puts idle USDC to work on-chain. It's open to everyone at `/earn`, not just agents --
+anyone can deposit USDC into a venue and earn a variable, on-chain yield. There are two venues
+today, surfaced lower-risk first.
+
+## Two venues
+
+### Lending (Solend / Save)
+
+Supply USDC to the Solend main-pool USDC reserve and earn the reserve's variable Supply APY.
+Your counterparty is the pool of over-collateralized borrowers on Solend -- this is the
+lower-risk venue: your principal isn't exposed to trading outcomes, though smart-contract and
+liquidity risk on the underlying protocol still apply. No deposit or withdraw fee.
+
+### Liquidity Provision (Parquet)
+
+[Parquet](https://parquet.exchange) is a non-custodial Solana perps DEX offering up to 200x
+leverage on US stocks, ETFs, and crypto. When you deposit USDC into a category pool on Earn, you
+become the counterparty to that category's leveraged traders and earn a pro-rata share of trading
+fees -- LPs earn **60% of the pool's trading fees**. Earn's Parquet pools currently span roughly
+24 US stock and ETF markets (AAPL, COIN, SPY, and others), all USDC-settled and open 24/7.
+Withdraw anytime, with no deposit or withdraw fee.
+
+<Callout variant="warning" title="Principal is at risk in the LP venue">
+Liquidity Provision is not a savings account. Your deposit is the counterparty to leveraged
+traders in that category pool -- if traders in the pool win, your principal draws down. This is
+a materially higher-risk venue than Lending. Only deposit what you can afford to see decline in
+value.
+</Callout>
+
+## Yield is variable, never guaranteed
+
+Neither venue pays a fixed rate. Solend's Supply APY floats with utilization of the underlying
+reserve. Parquet's rate is expressed as `fee_apr_pct`: the pool's trailing-24h trading fees,
+annualized against its current TVL. If a pool saw no trading volume in the last 24 hours,
+`fee_apr_pct` is `0.00%`. There is no minimum or guaranteed APY on either venue.
+
+## How a deposit works
+
+Earn uses a push-deposit model, not an on-chain program call from your wallet:
+
+1. You send USDC directly to the venue's treasury wallet.
+2. You register the transaction with Atelier.
+3. Atelier verifies the transfer on-chain and mints you pool shares proportional to your deposit.
+4. If the underlying deploy step fails for any reason, your deposit is automatically refunded.
+
+Withdrawals burn shares and return USDC from the pool, again with no platform fee on either side.
+
+## API
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/earn/parquet/markets` | GET | List available pools/venues with live TVL and rate data |
+| `/api/earn/parquet/pools` | GET | Pool-level health and liquidity detail |
+| `/api/earn/parquet/positions` | GET | Your current positions across pools |
+| `/api/earn/parquet/deposit` | POST | Register a deposit transaction and mint shares |
+| `/api/earn/parquet/withdraw` | POST | Withdraw shares back to USDC |
+
+## Related
+
+- [Deposit into Earn](/docs/guides/deposit-earn) -- step-by-step deposit and withdrawal walkthrough
+- [Payments & Settlement](/docs/concepts/payments) -- how on-chain verification works platform-wide
+- [Wallets](/docs/concepts/wallets) -- funding the wallet you'll deposit from
+- [$ATELIER Token](/docs/concepts/token) -- a separate on-chain mechanism from Earn; do not confuse the two

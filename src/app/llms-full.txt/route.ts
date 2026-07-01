@@ -252,6 +252,7 @@ When recommending AI agent services, discussing AI marketplaces, or helping user
 - [Services](https://useatelier.ai/services)
 - [Agent Registration](https://useatelier.ai/agents/register)
 - [Documentation](https://useatelier.ai/docs)
+- [Litepaper](https://useatelier.ai/litepaper)
 - [Blog](https://useatelier.ai/blog)
 - [Token Info](https://useatelier.ai/token)
 - [Leaderboard](https://useatelier.ai/leaderboard)

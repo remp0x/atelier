@@ -1,0 +1,75 @@
+export const metadata = {
+  title: 'Stake $ATELIER',
+  description: 'Staking tokens to start earning a revenue share.',
+};
+
+# Stake $ATELIER
+
+<StatusBadge status="Beta" />
+
+<Callout variant="warning" title="Not audited, not on mainnet">
+Staking is in testing on Solana devnet and has not been professionally audited. It is not live on
+mainnet, and there's no date for that yet -- a third-party audit is a hard gate before any
+mainnet deployment. This guide describes how staking is designed to work once it ships, not
+something you can stake into today.
+</Callout>
+
+$ATELIER staking is a real-yield, revenue-share program: you lock $ATELIER and earn a pro-rata
+share of platform revenue paid out in USDC, not inflationary token emissions. See
+[Staking (real-yield)](/docs/concepts/staking) for the full mechanics and
+[Token & staking program](/docs/protocol/token-and-staking) for the on-chain program details.
+
+<Steps>
+<Step title="Acquire $ATELIER">
+$ATELIER is a Solana token launched via PumpFun (Token-2022, mint and freeze authority revoked).
+You'll need it in your Solana wallet before you can stake. See
+[$ATELIER Token](/docs/concepts/token) for token details and
+[Fund your wallet](/docs/guides/fund-your-wallet) for getting a Solana wallet funded.
+</Step>
+<Step title="Choose a lock tier">
+Staking locks your $ATELIER into one of three tiers, each with a different reward multiplier:
+
+| Tier | Lock | Multiplier |
+|---|---|---|
+| Flexible | Unstake anytime | 1x |
+| 90-day | 90-day lock | 4x |
+| 180-day | 180-day lock | 8x |
+
+A longer lock means a larger weighted share of the reward pool for the same amount staked, but in
+the 90-day and 180-day tiers your principal is committed for that lock's duration -- there's no
+early exit.
+</Step>
+<Step title="Stake">
+Once staking is live, you'll stake $ATELIER into your chosen tier from `/stake` using your Privy
+embedded Solana wallet (or a connected external wallet). The program is non-custodial: a
+program-owned PDA holds both the staked-$ATELIER vault and the USDC reward vault, and no admin
+key can move funds out of either -- only your own unstake and claim instructions can.
+</Step>
+<Step title="Earn USDC via linear drip">
+Rewards don't accrue continuously and sit ready to claim the instant they're funded. Each funding
+round pays out gradually over a fixed reward-duration window, pro-rata to your weighted share
+(amount staked x tier multiplier) for the time you were staked during that window. Rewards come
+from platform revenue -- by default, 50% of creator-fee revenue is routed into the reward vault
+on a periodic funding cadence -- not from new token issuance.
+</Step>
+<Step title="Claim">
+Claiming pulls whatever has dripped so far into your weighted share; it doesn't fast-forward the
+drip window. You can claim as often as you like -- there's no penalty for claiming smaller
+amounts more frequently versus waiting.
+</Step>
+<Step title="Unstake">
+Unstaking returns your staked $ATELIER 1:1 -- staking never puts your principal at market or
+trading risk the way, say, Earn's Liquidity Provision venue does. In the Flexible tier you can
+unstake anytime; in the 90-day and 180-day tiers, unstaking is available once your lock period
+has elapsed.
+</Step>
+</Steps>
+
+## What's next
+
+<CardGrid columns={2}>
+<Card title="Staking (real-yield)" description="Full mechanics: lock tiers, the linear drip model, and reward sourcing." href="/docs/concepts/staking" />
+<Card title="Token & staking program" description="On-chain program details, addresses, and audit status." href="/docs/protocol/token-and-staking" />
+<Card title="$ATELIER Token" description="What you're staking, and its other utility." href="/docs/concepts/token" />
+<Card title="Atelier Earn" description="A separate, currently-live yield product with a different risk model." href="/docs/concepts/earn" />
+</CardGrid>

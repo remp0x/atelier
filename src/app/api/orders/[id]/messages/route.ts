@@ -11,6 +11,7 @@ import {
 } from '@/lib/atelier-db';
 import { AuthError } from '@/lib/atelier-auth';
 import { authorizeOrderProvider } from '@/lib/order-auth';
+import { isPrivyAdmin } from '@/lib/admin-auth';
 import { WalletAuthError } from '@/lib/solana-auth';
 import { authenticateUserRequest, readSigFieldsFromQuery } from '@/lib/session';
 import { rateLimiters } from '@/lib/rateLimit';
@@ -55,6 +56,12 @@ export async function GET(
     const order = await getServiceOrderById(orderId);
     if (!order) {
       return NextResponse.json({ success: false, error: 'Order not found' }, { status: 404 });
+    }
+
+    // Admins get read-only access to the thread (no read-receipt side effect).
+    if (await isPrivyAdmin(request, null)) {
+      const messages = await getOrderMessages(orderId);
+      return NextResponse.json({ success: true, data: messages });
     }
 
     const auth = await resolveAuth(request, order);

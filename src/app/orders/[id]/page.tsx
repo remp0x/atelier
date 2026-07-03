@@ -78,13 +78,258 @@ function truncateWallet(addr: string | null | undefined): string {
   return addr.length > 12 ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : addr;
 }
 
-function buyerDisplay(order: ServiceOrder): string | null {
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function explorerAccountUrl(addr: string, chain: 'solana' | 'base'): string {
+  return chain === 'base'
+    ? `https://basescan.org/address/${addr}`
+    : `https://solscan.io/account/${addr}`;
+}
+
+function Avatar({ src, name, kind }: { src?: string | null; name: string; kind: 'human' | 'agent' }) {
+  const [err, setErr] = useState(false);
+  if (src && !err) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className="w-9 h-9 rounded-full object-cover border border-neutral-200 dark:border-neutral-800 shrink-0"
+        onError={() => setErr(true)}
+      />
+    );
+  }
   return (
-    order.client_name ||
-    order.client_username ||
-    (order.client_wallet ? truncateWallet(order.client_wallet) : null) ||
-    (order.payer_address ? truncateWallet(order.payer_address) : null)
+    <div className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-2xs font-mono font-bold text-white ${kind === 'agent' ? 'gradient-atelier' : 'bg-neutral-600 dark:bg-neutral-700'}`}>
+      {initials(name)}
+    </div>
   );
+}
+
+function WalletChip({ address, chain }: { address: string; chain: 'solana' | 'base' }) {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback(() => {
+    navigator.clipboard?.writeText(address).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    }).catch(() => { /* clipboard unavailable */ });
+  }, [address]);
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-mono text-2xs text-neutral-500 dark:text-neutral-400">{truncateWallet(address)}</span>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label="Copy address"
+        className="text-neutral-400 hover:text-atelier transition-colors cursor-pointer"
+      >
+        {copied ? (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        ) : (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+          </svg>
+        )}
+      </button>
+      <a
+        href={explorerAccountUrl(address, chain)}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="View on block explorer"
+        className="text-neutral-400 hover:text-atelier transition-colors"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+        </svg>
+      </a>
+    </div>
+  );
+}
+
+interface PartyProps {
+  label: string;
+  kind: 'human' | 'agent';
+  name: string;
+  official?: boolean;
+  x402?: boolean;
+  handle?: string | null;
+  avatar?: string | null;
+  profileHref?: string | null;
+  wallet?: string | null;
+  chain?: 'solana' | 'base';
+}
+
+function PartyCard({ label, kind, name, official, x402, handle, avatar, profileHref, wallet, chain = 'solana' }: PartyProps) {
+  const nameNode = profileHref ? (
+    <Link href={profileHref} className="text-black dark:text-white text-sm font-semibold hover:text-atelier transition-colors truncate">{name}</Link>
+  ) : (
+    <span className="text-black dark:text-white text-sm font-semibold truncate">{name}</span>
+  );
+  return (
+    <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-2xs font-mono text-neutral-500 uppercase tracking-wider">{label}</span>
+        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs font-mono ${kind === 'agent' ? 'bg-atelier/10 text-atelier-bright' : 'bg-emerald-400/10 text-emerald-400'}`}>
+          {kind === 'agent' ? (
+            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 3.75H6.912a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H15M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859M12 3v8.25m0 0l-3-3m3 3l3-3" />
+            </svg>
+          ) : (
+            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+          )}
+          {kind === 'agent' ? 'Agent' : 'Human'}
+        </span>
+      </div>
+      <div className="flex items-center gap-2.5">
+        <Avatar src={avatar} name={name} kind={kind} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1">
+            {nameNode}
+            {official && (
+              <svg className="w-3.5 h-3.5 text-atelier shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-label="Official">
+                <path fillRule="evenodd" d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+              </svg>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {handle && (
+              <a href={`https://x.com/${handle}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-2xs font-mono text-neutral-500 hover:text-atelier transition-colors">
+                <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                @{handle}
+              </a>
+            )}
+            {x402 && <span className="text-2xs font-mono text-neutral-500">paid via x402</span>}
+          </div>
+          {wallet && <div className="mt-1"><WalletChip address={wallet} chain={chain} /></div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buyerParty(order: ServiceOrder): PartyProps {
+  const wallet = order.client_wallet || order.payer_address || null;
+  if (order.client_type === 'agent_x402') {
+    return {
+      label: 'Buyer',
+      kind: 'agent',
+      x402: true,
+      name: order.client_name || 'Autonomous Agent',
+      profileHref: order.client_agent_id ? atelierHref(`/atelier/agents/${order.client_agent_id}`) : null,
+      wallet,
+      chain: order.payment_chain,
+    };
+  }
+  return {
+    label: 'Buyer',
+    kind: 'human',
+    name: order.client_display_name || order.client_username || (wallet ? truncateWallet(wallet) : 'Unknown'),
+    handle: order.client_twitter,
+    avatar: order.client_avatar,
+    profileHref: order.client_username ? `/profile/${order.client_username}` : null,
+    wallet,
+    chain: order.payment_chain,
+  };
+}
+
+function sellerParty(order: ServiceOrder): PartyProps {
+  return {
+    label: 'Seller',
+    kind: 'agent',
+    official: !!order.provider_official,
+    name: order.provider_name,
+    handle: order.provider_twitter,
+    avatar: order.provider_avatar,
+    profileHref: atelierHref(`/atelier/agents/${order.provider_slug || order.provider_agent_id}`),
+    chain: order.payment_chain,
+  };
+}
+
+function PartiesRow({ order, side = false }: { order: ServiceOrder; side?: boolean }) {
+  if (side) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <PartyCard {...buyerParty(order)} />
+        <div className="hidden sm:flex flex-col items-center text-neutral-400">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15m0 0l-6-6m6 6l-6 6" />
+          </svg>
+        </div>
+        <PartyCard {...sellerParty(order)} />
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      <PartyCard {...buyerParty(order)} />
+      <PartyCard {...sellerParty(order)} />
+    </div>
+  );
+}
+
+interface PaymentRow { label: string; value: string; href?: string; strong?: boolean; positive?: boolean; muted?: boolean; }
+
+function PaymentSummary({ rows }: { rows: PaymentRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black space-y-1.5">
+      <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-1">Payment</p>
+      {rows.map((r, i) => (
+        <div key={i} className={`flex items-center justify-between ${r.strong ? 'pt-1 border-t border-neutral-200 dark:border-neutral-800' : ''}`}>
+          <span className="text-neutral-500 font-mono text-2xs">{r.label}</span>
+          {r.href ? (
+            <a href={r.href} target="_blank" rel="noopener noreferrer" className="text-atelier-bright text-2xs font-mono hover:underline">{r.value}</a>
+          ) : (
+            <span className={`text-xs font-mono ${r.positive ? 'text-emerald-500' : r.muted ? 'text-neutral-500' : 'text-black dark:text-white'} ${r.strong ? 'font-bold' : ''}`}>{r.value}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function txExplorerUrl(hash: string, chain: 'solana' | 'base'): string {
+  return chain === 'base' ? `https://basescan.org/tx/${hash}` : `https://solscan.io/tx/${hash}`;
+}
+
+function buyerPaymentRows(order: ServiceOrder): PaymentRow[] {
+  const rows: PaymentRow[] = [];
+  if (order.quoted_price_usd) rows.push({ label: 'Price', value: `$${order.quoted_price_usd} USDC`, strong: true });
+  if (order.escrow_tx_hash) rows.push({ label: 'Escrow tx', value: truncateId(order.escrow_tx_hash), href: txExplorerUrl(order.escrow_tx_hash, order.payment_chain) });
+  return rows;
+}
+
+function sellerPaymentRows(order: ServiceOrder, quoted: number, fee: number, net: number): PaymentRow[] {
+  const rows: PaymentRow[] = [];
+  if (quoted > 0) {
+    rows.push({ label: 'Quote', value: `$${quoted.toFixed(2)} USDC` });
+    rows.push({ label: 'Platform fee', value: `-$${fee.toFixed(2)}`, muted: true });
+    rows.push({ label: 'You earn', value: `$${net.toFixed(2)} USDC`, strong: true, positive: true });
+  }
+  if (order.payout_tx_hash) rows.push({ label: 'Payout tx', value: truncateId(order.payout_tx_hash), href: txExplorerUrl(order.payout_tx_hash, order.payment_chain) });
+  return rows;
+}
+
+function adminPaymentRows(order: ServiceOrder, quoted: number, fee: number, net: number): PaymentRow[] {
+  const rows: PaymentRow[] = [];
+  if (quoted > 0) {
+    rows.push({ label: 'Buyer paid', value: `$${quoted.toFixed(2)} USDC` });
+    rows.push({ label: 'Platform fee', value: `+$${fee.toFixed(2)}`, positive: true });
+    rows.push({ label: 'Seller earns', value: `$${net.toFixed(2)} USDC`, strong: true });
+  }
+  if (order.escrow_tx_hash) rows.push({ label: 'Escrow tx', value: truncateId(order.escrow_tx_hash), href: txExplorerUrl(order.escrow_tx_hash, order.payment_chain) });
+  if (order.payout_tx_hash) rows.push({ label: 'Payout tx', value: truncateId(order.payout_tx_hash), href: txExplorerUrl(order.payout_tx_hash, order.payment_chain) });
+  return rows;
 }
 
 function formatTimeRemaining(expiresAt: string): string {
@@ -968,6 +1213,8 @@ function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: 
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const didInitRef = useRef(false);
+  const justSentRef = useRef(false);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -993,7 +1240,19 @@ function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: 
   }, [fetchMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = containerRef.current;
+    if (!el || messages.length === 0) return;
+    // Skip auto-scroll on the first populated render: opening an order should
+    // land at the top of the thread, not yank the page to the bottom.
+    if (!didInitRef.current) {
+      didInitRef.current = true;
+      return;
+    }
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (justSentRef.current || nearBottom) {
+      el.scrollTop = el.scrollHeight;
+    }
+    justSentRef.current = false;
   }, [messages.length]);
 
   const handleSend = useCallback(async () => {
@@ -1016,6 +1275,7 @@ function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: 
       });
       const json = await res.json();
       if (json.success) {
+        justSentRef.current = true;
         setMessages((prev) => [...prev, json.data]);
         setInput('');
       }
@@ -1183,6 +1443,10 @@ export default function AtelierOrderPage() {
 
   const { order, review } = data;
 
+  if (data.viewer_role === 'admin') {
+    return <AdminOrderView data={data} />;
+  }
+
   if (data.viewer_role === 'seller') {
     return <SellerOrderView data={data} onRefresh={load} buildChatAuth={buildChatAuth} />;
   }
@@ -1241,35 +1505,13 @@ export default function AtelierOrderPage() {
                     {STATUS_LABELS[order.status] || order.status}
                   </span>
                 </div>
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <PartiesRow order={order} />
+                  <PaymentSummary rows={buyerPaymentRows(order)} />
+                  <div className="flex items-center justify-between px-1">
                     <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
-                    <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
+                    <span className="text-neutral-500 text-2xs font-mono">{formatDate(order.created_at)}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-neutral-500 font-mono text-2xs">Provider</span>
-                    <Link href={atelierHref(`/atelier/agents/${order.provider_slug || order.provider_agent_id}`)} className="text-atelier hover:underline text-xs font-mono">
-                      {order.provider_name}
-                    </Link>
-                  </div>
-                  {buyerDisplay(order) && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Client</span>
-                      <span className="text-black dark:text-white text-xs font-mono">{buyerDisplay(order)}</span>
-                    </div>
-                  )}
-                  {order.quoted_price_usd && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Price</span>
-                      <span className="text-black dark:text-white text-xs font-mono font-bold">${order.quoted_price_usd} USDC</span>
-                    </div>
-                  )}
-                  {order.escrow_tx_hash && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Tx</span>
-                      <span className="text-atelier-bright text-2xs font-mono">{truncateId(order.escrow_tx_hash)}</span>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -2036,6 +2278,119 @@ function SellerDeliverForm({ orderId, buildAuth, buildUploadAuth, revisionReques
   );
 }
 
+function AdminOrderView({ data }: { data: OrderData }) {
+  const { order } = data;
+  const quoted = parseFloat(order.quoted_price_usd || '0');
+  const fee = parseFloat(order.platform_fee_usd || '0');
+  const net = Math.max(0, Math.round((quoted - fee) * 100) / 100);
+
+  const references: string[] = (() => {
+    try { return order.reference_images ? JSON.parse(order.reference_images) : []; } catch { return []; }
+  })();
+  const requirements: [string, string][] = (() => {
+    try {
+      const a: Record<string, string> = order.requirement_answers ? JSON.parse(order.requirement_answers) : {};
+      return Object.entries(a).filter(([, v]) => v?.trim());
+    } catch { return []; }
+  })();
+
+  return (
+    <AtelierAppLayout>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-20">
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <Link href={atelierHref('/atelier/orders')} className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-atelier font-mono transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+            Orders
+          </Link>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-2xs font-mono bg-atelier/10 text-atelier-bright uppercase tracking-wider">
+            Admin · read-only
+          </span>
+        </div>
+
+        <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a] mb-4">
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold font-display truncate">{order.service_title || 'Order'}</h1>
+              <p className="text-2xs font-mono text-neutral-500 mt-0.5">{order.id}</p>
+            </div>
+            <span className={`shrink-0 inline-flex px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium ${STATUS_COLORS[order.status] || 'bg-neutral-800 text-neutral-300'}`}>
+              {STATUS_LABELS[order.status] || order.status}
+            </span>
+          </div>
+          <PartiesRow order={order} side />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <PaymentSummary rows={adminPaymentRows(order, quoted, fee, net)} />
+          <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black space-y-1.5">
+            <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-1">Details</p>
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
+              <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500 font-mono text-2xs">Origin</span>
+              <span className="text-black dark:text-white text-xs font-mono">{order.client_type === 'agent_x402' ? 'Agent · x402' : 'Human · UI'}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500 font-mono text-2xs">Payment</span>
+              <span className="text-black dark:text-white text-xs font-mono">{order.payment_method || '—'} · {order.payment_chain}</span>
+            </div>
+            {order.completed_at && (
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500 font-mono text-2xs">Completed</span>
+                <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.completed_at)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {order.brief && (
+          <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a] mt-4">
+            <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Brief</p>
+            <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed break-all">{order.brief}</p>
+            {references.length > 0 && (
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {references.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                    <img src={url} alt={`Reference ${i + 1}`} className="w-12 h-12 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors" onError={(e) => { const el = e.currentTarget.closest('a'); if (el instanceof HTMLElement) el.style.display = 'none'; }} />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {requirements.length > 0 && (
+          <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a] mt-4">
+            <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Requirements</p>
+            <div className="space-y-2">
+              {requirements.map(([label, value]) => (
+                <div key={label}>
+                  <p className="text-2xs font-mono text-neutral-500">{label}</p>
+                  <p className="text-sm text-gray-700 dark:text-neutral-300">{value}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {data.deliverables.length > 0 && (
+          <div className="mt-4">
+            <DeliverablesGallery deliverables={data.deliverables} />
+          </div>
+        )}
+
+        <p className="text-2xs font-mono text-neutral-500 text-center mt-6">
+          The buyer/seller message thread is private and not shown in the admin view.
+        </p>
+      </div>
+    </AtelierAppLayout>
+  );
+}
+
 function SellerOrderView({ data, onRefresh, buildChatAuth }: {
   data: OrderData;
   onRefresh: () => void;
@@ -2122,43 +2477,13 @@ function SellerOrderView({ data, onRefresh, buildChatAuth }: {
                 </div>
                 <h1 className="text-base font-bold font-display truncate">{order.service_title}</h1>
                 <p className="text-2xs font-mono text-neutral-500 mt-0.5 mb-3">{order.id}</p>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <PartiesRow order={order} />
+                  <PaymentSummary rows={sellerPaymentRows(order, quoted, fee, net)} />
+                  <div className="flex items-center justify-between px-1">
                     <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
-                    <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
+                    <span className="text-neutral-500 text-2xs font-mono">{formatDate(order.created_at)}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-neutral-500 font-mono text-2xs">Buyer</span>
-                    <span className="text-black dark:text-white text-xs font-mono">{buyerDisplay(order) || 'Unknown'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-neutral-500 font-mono text-2xs">Seller</span>
-                    <Link href={atelierHref(`/atelier/agents/${order.provider_slug || order.provider_agent_id}`)} className="text-atelier hover:underline text-xs font-mono">
-                      {order.provider_name}
-                    </Link>
-                  </div>
-                  {quoted > 0 && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-500 font-mono text-2xs">Quote</span>
-                        <span className="text-black dark:text-white text-xs font-mono">${quoted.toFixed(2)} USDC</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-500 font-mono text-2xs">Platform fee</span>
-                        <span className="text-neutral-500 text-xs font-mono">-${fee.toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center justify-between pt-1 border-t border-neutral-200 dark:border-neutral-800">
-                        <span className="text-neutral-500 font-mono text-2xs">You earn</span>
-                        <span className="text-emerald-500 text-xs font-mono font-bold">${net.toFixed(2)} USDC</span>
-                      </div>
-                    </>
-                  )}
-                  {order.payout_tx_hash && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Payout</span>
-                      <span className="text-atelier-bright text-2xs font-mono">{truncateId(order.payout_tx_hash)}</span>
-                    </div>
-                  )}
                 </div>
               </div>
 

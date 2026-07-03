@@ -1616,54 +1616,6 @@ export default function AtelierOrderPage() {
                   </div>
                 )}
 
-                {/* Approve / Revise / Dispute */}
-                {order.status === 'delivered' && isOrderClient && (
-                  <>
-                    {walletMismatch && (
-                      <p className="text-2xs font-mono text-amber-500/90 px-2.5 py-2 rounded border border-amber-400/20 bg-amber-400/5 leading-relaxed">
-                        Connected wallet differs from the one used to place this order. You can still approve — releasing payment to the agent doesn&apos;t require your wallet.
-                      </p>
-                    )}
-                    {order.revision_count > 0 && (
-                      <p className="text-2xs font-mono text-neutral-500 px-1">
-                        {order.revision_count}/{order.max_revisions} revisions used
-                      </p>
-                    )}
-                    <button
-                      onClick={() => setShowApproveConfirm(true)}
-                      disabled={approving || disputing || requestingRevision}
-                      className="w-full py-2.5 rounded bg-emerald-500 text-white text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all hover:bg-emerald-600 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {approving ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                          Approving...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                          </svg>
-                          Approve & Complete
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => { setShowRevisionForm(true); setShowDisputeForm(false); }}
-                      disabled={approving || requestingRevision || showRevisionForm}
-                      className="w-full py-2 rounded border border-amber-400/30 text-amber-400 text-xs font-mono hover:bg-amber-400/10 disabled:opacity-60 transition-colors cursor-pointer"
-                    >
-                      {order.revision_count >= order.max_revisions ? 'Extra Revision' : 'Request Revision'}
-                    </button>
-                    <button
-                      onClick={() => { setShowDisputeForm(true); setShowRevisionForm(false); }}
-                      disabled={approving || disputing || showDisputeForm}
-                      className="w-full text-2xs font-mono text-red-400/70 hover:text-red-400 disabled:opacity-60 transition-colors cursor-pointer py-1"
-                    >
-                      Report a problem
-                    </button>
-                  </>
-                )}
 
                 {/* Cancel */}
                 {canCancel && (
@@ -1761,6 +1713,67 @@ export default function AtelierOrderPage() {
             {/* Deliverables gallery for standard (non-workspace) orders */}
             {!showWorkspace && data.deliverables.length > 0 && (
               <DeliverablesGallery deliverables={data.deliverables} locked={locked} />
+            )}
+
+            {/* Approve / Revise / Dispute — co-located with the delivered result */}
+            {order.status === 'delivered' && isOrderClient && (
+              <div className="p-4 rounded-lg border border-emerald-400/30 bg-emerald-400/5 space-y-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-mono text-emerald-400 font-medium">Happy with the result?</p>
+                    {order.quoted_price_usd && (
+                      <p className="text-2xs font-mono text-neutral-500 mt-0.5">
+                        Approving releases ${order.quoted_price_usd} USDC to {order.provider_name}.
+                      </p>
+                    )}
+                  </div>
+                  {order.revision_count > 0 && (
+                    <span className="text-2xs font-mono text-neutral-500 shrink-0">
+                      {order.revision_count}/{order.max_revisions} revisions used
+                    </span>
+                  )}
+                </div>
+                {walletMismatch && (
+                  <p className="text-2xs font-mono text-amber-500/90 px-2.5 py-2 rounded border border-amber-400/20 bg-amber-400/5 leading-relaxed">
+                    Connected wallet differs from the one used to place this order. You can still approve — releasing payment to the agent doesn&apos;t require your wallet.
+                  </p>
+                )}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => setShowApproveConfirm(true)}
+                    disabled={approving || disputing || requestingRevision}
+                    className="flex-1 py-2.5 rounded bg-emerald-500 text-white text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all hover:bg-emerald-600 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {approving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        Approve &amp; Complete
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setShowRevisionForm(true); setShowDisputeForm(false); }}
+                    disabled={approving || requestingRevision || showRevisionForm}
+                    className="sm:w-auto py-2.5 px-4 rounded border border-amber-400/30 text-amber-400 text-sm font-mono hover:bg-amber-400/10 disabled:opacity-60 transition-colors cursor-pointer"
+                  >
+                    {order.revision_count >= order.max_revisions ? 'Extra Revision' : 'Request Revision'}
+                  </button>
+                </div>
+                <button
+                  onClick={() => { setShowDisputeForm(true); setShowRevisionForm(false); }}
+                  disabled={approving || disputing || showDisputeForm}
+                  className="text-2xs font-mono text-red-400/70 hover:text-red-400 disabled:opacity-60 transition-colors cursor-pointer"
+                >
+                  Report a problem
+                </button>
+              </div>
             )}
 
             {review && <ReviewInline review={review} />}

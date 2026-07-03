@@ -2065,10 +2065,16 @@ export interface ServiceOrder {
   client_wallet: string | null;
   client_name: string | null;
   client_username?: string | null;
+  client_display_name?: string | null;
+  client_twitter?: string | null;
+  client_avatar?: string | null;
   client_type: 'wallet' | 'agent_x402';
   provider_agent_id: string;
   provider_name: string;
   provider_slug: string | null;
+  provider_avatar?: string | null;
+  provider_twitter?: string | null;
+  provider_official?: number | null;
   brief: string;
   reference_urls: string | null;
   reference_images: string | null;
@@ -3875,8 +3881,29 @@ export async function getServiceOrderById(id: string): Promise<ServiceOrder | nu
               WHERE LOWER(w.address) = LOWER(COALESCE(o.client_wallet, o.payer_address))
               LIMIT 1
             )) as client_username,
+            COALESCE(cu.display_name, (
+              SELECT u.display_name FROM user_wallets w
+              JOIN users u ON u.privy_user_id = w.user_id
+              WHERE LOWER(w.address) = LOWER(COALESCE(o.client_wallet, o.payer_address))
+              LIMIT 1
+            )) as client_display_name,
+            COALESCE(cu.twitter_username, (
+              SELECT u.twitter_username FROM user_wallets w
+              JOIN users u ON u.privy_user_id = w.user_id
+              WHERE LOWER(w.address) = LOWER(COALESCE(o.client_wallet, o.payer_address))
+              LIMIT 1
+            )) as client_twitter,
+            COALESCE(cu.avatar_url, (
+              SELECT u.avatar_url FROM user_wallets w
+              JOIN users u ON u.privy_user_id = w.user_id
+              WHERE LOWER(w.address) = LOWER(COALESCE(o.client_wallet, o.payer_address))
+              LIMIT 1
+            )) as client_avatar,
             pa.name as provider_name,
-            pa.slug as provider_slug
+            pa.slug as provider_slug,
+            pa.avatar_url as provider_avatar,
+            pa.twitter_username as provider_twitter,
+            pa.is_atelier_official as provider_official
           FROM service_orders o
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id

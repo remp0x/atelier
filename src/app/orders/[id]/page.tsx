@@ -1455,7 +1455,6 @@ export default function AtelierOrderPage() {
   }
 
   const isWorkspace = order.quota_total > 0;
-  const isTerminal = order.status === 'cancelled' || order.status === 'disputed';
   const showWorkspace = isWorkspace && ['in_progress', 'delivered', 'completed'].includes(order.status);
 
   const walletMatches = !!walletAddress && order.client_wallet === walletAddress;
@@ -1563,57 +1562,7 @@ export default function AtelierOrderPage() {
               })()}
 
               {/* Timeline Progress */}
-              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
-                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-4">Progress</p>
-                <div className="relative ml-1">
-                  {(() => {
-                    const currentIdx = statusIndex(order.status);
-                    const steps = STATUS_SEQUENCE.map((s, i) => {
-                      const isDone = i < currentIdx || (i === currentIdx && order.status === 'completed');
-                      const isCurrent = i === currentIdx && order.status !== 'completed';
-                      const isRevisionStep = order.status === 'revision_requested' && s === 'delivered';
-                      return { key: s, label: STATUS_LABELS[s], isDone: isDone || isRevisionStep, isCurrent, isTerminalStep: false, isRevisionStep: false };
-                    });
-                    if (order.status === 'revision_requested') {
-                      steps.push({ key: 'revision_requested', label: 'Revision Requested', isDone: false, isCurrent: true, isTerminalStep: false, isRevisionStep: true });
-                    }
-                    if (isTerminal) {
-                      steps.push({ key: order.status, label: order.status === 'cancelled' ? 'Cancelled' : 'Disputed', isDone: true, isCurrent: false, isTerminalStep: true, isRevisionStep: false });
-                    }
-                    return steps.map((step, i) => {
-                      const isLast = i === steps.length - 1;
-                      return (
-                        <div key={step.key} className="flex items-start gap-3 relative">
-                          <div className="flex flex-col items-center w-4 shrink-0">
-                            <div className="flex items-center justify-center w-4 h-4">
-                              {step.isTerminalStep ? (
-                                <div className="w-2.5 h-2.5 rounded-full bg-red-500 dark:bg-red-400" />
-                              ) : step.isCurrent ? (
-                                <div className="w-2.5 h-2.5 rounded-full bg-atelier animate-pulse-atelier ring-[3px] ring-atelier/20" />
-                              ) : step.isDone ? (
-                                <svg className="w-4 h-4 text-atelier" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                </svg>
-                              ) : (
-                                <div className="w-2 h-2 rounded-full border-[1.5px] border-gray-300 dark:border-neutral-600" />
-                              )}
-                            </div>
-                            {!isLast && (
-                              <div className={`w-px h-4 ${step.isDone ? 'bg-atelier/30' : 'bg-gray-200 dark:bg-neutral-800'}`} />
-                            )}
-                          </div>
-                          <span className={`text-xs font-mono leading-4 ${
-                            step.isTerminalStep ? 'text-red-600 dark:text-red-400 font-medium' :
-                            step.isRevisionStep ? 'text-amber-600 dark:text-amber-400 font-medium' :
-                            step.isCurrent ? 'text-gray-900 dark:text-white font-medium' :
-                            step.isDone ? 'text-gray-500 dark:text-neutral-400' : 'text-gray-300 dark:text-neutral-600'
-                          }`}>{step.label}</span>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
+              <OrderProgress order={order} />
 
               {/* Actions */}
               <div className="space-y-2">
@@ -2281,11 +2230,67 @@ function SellerDeliverForm({ orderId, buildAuth, buildUploadAuth, revisionReques
   );
 }
 
+function OrderProgress({ order }: { order: ServiceOrder }) {
+  const isTerminal = order.status === 'cancelled' || order.status === 'disputed';
+  const currentIdx = statusIndex(order.status);
+  const steps = STATUS_SEQUENCE.map((s, i) => {
+    const isDone = i < currentIdx || (i === currentIdx && order.status === 'completed');
+    const isCurrent = i === currentIdx && order.status !== 'completed';
+    const isRevisionStep = order.status === 'revision_requested' && s === 'delivered';
+    return { key: s, label: STATUS_LABELS[s], isDone: isDone || isRevisionStep, isCurrent, isTerminalStep: false, isRevisionStep: false };
+  });
+  if (order.status === 'revision_requested') {
+    steps.push({ key: 'revision_requested', label: 'Revision Requested', isDone: false, isCurrent: true, isTerminalStep: false, isRevisionStep: true });
+  }
+  if (isTerminal) {
+    steps.push({ key: order.status, label: order.status === 'cancelled' ? 'Cancelled' : 'Disputed', isDone: true, isCurrent: false, isTerminalStep: true, isRevisionStep: false });
+  }
+  return (
+    <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+      <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-4">Progress</p>
+      <div className="relative ml-1">
+        {steps.map((step, i) => {
+          const isLast = i === steps.length - 1;
+          return (
+            <div key={step.key} className="flex items-start gap-3 relative">
+              <div className="flex flex-col items-center w-4 shrink-0">
+                <div className="flex items-center justify-center w-4 h-4">
+                  {step.isTerminalStep ? (
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500 dark:bg-red-400" />
+                  ) : step.isCurrent ? (
+                    <div className="w-2.5 h-2.5 rounded-full bg-atelier animate-pulse-atelier ring-[3px] ring-atelier/20" />
+                  ) : step.isDone ? (
+                    <svg className="w-4 h-4 text-atelier" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  ) : (
+                    <div className="w-2 h-2 rounded-full border-[1.5px] border-gray-300 dark:border-neutral-600" />
+                  )}
+                </div>
+                {!isLast && (
+                  <div className={`w-px h-4 ${step.isDone ? 'bg-atelier/30' : 'bg-gray-200 dark:bg-neutral-800'}`} />
+                )}
+              </div>
+              <span className={`text-xs font-mono leading-4 ${
+                step.isTerminalStep ? 'text-red-600 dark:text-red-400 font-medium' :
+                step.isRevisionStep ? 'text-amber-600 dark:text-amber-400 font-medium' :
+                step.isCurrent ? 'text-gray-900 dark:text-white font-medium' :
+                step.isDone ? 'text-gray-500 dark:text-neutral-400' : 'text-gray-300 dark:text-neutral-600'
+              }`}>{step.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AdminOrderView({ data, buildChatAuth }: { data: OrderData; buildChatAuth: () => Promise<ChatAuth> }) {
   const { order } = data;
   const quoted = parseFloat(order.quoted_price_usd || '0');
   const fee = parseFloat(order.platform_fee_usd || '0');
   const net = Math.max(0, Math.round((quoted - fee) * 100) / 100);
+  const showChat = !['pending_quote', 'quoted', 'accepted'].includes(order.status);
 
   const references: string[] = (() => {
     try { return order.reference_images ? JSON.parse(order.reference_images) : []; } catch { return []; }
@@ -2299,19 +2304,15 @@ function AdminOrderView({ data, buildChatAuth }: { data: OrderData; buildChatAut
 
   return (
     <AtelierAppLayout>
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-20">
-        <div className="flex items-center justify-between gap-3 mb-6">
-          <Link href={atelierHref('/atelier/orders')} className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-atelier font-mono transition-colors">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-            </svg>
-            Orders
-          </Link>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-2xs font-mono bg-atelier/10 text-atelier-bright uppercase tracking-wider">
-            Admin · read-only
-          </span>
-        </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-20">
+        <Link href={atelierHref('/atelier/orders')} className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-atelier font-mono transition-colors mb-6">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          Orders
+        </Link>
 
+        {/* Top row: header + both parties */}
         <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a] mb-4">
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="min-w-0">
@@ -2325,72 +2326,79 @@ function AdminOrderView({ data, buildChatAuth }: { data: OrderData; buildChatAut
           <PartiesRow order={order} side />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <PaymentSummary rows={adminPaymentRows(order, quoted, fee, net)} />
-          <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black space-y-1.5">
-            <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-1">Details</p>
-            <div className="flex items-center justify-between">
-              <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
-              <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-neutral-500 font-mono text-2xs">Origin</span>
-              <span className="text-black dark:text-white text-xs font-mono">{order.client_type === 'agent_x402' ? 'Agent · x402' : 'Human · UI'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-neutral-500 font-mono text-2xs">Payment</span>
-              <span className="text-black dark:text-white text-xs font-mono">{order.payment_method || '—'} · {order.payment_chain}</span>
-            </div>
-            {order.completed_at && (
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-500 font-mono text-2xs">Completed</span>
-                <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.completed_at)}</span>
+        {/* Chat on the left (compact), everything else on the right */}
+        <div className="flex flex-col-reverse lg:grid lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:gap-6">
+          <div className="min-w-0">
+            {showChat ? (
+              <OrderChat orderId={order.id} readOnly selfIds={[]} buildAuth={buildChatAuth} deliveries={[]} />
+            ) : (
+              <div className="border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50 dark:bg-black p-6 text-center">
+                <p className="text-2xs font-mono text-neutral-500">No conversation at this stage.</p>
               </div>
             )}
+          </div>
+
+          <div className="min-w-0 space-y-3">
+            <OrderProgress order={order} />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <PaymentSummary rows={adminPaymentRows(order, quoted, fee, net)} />
+              <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black space-y-1.5">
+                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-1">Details</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
+                  <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500 font-mono text-2xs">Origin</span>
+                  <span className="text-black dark:text-white text-xs font-mono">{order.client_type === 'agent_x402' ? 'Agent · x402' : 'Human · UI'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500 font-mono text-2xs">Payment</span>
+                  <span className="text-black dark:text-white text-xs font-mono">{order.payment_method || '—'} · {order.payment_chain}</span>
+                </div>
+                {order.completed_at && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500 font-mono text-2xs">Completed</span>
+                    <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.completed_at)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {order.brief && (
+              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Brief</p>
+                <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed break-all">{order.brief}</p>
+                {references.length > 0 && (
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {references.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                        <img src={url} alt={`Reference ${i + 1}`} className="w-12 h-12 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors" onError={(e) => { const el = e.currentTarget.closest('a'); if (el instanceof HTMLElement) el.style.display = 'none'; }} />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {requirements.length > 0 && (
+              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Requirements</p>
+                <div className="space-y-2">
+                  {requirements.map(([label, value]) => (
+                    <div key={label}>
+                      <p className="text-2xs font-mono text-neutral-500">{label}</p>
+                      <p className="text-sm text-gray-700 dark:text-neutral-300">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {data.deliverables.length > 0 && <DeliverablesGallery deliverables={data.deliverables} />}
           </div>
         </div>
-
-        {order.brief && (
-          <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a] mt-4">
-            <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Brief</p>
-            <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed break-all">{order.brief}</p>
-            {references.length > 0 && (
-              <div className="flex gap-2 mt-3 flex-wrap">
-                {references.map((url, i) => (
-                  <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                    <img src={url} alt={`Reference ${i + 1}`} className="w-12 h-12 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors" onError={(e) => { const el = e.currentTarget.closest('a'); if (el instanceof HTMLElement) el.style.display = 'none'; }} />
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {requirements.length > 0 && (
-          <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a] mt-4">
-            <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Requirements</p>
-            <div className="space-y-2">
-              {requirements.map(([label, value]) => (
-                <div key={label}>
-                  <p className="text-2xs font-mono text-neutral-500">{label}</p>
-                  <p className="text-sm text-gray-700 dark:text-neutral-300">{value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {data.deliverables.length > 0 && (
-          <div className="mt-4">
-            <DeliverablesGallery deliverables={data.deliverables} />
-          </div>
-        )}
-
-        {!['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
-          <div className="mt-4">
-            <OrderChat orderId={order.id} readOnly selfIds={[]} buildAuth={buildChatAuth} deliveries={[]} />
-          </div>
-        )}
       </div>
     </AtelierAppLayout>
   );

@@ -104,7 +104,7 @@ function Avatar({ src, name, kind }: { src?: string | null; name: string; kind: 
     );
   }
   return (
-    <div className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-2xs font-mono font-bold text-white ${kind === 'agent' ? 'gradient-atelier' : 'bg-neutral-600 dark:bg-neutral-700'}`}>
+    <div className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-2xs font-mono font-bold text-white ${kind === 'agent' ? 'bg-gradient-atelier' : 'bg-neutral-500 dark:bg-neutral-700'}`}>
       {initials(name)}
     </div>
   );
@@ -172,7 +172,7 @@ function PartyCard({ label, kind, name, official, x402, handle, avatar, profileH
     <span className="text-black dark:text-white text-sm font-semibold truncate">{name}</span>
   );
   return (
-    <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black">
+    <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black flex flex-col">
       <div className="flex items-center justify-between mb-2">
         <span className="text-2xs font-mono text-neutral-500 uppercase tracking-wider">{label}</span>
         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs font-mono ${kind === 'agent' ? 'bg-atelier/10 text-atelier-bright' : 'bg-emerald-400/10 text-emerald-400'}`}>
@@ -188,7 +188,7 @@ function PartyCard({ label, kind, name, official, x402, handle, avatar, profileH
           {kind === 'agent' ? 'Agent' : 'Human'}
         </span>
       </div>
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 flex-1">
         <Avatar src={avatar} name={name} kind={kind} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
@@ -258,9 +258,9 @@ function sellerParty(order: ServiceOrder): PartyProps {
 function PartiesRow({ order, side = false }: { order: ServiceOrder; side?: boolean }) {
   if (side) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-stretch gap-3">
         <PartyCard {...buyerParty(order)} />
-        <div className="hidden sm:flex flex-col items-center text-neutral-400">
+        <div className="hidden sm:flex flex-col items-center justify-center text-neutral-400">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15m0 0l-6-6m6 6l-6 6" />
           </svg>
@@ -1201,12 +1201,13 @@ interface ChatAuth {
   sig?: { wallet: string; wallet_sig: string; wallet_sig_ts: string };
 }
 
-function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: {
+function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false, readOnly = false }: {
   orderId: string;
   selfIds: string[];
   deliveries: DeliveryInfo[];
   buildAuth: () => Promise<ChatAuth>;
   locked?: boolean;
+  readOnly?: boolean;
 }) {
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [input, setInput] = useState('');
@@ -1336,23 +1337,25 @@ function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: 
         ))}
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex gap-2 mt-3">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-          placeholder="Type a message..."
-          maxLength={2000}
-          className="flex-1 px-3 py-2 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
-        />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || sending}
-          className="px-4 py-2 rounded border border-atelier/60 text-atelier text-sm font-mono font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier"
-        >
-          {sending ? '...' : 'Send'}
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex gap-2 mt-3">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="Type a message..."
+            maxLength={2000}
+            className="flex-1 px-3 py-2 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || sending}
+            className="px-4 py-2 rounded border border-atelier/60 text-atelier text-sm font-mono font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier"
+          >
+            {sending ? '...' : 'Send'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1444,7 +1447,7 @@ export default function AtelierOrderPage() {
   const { order, review } = data;
 
   if (data.viewer_role === 'admin') {
-    return <AdminOrderView data={data} />;
+    return <AdminOrderView data={data} buildChatAuth={buildChatAuth} />;
   }
 
   if (data.viewer_role === 'seller') {
@@ -2278,7 +2281,7 @@ function SellerDeliverForm({ orderId, buildAuth, buildUploadAuth, revisionReques
   );
 }
 
-function AdminOrderView({ data }: { data: OrderData }) {
+function AdminOrderView({ data, buildChatAuth }: { data: OrderData; buildChatAuth: () => Promise<ChatAuth> }) {
   const { order } = data;
   const quoted = parseFloat(order.quoted_price_usd || '0');
   const fee = parseFloat(order.platform_fee_usd || '0');
@@ -2383,9 +2386,11 @@ function AdminOrderView({ data }: { data: OrderData }) {
           </div>
         )}
 
-        <p className="text-2xs font-mono text-neutral-500 text-center mt-6">
-          The buyer/seller message thread is private and not shown in the admin view.
-        </p>
+        {!['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
+          <div className="mt-4">
+            <OrderChat orderId={order.id} readOnly selfIds={[]} buildAuth={buildChatAuth} deliveries={[]} />
+          </div>
+        )}
       </div>
     </AtelierAppLayout>
   );

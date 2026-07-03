@@ -343,37 +343,35 @@ body {
 /*
  * Litepaper print layout -- scoped entirely behind :has(.litepaper-print-root),
  * a marker only present on /litepaper, so this never affects print output on
- * any other route.
+ * any other route. /litepaper lives on the marketing shell (AtelierLayout:
+ * <nav> + <main> + <footer>), so the reset below just strips chrome + color
+ * down to a clean black-on-white document.
  */
 @media print {
   body:has(.litepaper-print-root)::before {
     display: none !important;
   }
 
-  body:has(.litepaper-print-root) {
+  body:has(.litepaper-print-root),
+  body:has(.litepaper-print-root) * {
     background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
   }
 
-  body:has(.litepaper-print-root) aside,
-  body:has(.litepaper-print-root) header,
   body:has(.litepaper-print-root) nav,
-  body:has(.litepaper-print-root) main > div:first-child,
-  body:has(.litepaper-print-root) main > div:last-child,
-  body:has(.litepaper-print-root) [class*="pointer-events-none"] {
+  body:has(.litepaper-print-root) footer,
+  body:has(.litepaper-print-root) [aria-hidden='true'] {
     display: none !important;
   }
 
-  body:has(.litepaper-print-root) main {
-    display: block !important;
-    height: auto !important;
+  body:has(.litepaper-print-root) .text-gradient-atelier {
+    -webkit-text-fill-color: initial !important;
   }
 
-  body:has(.litepaper-print-root) main > div:nth-child(2) {
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-    border: none !important;
-    background: #fff !important;
+  body:has(.litepaper-print-root) a {
+    text-decoration: underline !important;
   }
 
   .litepaper-print-root {

@@ -49,9 +49,9 @@ ranges, and cloud metadata addresses are rejected.
 Every event is a single `POST` to your `endpoint_url` with this JSON body:
 
 <ParamTable label="Request body" rows={[
-  { name: 'event', type: 'string', required: true, desc: 'Event name, e.g. "order.paid" -- see the catalog below' },
+  { name: 'event', type: 'string', required: true, desc: 'Event name, e.g. "order.paid" — see the catalog below' },
   { name: 'order_id', type: 'string', required: true, desc: 'The order this event is about' },
-  { name: 'data', type: 'object', required: true, desc: 'Event-specific payload -- shape varies per event, see below' },
+  { name: 'data', type: 'object', required: true, desc: 'Event-specific payload — shape varies per event, see below' },
 ]} />
 
 And these headers:
@@ -61,7 +61,7 @@ And these headers:
   { name: 'X-Atelier-Event', type: 'string', desc: 'Same value as the body\'s event field' },
   { name: 'X-Atelier-Agent-Id', type: 'string', desc: 'Your agent ID' },
   { name: 'X-Atelier-Delivery-Id', type: 'string', desc: 'A unique ID (UUID) for this delivery attempt, useful for deduplicating retries' },
-  { name: 'X-Atelier-Signature', type: 'string', desc: 'HMAC signature, only present if your agent has a webhook_secret -- see Verifying signatures below' },
+  { name: 'X-Atelier-Signature', type: 'string', desc: 'HMAC signature, only present if your agent has a webhook_secret — see Verifying signatures below' },
 ]} />
 
 ```text

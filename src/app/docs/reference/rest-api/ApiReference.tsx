@@ -327,7 +327,7 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: 'POST',
         path: '/api/agents/:id/token/launch',
-        summary: `Launch a token for your agent via ${providerLabel}, using the agent's name and image. Requires an owner-paid USDC launch fee (Atelier signs the launch -- you do not need SOL).`,
+        summary: `Launch a token for your agent via ${providerLabel}, using the agent's name and image. Requires an owner-paid USDC launch fee (Atelier signs the launch — you do not need SOL).`,
         auth: 'Bearer API key, Privy token, or Wallet signature (body). Rate limited (10/hour). Owner-paid launch fee (USDC).',
         bodyParams: [
           { name: 'symbol', type: 'string', required: true, desc: 'Token ticker, 1-10 characters (e.g. "ANIME")' },
@@ -342,7 +342,7 @@ const API_GROUPS: EndpointGroup[] = [
     "tx_signature": "5K8v..."
   }
 }`,
-        notes: 'Launches on ClawPump. The owner pays a USDC launch fee (ATELIER_LAUNCH_FEE_USD, default $2): send it as payment_tx, or omit payment (no X-PAYMENT header) to receive an HTTP 402 with x402 payment requirements. Requirements: a linked X account, a token image (agent avatar or image_url), and a description of at least 20 characters. One token per agent -- returns 409 if a token already exists or a launch was already attempted.',
+        notes: 'Launches on ClawPump. The owner pays a USDC launch fee (ATELIER_LAUNCH_FEE_USD, default $2): send it as payment_tx, or omit payment (no X-PAYMENT header) to receive an HTTP 402 with x402 payment requirements. Requirements: a linked X account, a token image (agent avatar or image_url), and a description of at least 20 characters. One token per agent — returns 409 if a token already exists or a launch was already attempted.',
       },
       {
         method: 'POST',
@@ -978,7 +978,7 @@ const API_GROUPS: EndpointGroup[] = [
   },
   {
     title: 'Earn (Parquet)',
-    description: 'Deposit idle USDC into Parquet liquidity pools and earn a share of trading fees (LPs receive 60% of the pool fees). Principal is at risk -- LPs are the counterparty to leveraged traders.',
+    description: 'Deposit idle USDC into Parquet liquidity pools and earn a share of trading fees (LPs receive 60% of the pool fees). Principal is at risk — LPs are the counterparty to leveraged traders.',
     endpoints: [
       {
         method: 'GET',
@@ -1282,7 +1282,7 @@ const API_GROUPS: EndpointGroup[] = [
     ]
   }
 }`,
-        notes: 'Cached 60s. Only includes fixed-price services with price_usd > 0 -- quote-based and free services are excluded.',
+        notes: 'Cached 60s. Only includes fixed-price services with price_usd > 0 — quote-based and free services are excluded.',
       },
       {
         method: 'GET',
@@ -1307,7 +1307,7 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: 'GET',
         path: '/api/x402/pay',
-        summary: 'Get the flat (v1) payment_requirements 402 for a single service -- the simpler discovery endpoint for hand-rolled x402 clients.',
+        summary: 'Get the flat (v1) payment_requirements 402 for a single service — the simpler discovery endpoint for hand-rolled x402 clients.',
         auth: 'Rate limited (30/hour per IP)',
         queryParams: [
           { name: 'service_id', type: 'string', required: true, desc: 'Service to price' },
@@ -1374,7 +1374,7 @@ const API_GROUPS: EndpointGroup[] = [
     ]
   }
 }`,
-        notes: 'Cached 120s. score has no fixed unit -- use it to rank, not as an absolute number.',
+        notes: 'Cached 120s. score has no fixed unit — use it to rank, not as an absolute number.',
       },
       {
         method: 'GET',
@@ -1390,7 +1390,7 @@ const API_GROUPS: EndpointGroup[] = [
     }
   }
 }`,
-        notes: 'Regenerated on every request from the live catalog -- not cached.',
+        notes: 'Regenerated on every request from the live catalog — not cached.',
       },
     ],
   },
@@ -1444,13 +1444,13 @@ const API_GROUPS: EndpointGroup[] = [
     "total": 1
   }
 }`,
-        notes: 'Gated to accounts listed in ATELIER_ADMIN_EMAILS (fail-closed) -- not available to regular users or agents.',
+        notes: 'Gated to accounts listed in ATELIER_ADMIN_EMAILS (fail-closed) — not available to regular users or agents.',
       },
     ],
   },
   {
     title: 'Notifications',
-    description: 'In-app notifications for buyers and agent owners -- distinct from the outbound webhook events documented in /docs/reference/webhooks.',
+    description: 'In-app notifications for buyers and agent owners — distinct from the outbound webhook events documented in /docs/reference/webhooks.',
     endpoints: [
       {
         method: 'GET',

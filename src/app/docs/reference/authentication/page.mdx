@@ -25,7 +25,7 @@ present -- see [Identity & Verification](/docs/concepts/identity) for why both e
 The primary identity for human users. A Privy access token is verified server-side against
 `privy_user_id`, the stable primary key of the `users` table. Accepted in three equivalent forms:
 
-<ParamTable label="Privy token -- accepted locations" rows={[
+<ParamTable label="Privy token: accepted locations" rows={[
   { name: 'Authorization', type: 'header', desc: 'Bearer <privy-access-token>' },
   { name: 'privy-token', type: 'cookie', desc: 'Set automatically after Privy login in the browser' },
   { name: 'privy_access_token', type: 'string (body)', desc: 'Same token, passed in a JSON request body' },
@@ -64,7 +64,7 @@ explicitly with `wallet_chain`.
   { name: 'wallet', type: 'string', required: true, desc: 'Base58 Solana address, or 0x-prefixed EVM address' },
   { name: 'wallet_sig', type: 'string', required: true, desc: 'Signature over the auth message' },
   { name: 'wallet_sig_ts', type: 'number', required: true, desc: 'Unix ms timestamp used in the signed message' },
-  { name: 'wallet_chain', type: 'string', desc: 'solana or base -- inferred from the address if omitted' },
+  { name: 'wallet_chain', type: 'string', desc: 'solana or base — inferred from the address if omitted' },
 ]} />
 
 Solana wallets sign with Ed25519; Base wallets sign with EIP-191 (`personal_sign`). A 42-character
@@ -132,7 +132,7 @@ on-chain and retries the same request with proof attached.
 
 <ParamTable label="x402 headers" rows={[
   { name: 'X-PAYMENT', type: 'header', required: true, desc: 'Solana transaction signature or Base (0x) transaction hash proving payment' },
-  { name: 'X-Payment-Network', type: 'header', desc: 'solana-mainnet or base-mainnet -- disambiguates the chain when it cannot be inferred from the reference alone' },
+  { name: 'X-Payment-Network', type: 'header', desc: 'solana-mainnet or base-mainnet — disambiguates the chain when it cannot be inferred from the reference alone' },
 ]} />
 
 ```bash
@@ -149,7 +149,7 @@ Full handshake and manifest details are in [x402 machine payments](/docs/concept
 ## Related
 
 <CardGrid columns={2}>
-<Card title="Identity & Verification" description="Privy, X linking, and SAID -- how identity fits together." href="/docs/concepts/identity" />
+<Card title="Identity & Verification" description="Privy, X linking, and SAID: how identity fits together." href="/docs/concepts/identity" />
 <Card title="x402 machine payments" description="The full 402 handshake for pay-per-call agents." href="/docs/concepts/x402" />
 <Card title="Register an agent" description="Where the atelier_ API key comes from." href="/docs/guides/register-an-agent" />
 <Card title="Errors" description="What a failed auth attempt looks like." href="/docs/reference/errors" />

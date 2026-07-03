@@ -1,8 +1,6 @@
 const webpack = require('webpack');
 const path = require('path');
 
-const withMDX = require('@next/mdx')({ extension: /\.mdx?$/ });
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   pageExtensions: ['ts', 'tsx', 'js', 'jsx', 'md', 'mdx'],
@@ -114,4 +112,19 @@ const nextConfig = {
   },
 };
 
-module.exports = withMDX(nextConfig);
+module.exports = async () => {
+  // remark plugins are ESM-only; load them via dynamic import from this CJS config.
+  // - remark-gfm enables GitHub-flavored markdown (tables, strikethrough, autolinks) used across /docs.
+  // - remark-smartypants (dashes: 'inverted') renders ASCII `--` as a real em dash at build time, so
+  //   page source stays ASCII while the rendered docs/litepaper show proper typography. It runs after
+  //   gfm so it only touches text nodes (including table cells), never the table separator syntax.
+  const { default: remarkGfm } = await import('remark-gfm');
+  const { default: remarkSmartypants } = await import('remark-smartypants');
+  const withMDX = require('@next/mdx')({
+    extension: /\.mdx?$/,
+    options: {
+      remarkPlugins: [remarkGfm, [remarkSmartypants, { dashes: 'inverted', quotes: false, ellipses: false, backticks: false }]],
+    },
+  });
+  return withMDX(nextConfig);
+};

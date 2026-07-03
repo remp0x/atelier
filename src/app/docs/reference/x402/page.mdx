@@ -18,14 +18,14 @@ The core object every x402 challenge is built from. This is the flat "v1" shape 
 
 <ParamTable label="payment_requirements" rows={[
   { name: 'version', type: 'string', required: true, desc: 'Always "1"' },
-  { name: 'scheme', type: 'string', required: true, desc: 'Always "exact" -- pay the exact amount, no tipping/overpayment logic' },
+  { name: 'scheme', type: 'string', required: true, desc: 'Always "exact" — pay the exact amount, no tipping/overpayment logic' },
   { name: 'network', type: 'string', required: true, desc: '"solana-mainnet" or "base-mainnet"' },
   { name: 'asset.currency', type: 'string', required: true, desc: 'Always "USDC"' },
   { name: 'asset.address', type: 'string', required: true, desc: 'USDC mint (Solana) or contract address (Base) for the network above' },
   { name: 'payTo', type: 'string', required: true, desc: 'Treasury address to send the payment to' },
-  { name: 'maxAmountRequired', type: 'string', required: true, desc: 'Exact amount due, in atomic USDC units (6 decimals) -- e.g. "5500000" is $5.50' },
+  { name: 'maxAmountRequired', type: 'string', required: true, desc: 'Exact amount due, in atomic USDC units (6 decimals) — e.g. "5500000" is $5.50' },
   { name: 'description', type: 'string', required: true, desc: 'Human-readable description of what\'s being paid for' },
-  { name: 'resource', type: 'string', required: true, desc: 'The endpoint that redeems the payment -- always https://api.useatelier.ai/api/orders for service payments, even when the 402 was issued by /api/x402/pay or /api/x402/discover' },
+  { name: 'resource', type: 'string', required: true, desc: 'The endpoint that redeems the payment — always https://api.useatelier.ai/api/orders for service payments, even when the 402 was issued by /api/x402/pay or /api/x402/discover' },
 ]} />
 
 ```json
@@ -51,7 +51,7 @@ price -- see [Payments & Settlement](/docs/concepts/payments) for the fee split.
 
 <ParamTable label="Request headers" rows={[
   { name: 'X-PAYMENT', type: 'string', desc: 'Proof of payment: a Solana transaction signature or a Base (0x-prefixed) transaction hash. x402 v2 clients may send the same value as PAYMENT-SIGNATURE instead.' },
-  { name: 'X-Payment-Network', type: 'string', desc: 'Optional. "solana-mainnet" or "base-mainnet" -- disambiguates the chain when it can\'t be inferred from the tx reference format alone.' },
+  { name: 'X-Payment-Network', type: 'string', desc: 'Optional. "solana-mainnet" or "base-mainnet" — disambiguates the chain when it can\'t be inferred from the tx reference format alone.' },
 ]} />
 
 <ParamTable label="402 response headers (v1 flat shape)" rows={[
@@ -176,7 +176,7 @@ Query params: `service_id` (required), `chain` (optional, `solana` or `base`, de
 <ParamTable label="accepts[] entry (X402AcceptV2)" rows={[
   { name: 'scheme', type: 'string', desc: '"exact"' },
   { name: 'network', type: 'string', desc: 'CAIP-2 network id: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" or "eip155:8453"' },
-  { name: 'amount', type: 'string', desc: 'Same as maxAmountRequired -- atomic USDC units' },
+  { name: 'amount', type: 'string', desc: 'Same as maxAmountRequired — atomic USDC units' },
   { name: 'asset', type: 'string', desc: 'Bare mint/contract address (no currency wrapper object)' },
   { name: 'payTo', type: 'string', desc: 'Treasury address' },
   { name: 'maxTimeoutSeconds', type: 'number', desc: 'Always 120' },
@@ -340,7 +340,7 @@ curl -X POST "https://api.useatelier.ai/api/x402/pay?service_id=svc_1234567890_a
 ## Related
 
 <CardGrid columns={2}>
-<Card title="x402 machine payments" description="The conceptual handshake -- what x402 is and when to use it." href="/docs/concepts/x402" />
+<Card title="x402 machine payments" description="The conceptual handshake: what x402 is and when to use it." href="/docs/concepts/x402" />
 <Card title="x402 integration guide" description="Build a caller that discovers, pays, and retries against x402 endpoints." href="/docs/guides/x402-integration" />
 <Card title="Payments & Settlement" description="On-chain verification, the 10% fee, and payout routing." href="/docs/concepts/payments" />
 <Card title="REST API reference" description="Every other endpoint, including the standard (non-x402) order flow." href="/docs/reference/rest-api" />

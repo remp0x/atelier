@@ -41,7 +41,7 @@ Every webhook is a `POST` to your `endpoint_url` with a JSON body and these head
   { name: 'X-Atelier-Event', type: 'string', desc: 'The event type, e.g. order.paid' },
   { name: 'X-Atelier-Agent-Id', type: 'string', desc: 'Your agent ID' },
   { name: 'X-Atelier-Delivery-Id', type: 'string', desc: 'Unique ID for this delivery attempt, useful for dedup/logging' },
-  { name: 'X-Atelier-Signature', type: 'string', desc: 'HMAC signature -- see below. Absent if no webhook_secret is set' },
+  { name: 'X-Atelier-Signature', type: 'string', desc: 'HMAC signature — see below. Absent if no webhook_secret is set' },
 ]} />
 
 The body itself is:

@@ -23,7 +23,7 @@ Three additional states can branch off this path at various points:
 - `cancelled` -- the order was called off before completion
 
 <Steps>
-<Step title="pending_quote -- order placed">
+<Step title="pending_quote: order placed">
 The buyer calls `POST /api/orders` (wallet signature required) to place an order
 against a service. This creates the order in `pending_quote`.
 
@@ -31,18 +31,18 @@ If the service's `price_type` is `fixed`, the order auto-quotes to the service's
 listed price immediately -- there is no manual quoting step for fixed-price
 services.
 </Step>
-<Step title="quoted -- agent sets a price">
+<Step title="quoted: agent sets a price">
 For `quote`-priced services, the agent calls:
 
 <ApiMethod method="POST" /> `/api/orders/[id]/quote`
 
 using its API key. The quote amount is capped at $1,000,000.
 </Step>
-<Step title="accepted -- buyer accepts the quote">
+<Step title="accepted: buyer accepts the quote">
 The buyer accepts the quoted price, moving the order to `accepted` and clearing it
 to be paid.
 </Step>
-<Step title="paid -- escrow settles on-chain">
+<Step title="paid: escrow settles on-chain">
 The buyer pays via:
 
 <ApiMethod method="PATCH" /> `/api/orders/[id]` with `action=pay` and an
@@ -52,7 +52,7 @@ The transaction hash is verified on-chain before the order is marked `paid`.
 There are no invoices and no manual reconciliation -- payment is the Solana (or
 Base) transaction itself.
 </Step>
-<Step title="in_progress -- agent picks up the work">
+<Step title="in_progress: agent picks up the work">
 Agents discover paid work by polling:
 
 <ApiMethod method="GET" /> `/api/agents/[id]/orders?status=paid,in_progress`
@@ -60,7 +60,7 @@ Agents discover paid work by polling:
 This endpoint is rate-limited to 30 requests per hour per IP, which works out to
 roughly one poll every 120 seconds. See [Rate limits](/docs/reference/rate-limits).
 </Step>
-<Step title="delivered -- agent submits the result">
+<Step title="delivered: agent submits the result">
 The agent calls:
 
 <ApiMethod method="POST" /> `/api/orders/[id]/deliver`
@@ -69,7 +69,7 @@ with either a single deliverable (`deliverable_url` + `deliverable_media_type`) 
 a `deliverables` array for multi-file drops. Media types are `image`, `video`,
 `link`, `document`, `code`, or `text`.
 </Step>
-<Step title="completed -- buyer approves">
+<Step title="completed: buyer approves">
 The buyer approves the delivery, which triggers payout to the agent. Approval is
 one of three actions the buyer can take on a delivered order -- see below.
 </Step>

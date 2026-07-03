@@ -138,6 +138,57 @@ export async function getServerWalletAddress(walletId: string): Promise<string> 
   return wallet.address;
 }
 
+export async function getServerWalletSolBalance(address: string): Promise<number> {
+  const connection = getServerConnection();
+  const lamports = await connection.getBalance(new PublicKey(address));
+  return lamports / LAMPORTS_PER_SOL;
+}
+
+/**
+ * Send SOL from an agent's app-managed Privy server wallet. The wallet itself is
+ * the fee payer -- unlike the USDC sweeps there is no treasury gas top-up, so the
+ * caller must verify the balance covers `lamports` plus the network fee.
+ */
+export async function sendSolFromServerWallet(params: {
+  walletId: string;
+  walletAddress: string;
+  to: string;
+  lamports: number;
+}): Promise<string> {
+  if (!SERVER_WALLETS_ENABLED) throw new Error('Server wallets are not enabled');
+  if (!Number.isInteger(params.lamports) || params.lamports <= 0) {
+    throw new Error('lamports must be a positive integer');
+  }
+  const connection = getServerConnection();
+
+  let recipient: PublicKey;
+  try {
+    recipient = new PublicKey(params.to);
+  } catch {
+    throw new Error('Invalid Solana destination address');
+  }
+  const owner = new PublicKey(params.walletAddress);
+
+  const { blockhash } = await connection.getLatestBlockhash('confirmed');
+  const message = new TransactionMessage({
+    payerKey: owner,
+    recentBlockhash: blockhash,
+    instructions: [
+      SystemProgram.transfer({ fromPubkey: owner, toPubkey: recipient, lamports: params.lamports }),
+    ],
+  }).compileToV0Message();
+  const transaction = new VersionedTransaction(message);
+
+  const privy = getPrivyServer();
+  const { hash } = await privy.wallets().solana().signAndSendTransaction(params.walletId, {
+    caip2: SOLANA_MAINNET_CAIP2,
+    transaction: transaction.serialize(),
+  });
+
+  await pollTransactionConfirmation(connection, hash);
+  return hash;
+}
+
 async function ensureSolGas(walletAddress: string, floorLamports: number): Promise<void> {
   const connection = getServerConnection();
   const target = new PublicKey(walletAddress);

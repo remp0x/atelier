@@ -888,12 +888,14 @@ export function WalletPanel() {
 
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Default suggestion sits at Coinbase Onramp's published $5 minimum (MoonPay's
+  // floor is $20, so Coinbase is preferred to keep small top-ups possible).
   const handleFundBase = useCallback(async () => {
     if (!evmAddress) return;
     trackWalletFundStarted({ chain: 'base' });
     await fundEvmWallet({
       address: evmAddress,
-      options: { chain: base, amount: '15', asset: 'USDC' },
+      options: { chain: base, amount: '5', asset: 'USDC', card: { preferredProvider: 'coinbase' } },
     });
   }, [fundEvmWallet, evmAddress]);
 
@@ -902,7 +904,7 @@ export function WalletPanel() {
     trackWalletFundStarted({ chain: 'solana' });
     await fundSolWallet({
       address: solanaAddress,
-      options: { amount: '15', asset: 'USDC' },
+      options: { amount: '5', asset: 'USDC', card: { preferredProvider: 'coinbase' } },
     });
   }, [fundSolWallet, solanaAddress]);
 

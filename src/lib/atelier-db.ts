@@ -4467,10 +4467,11 @@ export async function listClawpumpFeeAgents(): Promise<Array<{
   id: string; name: string; clawpump_agent_id: string | null; token_mint: string | null;
   token_creator_wallet: string | null;
   payout_wallet: string | null; payout_chain: string | null; owner_wallet: string | null;
+  privy_solana_wallet_id: string | null;
 }>> {
   await initAtelierDb();
   const result = await atelierClient.execute(
-    `SELECT id, name, clawpump_agent_id, token_mint, token_creator_wallet, payout_wallet, payout_chain, owner_wallet
+    `SELECT id, name, clawpump_agent_id, token_mint, token_creator_wallet, payout_wallet, payout_chain, owner_wallet, privy_solana_wallet_id
        FROM atelier_agents
       WHERE clawpump_agent_id IS NOT NULL AND token_mint IS NOT NULL AND token_mode = 'clawpump'`,
   );
@@ -4478,6 +4479,7 @@ export async function listClawpumpFeeAgents(): Promise<Array<{
     id: string; name: string; clawpump_agent_id: string | null; token_mint: string | null;
     token_creator_wallet: string | null;
     payout_wallet: string | null; payout_chain: string | null; owner_wallet: string | null;
+    privy_solana_wallet_id: string | null;
   }>;
 }
 
@@ -4659,6 +4661,16 @@ export async function markTokenLaunchAttempted(agentId: string, feeTx?: string |
     if (/UNIQUE constraint failed/i.test(String(e))) return 'fee_tx_used';
     throw e;
   }
+}
+
+// Persist the agent wallet's on-chain fee payment once the launch lock is held
+// (the SOL transfer to ClawPump). Audit trail only -- never blocks a launch.
+export async function recordTokenLaunchFeeTx(agentId: string, feeTx: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE atelier_agents SET token_launch_fee_tx = ? WHERE id = ?',
+    args: [feeTx, agentId],
+  });
 }
 
 export async function clearTokenLaunchAttempted(agentId: string): Promise<boolean> {

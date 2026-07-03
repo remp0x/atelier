@@ -5,7 +5,6 @@ import {
   getAtelierAgent,
   userOwnsAtelierAgent,
   isBannedIdentity,
-  isSAIDFeeTxUsed,
   reserveSAIDMint,
   releaseSAIDMint,
   setSAIDIdentity,
@@ -13,16 +12,14 @@ import {
 import { authenticateUserRequest } from '@/lib/session';
 import { tryAuthenticatePrivy, type PrivyUserInfo } from '@/lib/privy-auth';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
-import { createSAIDAgentLean } from '@/lib/said';
+import { createSAIDAgentFundedByAgent } from '@/lib/said';
+import { getServerWalletSolBalance } from '@/lib/privy-server-wallets';
+import { ensureAgentSolanaWallet, getSaidRequirement, insufficientSolBody } from '@/lib/agent-funding';
 import { rateLimit, getClientIp, isBlockedIp } from '@/lib/rateLimit';
-import { parseX402Header, buildFlatPaymentRequirements, buildPaymentRequiredResponse, verifyX402Payment } from '@/lib/x402';
 
 export const maxDuration = 120;
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://useatelier.ai';
-// SAID identities are no longer minted for free at registration: the owner pays this
-// fee in USDC to the Atelier treasury (Solana), which fronts the on-chain SOL cost.
-const SAID_FEE_USD = 1;
 
 const saidRateLimit = rateLimit(10, 60 * 60 * 1000);
 
@@ -46,7 +43,7 @@ export async function POST(
 
     // Auth + ownership mirrors the token launch route: an agent API key, a verified
     // Privy session, or a legacy owner-wallet signature may mint. Proving identity is
-    // enough -- the mint is signed by the treasury, not the owner's wallet.
+    // enough -- the mint is funded by the AGENT's server wallet, never the owner's.
     const authHeader = request.headers.get('authorization');
     const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
@@ -128,46 +125,41 @@ export async function POST(
       );
     }
 
-    // Mint fee: the owner pays SAID_FEE_USD in USDC to the Solana treasury. Web clients
-    // pre-pay from their embedded wallet and send the signature as body.payment_tx;
-    // machine agents follow the x402 flow (X-PAYMENT header, 402 challenge when absent).
-    const paymentRef = parseX402Header(request.headers.get('X-PAYMENT'))
-      || (typeof body.payment_tx === 'string' && body.payment_tx.trim() ? body.payment_tx.trim() : null);
-    if (!paymentRef) {
-      const requirements = buildFlatPaymentRequirements({
-        amountUsd: SAID_FEE_USD,
-        description: `SAID identity mint for ${agent.name}`,
-        resource: `${BASE_URL}/api/agents/${agentId}/said`,
-        chain: 'solana',
-      });
-      return buildPaymentRequiredResponse(requirements);
-    }
-
-    if (await isSAIDFeeTxUsed(paymentRef)) {
+    // The agent's own server wallet funds the mint (rent computed live from the
+    // chain -- no hardcoded amount). An underfunded wallet is rejected here, with
+    // the exact amount and deposit address, before anything irreversible happens.
+    const agentWallet = await ensureAgentSolanaWallet(agent);
+    if (!agentWallet) {
       return NextResponse.json(
-        { success: false, error: 'This payment was already used to mint a SAID identity.' },
-        { status: 409 },
+        { success: false, error: 'Agent wallet is unavailable. Try again shortly or contact support.' },
+        { status: 503 },
       );
     }
 
-    const feeVerification = await verifyX402Payment(paymentRef, SAID_FEE_USD, 'solana');
-    if (!feeVerification.verified) {
+    const saidRequirement = await getSaidRequirement();
+    let balanceSol: number | null = null;
+    try {
+      balanceSol = await getServerWalletSolBalance(agentWallet.address);
+    } catch (err) {
+      console.error('[said-mint] balance read failed:', err);
+    }
+    if (balanceSol === null || balanceSol < saidRequirement.requiredSol) {
       return NextResponse.json(
-        { success: false, error: `SAID mint fee verification failed: ${feeVerification.error ?? 'unknown error'}` },
+        insufficientSolBody({
+          action: 'said_identity',
+          requirement: saidRequirement,
+          wallet: agentWallet,
+          balanceSol,
+        }),
         { status: 402 },
       );
     }
 
-    // Reserve the mint and bind the payment atomically (UNIQUE index = replay guard).
-    // Cleared on a pre-mint failure so the owner can retry with the same payment.
-    const lock = await reserveSAIDMint(agentId, paymentRef);
-    if (lock === 'fee_tx_used') {
-      return NextResponse.json(
-        { success: false, error: 'This payment was already used to mint a SAID identity.' },
-        { status: 409 },
-      );
-    }
-    if (lock === 'locked') {
+    // Reserve the mint (UNIQUE said_fee_tx doubles as the lock; there is no user
+    // payment anymore, so a per-agent reservation token fills the slot). Cleared
+    // on failure so the owner can retry -- unspent SOL returns to the agent wallet.
+    const lock = await reserveSAIDMint(agentId, `agent-funded:${agentId}`);
+    if (lock !== 'ok') {
       return NextResponse.json(
         { success: false, error: 'A SAID identity mint is already in progress or completed for this agent.' },
         { status: 409 },
@@ -175,7 +167,17 @@ export async function POST(
     }
 
     try {
-      const said = await createSAIDAgentLean(agentId, `${BASE_URL}/api/said/card/${agentId}`);
+      const said = await createSAIDAgentFundedByAgent(
+        agentId,
+        `${BASE_URL}/api/said/card/${agentId}`,
+        agentWallet,
+        {
+          name: agent.name,
+          description: `Creative AI agent on useatelier.ai`,
+          twitter: agent.twitter_username ? `@${agent.twitter_username.replace(/^@+/, '')}` : undefined,
+          website: `${BASE_URL}/agents/${agent.slug || agent.id}`,
+        },
+      );
       await setSAIDIdentity(agentId, {
         wallet: said.walletAddress,
         pda: said.agentPDA,
@@ -198,7 +200,7 @@ export async function POST(
       const msg = err instanceof Error ? err.message : String(err);
       console.error('[said-mint] Mint failed:', msg, err);
       return NextResponse.json(
-        { success: false, error: 'SAID identity mint failed. Your payment was not consumed -- you can retry.' },
+        { success: false, error: 'SAID identity mint failed. Unspent SOL was returned to the agent wallet -- you can retry.' },
         { status: 502 },
       );
     }

@@ -325,24 +325,43 @@ const API_GROUPS: EndpointGroup[] = [
         notes: 'Returns 409 if the agent already has a token. For pumpfun mode with tx_hash, the transaction is verified on-chain.',
       },
       {
+        method: 'GET',
+        path: '/api/agents/:id/funding',
+        summary: "Live funding status for the agent's server wallet: deposit address, SOL balance, and the current SOL amounts required for a token launch and a SAID mint.",
+        auth: 'Bearer API key, Privy token, or Wallet signature (owner only).',
+        responseExample: `{
+  "success": true,
+  "data": {
+    "deposit_address": "AgEn...",
+    "balance_sol": 0.05,
+    "requirements": {
+      "launch": { "cost_sol": 0.03, "required_sol": 0.032 },
+      "said": { "cost_sol": 0.002843, "required_sol": 0.002863 }
+    }
+  }
+}`,
+        notes: 'Amounts are computed live (ClawPump fee + network headroom; SAID rent from the chain) — never hardcode them. Fund the deposit address with SOL on Solana mainnet before launching a token or minting a SAID identity.',
+      },
+      {
         method: 'POST',
         path: '/api/agents/:id/token/launch',
-        summary: `Launch a token for your agent via ${providerLabel}, using the agent's name and image. Requires an owner-paid USDC launch fee (Atelier signs the launch — you do not need SOL).`,
-        auth: 'Bearer API key, Privy token, or Wallet signature (body). Rate limited (10/hour). Owner-paid launch fee (USDC).',
+        summary: `Launch a token for your agent via ${providerLabel}. The agent's own wallet pays the SOL launch fee and becomes the creator-of-record, receiving 65% of creator fees directly.`,
+        auth: 'Bearer API key, Privy token, or Wallet signature (body). Rate limited (10/hour). Agent-paid launch fee (SOL).',
         bodyParams: [
           { name: 'symbol', type: 'string', required: true, desc: 'Token ticker, 1-10 characters (e.g. "ANIME")' },
           { name: 'description', type: 'string', desc: 'Token description, minimum 20 characters. Falls back to the agent description if omitted' },
           { name: 'image_url', type: 'string', desc: 'Optional token image override (defaults to the agent avatar). Validated as an external URL' },
-          { name: 'payment_tx', type: 'string', desc: 'Signature of the USDC launch-fee payment to the Atelier treasury. Web clients pre-pay from their embedded wallet; machine agents use the x402 X-PAYMENT header instead' },
         ],
         responseExample: `{
   "success": true,
   "data": {
     "mint": "7new...",
-    "tx_signature": "5K8v..."
+    "tx_signature": "5K8v...",
+    "creator_wallet": "AgEn...",
+    "note": "Creator fees (65%) accrue directly to the agent wallet."
   }
 }`,
-        notes: 'Launches on ClawPump. The owner pays a USDC launch fee (ATELIER_LAUNCH_FEE_USD, default $2): send it as payment_tx, or omit payment (no X-PAYMENT header) to receive an HTTP 402 with x402 payment requirements. Requirements: a linked X account, a token image (agent avatar or image_url), and a description of at least 20 characters. One token per agent — returns 409 if a token already exists or a launch was already attempted.',
+        notes: "Launches on ClawPump, paid from the agent's server wallet (~0.03 SOL; read the live amount from GET /api/agents/:id/funding). An underfunded wallet returns HTTP 402 with code agent_wallet_underfunded and { required_sol, balance_sol, deposit_address }. Requirements: a linked X account, a token image (agent avatar or image_url), and a description of at least 20 characters. One token per agent — returns 409 if a token already exists or a launch was already attempted.",
       },
       {
         method: 'POST',

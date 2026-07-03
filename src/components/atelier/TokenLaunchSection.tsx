@@ -2,15 +2,15 @@
 
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useLinkAccount } from '@privy-io/react-auth';
+import { useFundWallet as useSolanaFundWallet, useSolanaFundingPlugin } from '@privy-io/react-auth/solana';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
-import { useUsdcPayment } from '@/hooks/use-usdc-payment';
+import { useSwapUsdcToSol } from '@/hooks/use-swap-sol';
+import { useAgentFunding } from '@/hooks/use-agent-funding';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import { isAtelierAdminEmail } from '@/lib/admin-client';
 import { providerLabel, agentFeePct, badgeLabelForMode, IS_CLAWPUMP } from '@/lib/token-economics';
 import Image from 'next/image';
 import type { MarketData } from '@/app/api/market/route';
-
-const LAUNCH_FEE_USD = Number(process.env.NEXT_PUBLIC_ATELIER_LAUNCH_FEE_USD || '2');
 
 interface TokenInfo {
   mint: string | null;
@@ -23,7 +23,7 @@ interface TokenInfo {
   launch_attempted: boolean;
 }
 
-type LaunchStep = 'idle' | 'paying' | 'launching' | 'confirming' | 'saving' | 'done' | 'error';
+type LaunchStep = 'idle' | 'launching' | 'confirming' | 'saving' | 'done' | 'error';
 
 function formatMcap(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -75,7 +75,9 @@ export function TokenLaunchSection({
   canManage?: boolean;
 }) {
   const { walletAddress, authenticated, getAuth, user, atelierUser, refreshAtelierUser } = useAtelierAuth();
-  const { payUsdc } = useUsdcPayment();
+  useSolanaFundingPlugin();
+  const { fundWallet: fundSolWallet } = useSolanaFundWallet();
+  const { swapUsdcToSol } = useSwapUsdcToSol();
   const isAdmin = isAtelierAdminEmail(user?.google?.email ?? user?.email?.address ?? null);
 
   const { linkTwitter } = useLinkAccount({
@@ -124,6 +126,17 @@ export function TokenLaunchSection({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // The agent's own wallet pays the launch fee in SOL. Live amounts + deposit
+  // address come from /funding; polled while the form is open so a deposit or
+  // swap shows up without a manual refresh.
+  const { funding } = useAgentFunding(agentId, mode === 'pumpfun' && !!isManager);
+  const [fundingBusy, setFundingBusy] = useState<'buy' | 'swap' | null>(null);
+
+  const launchRequiredSol = funding?.requirements?.launch?.required_sol ?? null;
+  const agentBalanceSol = funding?.balance_sol ?? null;
+  const depositAddress = funding?.deposit_address ?? null;
+  const launchFunded = launchRequiredSol !== null && agentBalanceSol !== null && agentBalanceSol >= launchRequiredSol;
 
   useEffect(() => {
     if (!IS_CLAWPUMP || token?.mode !== 'clawpump' || !token?.mint) return;
@@ -374,7 +387,20 @@ export function TokenLaunchSection({
           A token launch was already attempted for this agent.{' '}
           {isAdmin
             ? 'Reset it to retry — only if no token was actually minted.'
-            : 'Please contact support to resolve.'}
+            : (
+              <>
+                Contact{' '}
+                <a
+                  href="https://t.me/atelierai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-atelier transition-colors"
+                >
+                  support on Telegram
+                </a>{' '}
+                to resolve.
+              </>
+            )}
         </p>
         {error && <p className="text-xs text-red-400 font-mono">{error}</p>}
         {isAdmin && (
@@ -437,7 +463,8 @@ export function TokenLaunchSection({
       setStep('launching');
 
       // Prefer the verified Privy token (works across multi-wallet users); fall
-      // back to a wallet signature for legacy wallet-only accounts.
+      // back to a wallet signature for legacy wallet-only accounts. No payment
+      // step: the AGENT's wallet pays the SOL fee server-side.
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       const requestBody: Record<string, unknown> = { symbol, name, description, image_url: imageUrl };
 
@@ -449,47 +476,14 @@ export function TokenLaunchSection({
         Object.assign(requestBody, walletAuth);
       }
 
-      const launchUrl = `/api/agents/${agentId}/token/launch`;
-
-      // Probe first with no payment: the server runs every eligibility gate and
-      // only then answers 402 with the fee requirements. Any other status means a
-      // gate rejected the launch -- surface that error WITHOUT charging the user.
-      const probe = await fetch(launchUrl, {
+      const res = await fetch(`/api/agents/${agentId}/token/launch`, {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody),
       });
-
-      if (probe.status === 402) {
-        const requirements = await probe.json();
-        const treasury = requirements.payTo as string;
-        const amountUsd = Number(requirements.maxAmountRequired) / 1_000_000;
-        if (!treasury || !Number.isFinite(amountUsd) || amountUsd <= 0) {
-          throw new Error('Launch fee could not be determined. Please try again.');
-        }
-
-        setStep('paying');
-        const paymentTx = await payUsdc({ chain: 'solana', treasury, amountUsd });
-
-        setStep('launching');
-        const paid = await fetch(launchUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ ...requestBody, payment_tx: paymentTx }),
-        });
-        const paidJson = await paid.json();
-        if (!paid.ok || !paidJson.success) {
-          throw new Error(paidJson.error || `Launch failed: ${paid.status}`);
-        }
-
-        setStep('done');
-        onTokenSet();
-        return;
-      }
-
-      const json = await probe.json();
-      if (!probe.ok || !json.success) {
-        throw new Error(json.error || `Launch failed: ${probe.status}`);
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || `Launch failed: ${res.status}`);
       }
 
       setStep('done');
@@ -500,8 +494,41 @@ export function TokenLaunchSection({
     }
   }
 
+  async function handleBuySol() {
+    if (!funding?.deposit_address) return;
+    setFundingBusy('buy');
+    setError(null);
+    try {
+      // Floor at 0.05 SOL so the purchase clears Coinbase Onramp's $5 minimum
+      // with headroom (MoonPay's floor is $20, hence the preferred provider).
+      const needed = Math.max((launchRequiredSol ?? 0.04) - (agentBalanceSol ?? 0), 0.05);
+      await fundSolWallet({
+        address: funding.deposit_address,
+        options: { asset: 'native-currency', amount: needed.toFixed(4), card: { preferredProvider: 'coinbase' } },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Funding flow failed');
+    } finally {
+      setFundingBusy(null);
+    }
+  }
+
+  async function handleSwapForSol() {
+    if (!funding?.deposit_address) return;
+    setFundingBusy('swap');
+    setError(null);
+    try {
+      // Jupiter only sponsors gas for ~$10+ swaps from SOL-less wallets, so the
+      // one-click amount stays above that floor.
+      await swapUsdcToSol({ amountUsd: 10, receiver: funding.deposit_address });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Swap failed');
+    } finally {
+      setFundingBusy(null);
+    }
+  }
+
   const stepLabels: Record<string, string> = {
-    paying: 'Paying launch fee...',
     launching: 'Launching token...',
     confirming: 'Confirming transaction...',
     saving: 'Saving token info...',
@@ -528,7 +555,7 @@ export function TokenLaunchSection({
             <span>Launch on {providerLabel}</span>
           </button>
           <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400 text-center">
-            ${LAUNCH_FEE_USD} USDC launch fee &middot; you earn {agentFeePct}% of creator fees
+            Your agent pays a small SOL launch fee &middot; it receives {agentFeePct}% of creator fees
           </p>
         </div>
       )}
@@ -644,6 +671,60 @@ export function TokenLaunchSection({
             </p>
           )}
 
+          {/* Agent wallet funding gate: the AGENT pays its launch fee in SOL and in
+              return receives the creator-fee share directly. Amounts are live. */}
+          {funding && depositAddress && (
+            launchFunded ? (
+              <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400">
+                Agent wallet ({depositAddress.slice(0, 4)}...{depositAddress.slice(-4)}) funded: {(agentBalanceSol ?? 0).toFixed(4)} SOL &middot; launch fee ~{funding.requirements.launch.cost_sol} SOL is paid by the agent
+              </p>
+            ) : (
+              <div className="rounded-lg border border-amber-400/40 bg-amber-50 dark:bg-amber-900/10 p-3 space-y-2">
+                <p className="text-2xs font-mono text-amber-600 dark:text-amber-400">
+                  <span className="font-semibold">{agentName} has its own wallet</span> — separate from your
+                  personal wallet. The launch fee ({launchRequiredSol} SOL) comes out of the agent&apos;s wallet,
+                  which also receives its {agentFeePct}% of creator fees.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(depositAddress)}
+                  aria-label="Copy agent wallet address"
+                  title="Copy agent wallet address"
+                  className="cursor-pointer w-full text-left px-2.5 py-1.5 rounded-md bg-white/60 dark:bg-black/30 border border-amber-400/30 transition-all duration-150 hover:border-amber-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+                >
+                  <span className="block text-2xs font-mono uppercase tracking-wider text-neutral-500 mb-0.5">
+                    Agent wallet &middot; balance {(agentBalanceSol ?? 0).toFixed(4)} SOL {copied ? '· Copied!' : '· click to copy'}
+                  </span>
+                  <span className="block text-2xs font-mono break-all text-neutral-700 dark:text-neutral-300">
+                    {depositAddress}
+                  </span>
+                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => { void handleBuySol(); }}
+                    disabled={busy || fundingBusy !== null}
+                    className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-400/50 text-amber-600 dark:text-amber-400 text-2xs font-mono font-medium transition-all duration-150 hover:bg-amber-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:opacity-50"
+                  >
+                    {fundingBusy === 'buy' ? 'Opening...' : 'Buy SOL (card)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void handleSwapForSol(); }}
+                    disabled={busy || fundingBusy !== null}
+                    className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-400/50 text-amber-600 dark:text-amber-400 text-2xs font-mono font-medium transition-all duration-150 hover:bg-amber-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:opacity-50"
+                  >
+                    {fundingBusy === 'swap' ? 'Swapping...' : 'Swap $10 USDC → SOL'}
+                  </button>
+                </div>
+                <p className="text-2xs font-mono text-neutral-500">
+                  Both buttons deposit straight into the agent&apos;s wallet — you never need SOL in your own.
+                  Or send SOL (Solana mainnet) to the address above from any wallet or exchange. Balance refreshes automatically.
+                </p>
+              </div>
+            )
+          )}
+
           {/* Busy indicator */}
           {busy && (
             <div className="flex items-center gap-2 py-1">
@@ -657,14 +738,14 @@ export function TokenLaunchSection({
           )}
 
           <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400">
-            Launch fee: ${LAUNCH_FEE_USD} USDC (paid in USDC on Solana) &middot; you earn {agentFeePct}% of creator fees
+            Launch fee: {funding ? `~${funding.requirements.launch.cost_sol} SOL` : 'a small amount of SOL'}, paid by the agent&apos;s wallet &middot; the agent receives {agentFeePct}% of creator fees
           </p>
 
           {/* Actions */}
           <div className="flex gap-2.5">
             <button
               onClick={handlePumpFunLaunch}
-              disabled={busy || uploadingImage || !name || !symbol || !imageUrl || !hasLinkedX || (IS_CLAWPUMP && description.trim().length < 20)}
+              disabled={busy || uploadingImage || !name || !symbol || !imageUrl || !hasLinkedX || (funding !== null && !launchFunded) || (IS_CLAWPUMP && description.trim().length < 20)}
               className="cursor-pointer flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold font-mono text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black disabled:opacity-40 disabled:pointer-events-none"
               style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)' }}
             >

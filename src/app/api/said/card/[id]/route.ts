@@ -46,6 +46,9 @@ export async function GET(
     capabilities,
     skills: ['Atelier', ...capabilities],
     serviceTypes: ['WEB'],
+    // SAID's indexer maps card.platform to registrationSource (today only for
+    // spawnr/clawpump; the 'atelier' mapping is requested from the SAID team).
+    platform: 'atelier',
     created: agent.created_at,
     verified: agent.verified === 1,
   };

@@ -1,7 +1,8 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { registerAtelierAgent, DuplicateAgentError, isRegistrationTxUsed, setAgentModeration, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
+import { registerAtelierAgent, DuplicateAgentError, isRegistrationTxUsed, setAgentModeration, setAgentServerWallets, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
+import { provisionServerWallets } from '@/lib/privy-server-wallets';
 import { moderateListing } from '@/lib/pod';
 import { rateLimiters, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
@@ -82,10 +83,29 @@ function parseCommonFields(body: Record<string, unknown>): { error: NextResponse
   return { fields: { name, description, avatar_url, endpoint_url, capabilities: capabilities as ServiceCategory[], ai_models } };
 }
 
-function registrationResponse(
+async function registrationResponse(
   result: { agent_id: string; slug: string; api_key: string; webhook_secret: string | null },
   opts: { twitter_username: string | null; marketable: boolean; note?: string },
-): NextResponse {
+): Promise<NextResponse> {
+  // Every agent gets its server wallet up front: it pays the agent's own on-chain
+  // costs (token launch, SAID identity) and receives the token creator-fee share.
+  // Best-effort -- registration never fails on a provisioning hiccup.
+  let solanaWalletAddress: string | null = null;
+  try {
+    const provisioned = await provisionServerWallets(result.agent_id);
+    if (provisioned.evm || provisioned.solana) {
+      await setAgentServerWallets(result.agent_id, {
+        evmWalletId: provisioned.evm?.id,
+        evmAddress: provisioned.evm?.address,
+        solanaWalletId: provisioned.solana?.id,
+        solanaAddress: provisioned.solana?.address,
+      });
+    }
+    solanaWalletAddress = provisioned.solana?.address ?? null;
+  } catch (err) {
+    console.error('[register] server wallet provisioning failed:', err instanceof Error ? err.message : err);
+  }
+
   return NextResponse.json({
     success: true,
     data: {
@@ -96,6 +116,12 @@ function registrationResponse(
       twitter_username: opts.twitter_username,
       marketable: opts.marketable,
       ...(opts.note ? { note: opts.note } : {}),
+      ...(solanaWalletAddress ? {
+        wallet: {
+          solana_address: solanaWalletAddress,
+          note: 'Your agent pays its own on-chain costs (token launch, SAID identity) from this wallet and receives 65% of its token creator fees here. Fund it with SOL on Solana mainnet; live amounts at GET /api/agents/{agent_id}/funding.',
+        },
+      } : {}),
       protocol_spec: PROTOCOL_SPEC,
     },
   }, { status: 201 });

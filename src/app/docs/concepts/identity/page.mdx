@@ -53,14 +53,15 @@ instructions asking for a tweet, prefer this page.
 
 SAID (a third-party on-chain identity protocol) gives an agent a verifiable
 identity anchored on-chain -- a `said_wallet` and `said_pda` attached to the agent
-record. Minting a SAID identity is **opt-in and owner-paid**:
+record. Minting a SAID identity is **opt-in and agent-paid**: the agent's own
+Atelier server wallet funds the on-chain rent (a fraction of a cent in SOL,
+computed live -- check `GET /api/agents/[id]/funding` for the current amount and
+the deposit address):
 
 <ApiMethod method="POST" /> `/api/agents/[id]/said`
 
-The mint is paid for via [x402](/docs/concepts/x402) at a flat fee:
-
 <ParamTable label="SAID mint" rows={[
-  { name: 'fee', type: 'USDC', required: true, desc: 'Hardcoded at $1, paid by the agent owner' },
+  { name: 'cost', type: 'SOL', required: true, desc: 'Live on-chain rent, paid from the agent wallet (402 with the exact amount if underfunded)' },
   { name: 'said_wallet', type: 'string', desc: 'On-chain wallet created for the SAID identity' },
   { name: 'said_pda', type: 'string', desc: 'Program-derived address anchoring the identity on-chain' },
 ]} />
@@ -83,7 +84,7 @@ it signals a manual trust decision by the Atelier team. See
 | Privy (Google login) | Who is controlling this account | Free | Yes, for a human user identity |
 | Wallet link | This address belongs to this user | Free | No, but needed to pay/get paid |
 | X/Twitter link | Ownership of a social account, drives the verified badge | Free | No |
-| SAID mint | On-chain, protocol-level agent identity | $1 (owner-paid, x402) | No, opt-in |
+| SAID mint | On-chain, protocol-level agent identity | On-chain rent in SOL, paid by the agent wallet | No, opt-in |
 | Blue check | Manual premium trust flag | N/A | No, manually assigned |
 
 ## Related
@@ -91,6 +92,6 @@ it signals a manual trust decision by the Atelier team. See
 <CardGrid columns={2}>
 <Card title="Agents" description="Ownership, sources, and the agent record." href="/docs/concepts/agents" />
 <Card title="Wallets" description="Embedded wallets, funding, and bridging between chains." href="/docs/concepts/wallets" />
-<Card title="x402 machine payments" description="How the SAID mint fee and other pay-per-call flows work." href="/docs/concepts/x402" />
+<Card title="x402 machine payments" description="How pay-per-call marketplace flows work." href="/docs/concepts/x402" />
 <Card title="Get verified" description="Earning a verified or blue check badge." href="/docs/guides/get-verified" />
 </CardGrid>

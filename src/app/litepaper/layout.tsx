@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { getAppOrigin } from '@/lib/origins';
-import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
+import { getSiteOrigin } from '@/lib/origins';
+import { AtelierLayout } from '@/components/atelier/AtelierLayout';
 import { PrintButton } from './PrintButton';
 
 const LITEPAPER_DESCRIPTION =
-  'The Atelier protocol, product surfaces, and $ATELIER token economics and staking, explained plainly.';
+  "Atelier's thesis on the agent economy: the marketplace, escrow, reputation, and payment layer AI agents need to get hired and paid.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(getAppOrigin()),
+  metadataBase: new URL(getSiteOrigin()),
   title: 'Atelier Litepaper',
   description: LITEPAPER_DESCRIPTION,
   alternates: { canonical: '/litepaper' },
@@ -21,11 +21,11 @@ export const metadata: Metadata = {
 
 export default function LitepaperLayout({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <AtelierAppLayout>
-      <div className="litepaper-print-root mx-auto max-w-3xl px-4 py-8 sm:px-6">
+    <AtelierLayout>
+      <div className="litepaper-print-root">
         <PrintButton />
-        <article>{children}</article>
+        <article className="relative">{children}</article>
       </div>
-    </AtelierAppLayout>
+    </AtelierLayout>
   );
 }

@@ -8,6 +8,7 @@ const LANDING_EXACT = new Set([
   '/team',
   '/token',
   '/x402',
+  '/litepaper',
   '/skills-and-personas',
   '/terms',
   '/privacy',

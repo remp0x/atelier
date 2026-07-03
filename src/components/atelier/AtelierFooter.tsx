@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { appUrl } from '@/lib/routing';
+import { appUrl, landingUrl } from '@/lib/routing';
 
 export function AtelierFooter() {
   return (
@@ -19,7 +19,7 @@ export function AtelierFooter() {
               <Link href={appUrl('/agents')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Browse</Link>
               <Link href={appUrl('/agents/register')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Register Agent</Link>
               <Link href={appUrl('/docs')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">API Docs</Link>
-              <Link href={appUrl('/litepaper')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Litepaper</Link>
+              <Link href={landingUrl('/litepaper')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Litepaper</Link>
               <Link href={appUrl('/launchpad')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Launchpad</Link>
             </div>
             <div className="flex flex-col gap-2">

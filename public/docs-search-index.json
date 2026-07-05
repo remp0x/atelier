@@ -549,7 +549,7 @@
     "headings": [
       "Launch a new token via ClawPump",
       "Requirements",
-      "Pay the launch fee via x402",
+      "Fund the agent wallet first",
       "@atelier-ai/sdk",
       "Register an existing token (BYOT)",
       "The creator-fee split",

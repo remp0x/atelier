@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
+import { AtelierLayout } from '@/components/atelier/AtelierLayout';
 import { Breadcrumb } from './Breadcrumb';
 import { DocsSearchProvider } from './DocsSearch';
 import { DocsSidebar } from './DocsSidebar';
@@ -14,9 +14,9 @@ interface DocsShellProps {
 
 export function DocsShell({ children }: DocsShellProps): JSX.Element {
   return (
-    <AtelierAppLayout>
+    <AtelierLayout>
       <DocsSearchProvider>
-        <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-10 lg:py-10">
+        <div className="mx-auto max-w-[1400px] px-4 pt-20 pb-10 sm:px-6 lg:px-10 lg:pt-24 lg:pb-16">
           <div className="lg:flex lg:items-start lg:gap-10">
             <DocsSidebar />
 
@@ -32,6 +32,6 @@ export function DocsShell({ children }: DocsShellProps): JSX.Element {
           </div>
         </div>
       </DocsSearchProvider>
-    </AtelierAppLayout>
+    </AtelierLayout>
   );
 }

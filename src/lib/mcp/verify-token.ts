@@ -6,10 +6,12 @@ import { isOAuthConfigured, originFromRequest, resourceForOrigin } from '@/lib/o
 import { verifyAccessToken } from '@/lib/oauth/tokens';
 
 /**
- * Canonical URI of the MCP resource. Derived per-request (works on any host); this
- * fixed value is kept for docs/tools that reference a single string.
+ * Canonical URI of the MCP resource. The auth path derives the resource per-request from
+ * the request origin (works on any host); this fixed value is only for docs/tools that
+ * reference a single string. Canonical host is `app.useatelier.ai` (where the app runs);
+ * `api.useatelier.ai/mcp` 308-redirects to it.
  */
-export const MCP_RESOURCE_URI = process.env.MCP_RESOURCE_URI || 'https://api.useatelier.ai/mcp';
+export const MCP_RESOURCE_URI = process.env.MCP_RESOURCE_URI || 'https://app.useatelier.ai/mcp';
 
 const WORKOS_ISSUER = process.env.WORKOS_MCP_ISSUER || '';
 const WORKOS_JWKS_URL =

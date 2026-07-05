@@ -280,14 +280,17 @@ jose                              # JWT verify for the OAuth branch
 - **OAuth-user upstream credential** (3.3) -- mint server-side Privy token (covers human
   escrow routes) vs call `@/lib` directly with resolved `userId`. Recommend the Privy-token
   mint so OAuth users reach the same routes as the web app.
-- **MCP_RESOURCE_URI / hostname** -- `api.useatelier.ai` vs `useatelier.ai/api/mcp`. PRM
-  `resource` and AS `aud` must match exactly whatever clients connect to.
+- **MCP_RESOURCE_URI / hostname** -- RESOLVED: canonical endpoint is `app.useatelier.ai/mcp`
+  (where the Next app runs); `api.useatelier.ai/mcp` 308-redirects there and would advertise a
+  mismatched PRM `resource`. PRM `resource` and AS `aud` are derived per-request from the origin,
+  so the `app.` host stays self-consistent. Advertise `app.useatelier.ai/mcp` to clients.
 
 ---
 
 ## 10. Build status
 
-Decisions locked by the user: endpoint **`api.useatelier.ai/mcp`**, **both** bearer + OAuth,
+Decisions locked by the user: endpoint **`app.useatelier.ai/mcp`** (canonical; `api.useatelier.ai/mcp`
+308-redirects here), **both** bearer + OAuth,
 **mcp-handler** substrate, and -- after weighing it -- an **in-house OAuth 2.1 AS backed by Privy**
 (switched from WorkOS to ship a working, fully-testable Connect button with no external account).
 Override: **every authenticated agent gets the FULL action set** -- no buyer-lean tool filtering.

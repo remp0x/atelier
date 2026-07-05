@@ -8,6 +8,7 @@ import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { getPrivyAccessToken } from '@/lib/privy-client';
+import { readPendingPayment, savePendingPayment, clearPendingPayment } from '@/lib/pending-payment';
 import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable, OrderMessage } from '@/lib/atelier-db';
 
 type ViewerRole = 'buyer' | 'seller' | 'admin';
@@ -1581,18 +1582,53 @@ export default function AtelierOrderPage() {
                           if (!treasuryWallet) { setPayError('Treasury wallet not configured'); return; }
                           const total = parseFloat(order.quoted_price_usd || '0');
                           if (total <= 0) { setPayError('Invalid order total'); return; }
+
+                          const verifyPayment = async (sig: string, chain: 'solana' | 'base') => {
+                            const auth = await getAuth();
+                            const res = await fetch(`/api/orders/${order.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                ...auth,
+                                action: 'pay',
+                                payment_method: chain === 'base' ? 'usdc-base' : 'usdc-sol',
+                                payment_chain: chain,
+                                escrow_tx_hash: sig,
+                              }),
+                            });
+                            return res.json() as Promise<{ success: boolean; error?: string }>;
+                          };
+
+                          const pending = readPendingPayment(order.id);
+                          if (pending) {
+                            setPayMsg('Found an earlier payment attempt -- verifying...');
+                            const resumeJson = await verifyPayment(pending.txSig, pending.chain);
+                            if (resumeJson.success) { clearPendingPayment(order.id); load(); return; }
+                            const resumeError = resumeJson.error || 'Payment verification failed';
+                            if (resumeError.includes('failed on-chain') || resumeError.includes('already been used')) {
+                              clearPendingPayment(order.id);
+                            } else {
+                              setPayError(
+                                `An earlier payment was sent (tx ${pending.txSig.slice(0, 12)}...) but verification failed: ${resumeError}. ` +
+                                'Not charging again -- retry in a moment or contact support.',
+                              );
+                              return;
+                            }
+                          }
+
                           setPayMsg('Sending USDC payment...');
                           const txSig = await payUsdc({ chain: 'solana', treasury: treasuryWallet, amountUsd: total });
+                          savePendingPayment({ orderId: order.id, txSig, chain: 'solana' });
                           setPayMsg('Verifying payment...');
-                          const auth = await getAuth();
-                          const res = await fetch(`/api/orders/${order.id}`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...auth, action: 'pay', payment_method: 'usdc-sol', escrow_tx_hash: txSig }),
-                          });
-                          const json = await res.json();
-                          if (!json.success) { setPayError(json.error || 'Payment verification failed'); return; }
-                          setPayMsg(null);
+                          const json = await verifyPayment(txSig, 'solana');
+                          if (!json.success) {
+                            setPayError(
+                              `${json.error || 'Payment verification failed'}. Your payment was sent (tx ${txSig.slice(0, 12)}...) -- ` +
+                              'do NOT pay again; click the button once more to retry verification without being charged.',
+                            );
+                            return;
+                          }
+                          clearPendingPayment(order.id);
                           load();
                         } catch (e) {
                           setPayError(e instanceof Error ? e.message : 'Payment failed');

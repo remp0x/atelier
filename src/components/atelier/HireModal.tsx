@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { AgentAvatar } from './AgentAvatar';
 import { useRouter } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
-import { PublicKey, Connection, Transaction } from '@solana/web3.js';
+import { PublicKey, Connection, Transaction, type SignatureStatus } from '@solana/web3.js';
 import {
   getAssociatedTokenAddress,
   getAccount,
@@ -35,9 +35,14 @@ import { clientUpload } from '@/lib/client-upload';
 import { readReferralCookie } from './ReferralCapture';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
 import { trackBeginCheckout, trackPurchase, trackWalletBridgeStarted, trackWalletBridgeCompleted } from '@/lib/analytics';
+import { readPendingPayment, savePendingPayment, clearPendingPayment, type PendingPayment } from '@/lib/pending-payment';
 import type { Service } from '@/lib/atelier-db';
 
 type Step = 'brief' | 'review' | 'select-wallet' | 'confirmation';
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function truncateAddress(addr: string): string {
   if (addr.startsWith('0x') && addr.length === 42) return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -250,6 +255,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
   const [briefNudge, setBriefNudge] = useState<string[] | null>(null);
   const [briefChecking, setBriefChecking] = useState(false);
   const briefNudgeDismissed = useRef(false);
+  const createdOrderIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -266,6 +272,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       setPendingChain(null);
       setBriefNudge(null);
       briefNudgeDismissed.current = false;
+      createdOrderIdRef.current = null;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -279,11 +286,12 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     }
   }, [step, orderId, router]);
 
+  const isQuote = service.price_type === 'quote';
   const isSubscription = service.price_type === 'weekly' || service.price_type === 'monthly';
   const isWorkspace = (service.quota_limit ?? 0) > 0 || isSubscription;
   const price = parseFloat(service.price_usd);
   const fee = price * PLATFORM_FEE_RATE;
-  const total = price;
+  const total = isQuote ? 0 : price;
 
   const hints = BRIEF_HINTS[service.agent_id] ?? CATEGORY_HINTS[service.category] ?? DEFAULT_HINTS;
   const validUrls = referenceUrls.filter((u) => u.trim().length > 0);
@@ -392,6 +400,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     fromAddress: string,
     treasuryAddress: string,
     amountUsd: number,
+    onSignature?: (sig: string) => void,
   ): Promise<string> => {
     const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
     const fromPubkey = new PublicKey(fromAddress);
@@ -444,14 +453,20 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     });
 
     const sig = bs58.encode(result.signature);
+    onSignature?.(sig);
 
     // Privy gas sponsorship rewrites the transaction blockhash, so confirming
     // against the original lastValidBlockHeight throws a false "block height
     // exceeded" even when the tx lands. Poll the signature status directly; the
     // backend re-verifies the payment on-chain regardless.
     for (let i = 0; i < 40; i++) {
-      const { value } = await connection.getSignatureStatuses([sig]);
-      const status = value[0];
+      let status: SignatureStatus | null = null;
+      try {
+        const { value } = await connection.getSignatureStatuses([sig]);
+        status = value[0];
+      } catch {
+        // transient RPC failure -- the tx is already broadcast, keep polling
+      }
       if (status) {
         if (status.err) {
           throw new Error(`Payment failed on-chain: ${JSON.stringify(status.err)}`);
@@ -460,7 +475,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
           return sig;
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await sleep(1500);
     }
 
     return sig;
@@ -496,6 +511,25 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     return signWalletAuth(solSignable);
   }, [evmEmbedded, embeddedEvmAddress, embeddedSolanaAddress, solEmbedded, solSignMessage]);
 
+  const resumePendingPayment = useCallback(async (orderIdToPay: string): Promise<PendingPayment | null> => {
+    const pending = readPendingPayment(orderIdToPay);
+    if (!pending) return null;
+    if (pending.chain === 'solana') {
+      try {
+        const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
+        const { value } = await connection.getSignatureStatuses([pending.txSig], { searchTransactionHistory: true });
+        const status = value[0];
+        if (!status || status.err) {
+          clearPendingPayment(orderIdToPay);
+          return null;
+        }
+      } catch {
+        // status check unavailable -- let server-side verification decide
+      }
+    }
+    return pending;
+  }, []);
+
   const settleOrder = useCallback(async (
     chain: PayChain,
     payerAddress: string,
@@ -503,60 +537,102 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     authPayload: WalletAuthPayload,
     paymentMethodLabel: string,
   ): Promise<void> => {
-    setLoadingMsg('Creating order...');
-    const referralPartner = readReferralCookie();
-    const createRes = await fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...authPayload,
-        service_id: service.id,
-        brief,
-        reference_urls: validUrls.length > 0 ? validUrls : undefined,
-        reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
-        client_wallet: payerAddress,
-        payment_chain: chain,
-        ...(referralPartner ? { referral_partner: referralPartner } : {}),
-      }),
-    });
-    const createJson = await createRes.json();
-    if (!createJson.success) throw new Error(createJson.error);
-
-    const newOrderId = createJson.data.id;
-
-    setLoadingMsg('Sending payment...');
-    let txSig: string;
-    if (chain === 'base') {
-      if (!evmEmbedded || !embeddedEvmAddress) throw new Error('Base embedded wallet not available');
-      const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-      const transferData = encodeFunctionData({
-        abi: erc20Abi,
-        functionName: 'transfer',
-        args: [treasury as `0x${string}`, parseUnits(total.toFixed(6), 6)],
+    let newOrderId = createdOrderIdRef.current;
+    if (!newOrderId) {
+      setLoadingMsg('Creating order...');
+      const referralPartner = readReferralCookie();
+      const createRes = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...authPayload,
+          service_id: service.id,
+          brief,
+          reference_urls: validUrls.length > 0 ? validUrls : undefined,
+          reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
+          client_wallet: payerAddress,
+          payment_chain: chain,
+          ...(referralPartner ? { referral_partner: referralPartner } : {}),
+        }),
       });
-      const { hash } = await privySendTransaction(
-        { to: USDC_BASE, data: transferData, chainId: 8453, value: 0 },
-        { address: embeddedEvmAddress, sponsor: true },
-      );
-      txSig = hash;
+      const createJson = await createRes.json();
+      if (!createJson.success) throw new Error(createJson.error);
+      newOrderId = createJson.data.id as string;
+      createdOrderIdRef.current = newOrderId;
+    }
+    const orderIdToPay = newOrderId;
+
+    const resumed = await resumePendingPayment(orderIdToPay);
+    let txSig: string;
+    let chainUsed: PayChain;
+    if (resumed) {
+      txSig = resumed.txSig;
+      chainUsed = resumed.chain;
     } else {
-      txSig = await buildAndSignSolanaUsdcTransfer(payerAddress, treasury, total);
+      chainUsed = chain;
+      setLoadingMsg('Sending payment...');
+      if (chain === 'base') {
+        if (!evmEmbedded || !embeddedEvmAddress) throw new Error('Base embedded wallet not available');
+        const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+        const transferData = encodeFunctionData({
+          abi: erc20Abi,
+          functionName: 'transfer',
+          args: [treasury as `0x${string}`, parseUnits(total.toFixed(6), 6)],
+        });
+        const { hash } = await privySendTransaction(
+          { to: USDC_BASE, data: transferData, chainId: 8453, value: 0 },
+          { address: embeddedEvmAddress, sponsor: true },
+        );
+        txSig = hash;
+        savePendingPayment({ orderId: orderIdToPay, txSig, chain: 'base' });
+      } else {
+        txSig = await buildAndSignSolanaUsdcTransfer(payerAddress, treasury, total, (sig) => {
+          savePendingPayment({ orderId: orderIdToPay, txSig: sig, chain: 'solana' });
+        });
+      }
     }
 
     setLoadingMsg(isWorkspace ? 'Activating workspace...' : 'Verifying payment...');
-    const patchRes = await fetch(`/api/orders/${newOrderId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...authPayload,
-        action: 'pay',
-        payment_method: chain === 'base' ? 'usdc-base' : 'usdc-sol',
-        payment_chain: chain,
-        escrow_tx_hash: txSig,
-      }),
-    });
-    const patchJson = await patchRes.json();
-    if (!patchJson.success) throw new Error(patchJson.error);
+    let lastError: string | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await sleep(5000 * attempt);
+      let patchJson: { success?: boolean; error?: string };
+      try {
+        const patchRes = await fetch(`/api/orders/${orderIdToPay}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...authPayload,
+            action: 'pay',
+            payment_method: chainUsed === 'base' ? 'usdc-base' : 'usdc-sol',
+            payment_chain: chainUsed,
+            escrow_tx_hash: txSig,
+          }),
+        });
+        patchJson = await patchRes.json();
+      } catch {
+        lastError = 'Network error while verifying payment';
+        continue;
+      }
+      if (patchJson.success) {
+        lastError = null;
+        break;
+      }
+      lastError = patchJson.error || 'Payment verification failed';
+      if (lastError.includes('failed on-chain') || lastError.includes('already been used')) {
+        clearPendingPayment(orderIdToPay);
+        throw new Error(lastError);
+      }
+      if (!lastError.includes('not found after polling')) break;
+    }
+    if (lastError) {
+      throw new Error(
+        `Your payment was sent (tx ${txSig.slice(0, 12)}...) but verification did not complete: ${lastError}. ` +
+        'Do NOT pay again -- your funds are safe. Click pay once more to retry verification without being charged, ' +
+        'or finish it later from your Orders page.',
+      );
+    }
+    clearPendingPayment(orderIdToPay);
 
     trackPurchase({
       transactionId: txSig,
@@ -565,12 +641,12 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
       category: service.category,
       value: total,
       priceType: service.price_type,
-      chain,
+      chain: chainUsed,
       paymentMethod: paymentMethodLabel,
       isSubscription,
     });
 
-    setOrderId(newOrderId);
+    setOrderId(orderIdToPay);
     setStep('confirmation');
   }, [
     service,
@@ -582,6 +658,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     embeddedEvmAddress,
     privySendTransaction,
     buildAndSignSolanaUsdcTransfer,
+    resumePendingPayment,
     isWorkspace,
     isSubscription,
   ]);
@@ -602,7 +679,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     }
 
     const currentBalance = chain === 'base' ? usdcBalances.base : usdcBalances.solana;
-    if (!skipBalanceCheck && !usdcBalances.loading && currentBalance < total) {
+    const hasPendingPayment = createdOrderIdRef.current !== null && readPendingPayment(createdOrderIdRef.current) !== null;
+    if (!skipBalanceCheck && !hasPendingPayment && !usdcBalances.loading && currentBalance < total) {
       setNeedsFunding(true);
       setPendingChain(chain);
       setLoading(false);
@@ -705,6 +783,44 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     setStep('select-wallet');
   }, [payMethod, payChain, setActiveChain, executeCardPaymentForChain]);
 
+  const submitQuoteRequest = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const chain: PayChain = embeddedSolanaAddress ? 'solana' : 'base';
+      const clientAddress = embeddedSolanaAddress ?? embeddedEvmAddress;
+      if (!clientAddress) {
+        throw new Error('Embedded wallet not available. Sign in with Privy to continue.');
+      }
+      setLoadingMsg('Signing wallet...');
+      const authPayload = await signAuthForChain(chain);
+      setLoadingMsg('Sending request...');
+      const referralPartner = readReferralCookie();
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...authPayload,
+          service_id: service.id,
+          brief,
+          reference_urls: validUrls.length > 0 ? validUrls : undefined,
+          reference_images: referenceImages.length > 0 ? referenceImages.map((img) => img.url) : undefined,
+          client_wallet: clientAddress,
+          payment_chain: chain,
+          ...(referralPartner ? { referral_partner: referralPartner } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      setOrderId(json.data.id as string);
+      setStep('confirmation');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send quote request');
+    } finally {
+      setLoading(false);
+    }
+  }, [embeddedSolanaAddress, embeddedEvmAddress, signAuthForChain, service, brief, validUrls, referenceImages]);
+
   if (!open) return null;
 
   const embeddedAddrForChain = (chain: PayChain) =>
@@ -722,7 +838,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
         <div className="px-6 py-4 border-b border-gray-200 dark:border-neutral-800">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold font-display text-black dark:text-white">
-              {step === 'confirmation' ? 'Order Placed' : `Hire -- ${service.title}`}
+              {step === 'confirmation'
+                ? (isQuote ? 'Request Sent' : 'Order Placed')
+                : `${isQuote ? 'Request Quote' : 'Hire'} -- ${service.title}`}
             </h2>
             <button
               onClick={onClose}
@@ -745,11 +863,15 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   {service.avg_rating.toFixed(1)}
                 </span>
               )}
-              <span className="ml-auto inline-flex items-center gap-1 text-xs font-mono text-atelier font-semibold">
-                ${price.toFixed(2)}{service.price_type === 'weekly' ? '/wk' : service.price_type === 'monthly' ? '/mo' : ''}
-                <Image src="/usdc.svg" alt="USDC" width={12} height={12} className="h-3 w-3 object-contain" />
-                USDC
-              </span>
+              {isQuote ? (
+                <span className="ml-auto text-xs font-mono text-atelier font-semibold">Custom Quote</span>
+              ) : (
+                <span className="ml-auto inline-flex items-center gap-1 text-xs font-mono text-atelier font-semibold">
+                  ${price.toFixed(2)}{service.price_type === 'weekly' ? '/wk' : service.price_type === 'monthly' ? '/mo' : ''}
+                  <Image src="/usdc.svg" alt="USDC" width={12} height={12} className="h-3 w-3 object-contain" />
+                  USDC
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -1011,36 +1133,50 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   <span className="text-gray-500 dark:text-neutral-400">Service</span>
                   <span className="text-black dark:text-white font-medium">{service.title}</span>
                 </div>
-                <div className="flex justify-between text-sm font-mono">
-                  <span className="text-gray-500 dark:text-neutral-400">Price</span>
-                  <span className="inline-flex items-center gap-1 text-black dark:text-white">
-                    ${price.toFixed(2)}{service.price_type === 'weekly' ? '/week' : service.price_type === 'monthly' ? '/month' : ''}
-                    <Image src="/usdc.svg" alt="USDC" width={12} height={12} className="h-3 w-3 object-contain" />
-                  </span>
-                </div>
-                {isSubscription && (
-                  <div className="flex justify-between text-sm font-mono">
-                    <span className="text-gray-500 dark:text-neutral-400">Period</span>
-                    <span className="text-black dark:text-white">{service.price_type === 'weekly' ? '7 days' : '30 days'}</span>
-                  </div>
+                {isQuote ? (
+                  <>
+                    <div className="flex justify-between text-sm font-mono">
+                      <span className="text-gray-500 dark:text-neutral-400">Pricing</span>
+                      <span className="text-black dark:text-white">Custom quote</span>
+                    </div>
+                    <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mt-1">
+                      {service.agent_name} will review your brief and reply with a price. You only pay after you accept the quote.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-sm font-mono">
+                      <span className="text-gray-500 dark:text-neutral-400">Price</span>
+                      <span className="inline-flex items-center gap-1 text-black dark:text-white">
+                        ${price.toFixed(2)}{service.price_type === 'weekly' ? '/week' : service.price_type === 'monthly' ? '/month' : ''}
+                        <Image src="/usdc.svg" alt="USDC" width={12} height={12} className="h-3 w-3 object-contain" />
+                      </span>
+                    </div>
+                    {isSubscription && (
+                      <div className="flex justify-between text-sm font-mono">
+                        <span className="text-gray-500 dark:text-neutral-400">Period</span>
+                        <span className="text-black dark:text-white">{service.price_type === 'weekly' ? '7 days' : '30 days'}</span>
+                      </div>
+                    )}
+                    {isSubscription && (
+                      <div className="flex justify-between text-sm font-mono">
+                        <span className="text-gray-500 dark:text-neutral-400">Generations</span>
+                        <span className="text-black dark:text-white">{(service.quota_limit ?? 0) > 0 ? service.quota_limit : 'Unlimited'}</span>
+                      </div>
+                    )}
+                    <div className="border-t border-gray-200 dark:border-neutral-800 pt-3 flex justify-between text-sm font-mono font-bold">
+                      <span className="text-black dark:text-white">Total</span>
+                      <span className="inline-flex items-center gap-1 text-atelier">
+                        ${total.toFixed(2)}
+                        <Image src="/usdc.svg" alt="USDC" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
+                        USDC
+                      </span>
+                    </div>
+                    <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mt-1">
+                      10% platform fee deducted from provider payout
+                    </p>
+                  </>
                 )}
-                {isSubscription && (
-                  <div className="flex justify-between text-sm font-mono">
-                    <span className="text-gray-500 dark:text-neutral-400">Generations</span>
-                    <span className="text-black dark:text-white">{(service.quota_limit ?? 0) > 0 ? service.quota_limit : 'Unlimited'}</span>
-                  </div>
-                )}
-                <div className="border-t border-gray-200 dark:border-neutral-800 pt-3 flex justify-between text-sm font-mono font-bold">
-                  <span className="text-black dark:text-white">Total</span>
-                  <span className="inline-flex items-center gap-1 text-atelier">
-                    ${total.toFixed(2)}
-                    <Image src="/usdc.svg" alt="USDC" width={14} height={14} className="h-3.5 w-3.5 object-contain" />
-                    USDC
-                  </span>
-                </div>
-                <p className="text-2xs font-mono text-gray-400 dark:text-neutral-600 mt-1">
-                  10% platform fee deducted from provider payout
-                </p>
               </div>
 
               <div className="p-3 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800">
@@ -1063,6 +1199,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 )}
               </div>
 
+              {!isQuote && (
               <div>
                 <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Payment method</p>
                 <div className="flex gap-2">
@@ -1088,8 +1225,9 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   </button>
                 </div>
               </div>
+              )}
 
-              {payMethod === 'card' && (
+              {!isQuote && payMethod === 'card' && (
                 <div>
                   <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-2">Receive on</p>
                   <div className="flex gap-2">
@@ -1123,7 +1261,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   Back
                 </button>
                 <button
-                  onClick={handleReviewPay}
+                  onClick={isQuote ? () => void submitQuoteRequest() : handleReviewPay}
                   disabled={loading || !authenticated}
                   className="flex-1 py-2.5 rounded border border-atelier text-atelier text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all duration-200 hover:bg-atelier hover:text-white flex items-center justify-center gap-2"
                 >
@@ -1134,6 +1272,8 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                     </>
                   ) : !authenticated ? (
                     'Connect Wallet'
+                  ) : isQuote ? (
+                    'Submit Request'
                   ) : (
                     <>
                       <Image src="/usdc.svg" alt="USDC" width={16} height={16} className="h-4 w-4 object-contain" />
@@ -1261,10 +1401,11 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                 </svg>
               </div>
               <h3 className="text-lg font-bold font-display text-black dark:text-white mb-2">
-                {isSubscription ? 'Subscription active!' : isWorkspace ? 'Workspace ready!' : 'Order placed!'}
+                {isQuote ? 'Quote request sent!' : isSubscription ? 'Subscription active!' : isWorkspace ? 'Workspace ready!' : 'Order placed!'}
               </h3>
               <p className="text-sm text-gray-500 dark:text-neutral-400 font-mono mb-4">
-                {isSubscription && service.price_type === 'weekly' ? 'Your 7-day subscription is active! Start generating. Redirecting...' :
+                {isQuote ? `${service.agent_name} will review your brief and send you a price. You only pay after you accept the quote. Redirecting...` :
+                 isSubscription && service.price_type === 'weekly' ? 'Your 7-day subscription is active! Start generating. Redirecting...' :
                  isSubscription && service.price_type === 'monthly' ? 'Your 30-day subscription is active! Start generating. Redirecting...' :
                  isWorkspace ? 'Your workspace is ready! Start generating. Redirecting...' :
                  'Your order is being processed. Redirecting...'}

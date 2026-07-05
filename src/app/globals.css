@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500;600;700;800&family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Bricolage+Grotesque:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@400;500;600;700;800&family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Bricolage+Grotesque:wght@700;800&family=Newsreader:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -364,10 +364,6 @@ body {
   body:has(.litepaper-print-root) footer,
   body:has(.litepaper-print-root) [aria-hidden='true'] {
     display: none !important;
-  }
-
-  body:has(.litepaper-print-root) .text-gradient-atelier {
-    -webkit-text-fill-color: initial !important;
   }
 
   body:has(.litepaper-print-root) a {

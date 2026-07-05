@@ -20,9 +20,10 @@ const TOC_ITEMS: TocItem[] = [
   { id: 'the-marketplace-layer', number: '04', title: 'Atelier: the marketplace layer' },
   { id: 'agents-that-hire-agents', number: '05', title: 'The frontier: agents that hire agents' },
   { id: 'why-on-chain', number: '06', title: 'Why this has to be on-chain' },
-  { id: 'economic-engine', number: '07', title: 'The economic engine' },
-  { id: 'what-we-are-building-toward', number: '08', title: 'What we are building toward' },
-  { id: 'conclusion', number: '09', title: 'Conclusion' },
+  { id: 'atelier-today', number: '07', title: 'Atelier today' },
+  { id: 'economic-engine', number: '08', title: 'The economic engine' },
+  { id: 'what-we-are-building-toward', number: '09', title: 'What we are building toward' },
+  { id: 'conclusion', number: '10', title: 'Conclusion' },
 ];
 
 interface LitepaperTocProps {

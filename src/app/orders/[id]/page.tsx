@@ -256,20 +256,7 @@ function sellerParty(order: ServiceOrder): PartyProps {
   };
 }
 
-function PartiesRow({ order, side = false }: { order: ServiceOrder; side?: boolean }) {
-  if (side) {
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-stretch gap-3">
-        <PartyCard {...buyerParty(order)} />
-        <div className="hidden sm:flex flex-col items-center justify-center text-neutral-400">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15m0 0l-6-6m6 6l-6 6" />
-          </svg>
-        </div>
-        <PartyCard {...sellerParty(order)} />
-      </div>
-    );
-  }
+function PartiesRow({ order }: { order: ServiceOrder }) {
   return (
     <div className="space-y-2">
       <PartyCard {...buyerParty(order)} />
@@ -888,7 +875,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
   const walletMatches = !!walletAddress && order.client_wallet === walletAddress;
   const isOrderClient = walletMatches
     || (!!atelierUser?.privy_user_id && !!order.user_id && order.user_id === atelierUser.privy_user_id)
-    || (atelierUser?.google_email ?? atelierUser?.email ?? '').toLowerCase() === 'rempxbt@gmail.com';
+    || data.viewer_role === 'admin';
 
   const buildOrderAuth = async (): Promise<Record<string, unknown>> => {
     if (walletMatches) {
@@ -1447,10 +1434,6 @@ export default function AtelierOrderPage() {
 
   const { order, review } = data;
 
-  if (data.viewer_role === 'admin') {
-    return <AdminOrderView data={data} buildChatAuth={buildChatAuth} />;
-  }
-
   if (data.viewer_role === 'seller') {
     return <SellerOrderView data={data} onRefresh={load} buildChatAuth={buildChatAuth} />;
   }
@@ -1458,12 +1441,18 @@ export default function AtelierOrderPage() {
   const isWorkspace = order.quota_total > 0;
   const showWorkspace = isWorkspace && ['in_progress', 'delivered', 'completed'].includes(order.status);
 
+  // Admins see the buyer view with every action enabled: the API authorizes
+  // admins for all client actions, and the server never gates their originals.
+  const isAdminViewer = data.viewer_role === 'admin';
   const walletMatches = !!walletAddress && order.client_wallet === walletAddress;
   const isOrderClient = walletMatches
     || (!!atelierUser?.privy_user_id && !!order.user_id && order.user_id === atelierUser.privy_user_id)
-    || (atelierUser?.google_email ?? atelierUser?.email ?? '').toLowerCase() === 'rempxbt@gmail.com';
-  const walletMismatch = isOrderClient && !walletMatches;
-  const locked = isOrderClient && order.status !== 'completed';
+    || isAdminViewer;
+  const walletMismatch = isOrderClient && !walletMatches && !isAdminViewer;
+  const locked = isOrderClient && !isAdminViewer && order.status !== 'completed';
+  const quoted = parseFloat(order.quoted_price_usd || '0');
+  const fee = parseFloat(order.platform_fee_usd || '0');
+  const net = Math.max(0, Math.round((quoted - fee) * 100) / 100);
 
   const buildOrderAuth = async (): Promise<Record<string, unknown>> => {
     if (walletMatches) {
@@ -1504,13 +1493,18 @@ export default function AtelierOrderPage() {
                     <h1 className="text-base font-bold font-display truncate">{order.service_title}</h1>
                     <p className="text-2xs font-mono text-neutral-500 mt-0.5">{order.id}</p>
                   </div>
-                  <span className={`shrink-0 inline-flex px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium ${STATUS_COLORS[order.status] || 'bg-neutral-800 text-neutral-300'}`}>
-                    {STATUS_LABELS[order.status] || order.status}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isAdminViewer && (
+                      <span className="inline-flex px-2 py-0.5 rounded-full text-2xs font-mono font-medium bg-amber-400/10 text-amber-400 uppercase tracking-wider">Admin</span>
+                    )}
+                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium ${STATUS_COLORS[order.status] || 'bg-neutral-800 text-neutral-300'}`}>
+                      {STATUS_LABELS[order.status] || order.status}
+                    </span>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <PartiesRow order={order} />
-                  <PaymentSummary rows={buyerPaymentRows(order)} />
+                  <PaymentSummary rows={isAdminViewer ? adminPaymentRows(order, quoted, fee, net) : buyerPaymentRows(order)} />
                   <div className="flex items-center justify-between px-1">
                     <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
                     <span className="text-neutral-500 text-2xs font-mono">{formatDate(order.created_at)}</span>
@@ -1678,7 +1672,7 @@ export default function AtelierOrderPage() {
                 )}
 
                 {/* Admin: Retry Payout */}
-                {order.status === 'completed' && !order.payout_tx_hash && walletAddress === 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb' && (
+                {order.status === 'completed' && !order.payout_tx_hash && (isAdminViewer || walletAddress === 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb') && (
                   <div className="p-3 rounded-lg border border-amber-400/30 bg-amber-400/5">
                     <p className="text-2xs font-mono text-amber-400/70 mb-2">Payout missing for this order</p>
                     {retryPayoutMsg && (
@@ -1955,10 +1949,11 @@ export default function AtelierOrderPage() {
             )}
 
             {/* Chat — always visible */}
-            {walletAddress && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
+            {(walletAddress || isAdminViewer) && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
               <OrderChat
                 orderId={order.id}
-                selfIds={[walletAddress]}
+                readOnly={isAdminViewer}
+                selfIds={walletAddress ? [walletAddress] : []}
                 buildAuth={buildChatAuth}
                 locked={locked}
                 deliveries={data.deliverables.length > 0
@@ -2331,125 +2326,6 @@ function OrderProgress({ order }: { order: ServiceOrder }) {
         })}
       </div>
     </div>
-  );
-}
-
-function AdminOrderView({ data, buildChatAuth }: { data: OrderData; buildChatAuth: () => Promise<ChatAuth> }) {
-  const { order } = data;
-  const quoted = parseFloat(order.quoted_price_usd || '0');
-  const fee = parseFloat(order.platform_fee_usd || '0');
-  const net = Math.max(0, Math.round((quoted - fee) * 100) / 100);
-  const showChat = !['pending_quote', 'quoted', 'accepted'].includes(order.status);
-
-  const references: string[] = (() => {
-    try { return order.reference_images ? JSON.parse(order.reference_images) : []; } catch { return []; }
-  })();
-  const requirements: [string, string][] = (() => {
-    try {
-      const a: Record<string, string> = order.requirement_answers ? JSON.parse(order.requirement_answers) : {};
-      return Object.entries(a).filter(([, v]) => v?.trim());
-    } catch { return []; }
-  })();
-
-  return (
-    <AtelierAppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pt-20">
-        <Link href={atelierHref('/atelier/orders')} className="inline-flex items-center gap-1.5 text-sm text-neutral-400 hover:text-atelier font-mono transition-colors mb-6">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-          </svg>
-          Orders
-        </Link>
-
-        {/* Top row: header + both parties */}
-        <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a] mb-4">
-          <div className="flex items-start justify-between gap-3 mb-4">
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold font-display truncate">{order.service_title || 'Order'}</h1>
-              <p className="text-2xs font-mono text-neutral-500 mt-0.5">{order.id}</p>
-            </div>
-            <span className={`shrink-0 inline-flex px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium ${STATUS_COLORS[order.status] || 'bg-neutral-800 text-neutral-300'}`}>
-              {STATUS_LABELS[order.status] || order.status}
-            </span>
-          </div>
-          <PartiesRow order={order} side />
-        </div>
-
-        {/* Chat on the left (compact), everything else on the right */}
-        <div className="flex flex-col-reverse lg:grid lg:grid-cols-[minmax(320px,380px)_minmax(0,1fr)] lg:gap-6">
-          <div className="min-w-0">
-            {showChat ? (
-              <OrderChat orderId={order.id} readOnly selfIds={[]} buildAuth={buildChatAuth} deliveries={[]} />
-            ) : (
-              <div className="border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50 dark:bg-black p-6 text-center">
-                <p className="text-2xs font-mono text-neutral-500">No conversation at this stage.</p>
-              </div>
-            )}
-          </div>
-
-          <div className="min-w-0 space-y-3">
-            <OrderProgress order={order} />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <PaymentSummary rows={adminPaymentRows(order, quoted, fee, net)} />
-              <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black space-y-1.5">
-                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-1">Details</p>
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
-                  <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-500 font-mono text-2xs">Origin</span>
-                  <span className="text-black dark:text-white text-xs font-mono">{order.client_type === 'agent_x402' ? 'Agent · x402' : 'Human · UI'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-500 font-mono text-2xs">Payment</span>
-                  <span className="text-black dark:text-white text-xs font-mono">{order.payment_method || '—'} · {order.payment_chain}</span>
-                </div>
-                {order.completed_at && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-neutral-500 font-mono text-2xs">Completed</span>
-                    <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.completed_at)}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {order.brief && (
-              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
-                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Brief</p>
-                <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed break-all">{order.brief}</p>
-                {references.length > 0 && (
-                  <div className="flex gap-2 mt-3 flex-wrap">
-                    {references.map((url, i) => (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                        <img src={url} alt={`Reference ${i + 1}`} className="w-12 h-12 rounded border border-neutral-800 object-cover hover:border-atelier transition-colors" onError={(e) => { const el = e.currentTarget.closest('a'); if (el instanceof HTMLElement) el.style.display = 'none'; }} />
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {requirements.length > 0 && (
-              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
-                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-2">Requirements</p>
-                <div className="space-y-2">
-                  {requirements.map(([label, value]) => (
-                    <div key={label}>
-                      <p className="text-2xs font-mono text-neutral-500">{label}</p>
-                      <p className="text-sm text-gray-700 dark:text-neutral-300">{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {data.deliverables.length > 0 && <DeliverablesGallery deliverables={data.deliverables} />}
-          </div>
-        </div>
-      </div>
-    </AtelierAppLayout>
   );
 }
 

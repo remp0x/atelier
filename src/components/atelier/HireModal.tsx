@@ -833,7 +833,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-lg mx-4 bg-white dark:bg-black-soft border border-gray-200 dark:border-neutral-800 rounded-lg shadow-2xl animate-slide-up">
+      <div className="relative w-full max-w-lg mx-4 bg-white dark:bg-black-soft border border-gray-200 dark:border-neutral-800 rounded-lg shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-neutral-800">
           <div className="flex items-center justify-between">
@@ -1181,7 +1181,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
               <div className="p-3 rounded-lg bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800">
                 <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1">Your brief:</p>
-                <p className="text-sm text-black dark:text-white">{brief}</p>
+                <p className="text-sm text-black dark:text-white max-h-24 overflow-y-auto whitespace-pre-wrap">{brief}</p>
                 {referenceImages.length > 0 && (
                   <div className="mt-2 pt-2 border-t border-gray-200 dark:border-neutral-800">
                     <p className="text-xs font-mono text-gray-500 dark:text-neutral-400 mb-1.5">Reference images:</p>

@@ -10,23 +10,14 @@ import {
   useSolanaFundingPlugin,
   useCreateWallet as useCreateSolanaWallet,
   useWallets as useSolanaWallets,
-  useSignAndSendTransaction,
+  useSignTransaction,
 } from '@privy-io/react-auth/solana';
-import { Connection, PublicKey, Transaction } from '@solana/web3.js';
-import {
-  getAssociatedTokenAddress,
-  getAccount,
-  createTransferInstruction,
-  createAssociatedTokenAccountInstruction,
-  TokenAccountNotFoundError,
-  TokenInvalidAccountOwnerError,
-} from '@solana/spl-token';
+import { Connection } from '@solana/web3.js';
 import { encodeFunctionData, erc20Abi, isAddress, parseUnits } from 'viem';
-import bs58 from 'bs58';
 import { base } from 'viem/chains';
 import { gsap } from 'gsap';
 import { useGSAP } from '@gsap/react';
-import { USDC_MINT } from '@/lib/solana-pay';
+import { relaySolanaUsdcTransfer } from '@/lib/solana-relay-client';
 import { USDC_BASE_ADDRESS } from '@/lib/base-constants';
 import { ChainLogo } from '@/components/atelier/ChainBadge';
 import { useEmbeddedWallets } from '@/hooks/use-embedded-wallets';
@@ -882,7 +873,7 @@ export function WalletPanel() {
   const { wallets: privyEvmWallets } = useWallets();
   const { wallets: privySolWallets } = useSolanaWallets();
   const { sendTransaction: evmSendTransaction } = useSendTransaction();
-  const { signAndSendTransaction: solSignAndSend } = useSignAndSendTransaction();
+  const { signTransaction: solanaSignTransaction } = useSignTransaction();
 
   const [sendChain, setSendChain] = useState<'base' | 'solana' | null>(null);
 
@@ -923,63 +914,15 @@ export function WalletPanel() {
     const embeddedSol = privySolWallets.find((w) => w.address === solanaAddress);
     if (!embeddedSol) throw new Error('Embedded Solana wallet not available');
 
-    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
-    const fromPubkey = new PublicKey(solanaAddress);
-    const toPubkey = new PublicKey(to);
-
-    const [whole, frac = ''] = String(amountUsd).split('.');
-    const padded = (frac + '000000').slice(0, 6);
-    const lamports = BigInt(whole) * BigInt(1_000_000) + BigInt(padded);
-
-    const senderAta = await getAssociatedTokenAddress(USDC_MINT, fromPubkey);
-    const recipientAta = await getAssociatedTokenAddress(USDC_MINT, toPubkey);
-
-    try {
-      const senderAccount = await getAccount(connection, senderAta);
-      if (senderAccount.amount < lamports) {
-        const have = Number(senderAccount.amount) / 1_000_000;
-        throw new Error(`Insufficient USDC. Need $${amountUsd.toFixed(2)}, have $${have.toFixed(2)}`);
-      }
-    } catch (err) {
-      if (err instanceof TokenAccountNotFoundError || err instanceof TokenInvalidAccountOwnerError) {
-        throw new Error('No USDC in this wallet. Fund it first.');
-      }
-      throw err;
-    }
-
-    const tx = new Transaction();
-    const recipientAtaInfo = await connection.getAccountInfo(recipientAta);
-    if (!recipientAtaInfo) {
-      tx.add(createAssociatedTokenAccountInstruction(fromPubkey, recipientAta, toPubkey, USDC_MINT));
-    }
-    tx.add(createTransferInstruction(senderAta, recipientAta, fromPubkey, lamports));
-
-    const { blockhash } = await connection.getLatestBlockhash('confirmed');
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = fromPubkey;
-
-    const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-    const result = await solSignAndSend({
-      transaction: new Uint8Array(serialized),
+    return relaySolanaUsdcTransfer({
+      connection: new Connection(SOLANA_RPC_URL, 'confirmed'),
+      fromAddress: solanaAddress,
+      toAddress: to,
+      amountUsd,
       wallet: embeddedSol,
-      chain: 'solana:mainnet',
-      options: { sponsor: true },
+      signTransaction: solanaSignTransaction,
     });
-    const sig = bs58.encode(result.signature);
-
-    for (let i = 0; i < 40; i++) {
-      const { value } = await connection.getSignatureStatuses([sig]);
-      const status = value[0];
-      if (status) {
-        if (status.err) throw new Error(`Transaction failed on-chain: ${JSON.stringify(status.err)}`);
-        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
-          return sig;
-        }
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, 1500));
-    }
-    return sig;
-  }, [solanaAddress, privySolWallets, solSignAndSend]);
+  }, [solanaAddress, privySolWallets, solanaSignTransaction]);
 
   const sendBaseUsdc = useCallback(async (to: string, amountUsd: number): Promise<string> => {
     if (!evmAddress) throw new Error('No Base wallet available');

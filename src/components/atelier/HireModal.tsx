@@ -5,28 +5,19 @@ import Image from 'next/image';
 import { AgentAvatar } from './AgentAvatar';
 import { useRouter } from 'next/navigation';
 import { atelierHref } from '@/lib/atelier-paths';
-import { PublicKey, Connection, Transaction, type SignatureStatus } from '@solana/web3.js';
-import {
-  getAssociatedTokenAddress,
-  getAccount,
-  createAssociatedTokenAccountInstruction,
-  createTransferInstruction,
-  TokenAccountNotFoundError,
-  TokenInvalidAccountOwnerError,
-} from '@solana/spl-token';
-import { USDC_MINT } from '@/lib/solana-pay';
+import { Connection } from '@solana/web3.js';
 import { useWallets, useSendTransaction } from '@privy-io/react-auth';
 import { useFundWallet as useEvmFundWallet } from '@privy-io/react-auth';
 import {
   useWallets as useSolanaWallets,
-  useSignAndSendTransaction,
+  useSignTransaction,
   useSignMessage as useSolanaSignMessage,
   useFundWallet as useSolanaFundWallet,
   useSolanaFundingPlugin,
 } from '@privy-io/react-auth/solana';
 import { createWalletClient, custom, encodeFunctionData, erc20Abi, parseUnits } from 'viem';
 import { base } from 'viem/chains';
-import bs58 from 'bs58';
+import { relaySolanaUsdcTransfer } from '@/lib/solana-relay-client';
 import { signWalletAuth, type WalletAuthPayload } from '@/lib/solana-auth-client';
 import { signEvmWalletAuth } from '@/lib/evm-auth-client';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
@@ -185,7 +176,6 @@ const DEFAULT_HINTS = {
 type PayMethod = 'wallet' | 'card';
 type PayChain = 'solana' | 'base';
 
-const SOLANA_USDC_DECIMALS = 6;
 const SOLANA_RPC_URL =
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
@@ -208,7 +198,7 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
 
   const { wallets: evmWallets } = useWallets();
   const { wallets: solanaWallets } = useSolanaWallets();
-  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const { signTransaction: solanaSignTransaction } = useSignTransaction();
   const { signMessage: solSignMessage } = useSolanaSignMessage();
   const { sendTransaction: privySendTransaction } = useSendTransaction();
 
@@ -402,84 +392,19 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
     amountUsd: number,
     onSignature?: (sig: string) => void,
   ): Promise<string> => {
-    const connection = new Connection(SOLANA_RPC_URL, 'confirmed');
-    const fromPubkey = new PublicKey(fromAddress);
-    const toPubkey = new PublicKey(treasuryAddress);
-
-    const senderAta = await getAssociatedTokenAddress(USDC_MINT, fromPubkey);
-    const recipientAta = await getAssociatedTokenAddress(USDC_MINT, toPubkey);
-
-    const [whole, frac = ''] = String(amountUsd).split('.');
-    const padded = (frac + '000000').slice(0, SOLANA_USDC_DECIMALS);
-    const lamports = BigInt(whole) * BigInt(10 ** SOLANA_USDC_DECIMALS) + BigInt(padded);
-
-    try {
-      const senderAccount = await getAccount(connection, senderAta);
-      if (senderAccount.amount < lamports) {
-        const have = Number(senderAccount.amount) / 10 ** SOLANA_USDC_DECIMALS;
-        throw new Error(`Insufficient USDC balance. Need $${amountUsd.toFixed(2)}, have $${have.toFixed(2)}`);
-      }
-    } catch (err) {
-      if (err instanceof TokenAccountNotFoundError || err instanceof TokenInvalidAccountOwnerError) {
-        throw new Error('No USDC in this wallet. Fund it with USDC on Solana first.');
-      }
-      throw err;
-    }
-
-    const tx = new Transaction();
-
-    const recipientAtaInfo = await connection.getAccountInfo(recipientAta);
-    if (!recipientAtaInfo) {
-      tx.add(
-        createAssociatedTokenAccountInstruction(fromPubkey, recipientAta, toPubkey, USDC_MINT),
-      );
-    }
-
-    tx.add(createTransferInstruction(senderAta, recipientAta, fromPubkey, lamports));
-
-    const { blockhash } = await connection.getLatestBlockhash('confirmed');
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = fromPubkey;
-
     if (!solEmbedded) throw new Error('Solana embedded wallet not available');
 
-    const serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
-
-    const result = await signAndSendTransaction({
-      transaction: new Uint8Array(serialized),
+    const sig = await relaySolanaUsdcTransfer({
+      connection: new Connection(SOLANA_RPC_URL, 'confirmed'),
+      fromAddress,
+      toAddress: treasuryAddress,
+      amountUsd,
       wallet: solEmbedded,
-      chain: 'solana:mainnet',
-      options: { sponsor: true },
+      signTransaction: solanaSignTransaction,
     });
-
-    const sig = bs58.encode(result.signature);
     onSignature?.(sig);
-
-    // Privy gas sponsorship rewrites the transaction blockhash, so confirming
-    // against the original lastValidBlockHeight throws a false "block height
-    // exceeded" even when the tx lands. Poll the signature status directly; the
-    // backend re-verifies the payment on-chain regardless.
-    for (let i = 0; i < 40; i++) {
-      let status: SignatureStatus | null = null;
-      try {
-        const { value } = await connection.getSignatureStatuses([sig]);
-        status = value[0];
-      } catch {
-        // transient RPC failure -- the tx is already broadcast, keep polling
-      }
-      if (status) {
-        if (status.err) {
-          throw new Error(`Payment failed on-chain: ${JSON.stringify(status.err)}`);
-        }
-        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
-          return sig;
-        }
-      }
-      await sleep(1500);
-    }
-
     return sig;
-  }, [solEmbedded, signAndSendTransaction]);
+  }, [solEmbedded, solanaSignTransaction]);
 
   const signAuthForChain = useCallback(async (chain: PayChain): Promise<WalletAuthPayload> => {
     if (chain === 'base') {

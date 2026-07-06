@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       privyUserId: user.privyUserId,
       email: user.googleEmail,
       twitter: user.twitterUsername,
-      wallet: user.linkedSolanaWallets[0] ?? null,
+      wallet: user.allSolanaWallets[0] ?? null,
     });
     if (banned) {
       return NextResponse.json({ success: false, error: 'Account is not permitted to use gas sponsorship' }, { status: 403 });
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     const { signature } = await sponsorAndSendSolanaTx({
       serializedTxBase64: transaction,
-      userWallets: user.linkedSolanaWallets,
+      userWallets: user.allSolanaWallets,
     });
 
     return NextResponse.json({ success: true, data: { signature } });

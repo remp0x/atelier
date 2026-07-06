@@ -20,6 +20,10 @@ export interface PrivyUserInfo {
   email: string | null;
   linkedSolanaWallets: string[];
   linkedEvmWallets: string[];
+  /** Every Solana wallet on the account, INCLUDING the Privy embedded wallet
+   *  (which `linkedSolanaWallets` deliberately excludes). Use this when you need
+   *  to recognise the wallet the user actually signs with, e.g. the gas relay. */
+  allSolanaWallets: string[];
   raw: unknown;
 }
 
@@ -58,6 +62,14 @@ function isSolanaWallet(
   a: LinkedAccount,
 ): a is Extract<LinkedAccount, { type: 'wallet'; chain_type: 'solana' }> {
   return a.type === 'wallet' && 'chain_type' in a && a.chain_type === 'solana' && isExternalWallet(a);
+}
+
+// Like isSolanaWallet but also matches the Privy embedded wallet (which the user
+// signs with). isSolanaWallet excludes embedded wallets on purpose.
+function isAnySolanaWallet(
+  a: LinkedAccount,
+): a is Extract<LinkedAccount, { type: 'wallet'; chain_type: 'solana' }> {
+  return a.type === 'wallet' && 'chain_type' in a && a.chain_type === 'solana';
 }
 
 function isEvmWallet(
@@ -126,8 +138,12 @@ export async function verifyPrivyAccessToken(accessToken: string): Promise<Privy
 
   const linkedSolanaWallets: string[] = [];
   const linkedEvmWallets: string[] = [];
+  const allSolanaWallets: string[] = [];
 
   for (const account of accounts) {
+    if (isAnySolanaWallet(account) && account.address) {
+      allSolanaWallets.push(account.address);
+    }
     if (isSolanaWallet(account) && account.address) {
       linkedSolanaWallets.push(account.address);
     } else if (isEvmWallet(account) && account.address) {
@@ -151,6 +167,7 @@ export async function verifyPrivyAccessToken(accessToken: string): Promise<Privy
     email,
     linkedSolanaWallets,
     linkedEvmWallets,
+    allSolanaWallets,
     raw: user,
   };
 }

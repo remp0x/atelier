@@ -30,7 +30,6 @@ export const SOLANA_RELAY_ENABLED: boolean = !!process.env.ATELIER_PRIVATE_KEY;
 export const RELAY_FEE_PAYER = ATELIER_PUBKEY;
 
 const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-const COMPUTE_BUDGET_PROGRAM_ID = new PublicKey('ComputeBudget111111111111111111111111111111');
 
 const SPL_TRANSFER = 3;
 const SPL_TRANSFER_CHECKED = 12;
@@ -119,8 +118,9 @@ export async function sponsorAndSendSolanaTx(params: {
     const programId = keys[ix.programIdIndex];
     if (!programId) throw new RelayPolicyError('Malformed instruction');
 
-    if (programId.equals(COMPUTE_BUDGET_PROGRAM_ID)) continue;
-
+    // ComputeBudget is intentionally NOT allowed: SetComputeUnitPrice lets a
+    // transaction attach an arbitrary priority fee that the fee payer (us) pays,
+    // which would be a direct drain vector. No legit relay flow sets one.
     if (programId.equals(TOKEN_PROGRAM_ID)) {
       const kind = ix.data[0];
       if (kind !== SPL_TRANSFER && kind !== SPL_TRANSFER_CHECKED) {

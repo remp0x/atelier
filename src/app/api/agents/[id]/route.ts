@@ -21,6 +21,7 @@ import { authenticateUserRequest } from '@/lib/session';
 import { tryResolvePrivyUserId } from '@/lib/privy-auth';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { validateExternalUrl } from '@/lib/url-validation';
+import { agentModerationState, remoderateAgent, type AgentModerationState } from '@/lib/agent-moderation';
 
 export async function GET(
   _request: NextRequest,
@@ -39,15 +40,23 @@ export async function GET(
     }
 
     // Ownership is identity-based: a verified Privy user may own the agent via
-    // user_id / linked wallets even when no wallet param is supplied. Fall back
-    // to the legacy ?wallet= match for wallet-only callers.
+    // user_id / linked wallets even when no wallet param is supplied. Machine
+    // agents prove ownership with their API key instead. Fall back to the
+    // legacy ?wallet= match for wallet-only callers.
     let isOwner = false;
-    const viewerUserId = await tryResolvePrivyUserId(_request, null);
-    if (viewerUserId) {
-      isOwner = await userOwnsAtelierAgent(viewerUserId, agent.id);
-    } else {
-      const viewerWallet = new URL(_request.url).searchParams.get('wallet');
-      isOwner = !!viewerWallet && agent.owner_wallet === viewerWallet;
+    if (_request.headers.get('authorization')?.startsWith('Bearer atelier_')) {
+      isOwner = await resolveExternalAgentByApiKey(_request)
+        .then((authed) => authed.id === agent.id)
+        .catch(() => false);
+    }
+    if (!isOwner) {
+      const viewerUserId = await tryResolvePrivyUserId(_request, null);
+      if (viewerUserId) {
+        isOwner = await userOwnsAtelierAgent(viewerUserId, agent.id);
+      } else {
+        const viewerWallet = new URL(_request.url).searchParams.get('wallet');
+        isOwner = !!viewerWallet && agent.owner_wallet === viewerWallet;
+      }
     }
 
     if (agent.source === 'external') {
@@ -99,6 +108,7 @@ export async function GET(
         const pendingOrders = await getPendingOrderCountForAgent(agent.id);
         agentPayload.last_poll_at = agent.last_poll_at || null;
         agentPayload.pending_orders = pendingOrders;
+        agentPayload.moderation = agentModerationState(agent);
       }
 
       return NextResponse.json({
@@ -168,6 +178,7 @@ export async function GET(
       const pendingOrders = await getPendingOrderCountForAgent(agent.id);
       atelierAgentPayload.last_poll_at = agent.last_poll_at || null;
       atelierAgentPayload.pending_orders = pendingOrders;
+      atelierAgentPayload.moderation = agentModerationState(agent);
     }
 
     return NextResponse.json({
@@ -346,7 +357,20 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: 'Agent not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, data: updated });
+    // Content edits go back through moderation: a clean verdict clears a
+    // 'review' flag on the spot, so owners can fix a flagged listing and be
+    // relisted without waiting on an admin.
+    let moderation: AgentModerationState | undefined;
+    if (name !== undefined || description !== undefined) {
+      moderation = await remoderateAgent(updated, updated.name, updated.description ?? '');
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: moderation
+        ? { ...updated, moderation_status: moderation.status, moderation_reason: moderation.reason, moderation }
+        : updated,
+    });
   } catch (error) {
     console.error('PATCH /api/agents/[id] error:', error);
     return NextResponse.json({ success: false, error: 'Internal server error' }, { status: 500 });

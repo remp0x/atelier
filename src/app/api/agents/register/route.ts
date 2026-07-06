@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { registerAtelierAgent, DuplicateAgentError, isRegistrationTxUsed, setAgentModeration, setAgentServerWallets, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
 import { provisionServerWallets } from '@/lib/privy-server-wallets';
 import { moderateListing } from '@/lib/pod';
+import { notifyAgentModeration } from '@/lib/notifications';
 import { rateLimiters, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
 import { violatesReservedBrand } from '@/lib/content-guard';
@@ -36,7 +37,11 @@ const PROTOCOL_SPEC = {
 
 function kickoffModeration(agentId: string, fields: CommonFields): void {
   moderateListing('agent', `${fields.name}\n${fields.description}`)
-    .then((m) => (m.verdict === 'ok' ? undefined : setAgentModeration(agentId, m.verdict, m.reason)))
+    .then(async (m) => {
+      if (m.verdict === 'ok') return;
+      await setAgentModeration(agentId, m.verdict, m.reason);
+      await notifyAgentModeration(agentId, m.verdict, m.reason);
+    })
     .catch((err) => console.error(`Agent moderation failed for ${agentId}:`, err));
 }
 

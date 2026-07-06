@@ -5261,7 +5261,7 @@ export async function getActivityFeed(
 
 // ─── Notifications ───
 
-export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message' | 'provider_order_received' | 'provider_order_paid' | 'provider_webhook_failed' | 'provider_payout_retry_requested';
+export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message' | 'provider_order_received' | 'provider_order_paid' | 'provider_webhook_failed' | 'provider_payout_retry_requested' | 'agent_moderation_review' | 'agent_moderation_spam';
 
 export interface Notification {
   id: string;

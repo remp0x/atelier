@@ -17,33 +17,38 @@ You'll need USDC in your wallet before you can deposit. See
 [Fund your wallet](/docs/guides/fund-your-wallet) if you haven't already.
 </Step>
 <Step title="Choose a venue">
-Earn surfaces two venues, lower-risk first:
+Earn surfaces two strategies, lower-risk first:
 
-- **Lending (Solend / Save)** -- supply USDC to Solend's main-pool USDC reserve and earn the
-  reserve's variable Supply APY. Your counterparty is over-collateralized borrowers, so your
+- **Lending (Solend, Kamino & Meteora)** -- supply USDC to a lending market's USDC reserve and
+  earn its variable Supply APY. Your counterparty is over-collateralized borrowers, so your
   principal isn't exposed to trading outcomes.
-- **Liquidity Provision (Parquet)** -- deposit USDC into a category pool on
+- **Liquidity Provision (Parquet)** -- deposit USDC into a category pool -- US Equities (roughly
+  24 stock and ETF markets) or Crypto (BTC, ETH & SOL perps) -- on
   [Parquet](https://parquet.exchange), a non-custodial Solana perps DEX. You become the
-  counterparty to that category's leveraged traders and earn 60% of the pool's trading fees,
-  pro-rata to your share.
+  counterparty to that category's leveraged traders and earn an estimated 60% share of the
+  pool's trading fees, pro-rata to your share (the figure used for the displayed APR; the exact
+  split is set by Parquet).
 
 <Callout variant="warning" title="Principal is at risk in the Liquidity Provision venue">
 Liquidity Provision is not a savings account. If traders in the pool you're supplying win, your
 principal draws down -- this is a materially higher-risk venue than Lending. Only deposit what
-you can afford to see decline in value. Yield on both venues is variable and never guaranteed:
-Solend's Supply APY floats with reserve utilization, and Parquet's `fee_apr_pct` is based on
-trailing-24h trading fees annualized against TVL -- it can be 0.00% if a pool saw no volume.
+you can afford to see decline in value. Yield on both strategies is variable and never
+guaranteed: a lending market's Supply APY floats with reserve utilization, and Parquet's
+`fee_apr_pct` is based on the LP's estimated share of trailing-24h trading fees annualized
+against TVL -- it can be 0.00% if a pool saw no volume.
 </Callout>
 </Step>
 <Step title="Deposit">
 Earn uses a push-deposit model rather than a wallet-signed program call:
 
-1. Send USDC directly to the venue's treasury wallet.
+1. Send USDC directly to Atelier's Earn treasury wallet, which then deploys it into the venue.
 2. Register the transaction with Atelier.
 3. Atelier verifies the transfer on-chain and mints you pool shares proportional to your deposit.
 
-If the underlying deploy step fails for any reason, your deposit is automatically refunded --
-you won't end up with a stuck transaction and no shares to show for it.
+If the underlying deploy step fails, Atelier auto-refunds the sender. Refunds are best-effort --
+in the rare case the sender can't be identified or the refund transaction itself fails, the funds
+are held in the treasury until support resolves it. Note: the first deposit into a fresh pool has
+a $100 minimum; after that there's no minimum.
 
 <ApiMethod method="POST" /> `/api/earn/parquet/deposit`
 </Step>
@@ -55,19 +60,21 @@ Check your current positions and each pool's live rate and TVL data:
 <ApiMethod method="GET" /> `/api/earn/parquet/markets` -- live TVL and rate data per venue
 </Step>
 <Step title="Withdraw">
-Withdraw whenever you want -- there's no lock-up on either venue:
+Withdraw whenever you want -- there's no lock-up on either strategy:
 
 <ApiMethod method="POST" /> `/api/earn/parquet/withdraw`
 
 This burns your shares and returns USDC from the pool, with no deposit or withdraw fee on either
-side.
+side. If the pool is short on free liquidity, your shares still burn immediately but the payout
+is queued and settles automatically as liquidity arrives -- the API returns `status: "queued"`
+in that case.
 </Step>
 </Steps>
 
 ## What's next
 
 <CardGrid columns={2}>
-<Card title="Atelier Earn" description="How the Lending and Liquidity Provision venues work, and the API behind them." href="/docs/concepts/earn" />
+<Card title="Atelier Earn" description="How the Lending and Liquidity Provision strategies work, and the API behind them." href="/docs/concepts/earn" />
 <Card title="Fund your wallet" description="Get USDC into your wallet before depositing." href="/docs/guides/fund-your-wallet" />
 <Card title="Payments & Settlement" description="How on-chain verification works platform-wide." href="/docs/concepts/payments" />
 <Card title="$ATELIER Token" description="A separate on-chain mechanism from Earn; don't confuse the two." href="/docs/concepts/token" />

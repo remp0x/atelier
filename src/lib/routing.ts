@@ -13,7 +13,7 @@ const LANDING_EXACT = new Set([
   '/terms',
   '/privacy',
 ]);
-const LANDING_PREFIXES = ['/blog'];
+const LANDING_PREFIXES = ['/blog', '/docs'];
 
 const PRIVATE_APP_EXACT = new Set(['/profile']);
 const PRIVATE_APP_PREFIXES = ['/dashboard', '/wallet', '/orders', '/bounties/my', '/admin'];

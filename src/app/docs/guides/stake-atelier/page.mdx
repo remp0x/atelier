@@ -31,13 +31,12 @@ Staking locks your $ATELIER into one of three tiers, each with a different rewar
 
 | Tier | Lock | Multiplier |
 |---|---|---|
-| Flexible | Unstake anytime | 1x |
+| 30-day | 30-day lock | 1x |
 | 90-day | 90-day lock | 4x |
 | 180-day | 180-day lock | 8x |
 
-A longer lock means a larger weighted share of the reward pool for the same amount staked, but in
-the 90-day and 180-day tiers your principal is committed for that lock's duration -- there's no
-early exit.
+A longer lock means a larger weighted share of the reward pool for the same amount staked, but
+your principal is committed for that lock's duration -- there's no early exit.
 </Step>
 <Step title="Stake">
 Once staking is live, you'll stake $ATELIER into your chosen tier from `/stake` using your Privy
@@ -59,9 +58,9 @@ amounts more frequently versus waiting.
 </Step>
 <Step title="Unstake">
 Unstaking returns your staked $ATELIER 1:1 -- staking never puts your principal at market or
-trading risk the way, say, Earn's Liquidity Provision venue does. In the Flexible tier you can
-unstake anytime; in the 90-day and 180-day tiers, unstaking is available once your lock period
-has elapsed.
+trading risk the way, say, Earn's Liquidity Provision venue does. Unstaking is available once
+your lock period has elapsed -- the on-chain program enforces the lock and releases it
+automatically.
 </Step>
 </Steps>
 

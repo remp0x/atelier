@@ -22,7 +22,7 @@ Data layer: Turso / LibSQL (raw SQL, src/lib/atelier-db.ts)  +  Vercel Blob (fil
    |
    +-- On-chain settlement: Solana (web3.js, SPL Token) + Base (viem, USDC)
    |     +-- $ATELIER token + staking program (Solana-only, Anchor)
-   +-- AI provider layer: grok / runway / luma / higgsfield / minimax / DALL-E
+   +-- AI provider layer: grok / runway / luma / higgsfield / minimax
    |     (submit-then-poll, src/lib/providers/*)
    v
 External integration surfaces: REST API, x402, MCP (stdio + remote), SDK
@@ -85,12 +85,12 @@ submitted transaction hash on-chain before advancing an order's status -- there 
 "trust the client" step. See [Payments & Settlement](/docs/concepts/payments) for the full flow,
 including fee splits and payout routing.
 
-Two Solana-only programs sit on top of this layer and are token-specific rather than
-marketplace-wide:
+On top of this layer sit the $ATELIER token and one Solana-only on-chain program, both
+token-specific rather than marketplace-wide:
 
 - **$ATELIER** ([Token](/docs/concepts/token)) -- a Token-2022 mint launched via PumpFun, with
-  mint and freeze authority revoked.
-- **Staking** ([Token & staking program](/docs/protocol/token-and-staking)) -- a separate Anchor
+  mint and freeze authority revoked (a mint, not a deployed program).
+- **Staking** ([Token & staking program](/docs/protocol/token-and-staking)) -- an Anchor
   program that lets holders stake $ATELIER for a USDC revenue share. <StatusBadge status="Beta" />
 
 ## AI provider layer
@@ -113,7 +113,7 @@ in `src/lib/providers/registry.ts` and selected per-service via the service's `p
 
 Active providers: **grok** (xAI, image + video), **runway** (Gen-4, image-to-video and
 text-to-video), **luma** (Ray-2, video, image-to-video, remix), **higgsfield** (DoP, avatar,
-soul), and **minimax** (Hailuo, video), plus **DALL-E 3** (OpenAI) for image generation.
+soul), and **minimax** (Hailuo, video).
 
 ## Identity layer
 

@@ -1,60 +1,24 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  PublicKey,
-  SystemProgram,
-  TransactionMessage,
-  VersionedTransaction,
-} from '@solana/web3.js';
-import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, userOwnsAtelierAgent, setAgentTwitterIfEmpty, isBannedIdentity, identityHasLaunchedToken, agentModerationOk, isLaunchFeeTxUsed } from '@/lib/atelier-db';
+import { getAtelierAgent, updateAgentToken, markTokenLaunchAttempted, clearTokenLaunchAttempted, recordTokenLaunchFeeTx, userOwnsAtelierAgent, setAgentTwitterIfEmpty, isBannedIdentity } from '@/lib/atelier-db';
 import { authenticateUserRequest } from '@/lib/session';
 import { tryAuthenticatePrivy, type PrivyUserInfo } from '@/lib/privy-auth';
-import { getServerConnection, ATELIER_PUBKEY, getAtelierKeypair, pollTransactionConfirmation } from '@/lib/solana-server';
 import { rateLimit, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrlWithDNS } from '@/lib/url-validation';
 import { violatesReservedBrand } from '@/lib/content-guard';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import { launchTokenSelfFundedOnClawpump, ClawpumpError, type ClawpumpLaunchResult } from '@/lib/clawpump-client';
-import { parseX402Header, buildFlatPaymentRequirements, buildPaymentRequiredResponse, verifyX402Payment } from '@/lib/x402';
+import { sendSolFromServerWallet, getServerWalletSolBalance } from '@/lib/privy-server-wallets';
+import { ensureAgentSolanaWallet, getLaunchRequirement, insufficientSolBody } from '@/lib/agent-funding';
 
 export const maxDuration = 300;
 
 const launchRateLimit = rateLimit(10, 60 * 60 * 1000);
 
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://useatelier.ai';
-// Token launches are no longer sponsored: the owner pays this fee in USDC to the
-// Atelier treasury (Solana) before the launch proceeds.
-const LAUNCH_FEE_USD = Number(process.env.ATELIER_LAUNCH_FEE_USD || '2');
-
 const TOKEN_NAME_SUFFIX = ' by Atelier';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-
-// Send `sol` SOL from the Atelier wallet to a destination and return the confirmed signature.
-// Used to pay ClawPump's self-funded launch fee (~0.03 SOL).
-async function transferSolFromAtelier(destination: string, sol: number): Promise<string> {
-  const lamports = Math.max(1, Math.round(sol * 1_000_000_000));
-  const connection = getServerConnection();
-  const payer = getAtelierKeypair();
-  const { blockhash } = await connection.getLatestBlockhash('confirmed');
-  const message = new TransactionMessage({
-    payerKey: ATELIER_PUBKEY,
-    recentBlockhash: blockhash,
-    instructions: [
-      SystemProgram.transfer({
-        fromPubkey: ATELIER_PUBKEY,
-        toPubkey: new PublicKey(destination),
-        lamports,
-      }),
-    ],
-  }).compileToV0Message();
-  const tx = new VersionedTransaction(message);
-  tx.sign([payer]);
-  const sig = await connection.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
-  await pollTransactionConfirmation(connection, sig, 60_000);
-  return sig;
-}
 
 export async function POST(
   request: NextRequest,
@@ -83,8 +47,8 @@ export async function POST(
     //  - machine: the agent's own API key (atelier_...)
     //  - social: a verified Privy token -> ownership via user_id / linked wallets
     //  - legacy: a wallet signature matching the agent's owner_wallet
-    // The launch is signed by Atelier/ClawPump (not the owner's wallet), so proving
-    // identity is sufficient -- the owner's active wallet need not equal owner_wallet.
+    // The launch is paid by the AGENT's server wallet and signed by ClawPump, so
+    // proving identity is sufficient -- the owner's active wallet is never charged.
     const authHeader = request.headers.get('authorization');
     const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
@@ -154,9 +118,6 @@ export async function POST(
     // auth path. The owner's linked X auto-propagates to agent.twitter_username on
     // login; for a live Privy session we also accept the handle straight from the
     // verified token (covers a just-linked account whose propagation hasn't run yet).
-    // The X handle that vouches for this launch. When the agent row carries no
-    // handle yet (propagation lag), the live Privy token is what satisfies the
-    // gate -- capture it so the launched token records a traceable account.
     const vouchingTwitter = agent.twitter_username?.trim() || privyInfo?.twitterUsername?.trim() || '';
     const hasLinkedX = Boolean(vouchingTwitter);
     if (!hasLinkedX) {
@@ -181,21 +142,13 @@ export async function POST(
       );
     }
 
-    // One X (Twitter) account may vouch for exactly one token launch, ever. The
-    // durable identity (Privy id + owner wallet) is checked alongside the handle so a
-    // fresh Privy account or a re-linked wallet can't farm a second launch off the
-    // same person -- the X gate alone lets one handle mint unlimited coins. Failed
-    // launches leave token_mint NULL, so they don't burn the quota.
-    if (await identityHasLaunchedToken(launcher, agentId)) {
+    // A single owner may launch one token per agent (enforced below via token_mint).
+    // Spam is gated economically by the SOL launch fee the agent's own wallet burns
+    // per launch, plus the banned-identity check above and the per-IP rate limit.
+    // Content moderation: only a hard 'spam' verdict blocks a launch.
+    if (agent.moderation_status === 'spam') {
       return NextResponse.json(
-        { success: false, error: 'This X account has already launched a token. Each X account can launch only one token.' },
-        { status: 409 },
-      );
-    }
-
-    if (!agentModerationOk(agent)) {
-      return NextResponse.json(
-        { success: false, error: 'This agent is under review and cannot launch a token right now.' },
+        { success: false, error: 'This agent was flagged as spam and cannot launch a token.' },
         { status: 403 },
       );
     }
@@ -257,21 +210,35 @@ export async function POST(
       );
     }
 
-    // Launch fee: the owner must pay LAUNCH_FEE_USD in USDC to the Solana treasury.
-    // Web clients pre-pay from their embedded wallet and send the signature as
-    // body.payment_tx; machine agents follow the x402 flow (X-PAYMENT header, 402
-    // challenge when absent). Verified after the cheap input checks but before any
-    // irreversible work.
-    const paymentRef = parseX402Header(request.headers.get('X-PAYMENT'))
-      || (typeof body.payment_tx === 'string' && body.payment_tx.trim() ? body.payment_tx.trim() : null);
-    if (!paymentRef) {
-      const requirements = buildFlatPaymentRequirements({
-        amountUsd: LAUNCH_FEE_USD,
-        description: `Atelier token launch for ${agent.name}`,
-        resource: `${BASE_URL}/api/agents/${agentId}/token/launch`,
-        chain: 'solana',
-      });
-      return buildPaymentRequiredResponse(requirements);
+    // Funding gate: the AGENT's own server wallet pays ClawPump's launch fee (and
+    // in return receives the 65% creator-fee share directly). The requirement is
+    // resolved live, and an underfunded wallet is rejected here -- before any
+    // irreversible work -- with the exact amount and deposit address.
+    const agentWallet = await ensureAgentSolanaWallet(agent);
+    if (!agentWallet) {
+      return NextResponse.json(
+        { success: false, error: 'Agent wallet is unavailable. Try again shortly or contact support.' },
+        { status: 503 },
+      );
+    }
+
+    const launchRequirement = await getLaunchRequirement();
+    let balanceSol: number | null = null;
+    try {
+      balanceSol = await getServerWalletSolBalance(agentWallet.address);
+    } catch (err) {
+      console.error('[token-launch] balance read failed:', err);
+    }
+    if (balanceSol === null || balanceSol < launchRequirement.requiredSol) {
+      return NextResponse.json(
+        insufficientSolBody({
+          action: 'token_launch',
+          requirement: launchRequirement,
+          wallet: agentWallet,
+          balanceSol,
+        }),
+        { status: 402 },
+      );
     }
 
     const avatarUrlCheck = await validateExternalUrlWithDNS(tokenImageUrl);
@@ -307,42 +274,21 @@ export async function POST(
       );
     }
 
-    if (await isLaunchFeeTxUsed(paymentRef)) {
-      return NextResponse.json(
-        { success: false, error: 'This payment was already used to launch a token.' },
-        { status: 409 },
-      );
-    }
-
-    const feeVerification = await verifyX402Payment(paymentRef, LAUNCH_FEE_USD, 'solana');
-    if (!feeVerification.verified) {
-      return NextResponse.json(
-        { success: false, error: `Launch fee payment verification failed: ${feeVerification.error ?? 'unknown error'}` },
-        { status: 402 },
-      );
-    }
-
-    // ClawPump is the only launch rail (pump.fun direct is disabled). The owner's
-    // USDC fee (verified above) replaces the old free sponsorship; Atelier still
-    // fronts the ~0.03 SOL ClawPump self-funded fee operationally. The launch lock
-    // records the payment atomically (UNIQUE index = replay guard). The SOL fee is
-    // paid before the ClawPump call, so a post-broadcast failure is non-retriable
-    // (retrying would double-pay) -- the outer catch holds the lock for manual review.
-    const lockResult = await markTokenLaunchAttempted(agentId, paymentRef);
-    if (lockResult === 'fee_tx_used') {
-      return NextResponse.json(
-        { success: false, error: 'This payment was already used to launch a token.' },
-        { status: 409 },
-      );
-    }
-    if (lockResult === 'locked') {
+    // ClawPump is the only launch rail. The agent's server wallet pays the SOL fee
+    // and is the creator-of-record, so the 65% creator-fee share accrues straight
+    // to it. The SOL fee is paid before the ClawPump call, so a post-payment
+    // failure is non-retriable (retrying would double-pay) -- the outer catch
+    // holds the lock for manual review.
+    const lockedAgentId = agentId;
+    const lockResult = await markTokenLaunchAttempted(lockedAgentId);
+    if (lockResult !== 'ok') {
       return NextResponse.json(
         { success: false, error: 'A token launch is already in progress or was attempted for this agent.' },
         { status: 409 },
       );
     }
 
-    console.log(`[token-launch] Launching via ClawPump (self-funded) for agent ${agentId}`);
+    console.log(`[token-launch] Launching via ClawPump (agent-funded) for agent ${agentId}, payer ${agentWallet.address}`);
     let result: ClawpumpLaunchResult;
     try {
       result = await launchTokenSelfFundedOnClawpump({
@@ -351,10 +297,21 @@ export async function POST(
         description,
         imageUrl: tokenImageUrl,
         agentName: tokenName,
-        // The fee is paid from (and the 65% earnings accrue to) the Atelier wallet; ClawPump
-        // verifies the payment originates from walletAddress, so it must equal the payer.
-        payerWallet: ATELIER_PUBKEY.toBase58(),
-        payLaunchFee: transferSolFromAtelier,
+        // ClawPump verifies the fee payment originates from walletAddress and pays
+        // that same wallet the 65% creator fees -- both are the agent's wallet.
+        payerWallet: agentWallet.address,
+        payLaunchFee: async (destination, sol) => {
+          const sig = await sendSolFromServerWallet({
+            walletId: agentWallet.walletId,
+            walletAddress: agentWallet.address,
+            to: destination,
+            lamports: Math.max(1, Math.round(sol * 1_000_000_000)),
+          });
+          await recordTokenLaunchFeeTx(lockedAgentId, sig).catch((err) => {
+            console.error('[token-launch] failed to record fee tx (non-blocking):', err);
+          });
+          return sig;
+        },
       });
     } catch (err) {
       if (err instanceof ClawpumpError && err.retriable === false) {
@@ -400,14 +357,19 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      data: { mint: mintAddress, tx_signature: txSignature },
+      data: {
+        mint: mintAddress,
+        tx_signature: txSignature,
+        creator_wallet: creatorWallet,
+        note: 'Creator fees (65%) accrue directly to the agent wallet.',
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[token-launch] Error:', message, error);
 
-    // Only the post-broadcast window risks a real mint we can't see; before that,
-    // release the lock so the owner can retry instead of needing support.
+    // Only the post-payment window risks a real mint (or a spent fee) we can't
+    // see; before that, release the lock so the owner can retry without support.
     if (agentId && !broadcasted) {
       await clearTokenLaunchAttempted(agentId).catch((err) => {
         console.error('[token-launch] Failed to release launch lock:', err);

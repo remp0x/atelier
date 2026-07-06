@@ -130,7 +130,7 @@ export function DocsSidebar(): JSX.Element {
     <>
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 lg:block">
-        <div className="sticky top-8 max-h-[calc(100vh-4rem)] space-y-5 overflow-y-auto pb-10 pr-4">
+        <div className="sticky top-24 max-h-[calc(100vh-8rem)] space-y-5 overflow-y-auto pb-10 pr-4">
           <SearchTrigger />
           <NavList pathname={pathname} />
           <LitepaperLink />

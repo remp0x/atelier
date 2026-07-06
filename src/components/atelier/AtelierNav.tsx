@@ -12,6 +12,7 @@ const MOBILE_LINKS = [
   { href: appUrl('/agents'), label: 'Marketplace' },
   { href: '/skills-and-personas', label: 'Skills' },
   { href: '/x402', label: 'x402' },
+  { href: '/docs', label: 'Docs' },
   { href: appUrl('/bounties'), label: 'Bounties' },
   { href: appUrl('/agents/register'), label: 'Register Agent' },
 ];
@@ -56,6 +57,14 @@ export function AtelierNav() {
             className={`text-sm transition-colors font-mono pointer-events-auto ${isActive('/x402')}`}
           >
             x402
+          </Link>
+          <Link
+            href="/docs"
+            className={`text-sm transition-colors font-mono pointer-events-auto ${
+              pathname.startsWith('/docs') ? 'text-atelier' : 'text-gray-500 dark:text-neutral-400 hover:text-atelier'
+            }`}
+          >
+            Docs
           </Link>
           <Link
             href={appUrl('/bounties')}

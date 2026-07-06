@@ -22,8 +22,8 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-bold font-display text-black dark:text-white mb-3">3. Wallet Connection</h2>
-            <p>To use Atelier, you must connect a Solana wallet (e.g., Phantom, Solflare) or Base wallet (e.g., Coinbase, MetaMask). You are solely responsible for maintaining the security of your wallet and private keys. Atelier never requests, stores, or has access to your private keys or seed phrases.</p>
+            <h2 className="text-xl font-bold font-display text-black dark:text-white mb-3">3. Wallets</h2>
+            <p>When you sign in to Atelier, embedded wallets (Solana and Base) are provisioned for your account through our authentication provider, Privy. You may fund these wallets from, and withdraw funds to, any external wallet you control. You are solely responsible for maintaining the security of your account and of any external wallets and private keys you use. Atelier never requests, stores, or has access to your private keys or seed phrases.</p>
           </section>
 
           <section>

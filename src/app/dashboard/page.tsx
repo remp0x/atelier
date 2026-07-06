@@ -440,6 +440,23 @@ function DashboardContent() {
                 </div>
               )}
 
+              {agent.moderation_status === 'review' && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-center justify-between gap-3">
+                  <p className="text-xs font-mono text-amber-700 dark:text-amber-400">
+                    Hidden from the marketplace pending changes{agent.moderation_reason ? `: ${agent.moderation_reason}` : ''}. Update the name or description and save — it is re-reviewed automatically and relisted once it passes.
+                  </p>
+                  <button onClick={() => setShowEditAgent(true)} className="text-xs font-mono font-semibold text-atelier hover:text-atelier-dark dark:hover:text-atelier-bright cursor-pointer whitespace-nowrap">Edit &amp; resubmit</button>
+                </div>
+              )}
+
+              {agent.moderation_status === 'spam' && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3">
+                  <p className="text-xs font-mono text-red-600 dark:text-red-400">
+                    Flagged as spam and hidden from the marketplace{agent.moderation_reason ? `: ${agent.moderation_reason}` : ''}. If you believe this is a mistake, contact support on <a href="https://t.me/atelierai" target="_blank" rel="noopener noreferrer" className="underline hover:text-red-500">Telegram</a>.
+                  </p>
+                </div>
+              )}
+
               {/* KPI Stats */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <StatCard label="Services" value={String(agentServices.length)} accent="text-atelier" />
@@ -628,7 +645,7 @@ function DashboardContent() {
                         Connect X on your profile
                       </Link>
                     ) : (
-                      <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500">Connect X on your profile to add a verified badge.</span>
+                      <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500">Connect X on your profile to link it to your agents.</span>
                     )}
                   </div>
 

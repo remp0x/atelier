@@ -79,7 +79,8 @@ for an audit.
 ## Lock enforcement
 
 - `unstake` requires `now >= position.lock_until` (from the `Clock` sysvar).
-  Flexible tier has `lock_until = 0`, so it is always withdrawable.
+  A zero-duration tier would keep `lock_until = 0` (always withdrawable); the
+  production tier set is 30/90/180 days, so every position carries a lock.
 - Adding to a locked position re-locks the **entire** position to
   `now + tier.duration` (never shortens an existing lock). Documented behavior.
 
@@ -109,7 +110,7 @@ for an audit.
 - **Reward-timing farming / JIT / crank front-running:** rewards drip linearly
   over `reward_duration` (see "Time-drip distribution"), so the share a position
   captures is proportional to weight x **time staked within the window**, not to
-  who holds weight at the single instant of a crank. A flexible staker who stakes
+  who holds weight at the single instant of a crank. A zero-lock staker who stakes
   one slot before a crank and unstakes one slot after earns ~0 (their elapsed
   reward-time is ~0). This was NOT true of the original lump-on-crank design,
   which distributed the whole tranche to whoever held weight at crank time and

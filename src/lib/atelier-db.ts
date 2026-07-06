@@ -113,6 +113,11 @@ export async function initAtelierDb(): Promise<void> {
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_pda TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_secret_key TEXT`).catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_tx_hash TEXT`).catch(() => {});
+  // The USDC payment that funded this agent's user-paid SAID mint. UNIQUE so one
+  // payment can't be replayed to mint identities on multiple agents; cleared on a
+  // pre-mint failure so the owner can retry with the same payment.
+  await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN said_fee_tx TEXT`).catch(() => {});
+  await atelierClient.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_atelier_agents_said_fee_tx ON atelier_agents(said_fee_tx)').catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN privy_user_id TEXT`).catch(() => {});
   await atelierClient.execute('CREATE INDEX IF NOT EXISTS idx_atelier_agents_privy_user_id ON atelier_agents(privy_user_id)').catch(() => {});
   await atelierClient.execute(`ALTER TABLE atelier_agents ADD COLUMN webhook_secret TEXT`).catch(() => {});
@@ -1951,6 +1956,7 @@ export interface AtelierAgent {
   said_pda: string | null;
   said_secret_key: string | null;
   said_tx_hash: string | null;
+  said_fee_tx: string | null;
   privy_user_id: string | null;
   user_id: string | null;
   webhook_secret: string | null;
@@ -1986,6 +1992,7 @@ export interface AtelierAgentListItem {
   is_atelier_official: number;
   partner_badge: string | null;
   twitter_username: string | null;
+  said_wallet?: string | null;
   services_count: number;
   avg_rating: number | null;
   total_orders: number;
@@ -2058,10 +2065,16 @@ export interface ServiceOrder {
   client_wallet: string | null;
   client_name: string | null;
   client_username?: string | null;
+  client_display_name?: string | null;
+  client_twitter?: string | null;
+  client_avatar?: string | null;
   client_type: 'wallet' | 'agent_x402';
   provider_agent_id: string;
   provider_name: string;
   provider_slug: string | null;
+  provider_avatar?: string | null;
+  provider_twitter?: string | null;
+  provider_official?: number | null;
   brief: string;
   reference_urls: string | null;
   reference_images: string | null;
@@ -2156,7 +2169,7 @@ export interface OrderDeliverable {
   deliverable_url: string | null;
   deliverable_media_type: 'image' | 'video' | 'link' | 'document' | 'code' | 'text' | null;
   preview_url: string | null;
-  status: 'pending' | 'generating' | 'completed' | 'failed';
+  status: 'pending' | 'generating' | 'completed' | 'failed' | 'superseded';
   error: string | null;
   created_at: string;
 }
@@ -2424,6 +2437,23 @@ export async function autoSetAgentTwitterForUser(userId: string, twitterUsername
           SET twitter_username = ?
           WHERE (twitter_username IS NULL OR twitter_username = '')
             AND (
+              user_id = ?
+              OR privy_user_id = ?
+              OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
+            )`,
+    args: [handle, userId, userId, userId],
+  });
+  return Number(result.rowsAffected ?? 0);
+}
+
+export async function reassignUserAgentsTwitter(userId: string, twitterUsername: string): Promise<number> {
+  await initAtelierDb();
+  const handle = twitterUsername.trim().replace(/^@+/, '').toLowerCase();
+  if (!handle) return 0;
+  const result = await atelierClient.execute({
+    sql: `UPDATE atelier_agents
+          SET twitter_username = ?
+          WHERE (
               user_id = ?
               OR privy_user_id = ?
               OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = ?)
@@ -2805,6 +2835,46 @@ export async function setSAIDIdentity(
   });
 }
 
+export async function isSAIDFeeTxUsed(txRef: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: 'SELECT COUNT(*) as cnt FROM atelier_agents WHERE said_fee_tx = ?',
+    args: [txRef],
+  });
+  return Number((result.rows[0] as unknown as { cnt: number }).cnt) > 0;
+}
+
+export type SAIDMintLockResult = 'ok' | 'locked' | 'fee_tx_used';
+
+// Reserves the user-paid SAID mint for an agent and records the funding payment in
+// one atomic write. The UNIQUE index on said_fee_tx is the replay guard: a payment
+// already tied to another agent makes the UPDATE throw -> 'fee_tx_used'. A row that
+// already carries a said_wallet or a reserved said_fee_tx no longer matches -> 'locked'.
+export async function reserveSAIDMint(agentId: string, feeTx: string): Promise<SAIDMintLockResult> {
+  await initAtelierDb();
+  try {
+    const result = await atelierClient.execute({
+      sql: `UPDATE atelier_agents SET said_fee_tx = ? WHERE id = ? AND (said_wallet IS NULL OR said_wallet = '') AND said_fee_tx IS NULL`,
+      args: [feeTx, agentId],
+    });
+    return result.rowsAffected > 0 ? 'ok' : 'locked';
+  } catch (e) {
+    if (/UNIQUE constraint failed/i.test(String(e))) return 'fee_tx_used';
+    throw e;
+  }
+}
+
+// Releases a SAID mint reservation after a pre-mint failure so the owner can retry
+// with the same payment. Only clears when no identity was actually recorded.
+export async function releaseSAIDMint(agentId: string): Promise<boolean> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `UPDATE atelier_agents SET said_fee_tx = NULL WHERE id = ? AND (said_wallet IS NULL OR said_wallet = '')`,
+    args: [agentId],
+  });
+  return result.rowsAffected > 0;
+}
+
 export async function getAgentsWithoutSAID(): Promise<AtelierAgent[]> {
   await initAtelierDb();
   const result = await atelierClient.execute({
@@ -2948,7 +3018,7 @@ export async function getAtelierAgents(filters?: {
     sql: `SELECT
             a.id, a.slug, a.name, a.description, a.avatar_url, a.source,
             a.verified, a.blue_check, a.is_atelier_official, a.partner_badge,
-            a.twitter_username,
+            a.twitter_username, a.said_wallet,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status IN ('paid','in_progress','delivered','completed','revision_requested')) as total_orders,
@@ -2976,7 +3046,7 @@ export async function getAtelierAgents(filters?: {
       id: string; slug: string; name: string; description: string | null; avatar_url: string | null;
       source: 'atelier' | 'external' | 'official';
       verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
-      twitter_username: string | null;
+      twitter_username: string | null; said_wallet: string | null;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       total_revenue: number;
       categories_str: string | null;
@@ -3013,6 +3083,7 @@ export async function getAtelierAgents(filters?: {
       source: r.source, verified: r.verified, blue_check: r.blue_check,
       is_atelier_official: r.is_atelier_official, partner_badge: r.partner_badge,
       twitter_username: r.twitter_username,
+      said_wallet: r.said_wallet,
       services_count: r.services_count,
       avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders,
       total_revenue: r.total_revenue || 0,
@@ -3174,7 +3245,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
     sql: `SELECT
             a.id, a.slug, a.name, a.description, a.avatar_url, a.source,
             a.verified, a.blue_check, a.is_atelier_official, a.partner_badge,
-            a.twitter_username,
+            a.twitter_username, a.said_wallet,
             COUNT(DISTINCT s.id) as services_count,
             MAX(s.avg_rating) as avg_rating,
             (SELECT COUNT(*) FROM service_orders WHERE provider_agent_id = a.id AND status IN ('paid','in_progress','delivered','completed','revision_requested')) as total_orders,
@@ -3201,7 +3272,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
       id: string; slug: string; name: string; description: string | null; avatar_url: string | null;
       source: 'atelier' | 'external' | 'official';
       verified: number; blue_check: number; is_atelier_official: number; partner_badge: string | null;
-      twitter_username: string | null;
+      twitter_username: string | null; said_wallet: string | null;
       services_count: number; avg_rating: number | null; total_orders: number; completed_orders: number;
       total_revenue: number;
       categories_str: string | null;
@@ -3234,6 +3305,7 @@ export async function getFeaturedAgents(limit: number): Promise<AtelierAgentList
       source: r.source, verified: r.verified, blue_check: r.blue_check,
       is_atelier_official: r.is_atelier_official, partner_badge: r.partner_badge,
       twitter_username: r.twitter_username,
+      said_wallet: r.said_wallet,
       services_count: r.services_count,
       avg_rating: r.avg_rating, total_orders: r.total_orders, completed_orders: r.completed_orders,
       total_revenue: r.total_revenue || 0,
@@ -3809,8 +3881,29 @@ export async function getServiceOrderById(id: string): Promise<ServiceOrder | nu
               WHERE LOWER(w.address) = LOWER(COALESCE(o.client_wallet, o.payer_address))
               LIMIT 1
             )) as client_username,
+            COALESCE(cu.display_name, (
+              SELECT u.display_name FROM user_wallets w
+              JOIN users u ON u.privy_user_id = w.user_id
+              WHERE LOWER(w.address) = LOWER(COALESCE(o.client_wallet, o.payer_address))
+              LIMIT 1
+            )) as client_display_name,
+            COALESCE(cu.twitter_username, (
+              SELECT u.twitter_username FROM user_wallets w
+              JOIN users u ON u.privy_user_id = w.user_id
+              WHERE LOWER(w.address) = LOWER(COALESCE(o.client_wallet, o.payer_address))
+              LIMIT 1
+            )) as client_twitter,
+            COALESCE(cu.avatar_url, (
+              SELECT u.avatar_url FROM user_wallets w
+              JOIN users u ON u.privy_user_id = w.user_id
+              WHERE LOWER(w.address) = LOWER(COALESCE(o.client_wallet, o.payer_address))
+              LIMIT 1
+            )) as client_avatar,
             pa.name as provider_name,
-            pa.slug as provider_slug
+            pa.slug as provider_slug,
+            pa.avatar_url as provider_avatar,
+            pa.twitter_username as provider_twitter,
+            pa.is_atelier_official as provider_official
           FROM service_orders o
           LEFT JOIN services s ON o.service_id = s.id
           LEFT JOIN atelier_agents ca ON o.client_agent_id = ca.id
@@ -3905,6 +3998,7 @@ export async function updateOrderStatus(
     workspace_expires_at?: string;
     payment_chain?: 'solana' | 'base';
     payer_address?: string | null;
+    reviewDeadlineFloorHours?: number;
   }
 ): Promise<ServiceOrder | null> {
   await initAtelierDb();
@@ -3926,7 +4020,13 @@ export async function updateOrderStatus(
 
   if (updates.status === 'delivered') {
     setClauses.push("delivered_at = CURRENT_TIMESTAMP");
-    setClauses.push("review_deadline = datetime('now', '+48 hours')");
+    if (updates.reviewDeadlineFloorHours !== undefined) {
+      const modifier = `+${Math.max(1, Math.floor(updates.reviewDeadlineFloorHours))} hours`;
+      setClauses.push("review_deadline = max(coalesce(review_deadline, datetime('now', ?)), datetime('now', ?))");
+      args.push(modifier, modifier);
+    } else {
+      setClauses.push("review_deadline = datetime('now', '+48 hours')");
+    }
   }
   if (updates.status === 'completed') {
     setClauses.push("completed_at = CURRENT_TIMESTAMP");
@@ -4113,6 +4213,16 @@ export async function getOrderDeliverables(orderId: string): Promise<OrderDelive
     args: [orderId],
   });
   return result.rows as unknown as OrderDeliverable[];
+}
+
+export async function supersedeOrderDeliverables(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await initAtelierDb();
+  const placeholders = ids.map(() => '?').join(', ');
+  await atelierClient.execute({
+    sql: `UPDATE order_deliverables SET status = 'superseded' WHERE id IN (${placeholders}) AND status = 'completed'`,
+    args: ids,
+  });
 }
 
 export async function updateOrderDeliverable(
@@ -4354,19 +4464,69 @@ export async function failFeePayout(id: string): Promise<void> {
 
 /** Agents that launched a ClawPump token -- candidates for creator-fee payouts. */
 export async function listClawpumpFeeAgents(): Promise<Array<{
-  id: string; clawpump_agent_id: string | null; token_mint: string | null;
+  id: string; name: string; clawpump_agent_id: string | null; token_mint: string | null;
+  token_creator_wallet: string | null;
   payout_wallet: string | null; payout_chain: string | null; owner_wallet: string | null;
+  privy_solana_wallet_id: string | null;
 }>> {
   await initAtelierDb();
   const result = await atelierClient.execute(
-    `SELECT id, clawpump_agent_id, token_mint, payout_wallet, payout_chain, owner_wallet
+    `SELECT id, name, clawpump_agent_id, token_mint, token_creator_wallet, payout_wallet, payout_chain, owner_wallet, privy_solana_wallet_id
        FROM atelier_agents
       WHERE clawpump_agent_id IS NOT NULL AND token_mint IS NOT NULL AND token_mode = 'clawpump'`,
   );
   return result.rows as unknown as Array<{
-    id: string; clawpump_agent_id: string | null; token_mint: string | null;
+    id: string; name: string; clawpump_agent_id: string | null; token_mint: string | null;
+    token_creator_wallet: string | null;
     payout_wallet: string | null; payout_chain: string | null; owner_wallet: string | null;
+    privy_solana_wallet_id: string | null;
   }>;
+}
+
+export interface DefiCapableAgent {
+  id: string;
+  name: string;
+  clawpump_agent_id: string;
+  token_mint: string;
+  token_symbol: string | null;
+  token_name: string | null;
+  avatar_url: string | null;
+}
+
+// An agent is "DeFi capable" once it has launched a ClawPump token: only then does a
+// ClawPump agent (and its custodied wallet) exist for the MCP tools to act on.
+const DEFI_CAPABLE_WHERE = `clawpump_agent_id IS NOT NULL AND token_mint IS NOT NULL AND token_mode = 'clawpump'`;
+const OWNED_BY_USER = `(user_id = :uid OR privy_user_id = :uid
+                        OR owner_wallet IN (SELECT address FROM user_wallets WHERE user_id = :uid))`;
+
+/** DeFi-capable agents owned by a user (Privy user id), newest token first. */
+export async function getDefiCapableAgentsByUser(userId: string): Promise<DefiCapableAgent[]> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT id, name, clawpump_agent_id, token_mint, token_symbol, token_name, avatar_url
+            FROM atelier_agents
+           WHERE ${DEFI_CAPABLE_WHERE} AND ${OWNED_BY_USER}
+           ORDER BY token_created_at DESC`,
+    args: { uid: userId },
+  });
+  return result.rows as unknown as DefiCapableAgent[];
+}
+
+/** A single DeFi-capable agent, scoped to its owner. Null if missing, unowned, or not launched. */
+export async function getDefiCapableAgentForUser(
+  agentId: string,
+  userId: string,
+): Promise<DefiCapableAgent | null> {
+  await initAtelierDb();
+  const result = await atelierClient.execute({
+    sql: `SELECT id, name, clawpump_agent_id, token_mint, token_symbol, token_name, avatar_url
+            FROM atelier_agents
+           WHERE id = :aid AND ${DEFI_CAPABLE_WHERE} AND ${OWNED_BY_USER}
+           LIMIT 1`,
+    args: { aid: agentId, uid: userId },
+  });
+  const row = result.rows[0];
+  return row ? (row as unknown as DefiCapableAgent) : null;
 }
 
 export async function getTotalSwept(): Promise<number> {
@@ -4547,6 +4707,16 @@ export async function markTokenLaunchAttempted(agentId: string, feeTx?: string |
     if (/UNIQUE constraint failed/i.test(String(e))) return 'fee_tx_used';
     throw e;
   }
+}
+
+// Persist the agent wallet's on-chain fee payment once the launch lock is held
+// (the SOL transfer to ClawPump). Audit trail only -- never blocks a launch.
+export async function recordTokenLaunchFeeTx(agentId: string, feeTx: string): Promise<void> {
+  await initAtelierDb();
+  await atelierClient.execute({
+    sql: 'UPDATE atelier_agents SET token_launch_fee_tx = ? WHERE id = ?',
+    args: [feeTx, agentId],
+  });
 }
 
 export async function clearTokenLaunchAttempted(agentId: string): Promise<boolean> {
@@ -5137,7 +5307,7 @@ export async function getActivityFeed(
 
 // ─── Notifications ───
 
-export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message' | 'provider_order_received' | 'provider_order_paid' | 'provider_webhook_failed' | 'provider_payout_retry_requested';
+export type NotificationType = 'order_quoted' | 'order_delivered' | 'order_revision' | 'order_message' | 'provider_order_received' | 'provider_order_paid' | 'provider_webhook_failed' | 'provider_payout_retry_requested' | 'agent_moderation_review' | 'agent_moderation_spam';
 
 export interface Notification {
   id: string;

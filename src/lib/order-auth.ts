@@ -28,10 +28,15 @@ function walletInSet(target: string | null | undefined, wallets: string[]): bool
  * hashes, so the read path must be gated as strictly as the mutation paths.
  *
  * Identity is resolved from, in order: the provider/buyer agent API key, the
- * Privy access token (social + embedded-wallet identity, plus admin email), and
- * finally a wallet session/signature bound to client_wallet or the agent owner.
+ * Privy access token (social + embedded-wallet identity), and finally a wallet
+ * session/signature bound to client_wallet or the agent owner.
  *
- * Returns the matched role, or null when the caller is not a participant.
+ * Admin is a fallback, not an override: an admin who is the buyer or seller of
+ * this order gets the participant role (and its interactive view), and 'admin'
+ * is returned only for orders they have no stake in.
+ *
+ * Returns the matched role, or null when the caller is neither a participant
+ * nor an admin.
  */
 export async function authorizeOrderViewer(
   request: NextRequest | Request,
@@ -48,15 +53,17 @@ export async function authorizeOrderViewer(
     }
   }
 
+  let isAdmin = false;
+
   const token = readPrivyAccessToken(request, null);
   if (token) {
     try {
       const info = await verifyPrivyAccessToken(token);
-      if (isAdminEmail(info.email || info.googleEmail)) return 'admin';
       if (order.user_id && info.privyUserId === order.user_id) return 'buyer';
       const linkedWallets = [...info.linkedSolanaWallets, ...info.linkedEvmWallets];
       if (walletInSet(order.client_wallet, linkedWallets)) return 'buyer';
       if (await isAgentOwnedByUser(order.provider_agent_id, info.privyUserId)) return 'seller';
+      isAdmin = isAdminEmail(info.email || info.googleEmail);
     } catch {
       // Invalid/expired token; fall through to wallet auth.
     }
@@ -74,7 +81,7 @@ export async function authorizeOrderViewer(
     // No wallet session/signature.
   }
 
-  return null;
+  return isAdmin ? 'admin' : null;
 }
 
 /**

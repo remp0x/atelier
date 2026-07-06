@@ -8,6 +8,7 @@ import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useUsdcPayment } from '@/hooks/use-usdc-payment';
 import { getPrivyAccessToken } from '@/lib/privy-client';
+import { readPendingPayment, savePendingPayment, clearPendingPayment } from '@/lib/pending-payment';
 import type { ServiceOrder, ServiceReview, OrderStatus, OrderDeliverable, OrderMessage } from '@/lib/atelier-db';
 
 type ViewerRole = 'buyer' | 'seller' | 'admin';
@@ -78,13 +79,245 @@ function truncateWallet(addr: string | null | undefined): string {
   return addr.length > 12 ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : addr;
 }
 
-function buyerDisplay(order: ServiceOrder): string | null {
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function explorerAccountUrl(addr: string, chain: 'solana' | 'base'): string {
+  return chain === 'base'
+    ? `https://basescan.org/address/${addr}`
+    : `https://solscan.io/account/${addr}`;
+}
+
+function Avatar({ src, name, kind }: { src?: string | null; name: string; kind: 'human' | 'agent' }) {
+  const [err, setErr] = useState(false);
+  if (src && !err) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className="w-9 h-9 rounded-full object-cover border border-neutral-200 dark:border-neutral-800 shrink-0"
+        onError={() => setErr(true)}
+      />
+    );
+  }
   return (
-    order.client_name ||
-    order.client_username ||
-    (order.client_wallet ? truncateWallet(order.client_wallet) : null) ||
-    (order.payer_address ? truncateWallet(order.payer_address) : null)
+    <div className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-2xs font-mono font-bold text-white ${kind === 'agent' ? 'bg-gradient-atelier' : 'bg-neutral-500 dark:bg-neutral-700'}`}>
+      {initials(name)}
+    </div>
   );
+}
+
+function WalletChip({ address, chain }: { address: string; chain: 'solana' | 'base' }) {
+  const [copied, setCopied] = useState(false);
+  const copy = useCallback(() => {
+    navigator.clipboard?.writeText(address).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    }).catch(() => { /* clipboard unavailable */ });
+  }, [address]);
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-mono text-2xs text-neutral-500 dark:text-neutral-400">{truncateWallet(address)}</span>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label="Copy address"
+        className="text-neutral-400 hover:text-atelier transition-colors cursor-pointer"
+      >
+        {copied ? (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        ) : (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+          </svg>
+        )}
+      </button>
+      <a
+        href={explorerAccountUrl(address, chain)}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="View on block explorer"
+        className="text-neutral-400 hover:text-atelier transition-colors"
+      >
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+        </svg>
+      </a>
+    </div>
+  );
+}
+
+interface PartyProps {
+  label: string;
+  kind: 'human' | 'agent';
+  name: string;
+  official?: boolean;
+  x402?: boolean;
+  handle?: string | null;
+  avatar?: string | null;
+  profileHref?: string | null;
+  wallet?: string | null;
+  chain?: 'solana' | 'base';
+}
+
+function PartyCard({ label, kind, name, official, x402, handle, avatar, profileHref, wallet, chain = 'solana' }: PartyProps) {
+  const nameNode = profileHref ? (
+    <Link href={profileHref} className="text-black dark:text-white text-sm font-semibold hover:text-atelier transition-colors truncate">{name}</Link>
+  ) : (
+    <span className="text-black dark:text-white text-sm font-semibold truncate">{name}</span>
+  );
+  return (
+    <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black flex flex-col">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-2xs font-mono text-neutral-500 uppercase tracking-wider">{label}</span>
+        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs font-mono ${kind === 'agent' ? 'bg-atelier/10 text-atelier-bright' : 'bg-emerald-400/10 text-emerald-400'}`}>
+          {kind === 'agent' ? (
+            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 3.75H6.912a2.25 2.25 0 00-2.15 1.588L2.35 13.177a2.25 2.25 0 00-.1.661V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 00-2.15-1.588H15M2.25 13.5h3.86a2.25 2.25 0 012.012 1.244l.256.512a2.25 2.25 0 002.013 1.244h3.218a2.25 2.25 0 002.013-1.244l.256-.512a2.25 2.25 0 012.013-1.244h3.859M12 3v8.25m0 0l-3-3m3 3l3-3" />
+            </svg>
+          ) : (
+            <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+          )}
+          {kind === 'agent' ? 'Agent' : 'Human'}
+        </span>
+      </div>
+      <div className="flex items-center gap-2.5 flex-1">
+        <Avatar src={avatar} name={name} kind={kind} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1">
+            {nameNode}
+            {official && (
+              <svg className="w-3.5 h-3.5 text-atelier shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-label="Official">
+                <path fillRule="evenodd" d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+              </svg>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {handle && (
+              <a href={`https://x.com/${handle}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-2xs font-mono text-neutral-500 hover:text-atelier transition-colors">
+                <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                @{handle}
+              </a>
+            )}
+            {x402 && <span className="text-2xs font-mono text-neutral-500">paid via x402</span>}
+          </div>
+          {wallet && <div className="mt-1"><WalletChip address={wallet} chain={chain} /></div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function buyerParty(order: ServiceOrder): PartyProps {
+  const wallet = order.client_wallet || order.payer_address || null;
+  if (order.client_type === 'agent_x402') {
+    return {
+      label: 'Buyer',
+      kind: 'agent',
+      x402: true,
+      name: order.client_name || 'Autonomous Agent',
+      profileHref: order.client_agent_id ? atelierHref(`/atelier/agents/${order.client_agent_id}`) : null,
+      wallet,
+      chain: order.payment_chain,
+    };
+  }
+  return {
+    label: 'Buyer',
+    kind: 'human',
+    name: order.client_display_name || order.client_username || (wallet ? truncateWallet(wallet) : 'Unknown'),
+    handle: order.client_twitter,
+    avatar: order.client_avatar,
+    profileHref: order.client_username ? `/profile/${order.client_username}` : null,
+    wallet,
+    chain: order.payment_chain,
+  };
+}
+
+function sellerParty(order: ServiceOrder): PartyProps {
+  return {
+    label: 'Seller',
+    kind: 'agent',
+    official: !!order.provider_official,
+    name: order.provider_name,
+    handle: order.provider_twitter,
+    avatar: order.provider_avatar,
+    profileHref: atelierHref(`/atelier/agents/${order.provider_slug || order.provider_agent_id}`),
+    chain: order.payment_chain,
+  };
+}
+
+function PartiesRow({ order }: { order: ServiceOrder }) {
+  return (
+    <div className="space-y-2">
+      <PartyCard {...buyerParty(order)} />
+      <PartyCard {...sellerParty(order)} />
+    </div>
+  );
+}
+
+interface PaymentRow { label: string; value: string; href?: string; strong?: boolean; positive?: boolean; muted?: boolean; }
+
+function PaymentSummary({ rows }: { rows: PaymentRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="p-3 rounded-lg border border-gray-200 dark:border-neutral-800 bg-neutral-50 dark:bg-black space-y-1.5">
+      <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-1">Payment</p>
+      {rows.map((r, i) => (
+        <div key={i} className={`flex items-center justify-between ${r.strong ? 'pt-1 border-t border-neutral-200 dark:border-neutral-800' : ''}`}>
+          <span className="text-neutral-500 font-mono text-2xs">{r.label}</span>
+          {r.href ? (
+            <a href={r.href} target="_blank" rel="noopener noreferrer" className="text-atelier-bright text-2xs font-mono hover:underline">{r.value}</a>
+          ) : (
+            <span className={`text-xs font-mono ${r.positive ? 'text-emerald-500' : r.muted ? 'text-neutral-500' : 'text-black dark:text-white'} ${r.strong ? 'font-bold' : ''}`}>{r.value}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function txExplorerUrl(hash: string, chain: 'solana' | 'base'): string {
+  return chain === 'base' ? `https://basescan.org/tx/${hash}` : `https://solscan.io/tx/${hash}`;
+}
+
+function buyerPaymentRows(order: ServiceOrder): PaymentRow[] {
+  const rows: PaymentRow[] = [];
+  if (order.quoted_price_usd) rows.push({ label: 'Price', value: `$${order.quoted_price_usd} USDC`, strong: true });
+  if (order.escrow_tx_hash) rows.push({ label: 'Escrow tx', value: truncateId(order.escrow_tx_hash), href: txExplorerUrl(order.escrow_tx_hash, order.payment_chain) });
+  return rows;
+}
+
+function sellerPaymentRows(order: ServiceOrder, quoted: number, fee: number, net: number): PaymentRow[] {
+  const rows: PaymentRow[] = [];
+  if (quoted > 0) {
+    rows.push({ label: 'Quote', value: `$${quoted.toFixed(2)} USDC` });
+    rows.push({ label: 'Platform fee', value: `-$${fee.toFixed(2)}`, muted: true });
+    rows.push({ label: 'You earn', value: `$${net.toFixed(2)} USDC`, strong: true, positive: true });
+  }
+  if (order.payout_tx_hash) rows.push({ label: 'Payout tx', value: truncateId(order.payout_tx_hash), href: txExplorerUrl(order.payout_tx_hash, order.payment_chain) });
+  return rows;
+}
+
+function adminPaymentRows(order: ServiceOrder, quoted: number, fee: number, net: number): PaymentRow[] {
+  const rows: PaymentRow[] = [];
+  if (quoted > 0) {
+    rows.push({ label: 'Buyer paid', value: `$${quoted.toFixed(2)} USDC` });
+    rows.push({ label: 'Platform fee', value: `+$${fee.toFixed(2)}`, positive: true });
+    rows.push({ label: 'Seller earns', value: `$${net.toFixed(2)} USDC`, strong: true });
+  }
+  if (order.escrow_tx_hash) rows.push({ label: 'Escrow tx', value: truncateId(order.escrow_tx_hash), href: txExplorerUrl(order.escrow_tx_hash, order.payment_chain) });
+  if (order.payout_tx_hash) rows.push({ label: 'Payout tx', value: truncateId(order.payout_tx_hash), href: txExplorerUrl(order.payout_tx_hash, order.payment_chain) });
+  return rows;
 }
 
 function formatTimeRemaining(expiresAt: string): string {
@@ -642,7 +875,7 @@ function WorkspaceView({ data, onRefresh }: { data: OrderData; onRefresh: () => 
   const walletMatches = !!walletAddress && order.client_wallet === walletAddress;
   const isOrderClient = walletMatches
     || (!!atelierUser?.privy_user_id && !!order.user_id && order.user_id === atelierUser.privy_user_id)
-    || (atelierUser?.google_email ?? atelierUser?.email ?? '').toLowerCase() === 'rempxbt@gmail.com';
+    || data.viewer_role === 'admin';
 
   const buildOrderAuth = async (): Promise<Record<string, unknown>> => {
     if (walletMatches) {
@@ -956,18 +1189,21 @@ interface ChatAuth {
   sig?: { wallet: string; wallet_sig: string; wallet_sig_ts: string };
 }
 
-function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: {
+function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false, readOnly = false }: {
   orderId: string;
   selfIds: string[];
   deliveries: DeliveryInfo[];
   buildAuth: () => Promise<ChatAuth>;
   locked?: boolean;
+  readOnly?: boolean;
 }) {
   const [messages, setMessages] = useState<OrderMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const didInitRef = useRef(false);
+  const justSentRef = useRef(false);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -993,7 +1229,19 @@ function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: 
   }, [fetchMessages]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = containerRef.current;
+    if (!el || messages.length === 0) return;
+    // Skip auto-scroll on the first populated render: opening an order should
+    // land at the top of the thread, not yank the page to the bottom.
+    if (!didInitRef.current) {
+      didInitRef.current = true;
+      return;
+    }
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (justSentRef.current || nearBottom) {
+      el.scrollTop = el.scrollHeight;
+    }
+    justSentRef.current = false;
   }, [messages.length]);
 
   const handleSend = useCallback(async () => {
@@ -1016,6 +1264,7 @@ function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: 
       });
       const json = await res.json();
       if (json.success) {
+        justSentRef.current = true;
         setMessages((prev) => [...prev, json.data]);
         setInput('');
       }
@@ -1076,23 +1325,25 @@ function OrderChat({ orderId, selfIds, deliveries, buildAuth, locked = false }: 
         ))}
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex gap-2 mt-3">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-          placeholder="Type a message..."
-          maxLength={2000}
-          className="flex-1 px-3 py-2 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
-        />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || sending}
-          className="px-4 py-2 rounded border border-atelier/60 text-atelier text-sm font-mono font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier"
-        >
-          {sending ? '...' : 'Send'}
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex gap-2 mt-3">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+            placeholder="Type a message..."
+            maxLength={2000}
+            className="flex-1 px-3 py-2 rounded bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier"
+          />
+          <button
+            onClick={handleSend}
+            disabled={!input.trim() || sending}
+            className="px-4 py-2 rounded border border-atelier/60 text-atelier text-sm font-mono font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:bg-atelier hover:text-white hover:border-atelier"
+          >
+            {sending ? '...' : 'Send'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1188,15 +1439,20 @@ export default function AtelierOrderPage() {
   }
 
   const isWorkspace = order.quota_total > 0;
-  const isTerminal = order.status === 'cancelled' || order.status === 'disputed';
   const showWorkspace = isWorkspace && ['in_progress', 'delivered', 'completed'].includes(order.status);
 
+  // Admins see the buyer view with every action enabled: the API authorizes
+  // admins for all client actions, and the server never gates their originals.
+  const isAdminViewer = data.viewer_role === 'admin';
   const walletMatches = !!walletAddress && order.client_wallet === walletAddress;
   const isOrderClient = walletMatches
     || (!!atelierUser?.privy_user_id && !!order.user_id && order.user_id === atelierUser.privy_user_id)
-    || (atelierUser?.google_email ?? atelierUser?.email ?? '').toLowerCase() === 'rempxbt@gmail.com';
-  const walletMismatch = isOrderClient && !walletMatches;
-  const locked = isOrderClient && order.status !== 'completed';
+    || isAdminViewer;
+  const walletMismatch = isOrderClient && !walletMatches && !isAdminViewer;
+  const locked = isOrderClient && !isAdminViewer && order.status !== 'completed';
+  const quoted = parseFloat(order.quoted_price_usd || '0');
+  const fee = parseFloat(order.platform_fee_usd || '0');
+  const net = Math.max(0, Math.round((quoted - fee) * 100) / 100);
 
   const buildOrderAuth = async (): Promise<Record<string, unknown>> => {
     if (walletMatches) {
@@ -1237,39 +1493,22 @@ export default function AtelierOrderPage() {
                     <h1 className="text-base font-bold font-display truncate">{order.service_title}</h1>
                     <p className="text-2xs font-mono text-neutral-500 mt-0.5">{order.id}</p>
                   </div>
-                  <span className={`shrink-0 inline-flex px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium ${STATUS_COLORS[order.status] || 'bg-neutral-800 text-neutral-300'}`}>
-                    {STATUS_LABELS[order.status] || order.status}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isAdminViewer && (
+                      <span className="inline-flex px-2 py-0.5 rounded-full text-2xs font-mono font-medium bg-amber-400/10 text-amber-400 uppercase tracking-wider">Admin</span>
+                    )}
+                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-2xs font-mono font-medium ${STATUS_COLORS[order.status] || 'bg-neutral-800 text-neutral-300'}`}>
+                      {STATUS_LABELS[order.status] || order.status}
+                    </span>
+                  </div>
                 </div>
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <PartiesRow order={order} />
+                  <PaymentSummary rows={isAdminViewer ? adminPaymentRows(order, quoted, fee, net) : buyerPaymentRows(order)} />
+                  <div className="flex items-center justify-between px-1">
                     <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
-                    <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
+                    <span className="text-neutral-500 text-2xs font-mono">{formatDate(order.created_at)}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-neutral-500 font-mono text-2xs">Provider</span>
-                    <Link href={atelierHref(`/atelier/agents/${order.provider_slug || order.provider_agent_id}`)} className="text-atelier hover:underline text-xs font-mono">
-                      {order.provider_name}
-                    </Link>
-                  </div>
-                  {buyerDisplay(order) && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Client</span>
-                      <span className="text-black dark:text-white text-xs font-mono">{buyerDisplay(order)}</span>
-                    </div>
-                  )}
-                  {order.quoted_price_usd && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Price</span>
-                      <span className="text-black dark:text-white text-xs font-mono font-bold">${order.quoted_price_usd} USDC</span>
-                    </div>
-                  )}
-                  {order.escrow_tx_hash && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Tx</span>
-                      <span className="text-atelier-bright text-2xs font-mono">{truncateId(order.escrow_tx_hash)}</span>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -1318,57 +1557,7 @@ export default function AtelierOrderPage() {
               })()}
 
               {/* Timeline Progress */}
-              <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
-                <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-4">Progress</p>
-                <div className="relative ml-1">
-                  {(() => {
-                    const currentIdx = statusIndex(order.status);
-                    const steps = STATUS_SEQUENCE.map((s, i) => {
-                      const isDone = i < currentIdx || (i === currentIdx && order.status === 'completed');
-                      const isCurrent = i === currentIdx && order.status !== 'completed';
-                      const isRevisionStep = order.status === 'revision_requested' && s === 'delivered';
-                      return { key: s, label: STATUS_LABELS[s], isDone: isDone || isRevisionStep, isCurrent, isTerminalStep: false, isRevisionStep: false };
-                    });
-                    if (order.status === 'revision_requested') {
-                      steps.push({ key: 'revision_requested', label: 'Revision Requested', isDone: false, isCurrent: true, isTerminalStep: false, isRevisionStep: true });
-                    }
-                    if (isTerminal) {
-                      steps.push({ key: order.status, label: order.status === 'cancelled' ? 'Cancelled' : 'Disputed', isDone: true, isCurrent: false, isTerminalStep: true, isRevisionStep: false });
-                    }
-                    return steps.map((step, i) => {
-                      const isLast = i === steps.length - 1;
-                      return (
-                        <div key={step.key} className="flex items-start gap-3 relative">
-                          <div className="flex flex-col items-center w-4 shrink-0">
-                            <div className="flex items-center justify-center w-4 h-4">
-                              {step.isTerminalStep ? (
-                                <div className="w-2.5 h-2.5 rounded-full bg-red-500 dark:bg-red-400" />
-                              ) : step.isCurrent ? (
-                                <div className="w-2.5 h-2.5 rounded-full bg-atelier animate-pulse-atelier ring-[3px] ring-atelier/20" />
-                              ) : step.isDone ? (
-                                <svg className="w-4 h-4 text-atelier" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                                </svg>
-                              ) : (
-                                <div className="w-2 h-2 rounded-full border-[1.5px] border-gray-300 dark:border-neutral-600" />
-                              )}
-                            </div>
-                            {!isLast && (
-                              <div className={`w-px h-4 ${step.isDone ? 'bg-atelier/30' : 'bg-gray-200 dark:bg-neutral-800'}`} />
-                            )}
-                          </div>
-                          <span className={`text-xs font-mono leading-4 ${
-                            step.isTerminalStep ? 'text-red-600 dark:text-red-400 font-medium' :
-                            step.isRevisionStep ? 'text-amber-600 dark:text-amber-400 font-medium' :
-                            step.isCurrent ? 'text-gray-900 dark:text-white font-medium' :
-                            step.isDone ? 'text-gray-500 dark:text-neutral-400' : 'text-gray-300 dark:text-neutral-600'
-                          }`}>{step.label}</span>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
+              <OrderProgress order={order} />
 
               {/* Actions */}
               <div className="space-y-2">
@@ -1387,18 +1576,53 @@ export default function AtelierOrderPage() {
                           if (!treasuryWallet) { setPayError('Treasury wallet not configured'); return; }
                           const total = parseFloat(order.quoted_price_usd || '0');
                           if (total <= 0) { setPayError('Invalid order total'); return; }
+
+                          const verifyPayment = async (sig: string, chain: 'solana' | 'base') => {
+                            const auth = await getAuth();
+                            const res = await fetch(`/api/orders/${order.id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                ...auth,
+                                action: 'pay',
+                                payment_method: chain === 'base' ? 'usdc-base' : 'usdc-sol',
+                                payment_chain: chain,
+                                escrow_tx_hash: sig,
+                              }),
+                            });
+                            return res.json() as Promise<{ success: boolean; error?: string }>;
+                          };
+
+                          const pending = readPendingPayment(order.id);
+                          if (pending) {
+                            setPayMsg('Found an earlier payment attempt -- verifying...');
+                            const resumeJson = await verifyPayment(pending.txSig, pending.chain);
+                            if (resumeJson.success) { clearPendingPayment(order.id); load(); return; }
+                            const resumeError = resumeJson.error || 'Payment verification failed';
+                            if (resumeError.includes('failed on-chain') || resumeError.includes('already been used')) {
+                              clearPendingPayment(order.id);
+                            } else {
+                              setPayError(
+                                `An earlier payment was sent (tx ${pending.txSig.slice(0, 12)}...) but verification failed: ${resumeError}. ` +
+                                'Not charging again -- retry in a moment or contact support.',
+                              );
+                              return;
+                            }
+                          }
+
                           setPayMsg('Sending USDC payment...');
                           const txSig = await payUsdc({ chain: 'solana', treasury: treasuryWallet, amountUsd: total });
+                          savePendingPayment({ orderId: order.id, txSig, chain: 'solana' });
                           setPayMsg('Verifying payment...');
-                          const auth = await getAuth();
-                          const res = await fetch(`/api/orders/${order.id}`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ...auth, action: 'pay', payment_method: 'usdc-sol', escrow_tx_hash: txSig }),
-                          });
-                          const json = await res.json();
-                          if (!json.success) { setPayError(json.error || 'Payment verification failed'); return; }
-                          setPayMsg(null);
+                          const json = await verifyPayment(txSig, 'solana');
+                          if (!json.success) {
+                            setPayError(
+                              `${json.error || 'Payment verification failed'}. Your payment was sent (tx ${txSig.slice(0, 12)}...) -- ` +
+                              'do NOT pay again; click the button once more to retry verification without being charged.',
+                            );
+                            return;
+                          }
+                          clearPendingPayment(order.id);
                           load();
                         } catch (e) {
                           setPayError(e instanceof Error ? e.message : 'Payment failed');
@@ -1422,54 +1646,6 @@ export default function AtelierOrderPage() {
                   </div>
                 )}
 
-                {/* Approve / Revise / Dispute */}
-                {order.status === 'delivered' && isOrderClient && (
-                  <>
-                    {walletMismatch && (
-                      <p className="text-2xs font-mono text-amber-500/90 px-2.5 py-2 rounded border border-amber-400/20 bg-amber-400/5 leading-relaxed">
-                        Connected wallet differs from the one used to place this order. You can still approve — releasing payment to the agent doesn&apos;t require your wallet.
-                      </p>
-                    )}
-                    {order.revision_count > 0 && (
-                      <p className="text-2xs font-mono text-neutral-500 px-1">
-                        {order.revision_count}/{order.max_revisions} revisions used
-                      </p>
-                    )}
-                    <button
-                      onClick={() => setShowApproveConfirm(true)}
-                      disabled={approving || disputing || requestingRevision}
-                      className="w-full py-2.5 rounded bg-emerald-500 text-white text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all hover:bg-emerald-600 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {approving ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                          Approving...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                          </svg>
-                          Approve & Complete
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => { setShowRevisionForm(true); setShowDisputeForm(false); }}
-                      disabled={approving || requestingRevision || showRevisionForm}
-                      className="w-full py-2 rounded border border-amber-400/30 text-amber-400 text-xs font-mono hover:bg-amber-400/10 disabled:opacity-60 transition-colors cursor-pointer"
-                    >
-                      {order.revision_count >= order.max_revisions ? 'Extra Revision' : 'Request Revision'}
-                    </button>
-                    <button
-                      onClick={() => { setShowDisputeForm(true); setShowRevisionForm(false); }}
-                      disabled={approving || disputing || showDisputeForm}
-                      className="w-full text-2xs font-mono text-red-400/70 hover:text-red-400 disabled:opacity-60 transition-colors cursor-pointer py-1"
-                    >
-                      Report a problem
-                    </button>
-                  </>
-                )}
 
                 {/* Cancel */}
                 {canCancel && (
@@ -1496,7 +1672,7 @@ export default function AtelierOrderPage() {
                 )}
 
                 {/* Admin: Retry Payout */}
-                {order.status === 'completed' && !order.payout_tx_hash && walletAddress === 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb' && (
+                {order.status === 'completed' && !order.payout_tx_hash && (isAdminViewer || walletAddress === 'EZkoXXZ5HEWdKwfv7wua7k6Dqv8aQxxHWNakq2gG2Qpb') && (
                   <div className="p-3 rounded-lg border border-amber-400/30 bg-amber-400/5">
                     <p className="text-2xs font-mono text-amber-400/70 mb-2">Payout missing for this order</p>
                     {retryPayoutMsg && (
@@ -1567,6 +1743,67 @@ export default function AtelierOrderPage() {
             {/* Deliverables gallery for standard (non-workspace) orders */}
             {!showWorkspace && data.deliverables.length > 0 && (
               <DeliverablesGallery deliverables={data.deliverables} locked={locked} />
+            )}
+
+            {/* Approve / Revise / Dispute — co-located with the delivered result */}
+            {order.status === 'delivered' && isOrderClient && (
+              <div className="p-4 rounded-lg border border-emerald-400/30 bg-emerald-400/5 space-y-3">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-sm font-mono text-emerald-400 font-medium">Happy with the result?</p>
+                    {order.quoted_price_usd && (
+                      <p className="text-2xs font-mono text-neutral-500 mt-0.5">
+                        Approving releases ${order.quoted_price_usd} USDC to {order.provider_name}.
+                      </p>
+                    )}
+                  </div>
+                  {order.revision_count > 0 && (
+                    <span className="text-2xs font-mono text-neutral-500 shrink-0">
+                      {order.revision_count}/{order.max_revisions} revisions used
+                    </span>
+                  )}
+                </div>
+                {walletMismatch && (
+                  <p className="text-2xs font-mono text-amber-500/90 px-2.5 py-2 rounded border border-amber-400/20 bg-amber-400/5 leading-relaxed">
+                    Connected wallet differs from the one used to place this order. You can still approve — releasing payment to the agent doesn&apos;t require your wallet.
+                  </p>
+                )}
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    onClick={() => setShowApproveConfirm(true)}
+                    disabled={approving || disputing || requestingRevision}
+                    className="flex-1 py-2.5 rounded bg-emerald-500 text-white text-sm font-medium font-mono tracking-wide disabled:opacity-60 transition-all hover:bg-emerald-600 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {approving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                        Approving...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        Approve &amp; Complete
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => { setShowRevisionForm(true); setShowDisputeForm(false); }}
+                    disabled={approving || requestingRevision || showRevisionForm}
+                    className="sm:w-auto py-2.5 px-4 rounded border border-amber-400/30 text-amber-400 text-sm font-mono hover:bg-amber-400/10 disabled:opacity-60 transition-colors cursor-pointer"
+                  >
+                    {order.revision_count >= order.max_revisions ? 'Extra Revision' : 'Request Revision'}
+                  </button>
+                </div>
+                <button
+                  onClick={() => { setShowDisputeForm(true); setShowRevisionForm(false); }}
+                  disabled={approving || disputing || showDisputeForm}
+                  className="text-2xs font-mono text-red-400/70 hover:text-red-400 disabled:opacity-60 transition-colors cursor-pointer"
+                >
+                  Report a problem
+                </button>
+              </div>
             )}
 
             {review && <ReviewInline review={review} />}
@@ -1712,10 +1949,11 @@ export default function AtelierOrderPage() {
             )}
 
             {/* Chat — always visible */}
-            {walletAddress && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
+            {(walletAddress || isAdminViewer) && !['pending_quote', 'quoted', 'accepted'].includes(order.status) && (
               <OrderChat
                 orderId={order.id}
-                selfIds={[walletAddress]}
+                readOnly={isAdminViewer}
+                selfIds={walletAddress ? [walletAddress] : []}
                 buildAuth={buildChatAuth}
                 locked={locked}
                 deliveries={data.deliverables.length > 0
@@ -2036,6 +2274,61 @@ function SellerDeliverForm({ orderId, buildAuth, buildUploadAuth, revisionReques
   );
 }
 
+function OrderProgress({ order }: { order: ServiceOrder }) {
+  const isTerminal = order.status === 'cancelled' || order.status === 'disputed';
+  const currentIdx = statusIndex(order.status);
+  const steps = STATUS_SEQUENCE.map((s, i) => {
+    const isDone = i < currentIdx || (i === currentIdx && order.status === 'completed');
+    const isCurrent = i === currentIdx && order.status !== 'completed';
+    const isRevisionStep = order.status === 'revision_requested' && s === 'delivered';
+    return { key: s, label: STATUS_LABELS[s], isDone: isDone || isRevisionStep, isCurrent, isTerminalStep: false, isRevisionStep: false };
+  });
+  if (order.status === 'revision_requested') {
+    steps.push({ key: 'revision_requested', label: 'Revision Requested', isDone: false, isCurrent: true, isTerminalStep: false, isRevisionStep: true });
+  }
+  if (isTerminal) {
+    steps.push({ key: order.status, label: order.status === 'cancelled' ? 'Cancelled' : 'Disputed', isDone: true, isCurrent: false, isTerminalStep: true, isRevisionStep: false });
+  }
+  return (
+    <div className="p-4 rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#0a0a0a]">
+      <p className="text-2xs font-mono text-neutral-500 uppercase tracking-wider mb-4">Progress</p>
+      <div className="relative ml-1">
+        {steps.map((step, i) => {
+          const isLast = i === steps.length - 1;
+          return (
+            <div key={step.key} className="flex items-start gap-3 relative">
+              <div className="flex flex-col items-center w-4 shrink-0">
+                <div className="flex items-center justify-center w-4 h-4">
+                  {step.isTerminalStep ? (
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500 dark:bg-red-400" />
+                  ) : step.isCurrent ? (
+                    <div className="w-2.5 h-2.5 rounded-full bg-atelier animate-pulse-atelier ring-[3px] ring-atelier/20" />
+                  ) : step.isDone ? (
+                    <svg className="w-4 h-4 text-atelier" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  ) : (
+                    <div className="w-2 h-2 rounded-full border-[1.5px] border-gray-300 dark:border-neutral-600" />
+                  )}
+                </div>
+                {!isLast && (
+                  <div className={`w-px h-4 ${step.isDone ? 'bg-atelier/30' : 'bg-gray-200 dark:bg-neutral-800'}`} />
+                )}
+              </div>
+              <span className={`text-xs font-mono leading-4 ${
+                step.isTerminalStep ? 'text-red-600 dark:text-red-400 font-medium' :
+                step.isRevisionStep ? 'text-amber-600 dark:text-amber-400 font-medium' :
+                step.isCurrent ? 'text-gray-900 dark:text-white font-medium' :
+                step.isDone ? 'text-gray-500 dark:text-neutral-400' : 'text-gray-300 dark:text-neutral-600'
+              }`}>{step.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SellerOrderView({ data, onRefresh, buildChatAuth }: {
   data: OrderData;
   onRefresh: () => void;
@@ -2122,43 +2415,13 @@ function SellerOrderView({ data, onRefresh, buildChatAuth }: {
                 </div>
                 <h1 className="text-base font-bold font-display truncate">{order.service_title}</h1>
                 <p className="text-2xs font-mono text-neutral-500 mt-0.5 mb-3">{order.id}</p>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <PartiesRow order={order} />
+                  <PaymentSummary rows={sellerPaymentRows(order, quoted, fee, net)} />
+                  <div className="flex items-center justify-between px-1">
                     <span className="text-neutral-500 font-mono text-2xs">Ordered</span>
-                    <span className="text-black dark:text-white text-xs font-mono">{formatDate(order.created_at)}</span>
+                    <span className="text-neutral-500 text-2xs font-mono">{formatDate(order.created_at)}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-neutral-500 font-mono text-2xs">Buyer</span>
-                    <span className="text-black dark:text-white text-xs font-mono">{buyerDisplay(order) || 'Unknown'}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-neutral-500 font-mono text-2xs">Seller</span>
-                    <Link href={atelierHref(`/atelier/agents/${order.provider_slug || order.provider_agent_id}`)} className="text-atelier hover:underline text-xs font-mono">
-                      {order.provider_name}
-                    </Link>
-                  </div>
-                  {quoted > 0 && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-500 font-mono text-2xs">Quote</span>
-                        <span className="text-black dark:text-white text-xs font-mono">${quoted.toFixed(2)} USDC</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-neutral-500 font-mono text-2xs">Platform fee</span>
-                        <span className="text-neutral-500 text-xs font-mono">-${fee.toFixed(2)}</span>
-                      </div>
-                      <div className="flex items-center justify-between pt-1 border-t border-neutral-200 dark:border-neutral-800">
-                        <span className="text-neutral-500 font-mono text-2xs">You earn</span>
-                        <span className="text-emerald-500 text-xs font-mono font-bold">${net.toFixed(2)} USDC</span>
-                      </div>
-                    </>
-                  )}
-                  {order.payout_tx_hash && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-neutral-500 font-mono text-2xs">Payout</span>
-                      <span className="text-atelier-bright text-2xs font-mono">{truncateId(order.payout_tx_hash)}</span>
-                    </div>
-                  )}
                 </div>
               </div>
 

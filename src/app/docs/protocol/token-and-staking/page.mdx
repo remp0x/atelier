@@ -42,7 +42,7 @@ principal) and `claim` (paying their accrued reward).
 
 | Tier index | Lock | Multiplier |
 |---|---|---|
-| 0 -- Flexible | Unstake anytime | 1x |
+| 0 -- 30 days | 30-day lock | 1x |
 | 1 -- 90 days | 90-day lock | 4x |
 | 2 -- 180 days | 180-day lock | 8x |
 
@@ -59,7 +59,7 @@ actually configured.
 |---|---|---|
 | `initialize_pool` | Program upgrade authority only | Creates the `Pool` + both vaults for a staked mint. Gated to the upgrade authority (a `ProgramData` constraint) because the pool PDA is deterministic per mint -- otherwise anyone could front-run the canonical pool and become its permanent admin. |
 | `stake` | Any holder | Locks $ATELIER into a tier, creating or adding to a `Position`. Credits the vault's actual received-amount delta, not the requested amount. |
-| `unstake` | Position owner | Requires `now >= position.lock_until` (Flexible has `lock_until = 0`). Returns staked principal 1:1. Never blocked by `set_paused`. |
+| `unstake` | Position owner | Requires `now >= position.lock_until`. Returns staked principal 1:1. Never blocked by `set_paused`. |
 | `claim` | Position owner | Pays out the position's accrued USDC reward. Never blocked by `set_paused`. |
 | `crank_sync` (`notify_reward`) | `pool.funder` only | Deposits a new USDC funding tranche and starts (or extends) a linear drip window. |
 | `set_paused` | `pool.admin` | Pauses new `stake` calls only -- it cannot freeze existing stakers' `unstake` or `claim`. |
@@ -74,7 +74,7 @@ weight. This is the standard drain-safe accumulator ordering.
 The important design choice is **how** a funding tranche enters that accumulator. Early versions
 folded a funded amount into the accumulator instantly, which paid the whole tranche to whoever
 held weight at that single instant -- exploitable by a low-TVL staker who pre-positions right
-before a scheduled crank, or a flexible staker who stakes one slot before and unstakes one slot
+before a scheduled crank, or a zero-lock staker who stakes one slot before and unstakes one slot
 after. The shipped design instead **drips linearly**: `crank_sync` sets a `reward_rate` and a
 `period_finish = now + reward_duration`, and the accumulator advances by
 `reward_rate x elapsed / total_weight` up to `period_finish` on every subsequent call. A position
@@ -96,11 +96,14 @@ Principal is tracked 1:1 and separately from the reward accumulator, so there is
 donation/inflation attack surface of the kind that affects share-price vault designs (ERC-4626
 style) -- staking $ATELIER 1:1 in and 1:1 out is not exposed to that class of bug.
 
-## Funding: 50% of creator-fee revenue, weekly
+## Funding: 50% of treasury creator-fee income, weekly
 
 The reward vault is funded from platform revenue, not token emissions. By default, 50%
-(`DEFAULT_SHARE_BPS = 5000`, configurable 0-10000 via environment) of agent-token creator-fee
-revenue is routed to staking. Creator fees accrue in SOL; a delta-windowed cursor
+(`DEFAULT_SHARE_BPS = 5000`, configurable 0-10000 via environment) of the pump.fun creator-fee
+income received by the Atelier treasury wallet is routed to staking. Today that means creator
+fees from the $ATELIER coin itself and from legacy launches where Atelier is creator-of-record --
+not fees on agents' own tokens, which accrue to each agent's wallet. Creator fees accrue in SOL;
+a delta-windowed cursor
 (`staking_revenue_cursor`) tracks how much has already been swept, the swept amount is valued in
 USDC at the live SOL price (a valuation, not an on-chain swap), and that USDC moves from treasury
 into the pool's `reward_vault` before `crank_sync` starts the drip. This runs on a weekly cron
@@ -157,7 +160,7 @@ for the 256-bit `mul_div_floor` math in `math.rs`. A full init -> stake -> fund 
 | Program ID | `5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq` |
 | Cluster | Solana devnet |
 | Upgrade authority | `DqCZ7r6cxediYCRZoKTCPuusSzrpnsBwRe6HZZJ1HbkN` |
-| Reward mint (USDC) | `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` |
+| Reward mint (USDC) | A devnet test USDC mint (mainnet USDC `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` applies only to the mainnet plan) |
 
 ## Related
 

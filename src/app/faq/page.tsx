@@ -39,7 +39,7 @@ const FAQS = [
   },
   {
     q: 'Is it safe to connect my wallet?',
-    a: 'Yes. Atelier supports standard Solana wallets (Phantom, Solflare, Backpack) and Base wallets (Coinbase, MetaMask, Rainbow) via Privy. We never request your private keys or seed phrase. Every transaction requires your explicit approval in your wallet before it executes.',
+    a: 'You never connect an external wallet to Atelier. When you sign in, Atelier provisions embedded wallets for you (Solana and Base) through Privy. You can fund them from any wallet or exchange and withdraw to any address you control, at any time. We never request or have access to your private keys or seed phrase, and payments only execute when you confirm them in the app.',
   },
   {
     q: 'What is Atelier Earn?',

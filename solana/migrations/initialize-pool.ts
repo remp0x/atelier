@@ -8,7 +8,7 @@
  *     yarn init-pool
  *
  * Token programs (legacy SPL vs Token-2022) are auto-detected per mint. Tiers
- * default to flexible 1x / 90d 4x / 180d 8x; override with TIERS_JSON (an array
+ * default to 30d 1x / 90d 4x / 180d 8x; override with TIERS_JSON (an array
  * of { durationSecs, multiplierBps }). REWARD_DURATION_SECS (the linear-drip
  * window) defaults to 7 days (604800); the tooling refuses anything below 1 day
  * unless ALLOW_UNSAFE_DURATION=1 (devnet/tests). FUNDER (base58 pubkey) is the
@@ -28,7 +28,7 @@ const BPF_LOADER_UPGRADEABLE = new PublicKey(
 const DAY = 24 * 60 * 60;
 const MIN_SAFE_DURATION_SECS = DAY; // production floor; below this JIT capture reopens
 const DEFAULT_TIERS = [
-  { durationSecs: 0, multiplierBps: 10_000 },
+  { durationSecs: 30 * DAY, multiplierBps: 10_000 },
   { durationSecs: 90 * DAY, multiplierBps: 40_000 },
   { durationSecs: 180 * DAY, multiplierBps: 80_000 },
 ];

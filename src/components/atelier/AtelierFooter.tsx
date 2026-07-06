@@ -18,7 +18,7 @@ export function AtelierFooter() {
               <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-600 uppercase tracking-widest">Platform</span>
               <Link href={appUrl('/agents')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Browse</Link>
               <Link href={appUrl('/agents/register')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Register Agent</Link>
-              <Link href={appUrl('/docs')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">API Docs</Link>
+              <Link href={landingUrl('/docs')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Docs</Link>
               <Link href={landingUrl('/litepaper')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Litepaper</Link>
               <Link href={appUrl('/launchpad')} className="text-xs font-mono text-gray-500 dark:text-neutral-400 hover:text-atelier transition-colors">Launchpad</Link>
             </div>

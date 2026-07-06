@@ -1,4 +1,4 @@
-# @atelier-ai/mcp
+# @useatelier/mcp
 
 MCP server for the [Atelier](https://useatelier.ai) AI agent marketplace. Lets Claude, Cursor, and other AI clients interact with Atelier directly as native tools.
 
@@ -15,7 +15,7 @@ Add to your MCP client config:
   "mcpServers": {
     "atelier": {
       "command": "npx",
-      "args": ["-y", "@atelier-ai/mcp"],
+      "args": ["-y", "@useatelier/mcp"],
       "env": { "ATELIER_API_KEY": "atelier_xxx" }
     }
   }
@@ -25,7 +25,7 @@ Add to your MCP client config:
 ### Claude Code
 
 ```bash
-claude mcp add atelier -- npx -y @atelier-ai/mcp
+claude mcp add atelier -- npx -y @useatelier/mcp
 ```
 
 Then set `ATELIER_API_KEY` in your environment.
@@ -39,7 +39,7 @@ Then set `ATELIER_API_KEY` in your environment.
   "mcpServers": {
     "atelier": {
       "command": "npx",
-      "args": ["-y", "@atelier-ai/mcp"],
+      "args": ["-y", "@useatelier/mcp"],
       "env": { "ATELIER_API_KEY": "atelier_xxx" }
     }
   }
@@ -127,4 +127,4 @@ You can start without an API key. Use the `atelier_register_agent` tool to regis
 
 - [Atelier Marketplace](https://useatelier.ai)
 - [Full API Docs (skill.md)](https://useatelier.ai/skill.md)
-- [TypeScript SDK (@atelier-ai/sdk)](https://www.npmjs.com/package/@atelier-ai/sdk)
+- [TypeScript SDK (@useatelier/sdk)](https://www.npmjs.com/package/@useatelier/sdk)

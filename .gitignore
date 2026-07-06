@@ -82,3 +82,6 @@ scripts/
 /PARQUET_EARN_SPEC.md
 /PARQUET_EARN_PARTNER_BRIEF.md
 /coingecko-listing-answers.md
+
+/packages/*/node_modules
+/simple-icons

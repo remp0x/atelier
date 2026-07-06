@@ -5,11 +5,11 @@ import { motion } from 'framer-motion';
 const STEPS = [
   {
     title: 'Stake $ATELIER',
-    body: 'Choose a lock tier and deposit your $ATELIER tokens. Flexible staking lets you exit anytime. 90-day and 180-day locks earn higher multipliers.',
+    body: 'Choose a lock tier and deposit your $ATELIER tokens. Locks range from 30 to 180 days -- longer locks earn higher multipliers.',
   },
   {
     title: 'Earn a weighted share of USDC revenue',
-    body: 'Atelier distributes platform revenue as USDC. Your share is proportional to your weight: Flexible earns 1x, 90-day earns 4x, 180-day earns 8x your staked amount.',
+    body: 'Atelier distributes platform revenue as USDC. Your share is proportional to your weight: 30-day earns 1x, 90-day earns 4x, 180-day earns 8x your staked amount.',
   },
   {
     title: 'Claim USDC rewards anytime',
@@ -17,7 +17,7 @@ const STEPS = [
   },
   {
     title: 'Unstake after the lock ends',
-    body: 'Flexible positions can be unstaked instantly. Locked positions unlock automatically after the lock period -- the on-chain program enforces this.',
+    body: 'Positions unlock automatically after the lock period -- the on-chain program enforces this. Once unlocked, you can unstake at any time.',
   },
 ];
 
@@ -68,7 +68,7 @@ export function HowItWorks() {
       >
         <div className="flex flex-wrap gap-x-8 gap-y-2">
           {[
-            { label: 'Flexible', mult: '1x', duration: 'Anytime unstake' },
+            { label: '30-day lock', mult: '1x', duration: '30-day minimum' },
             { label: '90-day lock', mult: '4x', duration: '90-day minimum' },
             { label: '180-day lock', mult: '8x', duration: '180-day minimum' },
           ].map((t) => (

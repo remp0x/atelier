@@ -1,12 +1,13 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { registerAtelierAgent, DuplicateAgentError, setSAIDIdentity, isRegistrationTxUsed, setAgentModeration, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
+import { registerAtelierAgent, DuplicateAgentError, isRegistrationTxUsed, setAgentModeration, setAgentServerWallets, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
+import { provisionServerWallets } from '@/lib/privy-server-wallets';
 import { moderateListing } from '@/lib/pod';
+import { notifyAgentModeration } from '@/lib/notifications';
 import { rateLimiters, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
 import { violatesReservedBrand } from '@/lib/content-guard';
-import { createSAIDAgent } from '@/lib/said';
 import { readPrivyAccessToken, verifyPrivyAccessToken, PrivyAuthError } from '@/lib/privy-auth';
 import { authenticateUserRequest } from '@/lib/session';
 import { WalletAuthError } from '@/lib/solana-auth';
@@ -34,22 +35,13 @@ const PROTOCOL_SPEC = {
   ],
 };
 
-function kickoffSAID(agentId: string): void {
-  createSAIDAgent(agentId, `${BASE_URL}/api/said/card/${agentId}`)
-    .then(async (said) => {
-      await setSAIDIdentity(agentId, {
-        wallet: said.walletAddress,
-        pda: said.agentPDA,
-        secretKey: said.secretKey,
-        txHash: said.txSignature,
-      });
-    })
-    .catch((err) => console.error(`SAID registration failed for ${agentId}:`, err));
-}
-
 function kickoffModeration(agentId: string, fields: CommonFields): void {
   moderateListing('agent', `${fields.name}\n${fields.description}`)
-    .then((m) => (m.verdict === 'ok' ? undefined : setAgentModeration(agentId, m.verdict, m.reason)))
+    .then(async (m) => {
+      if (m.verdict === 'ok') return;
+      await setAgentModeration(agentId, m.verdict, m.reason);
+      await notifyAgentModeration(agentId, m.verdict, m.reason);
+    })
     .catch((err) => console.error(`Agent moderation failed for ${agentId}:`, err));
 }
 
@@ -96,10 +88,29 @@ function parseCommonFields(body: Record<string, unknown>): { error: NextResponse
   return { fields: { name, description, avatar_url, endpoint_url, capabilities: capabilities as ServiceCategory[], ai_models } };
 }
 
-function registrationResponse(
+async function registrationResponse(
   result: { agent_id: string; slug: string; api_key: string; webhook_secret: string | null },
   opts: { twitter_username: string | null; marketable: boolean; note?: string },
-): NextResponse {
+): Promise<NextResponse> {
+  // Every agent gets its server wallet up front: it pays the agent's own on-chain
+  // costs (token launch, SAID identity) and receives the token creator-fee share.
+  // Best-effort -- registration never fails on a provisioning hiccup.
+  let solanaWalletAddress: string | null = null;
+  try {
+    const provisioned = await provisionServerWallets(result.agent_id);
+    if (provisioned.evm || provisioned.solana) {
+      await setAgentServerWallets(result.agent_id, {
+        evmWalletId: provisioned.evm?.id,
+        evmAddress: provisioned.evm?.address,
+        solanaWalletId: provisioned.solana?.id,
+        solanaAddress: provisioned.solana?.address,
+      });
+    }
+    solanaWalletAddress = provisioned.solana?.address ?? null;
+  } catch (err) {
+    console.error('[register] server wallet provisioning failed:', err instanceof Error ? err.message : err);
+  }
+
   return NextResponse.json({
     success: true,
     data: {
@@ -110,6 +121,12 @@ function registrationResponse(
       twitter_username: opts.twitter_username,
       marketable: opts.marketable,
       ...(opts.note ? { note: opts.note } : {}),
+      ...(solanaWalletAddress ? {
+        wallet: {
+          solana_address: solanaWalletAddress,
+          note: 'Your agent pays its own on-chain costs (token launch, SAID identity) from this wallet and receives 65% of its token creator fees here. Fund it with SOL on Solana mainnet; live amounts at GET /api/agents/{agent_id}/funding.',
+        },
+      } : {}),
       protocol_spec: PROTOCOL_SPEC,
     },
   }, { status: 201 });
@@ -152,7 +169,6 @@ async function registerViaPrivy(body: Record<string, unknown>, token: string, cl
     registration_ip: clientIp,
   });
 
-  kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: twitterUsername, marketable: true });
 }
@@ -177,7 +193,6 @@ async function registerViaWallet(request: NextRequest, body: Record<string, unkn
   if ('error' in parsed) return parsed.error;
 
   const result = await registerAtelierAgent({ ...parsed.fields, owner_wallet: verifiedWallet, registration_ip: clientIp });
-  kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: null, marketable: true });
 }
@@ -213,7 +228,6 @@ async function registerViaX402(body: Record<string, unknown>, txRef: string, cha
     registration_tx: txRef,
     registration_ip: clientIp,
   });
-  kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, { twitter_username: null, marketable: true });
 }
@@ -223,7 +237,6 @@ async function registerBare(body: Record<string, unknown>, clientIp: string): Pr
   if ('error' in parsed) return parsed.error;
 
   const result = await registerAtelierAgent({ ...parsed.fields, registration_ip: clientIp });
-  kickoffSAID(result.agent_id);
   kickoffModeration(result.agent_id, parsed.fields);
   return registrationResponse(result, {
     twitter_username: null,

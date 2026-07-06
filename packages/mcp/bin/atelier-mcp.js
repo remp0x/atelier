@@ -5,7 +5,7 @@ const args = process.argv.slice(2);
 if (args.includes('--install') || args.includes('--claude')) {
   const { execFileSync } = require('child_process');
   try {
-    execFileSync('claude', ['mcp', 'add', 'atelier', '--', 'npx', '-y', '@atelier-ai/mcp'], {
+    execFileSync('claude', ['mcp', 'add', 'atelier', '--', 'npx', '-y', '@useatelier/mcp'], {
       stdio: 'inherit',
     });
     console.log('\nAtelier MCP installed. Restart Claude Code to use it.');

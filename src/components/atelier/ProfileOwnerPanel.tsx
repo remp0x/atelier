@@ -8,6 +8,7 @@ import type { AtelierUser } from '@/lib/atelier-db';
 
 interface ProfileOwnerPanelProps {
   user: AtelierUser;
+  hasLaunchedToken: boolean;
 }
 
 function XIcon({ className }: { className?: string }): React.ReactElement {
@@ -26,7 +27,7 @@ function PencilIcon({ className }: { className?: string }): React.ReactElement {
   );
 }
 
-export function ProfileOwnerPanel({ user }: ProfileOwnerPanelProps): React.ReactElement | null {
+export function ProfileOwnerPanel({ user, hasLaunchedToken }: ProfileOwnerPanelProps): React.ReactElement | null {
   const { atelierUser, refreshAtelierUser } = useAtelierAuth();
   const { user: privyUser, unlinkTwitter } = usePrivy();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -40,10 +41,12 @@ export function ProfileOwnerPanel({ user }: ProfileOwnerPanelProps): React.React
   const linkedAccounts = privyUser?.linkedAccounts ?? [];
   const hasTwitter = linkedAccounts.some((a) => a.type === 'twitter_oauth');
 
+  const twitterAccount = linkedAccounts.find((a) => a.type === 'twitter_oauth') as { username?: string; subject?: string } | undefined;
+  const xHandle = twitterAccount?.username ?? user.twitter_username ?? null;
+
   const handleUnlinkTwitter = useCallback(async () => {
-    const twitterAccount = linkedAccounts.find((a) => a.type === 'twitter_oauth');
     if (!twitterAccount) return;
-    const subject = (twitterAccount as { subject?: string }).subject;
+    const subject = twitterAccount.subject;
     if (!subject) return;
     const confirmed = window.confirm('Disconnect X account from this profile?');
     if (!confirmed) return;
@@ -53,7 +56,19 @@ export function ProfileOwnerPanel({ user }: ProfileOwnerPanelProps): React.React
     } catch (err) {
       console.error('[ProfileOwnerPanel] unlinkTwitter failed:', err);
     }
-  }, [linkedAccounts, unlinkTwitter, refreshAtelierUser]);
+  }, [twitterAccount, unlinkTwitter, refreshAtelierUser]);
+
+  const handleChangeTwitter = useCallback(async () => {
+    const subject = twitterAccount?.subject;
+    const confirmed = window.confirm('Change your X account? Your current X disconnects, then you connect a new one. Finish by connecting the new account -- your agents always keep an X linked.');
+    if (!confirmed) return;
+    try {
+      if (subject) await unlinkTwitter(subject);
+      void linkTwitter();
+    } catch (err) {
+      console.error('[ProfileOwnerPanel] change X failed:', err);
+    }
+  }, [twitterAccount, unlinkTwitter, linkTwitter]);
 
   if (!isOwner) return null;
 
@@ -88,12 +103,25 @@ export function ProfileOwnerPanel({ user }: ProfileOwnerPanelProps): React.React
         {hasTwitter && (
           <button
             type="button"
-            onClick={handleUnlinkTwitter}
-            aria-label="Disconnect X account"
-            className={`${btnBase} text-emerald-400 hover:text-red-400 border-emerald-900/40 hover:border-red-900/60 hover:bg-red-900/10`}
+            onClick={handleChangeTwitter}
+            aria-label="Change X account"
+            className={`${btnBase} text-emerald-400 border-emerald-900/40`}
           >
             <XIcon className="w-3.5 h-3.5" />
-            X Connected
+            <span>{xHandle ? `@${xHandle}` : 'X Connected'}</span>
+            <span className="opacity-50">&middot; Change</span>
+          </button>
+        )}
+
+        {hasTwitter && !hasLaunchedToken && (
+          <button
+            type="button"
+            onClick={handleUnlinkTwitter}
+            aria-label="Disconnect X account"
+            className={`${btnBase} text-red-400 hover:text-red-300 border-red-900/40 hover:border-red-900/60 hover:bg-red-900/10`}
+          >
+            <XIcon className="w-3.5 h-3.5" />
+            Disconnect
           </button>
         )}
       </div>

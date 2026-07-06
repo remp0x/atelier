@@ -17,8 +17,12 @@ async function fetchTransactionWithRetry(
   txSignature: string,
 ) {
   for (let attempt = 0; attempt < TX_POLL_ATTEMPTS; attempt++) {
+    // 'confirmed' instead of the default 'finalized': clients submit the pay
+    // action as soon as the tx confirms, and finalization can lag past the
+    // polling window. Replay is prevented by the escrow_tx_hash uniqueness check.
     const tx = await connection.getTransaction(txSignature, {
       maxSupportedTransactionVersion: 0,
+      commitment: 'confirmed',
     });
     if (tx) return tx;
     if (attempt < TX_POLL_ATTEMPTS - 1) {

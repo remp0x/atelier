@@ -11,6 +11,7 @@ import { AtelierAppLayout } from '@/components/atelier/AtelierAppLayout';
 import { ServiceCard } from '@/components/atelier/ServiceCard';
 import { HireModal } from '@/components/atelier/HireModal';
 import { TokenLaunchSection } from '@/components/atelier/TokenLaunchSection';
+import { AgentWalletCard } from '@/components/atelier/AgentWalletCard';
 import type { Service, ServiceReview, RecentAgentOrder, PortfolioItem } from '@/lib/atelier-db';
 
 function getTimeAgo(dateStr: string): string {
@@ -84,9 +85,11 @@ interface AgentDetail {
   capabilities?: string[];
   owner_wallet?: string | null;
   is_owner?: boolean;
+  said_wallet?: string | null;
   token?: AgentTokenInfo;
   last_poll_at?: string | null;
   pending_orders?: number;
+  moderation?: { status: 'ok' | 'review' | 'spam'; reason: string | null };
 }
 
 interface AgentData {
@@ -111,6 +114,8 @@ export default function AtelierAgentPage() {
   const [error, setError] = useState<string | null>(null);
   const [hireService, setHireService] = useState<Service | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('services');
+  const [saidStep, setSaidStep] = useState<'idle' | 'minting' | 'error'>('idle');
+  const [saidError, setSaidError] = useState<string | null>(null);
 
   async function loadAgent() {
     try {
@@ -172,6 +177,37 @@ export default function AtelierAgentPage() {
       linkedWalletAddresses.some((a) => a.toLowerCase() === ownerWalletAddr.toLowerCase())
     )
   );
+
+  async function handleMintSaid() {
+    setSaidError(null);
+    setSaidStep('minting');
+    try {
+      // The agent's own wallet funds the mint server-side. A 402 means it is
+      // underfunded -- the error message carries the live amount + deposit address.
+      const url = `/api/agents/${params.id}/said`;
+      const token = await getPrivyAccessToken();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || `Mint failed: ${res.status}`);
+      }
+
+      setSaidStep('idle');
+      loadAgent();
+    } catch (err) {
+      setSaidStep('error');
+      setSaidError(err instanceof Error ? err.message : 'Mint failed');
+    }
+  }
 
   const avgRating = stats.avg_rating
     ?? (reviews.length > 0 ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length : 0);
@@ -241,6 +277,17 @@ export default function AtelierAgentPage() {
                     </svg>
                   </a>
                 )}
+                {agent.said_wallet && (
+                  <a
+                    href={`https://www.saidprotocol.com/agents/${agent.said_wallet}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Verified SAID identity"
+                  >
+                    <img src="/SAID-LOGO-BLACK.png" alt="SAID" className="h-4 w-auto block dark:hidden" />
+                    <img src="/SAID-LOGO-WHITE.png" alt="SAID" className="h-4 w-auto hidden dark:block" />
+                  </a>
+                )}
               </div>
 
               <div className="flex items-center gap-2 mb-3">
@@ -273,6 +320,7 @@ export default function AtelierAgentPage() {
               agentName={agent.name}
               agentDescription={agent.bio || agent.description || ''}
               agentAvatarUrl={agent.avatar_url}
+              agentTwitterUsername={agent.twitter_username || null}
               token={agent.token || null}
               ownerWallet={agent.owner_wallet || null}
               onTokenSet={loadAgent}
@@ -286,9 +334,89 @@ export default function AtelierAgentPage() {
               </p>
             )}
           </div>
+
+          {/* SAID identity — inside profile card */}
+          {isOwner && !agent.said_wallet && (
+            <div className="mt-5 pt-5 border-t border-gray-200 dark:border-neutral-800">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => { void handleMintSaid(); }}
+                    disabled={saidStep === 'minting'}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-atelier text-white text-sm font-mono hover:bg-atelier-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {saidStep === 'minting' && (
+                      <span className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                    )}
+                    {saidStep === 'minting' ? 'Minting...' : 'Mint SAID identity'}
+                  </button>
+                  <span className="text-xs font-mono text-neutral-500">paid in SOL from the agent&apos;s own wallet — not yours</span>
+                </div>
+                {saidStep === 'error' && saidError && (
+                  <p className="text-xs font-mono text-red-500">{saidError}</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
+        {/* ── Agent wallet (owner only) ── */}
+        {isOwner && (
+          <div className="mb-6">
+            <AgentWalletCard agentId={agent.id} agentName={agent.name} />
+          </div>
+        )}
+
         {/* ── Owner warnings ── */}
+        {isOwner && agent.moderation?.status === 'review' && (
+          <div className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-mono font-medium text-amber-800 dark:text-amber-300">
+                  Hidden from the marketplace — changes requested
+                </p>
+                {agent.moderation.reason && (
+                  <p className="text-xs font-mono text-amber-600 dark:text-amber-400 mt-1">
+                    Reason: {agent.moderation.reason}
+                  </p>
+                )}
+                <p className="text-xs font-mono text-amber-600 dark:text-amber-400 mt-1">
+                  Update the name or description from your{' '}
+                  <Link href={atelierHref('/atelier/dashboard')} className="underline hover:text-amber-500">dashboard</Link>
+                  {' '}and save. It is re-reviewed automatically and relisted as soon as it passes.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isOwner && agent.moderation?.status === 'spam' && (
+          <div className="rounded-xl border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-red-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-mono font-medium text-red-800 dark:text-red-300">
+                  Flagged as spam and hidden from the marketplace
+                </p>
+                {agent.moderation.reason && (
+                  <p className="text-xs font-mono text-red-600 dark:text-red-400 mt-1">
+                    Reason: {agent.moderation.reason}
+                  </p>
+                )}
+                <p className="text-xs font-mono text-red-600 dark:text-red-400 mt-1">
+                  If you believe this is a mistake, contact support on{' '}
+                  <a href="https://t.me/atelierai" target="_blank" rel="noopener noreferrer" className="underline hover:text-red-500">Telegram</a>.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isOwner && (agent.pending_orders ?? 0) > 0 && (
           <div className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4 mb-6">
             <div className="flex items-start gap-3">

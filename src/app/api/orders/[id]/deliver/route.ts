@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceOrderById, updateOrderStatus, createOrderDeliverable, updateOrderDeliverable } from '@/lib/atelier-db';
+import { getServiceOrderById, updateOrderStatus, createOrderDeliverable, updateOrderDeliverable, getOrderDeliverables, supersedeOrderDeliverables } from '@/lib/atelier-db';
 import { AuthError } from '@/lib/atelier-auth';
 import { authorizeOrderProvider } from '@/lib/order-auth';
 import { rateLimiters } from '@/lib/rateLimit';
@@ -12,6 +12,10 @@ import { generateDeliverablePreview } from '@/lib/deliverable-preview';
 
 const VALID_MEDIA_TYPES = ['image', 'video', 'link', 'document', 'code', 'text'] as const;
 type MediaType = typeof VALID_MEDIA_TYPES[number];
+
+// Resubmitting onto an already-delivered order guarantees the buyer at least this many
+// hours to review the corrected file, without granting a fresh 48h on every resubmit.
+const RESUBMIT_REVIEW_FLOOR_HOURS = 24;
 
 interface DeliverableItem {
   deliverable_url: string;
@@ -56,7 +60,9 @@ export async function POST(
     const body = await request.json();
     const agent = await authorizeOrderProvider(request, body, order);
 
-    const DELIVERABLE_STATUSES = ['paid', 'in_progress', 'disputed', 'revision_requested'];
+    // 'delivered' is included so an agent can resubmit a corrected file before the buyer
+    // accepts (e.g. the first upload was wrong or broken). Once 'completed', payout has run.
+    const DELIVERABLE_STATUSES = ['paid', 'in_progress', 'disputed', 'revision_requested', 'delivered'];
     if (!DELIVERABLE_STATUSES.includes(order.status)) {
       return NextResponse.json(
         { success: false, error: `Cannot deliver order with status "${order.status}". Must be one of: ${DELIVERABLE_STATUSES.join(', ')}.` },
@@ -93,6 +99,13 @@ export async function POST(
       );
     }
 
+    // On resubmit (order already 'delivered'), capture the prior completed rows so we can
+    // supersede them once the corrected set is in place, leaving only the latest in the gallery.
+    const isResubmit = order.status === 'delivered';
+    const supersededIds = isResubmit
+      ? (await getOrderDeliverables(orderId)).filter((d) => d.status === 'completed').map((d) => d.id)
+      : [];
+
     // Insert each deliverable into order_deliverables, generating a watermarked
     // low-res preview for image deliverables so the original stays hidden until accept.
     let primaryPreviewUrl: string | null = null;
@@ -109,6 +122,8 @@ export async function POST(
       if (i === 0) primaryPreviewUrl = previewUrl;
     }
 
+    await supersedeOrderDeliverables(supersededIds);
+
     // Set primary deliverable on the order (first item) for backward compat
     const primary = items[0];
     const updated = await updateOrderStatus(orderId, {
@@ -116,6 +131,7 @@ export async function POST(
       deliverable_url: primary.deliverable_url,
       deliverable_media_type: primary.deliverable_media_type,
       ...(primaryPreviewUrl ? { deliverable_preview_url: primaryPreviewUrl } : {}),
+      ...(isResubmit ? { reviewDeadlineFloorHours: RESUBMIT_REVIEW_FLOOR_HOURS } : {}),
     });
 
     if (order.brief) {

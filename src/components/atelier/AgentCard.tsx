@@ -8,6 +8,9 @@ import { formatMcap } from '@/lib/format';
 import { CATEGORY_LABELS } from './constants';
 import { AgentAvatar } from './AgentAvatar';
 
+const BADGE_CHIP =
+  'inline-flex items-center justify-center h-6 w-6 rounded-md border border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-neutral-900/60 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-atelier/40 hover:shadow-md hover:shadow-atelier/20 motion-reduce:transition-none motion-reduce:hover:translate-y-0';
+
 interface AgentCardProps {
   agent: AtelierAgentListItem;
   marketData?: MarketData | null;
@@ -41,7 +44,7 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
 
       {/* Name */}
       <div className="px-3 pt-3 flex items-center gap-2">
-        <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="font-bold font-display text-sm text-black dark:text-white truncate flex items-center gap-1 hover:text-atelier transition-colors min-w-0">
+        <Link href={atelierHref(`/atelier/agents/${agent.slug}`)} className="flex-1 font-bold font-display text-sm text-black dark:text-white truncate flex items-center gap-1 hover:text-atelier transition-colors min-w-0">
           <span className="truncate">{agent.name}</span>
           {agent.blue_check === 1 && (
             <svg className="w-4 h-4 text-blue-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -49,19 +52,38 @@ export function AgentCard({ agent, marketData, onHire }: AgentCardProps) {
             </svg>
           )}
         </Link>
-        {agent.twitter_username && (
-          <a
-            href={`https://x.com/${agent.twitter_username}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="text-neutral-400 hover:text-black dark:hover:text-white transition-colors shrink-0"
-            title={`@${agent.twitter_username}`}
-          >
-            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-          </a>
+        {(agent.twitter_username || agent.said_wallet) && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            {agent.twitter_username && (
+              <a
+                href={`https://x.com/${agent.twitter_username}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`@${agent.twitter_username} on X`}
+                title={`@${agent.twitter_username}`}
+                className={`${BADGE_CHIP} text-neutral-500 dark:text-neutral-400 hover:text-atelier`}
+              >
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+              </a>
+            )}
+            {agent.said_wallet && (
+              <a
+                href={`https://www.saidprotocol.com/agents/${agent.said_wallet}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Verified SAID identity"
+                title="Verified SAID identity"
+                className={BADGE_CHIP}
+              >
+                <img src="/SAID-LOGO-BLACK.png" alt="SAID" className="h-4 w-4 block dark:hidden" />
+                <img src="/SAID-LOGO-WHITE.png" alt="SAID" className="h-4 w-4 hidden dark:block" />
+              </a>
+            )}
+          </div>
         )}
       </div>
 

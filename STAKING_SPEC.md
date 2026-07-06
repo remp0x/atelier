@@ -12,7 +12,7 @@ program holds funds, not Atelier.
 | Custody | On-chain Solana program (non-custodial) | User-chosen. Trustless; program-owned vaults; no "trust Atelier" with staked funds. |
 | Base | Clean-room Anchor program | The only audited program with the right shape (`mithraiclabs/spl-token-staking`) is BUSL-1.1 (deploy-blocked to 2027); nothing audited supports Token-2022. So we build fresh, using its architecture as reference. |
 | Lock model | 3 discrete tiers (Parquet-style), continuous accrual | Discrete tiers = a lookup table, not an interpolation curve. Continuous accrual + claim-anytime = simpler than epochs and matches the accumulator. |
-| Multipliers | Moderate: flexible 1x / 90d 4x / 180d 8x | User-chosen. Rewards commitment without nuking casual stakers; bounded enough to keep expiry handling simple. |
+| Multipliers | Moderate: 30d 1x / 90d 4x / 180d 8x | User-chosen. Rewards commitment without nuking casual stakers; bounded enough to keep expiry handling simple. |
 | Chain | Solana only | Token stays on Solana (Base migration shelved). Rewards paid in USDC on Solana. |
 
 ## Architecture
@@ -68,15 +68,15 @@ This is the core anti-rug property. See SECURITY.md.
 
 | Index | Lock | Multiplier | Unstake |
 |---|---|---|---|
-| 0 | Flexible | 1x | anytime |
+| 0 | 30 days | 1x | after term |
 | 1 | 90 days | 4x | after term |
 | 2 | 180 days | 8x | after term |
 
 ## Worked example
 
 1.5M total weight in the pool, $2,000 USDC funded that week. A 180d staker with
-10,000 $ATELIER = 80,000 weight = 5.3% share = ~$107. The same 10,000 left
-flexible (10,000 weight) earns ~$13. The 8x spread is the incentive.
+10,000 $ATELIER = 80,000 weight = 5.3% share = ~$107. The same 10,000 in the
+30-day tier (10,000 weight) earns ~$13. The 8x spread is the incentive.
 
 ## File map
 

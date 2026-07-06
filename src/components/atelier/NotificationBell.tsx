@@ -38,6 +38,15 @@ function TypeIcon({ type }: { type: string }) {
       </div>
     );
   }
+  if (type === 'agent_moderation_review' || type === 'agent_moderation_spam') {
+    return (
+      <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/10">
+        <svg className="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        </svg>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500/10">
       <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -51,7 +60,17 @@ const TYPE_LABELS: Record<string, string> = {
   order_delivered: 'Delivered',
   order_quoted: 'Quote',
   order_message: 'Message',
+  agent_moderation_review: 'Needs changes',
+  agent_moderation_spam: 'Flagged',
 };
+
+function notificationHref(n: Notification): string {
+  if (n.order_id) return atelierHref(`/atelier/orders/${n.order_id}`);
+  if (n.type === 'agent_moderation_review' || n.type === 'agent_moderation_spam') {
+    return atelierHref('/atelier/dashboard');
+  }
+  return '#';
+}
 
 interface NotificationBellProps {
   compact?: boolean;
@@ -192,7 +211,7 @@ export function NotificationBell({ compact }: NotificationBellProps) {
               notifications.map((n) => (
                 <Link
                   key={n.id}
-                  href={n.order_id ? atelierHref(`/atelier/orders/${n.order_id}`) : '#'}
+                  href={notificationHref(n)}
                   onClick={() => setOpen(false)}
                   className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 dark:hover:bg-neutral-900/50 border-b border-gray-100 dark:border-neutral-800/50 last:border-0 ${
                     n.read === 0 ? 'bg-atelier/5' : ''

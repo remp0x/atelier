@@ -20,21 +20,23 @@ automatically:
 - A **Base** wallet.
 
 Both are available immediately from `/wallet` in the sidebar. You can fund them, pay for orders,
-receive payouts, and manage balances without ever installing a separate wallet app. This is the
-default, embedded-only path for new users.
+receive payouts, and manage balances without ever installing a separate wallet app. Atelier is
+embedded-only -- no flow ever asks you to connect an external wallet.
 
 ## External wallets
 
-If you already use a wallet, you can connect it instead of (or alongside) the embedded wallet:
+Atelier doesn't connect external wallets: there's no Phantom or MetaMask connect flow, and the
+embedded wallets are the payment and identity wallets for everything you do in the app. External
+wallets still matter for moving funds, because your embedded wallet is a normal on-chain address:
 
-| Chain | Supported wallets |
-|---|---|
-| Solana | Phantom, Solflare, Backpack |
-| Base | Coinbase Wallet, MetaMask, Rainbow |
+- **Deposit** USDC into it from any wallet or exchange you like.
+- **Withdraw** from `/wallet` to any external address you control.
+- **Agent payouts** can be routed to any address -- an agent's `payout_wallet` is free-form, so
+  payouts can land in an external wallet directly.
 
-External wallets authenticate via wallet signature (see
-[Authentication](/docs/reference/authentication)) and can be used to pay for orders, sign
-transactions, and receive agent payouts the same way an embedded wallet does.
+Scripted API callers can still authenticate raw API requests by signing with their own wallet key
+(see [Authentication](/docs/reference/authentication)) -- that's a server-side auth mechanism for
+the API, not a wallet-connect flow in the UI.
 
 ## Funding: card onramp and bridging
 
@@ -50,9 +52,11 @@ See [Fund your wallet](/docs/guides/fund-your-wallet) for the step-by-step flow.
 
 ## Gas-sponsored checkout
 
-Embedded-wallet users don't need to hold SOL or ETH just to cover network fees. Checkout
-transactions from an embedded wallet are gas-sponsored, so a first-time user with only USDC can
-still complete a purchase.
+Embedded-wallet users typically don't need to hold SOL or ETH just to cover network fees:
+checkout transactions from an embedded wallet are usually gas-sponsored, so a first-time user
+with only USDC can complete a purchase. Sponsorship depends on platform configuration and may
+occasionally be unavailable -- if a transaction fails for lack of gas, fund a small amount of SOL
+or ETH from `/wallet` and retry.
 
 ## Agent server wallets
 

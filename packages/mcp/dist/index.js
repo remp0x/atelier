@@ -1,12 +1,10 @@
 "use strict";
 
 // src/index.ts
-var import_server = require("@modelcontextprotocol/sdk/server/index.js");
+var import_mcp = require("@modelcontextprotocol/sdk/server/mcp.js");
 var import_stdio = require("@modelcontextprotocol/sdk/server/stdio.js");
-var import_types = require("@modelcontextprotocol/sdk/types.js");
 
-// ../sdk/dist/index.mjs
-var import_crypto = require("crypto");
+// ../sdk/src/errors.ts
 var AtelierError = class extends Error {
   status;
   code;
@@ -55,6 +53,8 @@ var RateLimitError = class extends AtelierError {
     this.retryAfter = retryAfter;
   }
 };
+
+// ../sdk/src/http.ts
 var DEFAULT_BASE_URL = "https://api.useatelier.ai";
 var DEFAULT_TIMEOUT = 3e4;
 var HttpClient = class {
@@ -155,10 +155,13 @@ var HttpClient = class {
     }
   }
 };
+
+// ../sdk/src/resources/agents.ts
 var AgentsResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async register(input) {
     return this.http.post("/api/agents/register", input);
   }
@@ -196,10 +199,13 @@ var AgentsResource = class {
     return this.http.post("/api/agents/recover", input);
   }
 };
+
+// ../sdk/src/resources/services.ts
 var ServicesResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async list(params) {
     return this.http.get("/api/services", params);
   }
@@ -219,10 +225,13 @@ var ServicesResource = class {
     return this.http.del(`/api/services/${encodeURIComponent(id)}`);
   }
 };
+
+// ../sdk/src/resources/orders.ts
 var OrdersResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async listForAgent(agentId, params) {
     return this.http.get(
       `/api/agents/${encodeURIComponent(agentId)}/orders`,
@@ -257,10 +266,13 @@ var OrdersResource = class {
     return this.http.post(`/api/orders/${encodeURIComponent(id)}/quote`, input);
   }
 };
+
+// ../sdk/src/resources/bounties.ts
 var BountiesResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async list(params) {
     return this.http.get("/api/bounties", params);
   }
@@ -274,10 +286,13 @@ var BountiesResource = class {
     return this.http.del(`/api/bounties/${encodeURIComponent(id)}/claim`);
   }
 };
+
+// ../sdk/src/resources/metrics.ts
 var MetricsResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async platform() {
     return this.http.get("/api/platform-stats");
   }
@@ -285,22 +300,31 @@ var MetricsResource = class {
     return this.http.get("/api/metrics/activity", params);
   }
 };
+
+// ../sdk/src/resources/market.ts
 var MarketResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async getData(mints) {
     return this.http.post("/api/market", { mints });
   }
 };
+
+// ../sdk/src/resources/models.ts
 var ModelsResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async list() {
     return this.http.get("/api/models");
   }
 };
+
+// ../sdk/src/resources/webhooks.ts
+var import_crypto = require("crypto");
 var SIGNATURE_TOLERANCE_SEC = 300;
 function parseSignatureHeader(header) {
   const parts = header.split(",");
@@ -325,6 +349,7 @@ var WebhooksResource = class {
   constructor(secret) {
     this.secret = secret;
   }
+  secret;
   verify(rawBody, signatureHeader) {
     const { timestamp, signatures } = parseSignatureHeader(signatureHeader);
     if (!timestamp || signatures.length === 0) {
@@ -355,6 +380,8 @@ var WebhookVerificationError = class extends Error {
     this.name = "WebhookVerificationError";
   }
 };
+
+// ../sdk/src/client.ts
 var AtelierClient = class {
   http;
   agents;
@@ -381,18 +408,16 @@ var AtelierClient = class {
   }
 };
 
-// src/tools.ts
-function errorResult(error) {
-  const message = error instanceof AtelierError ? `${error.name}: ${error.message} (${error.status})` : error instanceof Error ? error.message : String(error);
-  return { content: [{ type: "text", text: message }], isError: true };
-}
-function jsonResult(data) {
-  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
-}
-var tools = [
+// ../mcp-core/src/registry.ts
+var import_types2 = require("@modelcontextprotocol/sdk/types.js");
+
+// ../mcp-core/src/tools/agents.ts
+var agentTools = [
   {
     name: "atelier_register_agent",
     description: "Register a new AI agent on the Atelier marketplace in a single call. Returns agent_id and api_key immediately. Provide owner_wallet + wallet_sig to register an owned, marketplace-visible agent; without an owner the agent is registered but hidden until you attach one (sign with a wallet, pay via x402, or link X). Linking X is optional and only adds a verified badge.",
+    auth: "none",
+    annotations: { title: "Register agent", openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
@@ -416,43 +441,37 @@ var tools = [
       },
       required: ["name", "description"]
     },
-    handler: async (client2, args) => {
-      try {
-        const result = await client2.agents.register({
-          name: args.name,
-          description: args.description,
-          avatar_url: args.avatar_url,
-          endpoint_url: args.endpoint_url,
-          capabilities: args.capabilities,
-          ai_models: args.ai_models,
-          owner_wallet: args.owner_wallet,
-          wallet_sig: args.wallet_sig,
-          wallet_sig_ts: args.wallet_sig_ts
-        });
-        if (result.api_key) {
-          client2.setApiKey(result.api_key);
-        }
-        return jsonResult(result);
-      } catch (e) {
-        return errorResult(e);
+    handler: async (ctx, args) => {
+      const result = await ctx.client.agents.register({
+        name: args.name,
+        description: args.description,
+        avatar_url: args.avatar_url,
+        endpoint_url: args.endpoint_url,
+        capabilities: args.capabilities,
+        ai_models: args.ai_models,
+        owner_wallet: args.owner_wallet,
+        wallet_sig: args.wallet_sig,
+        wallet_sig_ts: args.wallet_sig_ts
+      });
+      if (result.api_key) {
+        ctx.client.setApiKey(result.api_key);
       }
+      return result;
     }
   },
   {
     name: "atelier_get_profile",
     description: "Get your agent profile on Atelier. Shows name, capabilities, stats, verification status, and payout wallet.",
+    auth: "agent",
+    annotations: { title: "Get my profile", readOnlyHint: true, idempotentHint: true },
     inputSchema: { type: "object", properties: {} },
-    handler: async (client2) => {
-      try {
-        return jsonResult(await client2.agents.me());
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx) => ctx.client.agents.me()
   },
   {
     name: "atelier_update_profile",
     description: "Update your agent profile on Atelier.",
+    auth: "agent",
+    annotations: { title: "Update my profile", idempotentHint: true },
     inputSchema: {
       type: "object",
       properties: {
@@ -461,172 +480,152 @@ var tools = [
         avatar_url: { type: "string", description: "New avatar URL" },
         endpoint_url: { type: "string", description: "New webhook endpoint URL" },
         payout_wallet: { type: "string", description: "Solana wallet for USDC payouts" },
-        capabilities: {
-          type: "array",
-          items: { type: "string" },
-          description: "Updated capabilities list"
-        },
-        ai_models: {
-          type: "array",
-          items: { type: "string" },
-          description: "Updated AI models list"
-        }
+        capabilities: { type: "array", items: { type: "string" }, description: "Updated capabilities list" },
+        ai_models: { type: "array", items: { type: "string" }, description: "Updated AI models list" }
       }
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.agents.update({
-          name: args.name,
-          description: args.description,
-          avatar_url: args.avatar_url,
-          endpoint_url: args.endpoint_url,
-          payout_wallet: args.payout_wallet,
-          capabilities: args.capabilities,
-          ai_models: args.ai_models
-        }));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx, args) => ctx.client.agents.update({
+      name: args.name,
+      description: args.description,
+      avatar_url: args.avatar_url,
+      endpoint_url: args.endpoint_url,
+      payout_wallet: args.payout_wallet,
+      capabilities: args.capabilities,
+      ai_models: args.ai_models
+    })
   },
   {
     name: "atelier_verify_twitter",
     description: "Optional: link your X/Twitter account to earn a verified badge. Not required to operate -- your agent can create services and take orders without it. Provide the URL of a tweet containing your agent verification code that mentions @useAtelier.",
+    auth: "agent",
+    annotations: { title: "Verify X/Twitter" },
     inputSchema: {
       type: "object",
-      properties: {
-        tweet_url: { type: "string", description: "URL of the verification tweet" }
-      },
+      properties: { tweet_url: { type: "string", description: "URL of the verification tweet" } },
       required: ["tweet_url"]
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.agents.verifyTwitter({ tweet_url: args.tweet_url }));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx, args) => ctx.client.agents.verifyTwitter({ tweet_url: args.tweet_url })
   },
   {
-    name: "atelier_list_services",
-    description: "List services for a specific agent on Atelier.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        agent_id: { type: "string", description: "Agent ID to list services for" }
-      },
-      required: ["agent_id"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.services.listForAgent(args.agent_id));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_create_service",
-    description: "Create a new service listing on Atelier. IMPORTANT: Before calling this tool, confirm the following with the user: category, title, description, price_usd, and price_type. Do not invent values for these fields. Optional fields (turnaround_hours, deliverables, demo_url) can be set by the AI if the user opts for full autonomy.",
+    name: "atelier_manage_portfolio",
+    description: "Hide or unhide items from your agent portfolio on Atelier.",
+    auth: "agent",
+    annotations: { title: "Manage portfolio", idempotentHint: true },
     inputSchema: {
       type: "object",
       properties: {
         agent_id: { type: "string", description: "Your agent ID" },
-        category: {
-          type: "string",
-          description: "Service category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom"
-        },
+        action: { type: "string", description: "Action: hide or unhide" },
+        source_type: { type: "string", description: "Source type: order or deliverable" },
+        source_id: { type: "string", description: "ID of the order or deliverable" }
+      },
+      required: ["agent_id", "action", "source_type", "source_id"]
+    },
+    handler: async (ctx, args) => ctx.client.agents.managePortfolio(args.agent_id, {
+      action: args.action,
+      source_type: args.source_type,
+      source_id: args.source_id
+    })
+  }
+];
+
+// ../mcp-core/src/tools/services.ts
+var serviceTools = [
+  {
+    name: "atelier_list_services",
+    description: "List services for a specific agent on Atelier.",
+    auth: "none",
+    annotations: { title: "List agent services", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    inputSchema: {
+      type: "object",
+      properties: { agent_id: { type: "string", description: "Agent ID to list services for" } },
+      required: ["agent_id"]
+    },
+    handler: async (ctx, args) => ctx.client.services.listForAgent(args.agent_id)
+  },
+  {
+    name: "atelier_create_service",
+    description: "Create a new service listing on Atelier. IMPORTANT: Before calling this tool, confirm the following with the user: category, title, description, price_usd, and price_type. Do not invent values for these fields. Optional fields (turnaround_hours, deliverables, demo_url) can be set by the AI if the user opts for full autonomy.",
+    auth: "agent",
+    annotations: { title: "Create service" },
+    inputSchema: {
+      type: "object",
+      properties: {
+        agent_id: { type: "string", description: "Your agent ID" },
+        category: { type: "string", description: "Service category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom" },
         title: { type: "string", description: "Service title (5-100 chars)" },
         description: { type: "string", description: "Service description (20-1000 chars)" },
         price_usd: { type: "string", description: 'Price in USD (e.g. "5.00")' },
         price_type: { type: "string", description: "Pricing model: fixed, quote, weekly, monthly (default: fixed)" },
         turnaround_hours: { type: "number", description: "Expected turnaround in hours (default: 48)" },
-        deliverables: {
-          type: "array",
-          items: { type: "string" },
-          description: "List of what the client receives"
-        },
+        deliverables: { type: "array", items: { type: "string" }, description: "List of what the client receives" },
         demo_url: { type: "string", description: "Demo/sample URL" }
       },
       required: ["agent_id", "category", "title", "description", "price_usd"]
     },
-    handler: async (client2, args) => {
-      try {
-        const agentId = args.agent_id;
-        const { agent_id: _, ...input } = args;
-        return jsonResult(await client2.services.create(agentId, {
-          category: input.category,
-          title: input.title,
-          description: input.description,
-          price_usd: input.price_usd,
-          price_type: input.price_type,
-          turnaround_hours: input.turnaround_hours,
-          deliverables: input.deliverables,
-          demo_url: input.demo_url
-        }));
-      } catch (e) {
-        return errorResult(e);
-      }
+    handler: async (ctx, args) => {
+      const agentId = args.agent_id;
+      return ctx.client.services.create(agentId, {
+        category: args.category,
+        title: args.title,
+        description: args.description,
+        price_usd: args.price_usd,
+        price_type: args.price_type,
+        turnaround_hours: args.turnaround_hours,
+        deliverables: args.deliverables,
+        demo_url: args.demo_url
+      });
     }
   },
   {
     name: "atelier_update_service",
     description: "Update an existing service listing on Atelier. Only provide the fields you want to change.",
+    auth: "agent",
+    annotations: { title: "Update service", idempotentHint: true },
     inputSchema: {
       type: "object",
       properties: {
         service_id: { type: "string", description: "Service ID to update" },
-        category: {
-          type: "string",
-          description: "Service category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom"
-        },
+        category: { type: "string", description: "Service category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom" },
         title: { type: "string", description: "Service title (3-100 chars)" },
         description: { type: "string", description: "Service description (10-1000 chars)" },
         price_usd: { type: "string", description: 'Price in USD (e.g. "5.00")' },
         price_type: { type: "string", description: "Pricing model: fixed, quote, weekly, monthly" },
         turnaround_hours: { type: "number", description: "Expected turnaround in hours" },
-        deliverables: {
-          type: "array",
-          items: { type: "string" },
-          description: "List of what the client receives"
-        },
+        deliverables: { type: "array", items: { type: "string" }, description: "List of what the client receives" },
         demo_url: { type: "string", description: "Demo/sample URL (null to remove)" },
         quota_limit: { type: "number", description: "Max orders (0 = unlimited)" },
         max_revisions: { type: "number", description: "Max revisions allowed (0-10)" }
       },
       required: ["service_id"]
     },
-    handler: async (client2, args) => {
-      try {
-        const serviceId = args.service_id;
-        const { service_id: _, ...input } = args;
-        return jsonResult(await client2.services.update(serviceId, input));
-      } catch (e) {
-        return errorResult(e);
-      }
+    handler: async (ctx, args) => {
+      const serviceId = args.service_id;
+      const { service_id: _omit, ...input } = args;
+      return ctx.client.services.update(serviceId, input);
     }
   },
   {
     name: "atelier_delete_service",
     description: "Deactivate a service listing on Atelier. The service will no longer appear in the marketplace.",
+    auth: "agent",
+    annotations: { title: "Deactivate service", destructiveHint: true, idempotentHint: true },
     inputSchema: {
       type: "object",
-      properties: {
-        service_id: { type: "string", description: "Service ID to deactivate" }
-      },
+      properties: { service_id: { type: "string", description: "Service ID to deactivate" } },
       required: ["service_id"]
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.services.delete(args.service_id));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
+    handler: async (ctx, args) => ctx.client.services.delete(args.service_id)
+  }
+];
+
+// ../mcp-core/src/tools/orders.ts
+var orderTools = [
   {
     name: "atelier_poll_orders",
     description: 'Check for new or active orders on Atelier. Use status filter to find orders needing action (e.g. "paid,in_progress" for orders to fulfill).',
+    auth: "agent",
+    annotations: { title: "Poll orders", readOnlyHint: true, idempotentHint: true },
     inputSchema: {
       type: "object",
       properties: {
@@ -635,19 +634,25 @@ var tools = [
       },
       required: ["agent_id"]
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.orders.listForAgent(args.agent_id, {
-          status: args.status
-        }));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx, args) => ctx.client.orders.listForAgent(args.agent_id, { status: args.status })
+  },
+  {
+    name: "atelier_get_order",
+    description: "Get details of a specific order on Atelier including review and deliverables.",
+    auth: "agent",
+    annotations: { title: "Get order", readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: "object",
+      properties: { order_id: { type: "string", description: "Order ID" } },
+      required: ["order_id"]
+    },
+    handler: async (ctx, args) => ctx.client.orders.get(args.order_id)
   },
   {
     name: "atelier_deliver_order",
     description: "Deliver completed work for an order on Atelier. Accepts a single deliverable or multiple via the deliverables array.",
+    auth: "agent",
+    annotations: { title: "Deliver order" },
     inputSchema: {
       type: "object",
       properties: {
@@ -669,26 +674,91 @@ var tools = [
       },
       required: ["order_id"]
     },
-    handler: async (client2, args) => {
-      try {
-        const orderId = args.order_id;
-        if (args.deliverables) {
-          return jsonResult(await client2.orders.deliver(orderId, {
-            deliverables: args.deliverables
-          }));
-        }
-        return jsonResult(await client2.orders.deliver(orderId, {
-          deliverable_url: args.deliverable_url,
-          deliverable_media_type: args.deliverable_media_type
-        }));
-      } catch (e) {
-        return errorResult(e);
+    handler: async (ctx, args) => {
+      const orderId = args.order_id;
+      if (args.deliverables) {
+        return ctx.client.orders.deliver(orderId, { deliverables: args.deliverables });
       }
+      return ctx.client.orders.deliver(orderId, {
+        deliverable_url: args.deliverable_url,
+        deliverable_media_type: args.deliverable_media_type
+      });
     }
+  },
+  {
+    name: "atelier_quote_order",
+    description: "Quote a price for a pending order on Atelier. Only the provider agent can quote. Order must be in pending_quote status.",
+    auth: "agent",
+    annotations: { title: "Quote order" },
+    inputSchema: {
+      type: "object",
+      properties: {
+        order_id: { type: "string", description: "Order ID to quote" },
+        price_usd: { type: "string", description: 'Quoted price in USD (e.g. "25.00")' }
+      },
+      required: ["order_id", "price_usd"]
+    },
+    handler: async (ctx, args) => ctx.client.orders.quote(args.order_id, { price_usd: args.price_usd })
+  },
+  {
+    name: "atelier_approve_order",
+    description: "Approve a delivered order on Atelier. This triggers payout to the provider agent. Only the client (ordering agent) can approve.",
+    auth: "agent",
+    annotations: { title: "Approve order" },
+    inputSchema: {
+      type: "object",
+      properties: { order_id: { type: "string", description: "Order ID to approve" } },
+      required: ["order_id"]
+    },
+    handler: async (ctx, args) => ctx.client.orders.approve(args.order_id)
+  },
+  {
+    name: "atelier_cancel_order",
+    description: "Cancel an order on Atelier. Can cancel orders in pending_quote, quoted, accepted, or paid status. Paid orders will be refunded.",
+    auth: "agent",
+    annotations: { title: "Cancel order", destructiveHint: true },
+    inputSchema: {
+      type: "object",
+      properties: { order_id: { type: "string", description: "Order ID to cancel" } },
+      required: ["order_id"]
+    },
+    handler: async (ctx, args) => ctx.client.orders.cancel(args.order_id)
+  },
+  {
+    name: "atelier_request_revision",
+    description: "Request a revision on a delivered order on Atelier. Provide feedback explaining what needs to change.",
+    auth: "agent",
+    annotations: { title: "Request revision" },
+    inputSchema: {
+      type: "object",
+      properties: {
+        order_id: { type: "string", description: "Order ID" },
+        feedback: { type: "string", description: "Feedback explaining what needs to change" }
+      },
+      required: ["order_id", "feedback"]
+    },
+    handler: async (ctx, args) => ctx.client.orders.requestRevision(args.order_id, args.feedback)
+  },
+  {
+    name: "atelier_dispute_order",
+    description: "Dispute a delivered order on Atelier. Use when the delivery does not meet the brief requirements.",
+    auth: "agent",
+    annotations: { title: "Dispute order", destructiveHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        order_id: { type: "string", description: "Order ID to dispute" },
+        reason: { type: "string", description: "Reason for the dispute" }
+      },
+      required: ["order_id", "reason"]
+    },
+    handler: async (ctx, args) => ctx.client.orders.dispute(args.order_id, args.reason)
   },
   {
     name: "atelier_send_message",
     description: "Send a message to the client on an active order on Atelier.",
+    auth: "agent",
+    annotations: { title: "Send order message" },
     inputSchema: {
       type: "object",
       properties: {
@@ -697,19 +767,29 @@ var tools = [
       },
       required: ["order_id", "content"]
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.orders.sendMessage(args.order_id, {
-          content: args.content
-        }));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx, args) => ctx.client.orders.sendMessage(args.order_id, { content: args.content })
   },
+  {
+    name: "atelier_get_messages",
+    description: "Get message history for an order on Atelier. Shows all messages between client and agent.",
+    auth: "agent",
+    annotations: { title: "Get order messages", readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: "object",
+      properties: { order_id: { type: "string", description: "Order ID" } },
+      required: ["order_id"]
+    },
+    handler: async (ctx, args) => ctx.client.orders.getMessages(args.order_id)
+  }
+];
+
+// ../mcp-core/src/tools/bounties.ts
+var bountyTools = [
   {
     name: "atelier_list_bounties",
     description: "Browse available bounties on Atelier. Bounties are tasks posted by humans with fixed budgets that agents can claim.",
+    auth: "none",
+    annotations: { title: "List bounties", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
@@ -720,23 +800,31 @@ var tools = [
         sort: { type: "string", description: "Sort order" }
       }
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.bounties.list({
-          status: args.status,
-          category: args.category,
-          min_budget: args.min_budget,
-          max_budget: args.max_budget,
-          sort: args.sort
-        }));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx, args) => ctx.client.bounties.list({
+      status: args.status,
+      category: args.category,
+      min_budget: args.min_budget,
+      max_budget: args.max_budget,
+      sort: args.sort
+    })
+  },
+  {
+    name: "atelier_get_bounty",
+    description: "Get details of a specific bounty on Atelier.",
+    auth: "none",
+    annotations: { title: "Get bounty", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    inputSchema: {
+      type: "object",
+      properties: { bounty_id: { type: "string", description: "Bounty ID" } },
+      required: ["bounty_id"]
+    },
+    handler: async (ctx, args) => ctx.client.bounties.get(args.bounty_id)
   },
   {
     name: "atelier_claim_bounty",
     description: "Claim an open bounty on Atelier. Your agent must be verified on Twitter before claiming.",
+    auth: "agent",
+    annotations: { title: "Claim bounty" },
     inputSchema: {
       type: "object",
       properties: {
@@ -745,162 +833,41 @@ var tools = [
       },
       required: ["bounty_id"]
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.bounties.claim(args.bounty_id, {
-          message: args.message
-        }));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx, args) => ctx.client.bounties.claim(args.bounty_id, { message: args.message })
   },
   {
-    name: "atelier_browse_agents",
-    description: "Browse AI agents on the Atelier marketplace. Search by name, filter by category or AI model.",
+    name: "atelier_withdraw_claim",
+    description: "Withdraw your claim from a bounty on Atelier.",
+    auth: "agent",
+    annotations: { title: "Withdraw bounty claim", destructiveHint: true },
     inputSchema: {
       type: "object",
-      properties: {
-        search: { type: "string", description: "Search by name or description" },
-        category: { type: "string", description: "Filter by capability category" },
-        model: { type: "string", description: "Filter by AI model" },
-        page: { type: "number", description: "Page number" },
-        limit: { type: "number", description: "Results per page" }
-      }
+      properties: { bounty_id: { type: "string", description: "Bounty ID to withdraw claim from" } },
+      required: ["bounty_id"]
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.agents.list(args));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_get_order",
-    description: "Get details of a specific order on Atelier including review and deliverables.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        order_id: { type: "string", description: "Order ID" }
-      },
-      required: ["order_id"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.orders.get(args.order_id));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_approve_order",
-    description: "Approve a delivered order on Atelier. This triggers payout to the provider agent. Only the client (ordering agent) can approve.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        order_id: { type: "string", description: "Order ID to approve" }
-      },
-      required: ["order_id"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.orders.approve(args.order_id));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_cancel_order",
-    description: "Cancel an order on Atelier. Can cancel orders in pending_quote, quoted, accepted, or paid status. Paid orders will be refunded.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        order_id: { type: "string", description: "Order ID to cancel" }
-      },
-      required: ["order_id"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.orders.cancel(args.order_id));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_request_revision",
-    description: "Request a revision on a delivered order on Atelier. Provide feedback explaining what needs to change.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        order_id: { type: "string", description: "Order ID" },
-        feedback: { type: "string", description: "Feedback explaining what needs to change" }
-      },
-      required: ["order_id", "feedback"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.orders.requestRevision(args.order_id, args.feedback));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_dispute_order",
-    description: "Dispute a delivered order on Atelier. Use when the delivery does not meet the brief requirements.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        order_id: { type: "string", description: "Order ID to dispute" },
-        reason: { type: "string", description: "Reason for the dispute" }
-      },
-      required: ["order_id", "reason"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.orders.dispute(args.order_id, args.reason));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_platform_stats",
-    description: "Get Atelier platform statistics: total agents, services, orders, bounties, and more.",
-    inputSchema: { type: "object", properties: {} },
-    handler: async (client2) => {
-      try {
-        return jsonResult(await client2.metrics.platform());
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
+    handler: async (ctx, args) => ctx.client.bounties.withdrawClaim(args.bounty_id)
+  }
+];
+
+// ../mcp-core/src/tools/tokens.ts
+var tokenTools = [
   {
     name: "atelier_get_token",
     description: "Get token information for an agent on Atelier. Shows mint address, name, symbol, and launch mode.",
+    auth: "none",
+    annotations: { title: "Get agent token", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
-      properties: {
-        agent_id: { type: "string", description: "Agent ID to get token info for" }
-      },
+      properties: { agent_id: { type: "string", description: "Agent ID to get token info for" } },
       required: ["agent_id"]
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.agents.getToken(args.agent_id));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx, args) => ctx.client.agents.getToken(args.agent_id)
   },
   {
     name: "atelier_register_token",
     description: "Register an existing token for your agent on Atelier. Supports PumpFun tokens (with tx_hash) and BYOT (Bring Your Own Token) mode.",
+    auth: "agent",
+    annotations: { title: "Register token" },
     inputSchema: {
       type: "object",
       properties: {
@@ -915,19 +882,21 @@ var tools = [
       },
       required: ["agent_id", "token_mint", "token_name", "token_symbol", "token_mode", "token_creator_wallet"]
     },
-    handler: async (client2, args) => {
-      try {
-        const agentId = args.agent_id;
-        const { agent_id: _, ...input } = args;
-        return jsonResult(await client2.agents.registerToken(agentId, input));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx, args) => ctx.client.agents.registerToken(args.agent_id, {
+      token_mint: args.token_mint,
+      token_name: args.token_name,
+      token_symbol: args.token_symbol,
+      token_mode: args.token_mode,
+      token_creator_wallet: args.token_creator_wallet,
+      token_image_url: args.token_image_url,
+      token_tx_hash: args.token_tx_hash
+    })
   },
   {
     name: "atelier_launch_token",
     description: "Launch a new token on PumpFun for your agent on Atelier. Agent must have an avatar_url set. Returns token details after launch.",
+    auth: "agent",
+    annotations: { title: "Launch token" },
     inputSchema: {
       type: "object",
       properties: {
@@ -936,153 +905,50 @@ var tools = [
       },
       required: ["agent_id", "symbol"]
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.agents.launchToken(args.agent_id, {
-          symbol: args.symbol
-        }));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
+    handler: async (ctx, args) => ctx.client.agents.launchToken(args.agent_id, { symbol: args.symbol })
+  }
+];
+
+// ../mcp-core/src/tools/discovery.ts
+var discoveryTools = [
   {
-    name: "atelier_manage_portfolio",
-    description: "Hide or unhide items from your agent portfolio on Atelier.",
+    name: "atelier_browse_agents",
+    description: "Browse AI agents on the Atelier marketplace. Search by name, filter by category or AI model.",
+    auth: "none",
+    annotations: { title: "Browse agents", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        agent_id: { type: "string", description: "Your agent ID" },
-        action: { type: "string", description: "Action: hide or unhide" },
-        source_type: { type: "string", description: "Source type: order or deliverable" },
-        source_id: { type: "string", description: "ID of the order or deliverable" }
-      },
-      required: ["agent_id", "action", "source_type", "source_id"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.agents.managePortfolio(args.agent_id, {
-          action: args.action,
-          source_type: args.source_type,
-          source_id: args.source_id
-        }));
-      } catch (e) {
-        return errorResult(e);
+        search: { type: "string", description: "Search by name or description" },
+        category: { type: "string", description: "Filter by capability category" },
+        model: { type: "string", description: "Filter by AI model" },
+        page: { type: "number", description: "Page number" },
+        limit: { type: "number", description: "Results per page" }
       }
-    }
+    },
+    handler: async (ctx, args) => ctx.client.agents.list(args)
   },
   {
-    name: "atelier_get_bounty",
-    description: "Get details of a specific bounty on Atelier.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        bounty_id: { type: "string", description: "Bounty ID" }
-      },
-      required: ["bounty_id"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.bounties.get(args.bounty_id));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_withdraw_claim",
-    description: "Withdraw your claim from a bounty on Atelier.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        bounty_id: { type: "string", description: "Bounty ID to withdraw claim from" }
-      },
-      required: ["bounty_id"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.bounties.withdrawClaim(args.bounty_id));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_quote_order",
-    description: "Quote a price for a pending order on Atelier. Only the provider agent can quote. Order must be in pending_quote status.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        order_id: { type: "string", description: "Order ID to quote" },
-        price_usd: { type: "string", description: 'Quoted price in USD (e.g. "25.00")' }
-      },
-      required: ["order_id", "price_usd"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.orders.quote(args.order_id, {
-          price_usd: args.price_usd
-        }));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_get_messages",
-    description: "Get message history for an order on Atelier. Shows all messages between client and agent.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        order_id: { type: "string", description: "Order ID" }
-      },
-      required: ["order_id"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.orders.getMessages(args.order_id));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_get_market_data",
-    description: "Get token market data (price, market cap) for Solana tokens. Queries DexScreener and PumpFun.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        mints: {
-          type: "array",
-          items: { type: "string" },
-          description: "Array of Solana token mint addresses (max 100)"
-        }
-      },
-      required: ["mints"]
-    },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.market.getData(args.mints));
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
-  },
-  {
-    name: "atelier_list_models",
-    description: "List available AI models on Atelier that can be used for service provider configuration.",
+    name: "atelier_featured_agents",
+    description: "Get featured agents on the Atelier marketplace.",
+    auth: "none",
+    annotations: { title: "Featured agents", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: { type: "object", properties: {} },
-    handler: async (client2) => {
-      try {
-        return jsonResult(await client2.models.list());
-      } catch (e) {
-        return errorResult(e);
-      }
-    }
+    handler: async (ctx) => ctx.client.agents.featured()
+  },
+  {
+    name: "atelier_platform_stats",
+    description: "Get Atelier platform statistics: total agents, services, orders, bounties, and more.",
+    auth: "none",
+    annotations: { title: "Platform stats", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    inputSchema: { type: "object", properties: {} },
+    handler: async (ctx) => ctx.client.metrics.platform()
   },
   {
     name: "atelier_activity_feed",
     description: "Get the platform activity feed on Atelier. Shows recent registrations, orders, services, reviews, and token launches.",
+    auth: "none",
+    annotations: { title: "Activity feed", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
@@ -1090,55 +956,311 @@ var tools = [
         limit: { type: "number", description: "Results per page (1-100, default: 50)" }
       }
     },
-    handler: async (client2, args) => {
-      try {
-        return jsonResult(await client2.metrics.activity({
-          limit: args.limit
-        }));
-      } catch (e) {
-        return errorResult(e);
+    handler: async (ctx, args) => ctx.client.metrics.activity({ limit: args.limit })
+  },
+  {
+    name: "atelier_get_market_data",
+    description: "Get token market data (price, market cap) for Solana tokens. Queries DexScreener and PumpFun.",
+    auth: "none",
+    annotations: { title: "Token market data", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        mints: { type: "array", items: { type: "string" }, description: "Array of Solana token mint addresses (max 100)" }
+      },
+      required: ["mints"]
+    },
+    handler: async (ctx, args) => ctx.client.market.getData(args.mints)
+  },
+  {
+    name: "atelier_list_models",
+    description: "List available AI models on Atelier that can be used for service provider configuration.",
+    auth: "none",
+    annotations: { title: "List models", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    inputSchema: { type: "object", properties: {} },
+    handler: async (ctx) => ctx.client.models.list()
+  }
+];
+
+// ../mcp-core/src/tools/http.ts
+async function fetchJson(url, init = {}) {
+  const res = await fetch(url, init);
+  const text = await res.text();
+  let body = text;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+  }
+  return { status: res.status, ok: res.ok, body };
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function authHeaders(ctx) {
+  return ctx.apiKey ? { Authorization: `Bearer ${ctx.apiKey}` } : {};
+}
+function unwrap(outcome) {
+  if (isRecord(outcome.body)) {
+    if (outcome.body.success === false) {
+      throw new Error(typeof outcome.body.error === "string" ? outcome.body.error : `HTTP ${outcome.status}`);
+    }
+    if ("data" in outcome.body) return outcome.body.data;
+  }
+  return outcome.body;
+}
+
+// ../mcp-core/src/tools/x402.ts
+var x402Tools = [
+  {
+    name: "atelier_search_agents",
+    description: "Search Atelier agent services available for hire. Returns matching services with pricing and the discover/pay URLs you use to hire them via x402 USDC payment.",
+    auth: "none",
+    annotations: { title: "Search services", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Substring to match against service title, agent name, or category." },
+        category: { type: "string", description: "Filter by service category (image_gen, video_gen, ugc, coding, ...)." },
+        limit: { type: "number", description: "Maximum number of results (1-50, default 20)." }
       }
+    },
+    handler: async (ctx, args) => {
+      const limit = Math.min(Math.max(Number(args.limit) || 20, 1), 50);
+      const params = new URLSearchParams({ pricing: "onetime", sortBy: "popular", limit: String(limit) });
+      if (typeof args.query === "string" && args.query.trim()) params.set("search", args.query.trim());
+      if (typeof args.category === "string" && args.category.trim()) params.set("category", args.category.trim());
+      const outcome = await fetchJson(`${ctx.baseUrl}/api/services?${params.toString()}`);
+      const data = isRecord(outcome.body) && Array.isArray(outcome.body.data) ? outcome.body.data : [];
+      return data.filter(isRecord).filter((s) => Number(s.price_usd) > 0).map((s) => ({
+        service_id: s.id,
+        title: s.title,
+        category: s.category,
+        agent_name: s.agent_name,
+        agent_slug: s.agent_slug,
+        price_usd: s.price_usd,
+        price_type: s.price_type,
+        discover_url: `${ctx.baseUrl}/api/x402/discover/${String(s.id)}`,
+        pay_url: `${ctx.baseUrl}/api/x402/pay?service_id=${String(s.id)}`
+      }));
     }
   },
   {
-    name: "atelier_featured_agents",
-    description: "Get featured agents on the Atelier marketplace.",
-    inputSchema: { type: "object", properties: {} },
-    handler: async (client2) => {
-      try {
-        return jsonResult(await client2.agents.featured());
-      } catch (e) {
-        return errorResult(e);
+    name: "atelier_get_payment_requirements",
+    description: "Get the x402 USDC payment requirements (the 402 challenge) for an Atelier service before hiring: amount, asset, network, and payTo address. Then pay on-chain and call atelier_submit_payment with the tx signature.",
+    auth: "none",
+    annotations: { title: "Get payment requirements", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        service_id: { type: "string", description: "The service_id to get payment requirements for." },
+        chain: { type: "string", description: "Payment chain: 'solana' (default) or 'base'." }
+      },
+      required: ["service_id"]
+    },
+    handler: async (ctx, args) => {
+      const serviceId = String(args.service_id ?? "").trim();
+      if (!serviceId) throw new Error("Missing required parameter: service_id");
+      const chain = typeof args.chain === "string" ? args.chain : "solana";
+      const outcome = await fetchJson(
+        `${ctx.baseUrl}/api/x402/discover/${encodeURIComponent(serviceId)}?chain=${encodeURIComponent(chain)}`,
+        { headers: { Accept: "application/json" } }
+      );
+      return { http_status: outcome.status, ...isRecord(outcome.body) ? outcome.body : { challenge: outcome.body } };
+    }
+  },
+  {
+    name: "atelier_submit_payment",
+    description: "Finalize hiring an Atelier agent after paying on-chain. Submit the x402 USDC payment proof (transaction signature/hash) plus your brief; this creates the paid order, settles the provider payout, and returns the order_id + status_url. Get the amount/address first via atelier_get_payment_requirements.",
+    auth: "none",
+    annotations: { title: "Submit payment / finalize hire", openWorldHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        service_id: { type: "string", description: "The service_id you are paying for." },
+        brief: { type: "string", description: "Description of the work you want the agent to perform." },
+        tx_signature: { type: "string", description: "On-chain payment proof: Solana tx signature or Base 0x tx hash." },
+        chain: { type: "string", description: "Payment network: 'solana' (-> solana-mainnet) or 'base' (-> base-mainnet). Auto-detected if omitted." }
+      },
+      required: ["service_id", "brief", "tx_signature"]
+    },
+    handler: async (ctx, args) => {
+      const serviceId = String(args.service_id ?? "").trim();
+      const brief = String(args.brief ?? "").trim();
+      const txSignature = String(args.tx_signature ?? "").trim();
+      if (!serviceId) throw new Error("Missing required parameter: service_id");
+      if (!brief) throw new Error("Missing required parameter: brief");
+      if (!txSignature) throw new Error("Missing required parameter: tx_signature");
+      const headers = {
+        "Content-Type": "application/json",
+        "X-PAYMENT": txSignature,
+        "X-Atelier-Brief": brief
+      };
+      if (typeof args.chain === "string" && args.chain) {
+        headers["X-Payment-Network"] = args.chain === "base" ? "base-mainnet" : "solana-mainnet";
       }
+      if (ctx.apiKey) headers["Authorization"] = `Bearer ${ctx.apiKey}`;
+      const outcome = await fetchJson(`${ctx.baseUrl}/api/x402/pay?service_id=${encodeURIComponent(serviceId)}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ service_id: serviceId, brief })
+      });
+      return { http_status: outcome.status, ...isRecord(outcome.body) ? outcome.body : { response: outcome.body } };
     }
   }
 ];
 
+// ../mcp-core/src/tools/earn.ts
+var earnTools = [
+  {
+    name: "atelier_earn_markets",
+    description: "List Atelier Earn venues/markets where idle USDC earns yield (Parquet LP, lending, ...). Returns each market with live APR, TVL, whether it is depositable, and the `treasury_wallet` you send USDC to when depositing. Call this first before depositing.",
+    auth: "none",
+    annotations: { title: "Earn markets", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    inputSchema: { type: "object", properties: {} },
+    handler: async (ctx) => unwrap(await fetchJson(`${ctx.baseUrl}/api/earn/parquet/markets`))
+  },
+  {
+    name: "atelier_earn_positions",
+    description: "List your active Atelier Earn positions with live USD value, shares, and principal.",
+    auth: "agent",
+    annotations: { title: "Earn positions", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
+    inputSchema: { type: "object", properties: {} },
+    handler: async (ctx) => unwrap(await fetchJson(`${ctx.baseUrl}/api/earn/parquet/positions`, { headers: authHeaders(ctx) }))
+  },
+  {
+    name: "atelier_earn_deposit",
+    description: "Deposit USDC into an Atelier Earn market to earn yield (push model). STEPS: (1) call atelier_earn_markets to get the `treasury_wallet` and the `key`/`market` you want; (2) send the USDC on Solana from your own wallet to that treasury_wallet; (3) call this with amount_usd + the transfer signature as incoming_tx_hash. The server verifies the transfer, deploys it, and mints your shares.",
+    auth: "agent",
+    annotations: { title: "Earn deposit", openWorldHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        amount_usd: { type: "string", description: 'USD amount deposited (must equal the USDC you sent), e.g. "100.00".' },
+        incoming_tx_hash: { type: "string", description: "Solana signature of your USDC transfer to the treasury_wallet." },
+        key: { type: "string", description: 'Market key from earn_markets (e.g. "parquet:usdc" or "solend:usdc"). Optional; defaults to parquet.' },
+        venue: { type: "string", description: 'Venue id (alternative to key), e.g. "parquet". Optional.' },
+        market: { type: "string", description: "Market id within the venue (alternative to key). Optional." },
+        slippage_bps: { type: "number", description: "Max slippage in basis points (optional)." }
+      },
+      required: ["amount_usd", "incoming_tx_hash"]
+    },
+    handler: async (ctx, args) => unwrap(
+      await fetchJson(`${ctx.baseUrl}/api/earn/parquet/deposit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(ctx) },
+        body: JSON.stringify({
+          amount_usd: args.amount_usd,
+          incoming_tx_hash: args.incoming_tx_hash,
+          key: args.key,
+          venue: args.venue,
+          market: args.market,
+          slippage_bps: args.slippage_bps
+        })
+      })
+    )
+  },
+  {
+    name: "atelier_earn_withdraw",
+    description: "Withdraw from an Atelier Earn position by burning vault shares. Pass `shares` (integer string from earn_positions) or `all: true`. USDC is sent to destination_wallet, or falls back to your agent payout/owner wallet. If pool liquidity is short the withdrawal is queued and settles as liquidity arrives.",
+    auth: "agent",
+    annotations: { title: "Earn withdraw", openWorldHint: true },
+    inputSchema: {
+      type: "object",
+      properties: {
+        shares: { type: "string", description: "Integer share amount to burn (from earn_positions). Omit if using all." },
+        all: { type: "boolean", description: "Withdraw the entire position. Overrides shares." },
+        key: { type: "string", description: "Position market key (the pool_market from earn_positions). Optional; defaults to parquet." },
+        venue: { type: "string", description: "Venue id (alternative to key). Optional." },
+        market: { type: "string", description: "Market id (alternative to key). Optional." },
+        destination_wallet: { type: "string", description: "Solana address to receive USDC. Optional; defaults to your payout/owner wallet." },
+        slippage_bps: { type: "number", description: "Max slippage in basis points (optional)." }
+      }
+    },
+    handler: async (ctx, args) => unwrap(
+      await fetchJson(`${ctx.baseUrl}/api/earn/parquet/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(ctx) },
+        body: JSON.stringify({
+          shares: args.shares,
+          all: args.all,
+          key: args.key,
+          venue: args.venue,
+          market: args.market,
+          destination_wallet: args.destination_wallet,
+          slippage_bps: args.slippage_bps
+        })
+      })
+    )
+  }
+];
+
+// ../mcp-core/src/tools/index.ts
+var allTools = [
+  ...agentTools,
+  ...serviceTools,
+  ...orderTools,
+  ...bountyTools,
+  ...tokenTools,
+  ...discoveryTools,
+  ...x402Tools,
+  ...earnTools
+];
+
+// ../mcp-core/src/result.ts
+function jsonResult(data) {
+  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+}
+function errorResult(error) {
+  const message = error instanceof AtelierError ? `${error.name}: ${error.message} (${error.status})` : error instanceof Error ? error.message : String(error);
+  return { content: [{ type: "text", text: message }], isError: true };
+}
+
+// ../mcp-core/src/registry.ts
+function registerTools(server2, makeContext) {
+  const srv = server2.server;
+  srv.registerCapabilities({ tools: {} });
+  srv.setRequestHandler(import_types2.ListToolsRequestSchema, async () => ({
+    tools: allTools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: t.inputSchema,
+      annotations: t.annotations
+    }))
+  }));
+  srv.setRequestHandler(import_types2.CallToolRequestSchema, async (request, extra) => {
+    const tool = allTools.find((t) => t.name === request.params.name);
+    if (!tool) {
+      return errorResult(`Unknown tool: ${request.params.name}`);
+    }
+    const ctx = await makeContext(extra.authInfo);
+    if (tool.auth === "agent" && ctx.caller.kind === "public") {
+      return errorResult(
+        "This action requires authentication. Connect with an Atelier API key (Authorization: Bearer atelier_...) or sign in via OAuth."
+      );
+    }
+    try {
+      const data = await tool.handler(
+        ctx,
+        request.params.arguments ?? {}
+      );
+      return jsonResult(data);
+    } catch (e) {
+      return errorResult(e);
+    }
+  });
+}
+
 // src/index.ts
 var apiKey = process.env.ATELIER_API_KEY;
-var baseUrl = process.env.ATELIER_BASE_URL;
+var baseUrl = process.env.ATELIER_BASE_URL || "https://api.useatelier.ai";
 var client = new AtelierClient({ apiKey, baseUrl });
-var server = new import_server.Server(
-  { name: "atelier", version: "0.1.0" },
-  { capabilities: { tools: {} } }
-);
-server.setRequestHandler(import_types.ListToolsRequestSchema, async () => ({
-  tools: tools.map((t) => ({
-    name: t.name,
-    description: t.description,
-    inputSchema: t.inputSchema
-  }))
+var server = new import_mcp.McpServer({ name: "atelier", version: "0.5.0" });
+registerTools(server, () => ({
+  client,
+  caller: { kind: "agent" },
+  baseUrl,
+  apiKey
 }));
-server.setRequestHandler(import_types.CallToolRequestSchema, async (request) => {
-  const tool = tools.find((t) => t.name === request.params.name);
-  if (!tool) {
-    return {
-      content: [{ type: "text", text: `Unknown tool: ${request.params.name}` }],
-      isError: true
-    };
-  }
-  return tool.handler(client, request.params.arguments ?? {});
-});
 async function main() {
   const transport = new import_stdio.StdioServerTransport();
   await server.connect(transport);

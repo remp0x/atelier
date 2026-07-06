@@ -13,6 +13,7 @@ import {
   type WalletChain,
 } from '@/lib/privy-server-wallets';
 import { validateExternalUrl } from '@/lib/url-validation';
+import { agentModerationState, remoderateAgent, type AgentModerationState } from '@/lib/agent-moderation';
 
 const VALID_CAPABILITIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const BASE58_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -98,6 +99,7 @@ export async function GET(request: NextRequest) {
         },
         privy_user_id: agent.privy_user_id,
         webhook_secret: agent.webhook_secret,
+        moderation: agentModerationState(agent),
         created_at: agent.created_at,
       },
     });
@@ -271,6 +273,14 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Agent not found' }, { status: 404 });
     }
 
+    // Content edits go back through moderation: a clean verdict clears a
+    // 'review' flag on the spot, so flagged agents can fix their listing and
+    // be relisted without waiting on an admin.
+    let moderation: AgentModerationState | undefined;
+    if (name !== undefined || description !== undefined) {
+      moderation = await remoderateAgent(updated, updated.name, updated.description ?? '');
+    }
+
     const maskedKey = updated.api_key ? `atelier_...${updated.api_key.slice(-4)}` : '—';
 
     return NextResponse.json({
@@ -297,6 +307,7 @@ export async function PATCH(request: NextRequest) {
         base_payout_configured: !!updated.payout_address_base,
         privy_user_id: updated.privy_user_id,
         webhook_secret: updated.webhook_secret,
+        moderation: moderation ?? agentModerationState(updated),
         created_at: updated.created_at,
       },
     });

@@ -30,6 +30,7 @@ function RiskBadge({ risk }: { risk: 'lower' | 'higher' }) {
 const PRODUCT_PITCH: Record<string, string> = {
   lending: 'Supply USDC to money markets (Solend, Kamino, Meteora) and earn interest as borrowers pay. Steadier yield, lower volatility.',
   liquidity_provision: 'Provide liquidity to perpetuals pools and collect a share of every trading fee. Higher fees, principal at risk.',
+  agent_trading: 'Let your agent trade DeFi autonomously — swaps, snipes and arbitrage across DEXes, 24/7. You set the strategy and risk; it executes.',
 };
 
 const PRODUCT_ICON: Record<string, React.ReactNode> = {
@@ -41,6 +42,12 @@ const PRODUCT_ICON: Record<string, React.ReactNode> = {
   liquidity_provision: (
     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
+    </svg>
+  ),
+  agent_trading: (
+    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 8.5A1.5 1.5 0 018.5 7h7A1.5 1.5 0 0117 8.5v7a1.5 1.5 0 01-1.5 1.5h-7A1.5 1.5 0 017 15.5v-7z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 4v3M12 4v3M15 4v3M9 17v3M12 17v3M15 17v3M4 9h3M4 12h3M4 15h3M17 9h3M17 12h3M17 15h3" />
     </svg>
   ),
 };
@@ -64,6 +71,7 @@ function ProductCard({
     (p) => marketKeys.includes(p.pool_market) && p.shares !== '0',
   );
 
+  const isAgentTrading = product.kind === 'agent_trading';
   const tvl = microToUsd(product.total_tvl_micro);
   const aprDisplay =
     product.headline_apr_pct !== null ? formatAprPct(product.headline_apr_pct) : 'Variable';
@@ -74,6 +82,8 @@ function ProductCard({
       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
     </svg>
   );
+
+  const agentCount = product.agentCount ?? 0;
 
   return (
     <motion.div
@@ -86,7 +96,7 @@ function ProductCard({
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-atelier/10 border border-atelier/20 text-atelier shrink-0">
-              {PRODUCT_ICON[product.id] ?? PRODUCT_ICON['liquidity_provision']}
+              {PRODUCT_ICON[product.kind] ?? PRODUCT_ICON['liquidity_provision']}
             </span>
             <div>
               <div className="flex items-center gap-2 mb-0.5">
@@ -97,22 +107,34 @@ function ProductCard({
               </div>
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <p className={`font-mono text-[22px] font-semibold tabular-nums leading-none ${aprPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
-              {aprDisplay}
-            </p>
-            <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 mt-0.5">{product.apr_label}</p>
-          </div>
+          {isAgentTrading ? (
+            <span className="inline-flex items-center h-6 px-2.5 rounded-full bg-atelier/10 border border-atelier/20 font-mono text-[10px] text-atelier shrink-0">
+              Autonomous
+            </span>
+          ) : (
+            <div className="text-right shrink-0">
+              <p className={`font-mono text-[22px] font-semibold tabular-nums leading-none ${aprPositive ? 'text-emerald-500 dark:text-emerald-400' : 'text-gray-400 dark:text-neutral-500'}`}>
+                {aprDisplay}
+              </p>
+              <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 mt-0.5">{product.apr_label}</p>
+            </div>
+          )}
         </div>
 
         <p className="text-[13px] text-gray-500 dark:text-neutral-400 leading-relaxed mb-4">
-          {PRODUCT_PITCH[product.id] ?? ''}
+          {PRODUCT_PITCH[product.kind] ?? ''}
         </p>
 
         <div className="flex items-center justify-between">
-          <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600 tabular-nums">
-            {product.markets.length} market{product.markets.length === 1 ? '' : 's'} &middot; {compactUsd(tvl)} pooled
-          </p>
+          {isAgentTrading ? (
+            <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600 tabular-nums">
+              {agentCount} agent{agentCount === 1 ? '' : 's'} ready
+            </p>
+          ) : (
+            <p className="font-mono text-[11px] text-gray-400 dark:text-neutral-600 tabular-nums">
+              {product.markets.length} market{product.markets.length === 1 ? '' : 's'} &middot; {compactUsd(tvl)} pooled
+            </p>
+          )}
           <button
             type="button"
             onClick={onSelect}

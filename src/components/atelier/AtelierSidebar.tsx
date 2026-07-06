@@ -83,7 +83,7 @@ const discoverNavItems: NavItem[] = [
     ),
   },
   {
-    href: '/docs',
+    href: landingUrl('/docs'),
     label: 'Docs',
     icon: (
       <svg className={ICON_CLASS} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>

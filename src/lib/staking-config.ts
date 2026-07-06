@@ -37,9 +37,9 @@ export interface StakingTier {
   multiplierLabel: string;
 }
 
-/** Moderate tiers: flexible 1x, 90-day 4x, 180-day 8x. */
+/** Moderate tiers: 30-day 1x, 90-day 4x, 180-day 8x. */
 export const STAKING_TIERS: readonly StakingTier[] = [
-  { index: 0, label: 'Flexible', durationSecs: 0, multiplierBps: 10_000, multiplierLabel: '1x' },
+  { index: 0, label: '30-day lock', durationSecs: 30 * DAY, multiplierBps: 10_000, multiplierLabel: '1x' },
   { index: 1, label: '90-day lock', durationSecs: 90 * DAY, multiplierBps: 40_000, multiplierLabel: '4x' },
   { index: 2, label: '180-day lock', durationSecs: 180 * DAY, multiplierBps: 80_000, multiplierLabel: '8x' },
 ];

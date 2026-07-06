@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
 import { useUsdcBalances } from '@/hooks/use-usdc-balances';
@@ -10,12 +10,14 @@ import { EarnHero } from '@/components/atelier/earn/EarnHero';
 import { StrategyMenu } from '@/components/atelier/earn/StrategyMenu';
 import { MarketGrid } from '@/components/atelier/earn/MarketGrid';
 import { LendingMarketCard } from '@/components/atelier/earn/LendingMarketCard';
+import { AgentDefiPanel } from '@/components/atelier/earn/AgentDefiPanel';
 import type {
   ProductData,
   PoolData,
   ParquetMarketEntry,
   SolendMarketEntry,
   Position,
+  AgentDefiAgent,
 } from '@/components/atelier/earn/types';
 
 interface MarketsApiResponse {
@@ -38,6 +40,8 @@ export function EarnPageClient() {
 
   const [positions, setPositions] = useState<Position[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
+
+  const [agentDefiAgents, setAgentDefiAgents] = useState<AgentDefiAgent[]>([]);
 
   const [activeProductId, setActiveProductId] = useState<string | null>(null);
 
@@ -94,6 +98,26 @@ export function EarnPageClient() {
     }
   }, [authenticated]);
 
+  const fetchAgentDefi = useCallback(async () => {
+    if (!authenticated) return;
+    try {
+      const token = await getPrivyAccessToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch('/api/earn/agent-defi/agents', { headers });
+      if (!res.ok) return;
+      const json = await res.json() as {
+        success: boolean;
+        data?: { enabled: boolean; connected: boolean; agents: AgentDefiAgent[] };
+      };
+      if (json.success && json.data?.enabled && json.data.agents.length > 0) {
+        setAgentDefiAgents(json.data.agents);
+      }
+    } catch {
+      // not fatal; feature is behind a flag
+    }
+  }, [authenticated]);
+
   const refreshAll = useCallback(async (market: string) => {
     await Promise.all([fetchPool(market), fetchPositions()]);
   }, [fetchPool, fetchPositions]);
@@ -107,6 +131,10 @@ export function EarnPageClient() {
   }, [fetchPositions]);
 
   useEffect(() => {
+    void fetchAgentDefi();
+  }, [fetchAgentDefi]);
+
+  useEffect(() => {
     const id = setInterval(() => {
       if (document.visibilityState === 'hidden') return;
       void fetchMarkets(true);
@@ -114,6 +142,24 @@ export function EarnPageClient() {
     }, AUTO_REFRESH_MS);
     return () => clearInterval(id);
   }, [fetchMarkets, fetchPositions]);
+
+  const displayProducts = useMemo((): ProductData[] => {
+    if (agentDefiAgents.length === 0) return products;
+    return [
+      ...products,
+      {
+        id: 'agent_defi',
+        kind: 'agent_trading',
+        label: 'Autonomous Trading',
+        risk: 'higher',
+        apr_label: 'Autonomous',
+        headline_apr_pct: null,
+        total_tvl_micro: '0',
+        markets: [],
+        agentCount: agentDefiAgents.length,
+      },
+    ];
+  }, [products, agentDefiAgents]);
 
   if (!ready) {
     return (
@@ -123,7 +169,7 @@ export function EarnPageClient() {
     );
   }
 
-  const activeProduct = products.find((p) => p.id === activeProductId) ?? null;
+  const activeProduct = displayProducts.find((p) => p.id === activeProductId) ?? null;
 
   const parquetProduct = activeProduct?.kind === 'liquidity_provision' ? activeProduct : null;
   const solendProduct = activeProduct?.kind === 'lending' ? activeProduct : null;
@@ -174,7 +220,7 @@ export function EarnPageClient() {
               transition={{ duration: 0.2 }}
             >
               <StrategyMenu
-                products={products}
+                products={displayProducts}
                 positions={positions}
                 onSelect={(id) => setActiveProductId(id)}
               />
@@ -204,6 +250,7 @@ export function EarnPageClient() {
                 onBack={() => setActiveProductId(null)}
                 onPoolRefresh={refreshAll}
                 onFetchPool={fetchPool}
+                agentDefiAgents={agentDefiAgents}
               />
             </motion.div>
           )}
@@ -230,6 +277,7 @@ interface ProductViewProps {
   onBack: () => void;
   onPoolRefresh: (market: string) => Promise<void>;
   onFetchPool: (marketId: string) => Promise<void>;
+  agentDefiAgents: AgentDefiAgent[];
 }
 
 function ProductView({
@@ -249,6 +297,7 @@ function ProductView({
   onBack,
   onPoolRefresh,
   onFetchPool,
+  agentDefiAgents,
 }: ProductViewProps) {
   return (
     <div className="space-y-5">
@@ -336,6 +385,25 @@ function ProductView({
             <p className="font-mono text-[10px] text-gray-400 dark:text-neutral-500">
               Lending markets powered by Solend, Kamino &amp; Meteora.
             </p>
+          </div>
+        </>
+      )}
+
+      {product.kind === 'agent_trading' && (
+        <>
+          <AgentDefiPanel agents={agentDefiAgents} />
+          <div className="pt-2">
+            <a
+              href="https://clawpump.tech"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-mono text-[10px] text-gray-400 dark:text-neutral-500 hover:text-atelier transition-colors"
+            >
+              Autonomous trading powered by ClawPump
+              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+              </svg>
+            </a>
           </div>
         </>
       )}

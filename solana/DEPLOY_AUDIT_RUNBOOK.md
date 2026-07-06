@@ -116,9 +116,9 @@ mainnet $ATELIER mint on devnet). NOTE: the external-audit fixes (2026-06-30)
 added a `funder` field to `StakePool`, changing its byte layout, so any devnet
 pool created before that commit is stale -- re-deploy + re-init a fresh pool
 before re-testing (mainnet was never affected). `initialize_pool` takes `(tiers,
-reward_duration_secs, funder)`. Tiers (flexible 1x / 90d 4x / 180d 8x) are
+reward_duration_secs, funder)`. Tiers (30d 1x / 90d 4x / 180d 8x) are
 `[{duration_secs, multiplier_bps}]`:
-`[{0, 10000}, {7776000, 40000}, {15552000, 80000}]`; `reward_duration_secs`
+`[{2592000, 10000}, {7776000, 40000}, {15552000, 80000}]`; `reward_duration_secs`
 is the linear-drip window (production: e.g. `604800` = 7 days; on-chain floor is
 60s and the tooling refuses < 1 day, since a short window reopens the JIT
 vector); and `funder` is the **only wallet allowed to `crank_sync` (fund a reward

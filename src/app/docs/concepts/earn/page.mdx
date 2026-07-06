@@ -8,26 +8,31 @@ export const metadata = {
 <StatusBadge status="Live" />
 
 Atelier Earn puts idle USDC to work on-chain. It's open to everyone at `/earn`, not just agents --
-anyone can deposit USDC into a venue and earn a variable, on-chain yield. There are two venues
+anyone can deposit USDC into a venue and earn a variable, on-chain yield. There are two strategies
 today, surfaced lower-risk first.
 
-## Two venues
+## Two strategies
 
-### Lending (Solend / Save)
+### Lending (Solend, Kamino & Meteora)
 
-Supply USDC to the Solend main-pool USDC reserve and earn the reserve's variable Supply APY.
-Your counterparty is the pool of over-collateralized borrowers on Solend -- this is the
-lower-risk venue: your principal isn't exposed to trading outcomes, though smart-contract and
-liquidity risk on the underlying protocol still apply. No deposit or withdraw fee.
+Supply USDC to a lending market's USDC reserve and earn its variable Supply APY. The Lending
+strategy aggregates three venues -- Solend (Save), Kamino, and Meteora -- each surfaced as its
+own market. Your counterparty is the pool of over-collateralized borrowers on the underlying
+protocol -- this is the lower-risk strategy: your principal isn't exposed to trading outcomes,
+though smart-contract and liquidity risk on the underlying protocol still apply. No deposit or
+withdraw fee.
 
 ### Liquidity Provision (Parquet)
 
 [Parquet](https://parquet.exchange) is a non-custodial Solana perps DEX offering up to 200x
 leverage on US stocks, ETFs, and crypto. When you deposit USDC into a category pool on Earn, you
 become the counterparty to that category's leveraged traders and earn a pro-rata share of trading
-fees -- LPs earn **60% of the pool's trading fees**. Earn's Parquet pools currently span roughly
-24 US stock and ETF markets (AAPL, COIN, SPY, and others), all USDC-settled and open 24/7.
-Withdraw anytime, with no deposit or withdraw fee.
+fees -- an estimated **60% share of the pool's trading fees** (the figure used for the displayed
+APR; the exact unified-pool split is set by Parquet). Earn surfaces two Parquet category pools:
+US Equities, spanning roughly 24 US stock and ETF markets (AAPL, COIN, SPY, and others), and
+Crypto, backing BTC, ETH, and SOL perps -- all USDC-settled and open 24/7. Withdraw anytime, with
+no deposit or withdraw fee; if the pool is short on free liquidity, the withdrawal is queued and
+settles as liquidity arrives.
 
 <Callout variant="warning" title="Principal is at risk in the LP venue">
 Liquidity Provision is not a savings account. Your deposit is the counterparty to leveraged
@@ -38,21 +43,29 @@ value.
 
 ## Yield is variable, never guaranteed
 
-Neither venue pays a fixed rate. Solend's Supply APY floats with utilization of the underlying
-reserve. Parquet's rate is expressed as `fee_apr_pct`: the pool's trailing-24h trading fees,
-annualized against its current TVL. If a pool saw no trading volume in the last 24 hours,
-`fee_apr_pct` is `0.00%`. There is no minimum or guaranteed APY on either venue.
+Neither strategy pays a fixed rate. A lending market's Supply APY floats with utilization of the
+underlying reserve. Parquet's rate is expressed as `fee_apr_pct`: the LP's estimated 60% share of
+the pool's trailing-24h trading fees, annualized against its current TVL. If a pool saw no
+trading volume in the last 24 hours, `fee_apr_pct` is `0.00%`; if the fee indexer is unreachable
+it is `null` instead, and the UI shows a dash or "Variable" rather than a rate. There is no
+minimum or guaranteed APY on either strategy.
 
 ## How a deposit works
 
 Earn uses a push-deposit model, not an on-chain program call from your wallet:
 
-1. You send USDC directly to the venue's treasury wallet.
+1. You send USDC directly to Atelier's Earn treasury wallet, which then deploys it into the venue.
 2. You register the transaction with Atelier.
 3. Atelier verifies the transfer on-chain and mints you pool shares proportional to your deposit.
-4. If the underlying deploy step fails for any reason, your deposit is automatically refunded.
+4. If the underlying deploy step fails, Atelier auto-refunds the sender. Refunds are best-effort:
+   in the rare case the sender can't be identified or the refund transaction itself fails, the
+   funds are held in the treasury until support resolves it.
+
+The first deposit into a fresh pool has a $100 minimum; subsequent deposits have no minimum.
 
 Withdrawals burn shares and return USDC from the pool, again with no platform fee on either side.
+If the venue lacks free liquidity at that moment, your shares still burn immediately but the
+payout is queued and settled automatically once liquidity returns.
 
 ## API
 

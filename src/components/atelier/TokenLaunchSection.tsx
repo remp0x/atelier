@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { useLinkAccount } from '@privy-io/react-auth';
+import { useFundWallet as useSolanaFundWallet, useSolanaFundingPlugin } from '@privy-io/react-auth/solana';
 import { useAtelierAuth } from '@/hooks/use-atelier-auth';
-import { useUsdcPayment } from '@/hooks/use-usdc-payment';
+import { useSwapUsdcToSol } from '@/hooks/use-swap-sol';
+import { useAgentFunding } from '@/hooks/use-agent-funding';
 import { getPrivyAccessToken } from '@/lib/privy-client';
 import { isAtelierAdminEmail } from '@/lib/admin-client';
 import { providerLabel, agentFeePct, badgeLabelForMode, IS_CLAWPUMP } from '@/lib/token-economics';
@@ -21,7 +23,7 @@ interface TokenInfo {
   launch_attempted: boolean;
 }
 
-type LaunchStep = 'idle' | 'paying' | 'launching' | 'confirming' | 'saving' | 'done' | 'error';
+type LaunchStep = 'idle' | 'launching' | 'confirming' | 'saving' | 'done' | 'error';
 
 function formatMcap(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -56,6 +58,7 @@ export function TokenLaunchSection({
   agentName,
   agentDescription,
   agentAvatarUrl,
+  agentTwitterUsername,
   token,
   ownerWallet,
   onTokenSet,
@@ -65,13 +68,16 @@ export function TokenLaunchSection({
   agentName: string;
   agentDescription?: string;
   agentAvatarUrl: string | null;
+  agentTwitterUsername?: string | null;
   token: TokenInfo | null;
   ownerWallet: string | null;
   onTokenSet: () => void;
   canManage?: boolean;
 }) {
   const { walletAddress, authenticated, getAuth, user, atelierUser, refreshAtelierUser } = useAtelierAuth();
-  const { payUsdc } = useUsdcPayment();
+  useSolanaFundingPlugin();
+  const { fundWallet: fundSolWallet } = useSolanaFundWallet();
+  const { swapUsdcToSol } = useSwapUsdcToSol();
   const isAdmin = isAtelierAdminEmail(user?.google?.email ?? user?.email?.address ?? null);
 
   const { linkTwitter } = useLinkAccount({
@@ -79,10 +85,23 @@ export function TokenLaunchSection({
   });
 
   // Anti-spam: a token can only launch once an X account is linked. Trust the live
-  // Privy session first; fall back to the persisted handle for wallet-only owners.
+  // Privy session first, then the owner's persisted handle, and finally the agent's
+  // own handle -- the server gate (token/launch route) already vouches on the agent
+  // row, so honoring it here keeps the client and server in agreement.
   const hasLinkedX =
     (user?.linkedAccounts ?? []).some((a) => a.type === 'twitter_oauth') ||
-    Boolean(atelierUser?.twitter_username);
+    Boolean(atelierUser?.twitter_username) ||
+    Boolean(agentTwitterUsername);
+
+  const linkedTwitter = (user?.linkedAccounts ?? []).find((a) => a.type === 'twitter_oauth') as { username?: string } | undefined;
+  const connectedXHandle = (linkedTwitter?.username || atelierUser?.twitter_username || agentTwitterUsername || '').replace(/^@+/, '');
+
+  // Ownership may be held under the Privy identity even when the active wallet
+  // differs from owner_wallet; callers that already know ownership (dashboard /
+  // agent page) pass canManage. Fall back to a direct wallet match. A confirmed
+  // manager sees the form regardless of owner_wallet -- the launch is signed by
+  // Atelier/ClawPump, not the owner's wallet.
+  const isManager = canManage ?? (!!walletAddress && walletAddress === ownerWallet);
 
   const [mode, setMode] = useState<'none' | 'pumpfun'>('none');
   const [resetting, setResetting] = useState(false);
@@ -107,6 +126,17 @@ export function TokenLaunchSection({
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // The agent's own wallet pays the launch fee in SOL. Live amounts + deposit
+  // address come from /funding; polled while the form is open so a deposit or
+  // swap shows up without a manual refresh.
+  const { funding } = useAgentFunding(agentId, mode === 'pumpfun' && !!isManager);
+  const [fundingBusy, setFundingBusy] = useState<'buy' | 'swap' | null>(null);
+
+  const launchRequiredSol = funding?.requirements?.launch?.required_sol ?? null;
+  const agentBalanceSol = funding?.balance_sol ?? null;
+  const depositAddress = funding?.deposit_address ?? null;
+  const launchFunded = launchRequiredSol !== null && agentBalanceSol !== null && agentBalanceSol >= launchRequiredSol;
 
   useEffect(() => {
     if (!IS_CLAWPUMP || token?.mode !== 'clawpump' || !token?.mint) return;
@@ -325,16 +355,17 @@ export function TokenLaunchSection({
             )}
           </div>
         )}
+
+        {isManager && connectedXHandle && (
+          <div className="px-5 pb-4 border-t border-atelier/10 pt-3">
+            <p className="text-2xs font-mono text-neutral-500">
+              X connected: <span className="text-neutral-300">@{connectedXHandle}</span> &middot; change it on your profile
+            </p>
+          </div>
+        )}
       </div>
     );
   }
-
-  // Ownership may be held under the Privy identity even when the active wallet
-  // differs from owner_wallet; callers that already know ownership (dashboard /
-  // agent page) pass canManage. Fall back to a direct wallet match. A confirmed
-  // manager sees the form regardless of owner_wallet -- the launch is signed by
-  // Atelier/ClawPump, not the owner's wallet.
-  const isManager = canManage ?? (!!walletAddress && walletAddress === ownerWallet);
 
   if (!isManager) {
     if (!authenticated && ownerWallet) {
@@ -356,7 +387,20 @@ export function TokenLaunchSection({
           A token launch was already attempted for this agent.{' '}
           {isAdmin
             ? 'Reset it to retry — only if no token was actually minted.'
-            : 'Please contact support to resolve.'}
+            : (
+              <>
+                Contact{' '}
+                <a
+                  href="https://t.me/atelierai"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-atelier transition-colors"
+                >
+                  support on Telegram
+                </a>{' '}
+                to resolve.
+              </>
+            )}
         </p>
         {error && <p className="text-xs text-red-400 font-mono">{error}</p>}
         {isAdmin && (
@@ -419,7 +463,8 @@ export function TokenLaunchSection({
       setStep('launching');
 
       // Prefer the verified Privy token (works across multi-wallet users); fall
-      // back to a wallet signature for legacy wallet-only accounts.
+      // back to a wallet signature for legacy wallet-only accounts. No payment
+      // step: the AGENT's wallet pays the SOL fee server-side.
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       const requestBody: Record<string, unknown> = { symbol, name, description, image_url: imageUrl };
 
@@ -431,47 +476,14 @@ export function TokenLaunchSection({
         Object.assign(requestBody, walletAuth);
       }
 
-      const launchUrl = `/api/agents/${agentId}/token/launch`;
-
-      // Probe first with no payment: the server runs every eligibility gate and
-      // only then answers 402 with the fee requirements. Any other status means a
-      // gate rejected the launch -- surface that error WITHOUT charging the user.
-      const probe = await fetch(launchUrl, {
+      const res = await fetch(`/api/agents/${agentId}/token/launch`, {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody),
       });
-
-      if (probe.status === 402) {
-        const requirements = await probe.json();
-        const treasury = requirements.payTo as string;
-        const amountUsd = Number(requirements.maxAmountRequired) / 1_000_000;
-        if (!treasury || !Number.isFinite(amountUsd) || amountUsd <= 0) {
-          throw new Error('Launch fee could not be determined. Please try again.');
-        }
-
-        setStep('paying');
-        const paymentTx = await payUsdc({ chain: 'solana', treasury, amountUsd });
-
-        setStep('launching');
-        const paid = await fetch(launchUrl, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ ...requestBody, payment_tx: paymentTx }),
-        });
-        const paidJson = await paid.json();
-        if (!paid.ok || !paidJson.success) {
-          throw new Error(paidJson.error || `Launch failed: ${paid.status}`);
-        }
-
-        setStep('done');
-        onTokenSet();
-        return;
-      }
-
-      const json = await probe.json();
-      if (!probe.ok || !json.success) {
-        throw new Error(json.error || `Launch failed: ${probe.status}`);
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || `Launch failed: ${res.status}`);
       }
 
       setStep('done');
@@ -482,8 +494,41 @@ export function TokenLaunchSection({
     }
   }
 
+  async function handleBuySol() {
+    if (!funding?.deposit_address) return;
+    setFundingBusy('buy');
+    setError(null);
+    try {
+      // Floor at 0.05 SOL so the purchase clears Coinbase Onramp's $5 minimum
+      // with headroom (MoonPay's floor is $20, hence the preferred provider).
+      const needed = Math.max((launchRequiredSol ?? 0.04) - (agentBalanceSol ?? 0), 0.05);
+      await fundSolWallet({
+        address: funding.deposit_address,
+        options: { asset: 'native-currency', amount: needed.toFixed(4), card: { preferredProvider: 'coinbase' } },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Funding flow failed');
+    } finally {
+      setFundingBusy(null);
+    }
+  }
+
+  async function handleSwapForSol() {
+    if (!funding?.deposit_address) return;
+    setFundingBusy('swap');
+    setError(null);
+    try {
+      // Jupiter only sponsors gas for ~$10+ swaps from SOL-less wallets, so the
+      // one-click amount stays above that floor.
+      await swapUsdcToSol({ amountUsd: 10, receiver: funding.deposit_address });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Swap failed');
+    } finally {
+      setFundingBusy(null);
+    }
+  }
+
   const stepLabels: Record<string, string> = {
-    paying: 'Paying launch fee...',
     launching: 'Launching token...',
     confirming: 'Confirming transaction...',
     saving: 'Saving token info...',
@@ -494,24 +539,24 @@ export function TokenLaunchSection({
       <h3 className="text-sm font-bold font-display mb-3">Agent Token</h3>
 
       {mode === 'none' && (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <button
             aria-label={`Launch ${agentName} token on ${providerLabel}`}
             onClick={() => { setMode('pumpfun'); setName(agentName); setDescription(agentDescription || ''); setImageUrl(agentAvatarUrl); }}
             disabled={busy}
-            className="group w-full flex flex-col items-center justify-center gap-1 px-5 py-4 rounded-xl text-white cursor-pointer shadow-md shadow-atelier/25 transition-all duration-200 hover:shadow-lg hover:shadow-atelier/40 hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black disabled:opacity-50 disabled:pointer-events-none"
+            className="group w-full flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl text-white font-display font-semibold text-sm tracking-tight cursor-pointer shadow-md shadow-atelier/25 transition-all duration-200 hover:shadow-lg hover:shadow-atelier/40 hover:brightness-[1.07] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black disabled:opacity-50 disabled:pointer-events-none"
             style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)' }}
           >
-            <span className="flex items-center gap-2.5">
-              {IS_CLAWPUMP && (
-                <img src="/clawpump_logo.png" alt="" className="w-5 h-5 rounded-sm transition-transform duration-200 group-hover:scale-110" />
-              )}
-              <span className="text-sm font-semibold font-display tracking-tight">Launch on {providerLabel}</span>
-            </span>
-            <span className="text-2xs font-mono text-white/75">
-              Small USDC launch fee &middot; you earn {agentFeePct}% of creator fees
-            </span>
+            {IS_CLAWPUMP && (
+              <span className="flex items-center justify-center w-6 h-6 rounded-full bg-white shadow-sm ring-1 ring-black/5 shrink-0">
+                <img src="/clawpump_logo.png" alt="" className="w-4 h-4" />
+              </span>
+            )}
+            <span>Launch on {providerLabel}</span>
           </button>
+          <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400 text-center">
+            Your agent pays a small SOL launch fee &middot; it receives {agentFeePct}% of creator fees
+          </p>
         </div>
       )}
 
@@ -620,6 +665,65 @@ export function TokenLaunchSection({
               </button>
             </div>
           )}
+          {hasLinkedX && (
+            <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400">
+              X connected{connectedXHandle ? `: @${connectedXHandle}` : ''} &middot; change it on your profile
+            </p>
+          )}
+
+          {/* Agent wallet funding gate: the AGENT pays its launch fee in SOL and in
+              return receives the creator-fee share directly. Amounts are live. */}
+          {funding && depositAddress && (
+            launchFunded ? (
+              <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400">
+                Agent wallet ({depositAddress.slice(0, 4)}...{depositAddress.slice(-4)}) funded: {(agentBalanceSol ?? 0).toFixed(4)} SOL &middot; launch fee ~{funding.requirements.launch.cost_sol} SOL is paid by the agent
+              </p>
+            ) : (
+              <div className="rounded-lg border border-amber-400/40 bg-amber-50 dark:bg-amber-900/10 p-3 space-y-2">
+                <p className="text-2xs font-mono text-amber-600 dark:text-amber-400">
+                  <span className="font-semibold">{agentName} has its own wallet</span> — separate from your
+                  personal wallet. The launch fee ({launchRequiredSol} SOL) comes out of the agent&apos;s wallet,
+                  which also receives its {agentFeePct}% of creator fees.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(depositAddress)}
+                  aria-label="Copy agent wallet address"
+                  title="Copy agent wallet address"
+                  className="cursor-pointer w-full text-left px-2.5 py-1.5 rounded-md bg-white/60 dark:bg-black/30 border border-amber-400/30 transition-all duration-150 hover:border-amber-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+                >
+                  <span className="block text-2xs font-mono uppercase tracking-wider text-neutral-500 mb-0.5">
+                    Agent wallet &middot; balance {(agentBalanceSol ?? 0).toFixed(4)} SOL {copied ? '· Copied!' : '· click to copy'}
+                  </span>
+                  <span className="block text-2xs font-mono break-all text-neutral-700 dark:text-neutral-300">
+                    {depositAddress}
+                  </span>
+                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => { void handleBuySol(); }}
+                    disabled={busy || fundingBusy !== null}
+                    className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-400/50 text-amber-600 dark:text-amber-400 text-2xs font-mono font-medium transition-all duration-150 hover:bg-amber-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:opacity-50"
+                  >
+                    {fundingBusy === 'buy' ? 'Opening...' : 'Buy SOL (card)'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void handleSwapForSol(); }}
+                    disabled={busy || fundingBusy !== null}
+                    className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-amber-400/50 text-amber-600 dark:text-amber-400 text-2xs font-mono font-medium transition-all duration-150 hover:bg-amber-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 disabled:opacity-50"
+                  >
+                    {fundingBusy === 'swap' ? 'Swapping...' : 'Swap $10 USDC → SOL'}
+                  </button>
+                </div>
+                <p className="text-2xs font-mono text-neutral-500">
+                  Both buttons deposit straight into the agent&apos;s wallet — you never need SOL in your own.
+                  Or send SOL (Solana mainnet) to the address above from any wallet or exchange. Balance refreshes automatically.
+                </p>
+              </div>
+            )
+          )}
 
           {/* Busy indicator */}
           {busy && (
@@ -633,11 +737,15 @@ export function TokenLaunchSection({
             <p className="text-xs text-red-400 font-mono">{error}</p>
           )}
 
+          <p className="text-2xs font-mono text-neutral-500 dark:text-neutral-400">
+            Launch fee: {funding ? `~${funding.requirements.launch.cost_sol} SOL` : 'a small amount of SOL'}, paid by the agent&apos;s wallet &middot; the agent receives {agentFeePct}% of creator fees
+          </p>
+
           {/* Actions */}
           <div className="flex gap-2.5">
             <button
               onClick={handlePumpFunLaunch}
-              disabled={busy || uploadingImage || !name || !symbol || !imageUrl || !hasLinkedX || (IS_CLAWPUMP && description.trim().length < 20)}
+              disabled={busy || uploadingImage || !name || !symbol || !imageUrl || !hasLinkedX || (funding !== null && !launchFunded) || (IS_CLAWPUMP && description.trim().length < 20)}
               className="cursor-pointer flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold font-mono text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-atelier focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-black disabled:opacity-40 disabled:pointer-events-none"
               style={{ background: 'linear-gradient(135deg, #fa4c14 0%, #ff7a3d 100%)' }}
             >
@@ -654,7 +762,7 @@ export function TokenLaunchSection({
           </div>
 
           <p className="text-2xs text-neutral-500 font-mono flex items-center gap-1.5">
-            {IS_CLAWPUMP && <img src="/clawpump_logo.png" alt="" className="w-3 h-3 rounded-sm shrink-0" />}
+            {IS_CLAWPUMP && <img src="/clawpump_logo.png" alt="" className="w-3 h-3 shrink-0" />}
             <span>Via {providerLabel}. You earn {agentFeePct}% of creator fees.</span>
           </p>
         </div>

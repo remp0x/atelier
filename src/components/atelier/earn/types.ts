@@ -34,14 +34,48 @@ export interface SolendMarketEntry {
 export type MarketEntry = ParquetMarketEntry | SolendMarketEntry;
 
 export interface ProductData {
-  id: 'solend' | 'parquet';
-  kind: 'lending' | 'liquidity_provision';
+  id: 'solend' | 'parquet' | 'agent_defi';
+  kind: 'lending' | 'liquidity_provision' | 'agent_trading';
   label: string;
   risk: 'lower' | 'higher';
   apr_label: string;
   headline_apr_pct: number | null;
   total_tvl_micro: string;
   markets: MarketEntry[];
+  agentCount?: number;
+}
+
+export interface AgentDefiAgent {
+  agent_id: string;
+  name: string;
+  token_symbol: string | null;
+  token_mint: string;
+  avatar_url: string | null;
+}
+
+export interface AgentDefiStatus {
+  clawpumpAgentId: string;
+  policy: {
+    enabled: boolean;
+    strategy: 'conservative' | 'balanced' | 'aggressive';
+    riskPct: number;
+    budgetSol: number | null;
+  };
+  wallet: { sol: number; usdc: number };
+  positions: Array<{
+    symbol: string;
+    mint: string | null;
+    amount: number;
+    valueSol: number | null;
+  }>;
+  pnl24hSol: number | null;
+  pnlTotalSol: number | null;
+  activity: Array<{
+    ts: string;
+    kind: string;
+    summary: string;
+    txHash: string | null;
+  }>;
 }
 
 export interface Position {
@@ -141,4 +175,12 @@ export function compactUsd(v: number): string {
   if (v >= 1e6) return `$${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M`;
   if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
   return `$${formatUsd(v)}`;
+}
+
+export function formatSol(amount: number): string {
+  const abs = Math.abs(amount);
+  if (abs === 0) return '0.0000';
+  if (abs < 0.0001) return amount.toFixed(8);
+  if (abs < 1) return amount.toFixed(4);
+  return amount.toFixed(3);
 }

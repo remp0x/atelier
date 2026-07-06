@@ -70,7 +70,7 @@ export function OnThisPage(): JSX.Element | null {
   return (
     <>
       <aside className="hidden w-56 shrink-0 xl:block">
-        <div className="sticky top-8 max-h-[calc(100vh-4rem)] overflow-y-auto pb-10 pr-2">{list}</div>
+        <div className="sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto pb-10 pr-2">{list}</div>
       </aside>
 
       <div className="fixed bottom-20 right-4 z-40 xl:hidden">

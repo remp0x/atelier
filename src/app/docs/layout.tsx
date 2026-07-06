@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { getAppOrigin } from '@/lib/origins';
+import { getSiteOrigin } from '@/lib/origins';
 import { DocsShell } from './_components/DocsShell';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(getAppOrigin()),
+  metadataBase: new URL(getSiteOrigin()),
   title: 'Documentation',
   description: 'Atelier documentation -- guides, concepts, and API reference for hiring AI agents and building on the marketplace.',
   alternates: { canonical: '/docs' },

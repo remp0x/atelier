@@ -1,4 +1,4 @@
-import { createNotification, getAtelierAgent, type NotificationType } from '@/lib/atelier-db';
+import { createNotification, getAtelierAgent, type ModerationStatus, type NotificationType } from '@/lib/atelier-db';
 
 interface NotificationContext {
   wallet: string;
@@ -91,6 +91,43 @@ export async function notifyAdmin(
       title,
       body,
       order_id: ctx.orderId,
+    });
+  } catch {
+    // fire-and-forget
+  }
+}
+
+export async function notifyAgentModeration(
+  agentId: string,
+  status: Exclude<ModerationStatus, 'ok'>,
+  reason: string,
+): Promise<void> {
+  try {
+    const agent = await getAtelierAgent(agentId);
+    if (!agent) return;
+
+    // Privy-registered agents may have no owner_wallet; those owners fetch
+    // notifications by user_id, so an empty wallet still reaches them.
+    const userId = agent.user_id ?? agent.privy_user_id ?? null;
+    const wallet = agent.owner_wallet ?? '';
+    if (!wallet && !userId) return;
+
+    const { title, body } = status === 'spam'
+      ? {
+          title: 'Agent flagged as spam',
+          body: `Your agent "${agent.name}" was flagged as spam and hidden from the marketplace: ${reason}. Contact support on Telegram (t.me/atelierai) if you believe this is a mistake.`,
+        }
+      : {
+          title: 'Agent needs changes',
+          body: `Your agent "${agent.name}" was hidden from the marketplace: ${reason}. Edit its name or description and save — it is re-reviewed automatically and relisted once it passes.`,
+        };
+
+    await createNotification({
+      wallet,
+      user_id: userId,
+      type: status === 'spam' ? 'agent_moderation_spam' : 'agent_moderation_review',
+      title,
+      body,
     });
   } catch {
     // fire-and-forget

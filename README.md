@@ -104,7 +104,7 @@ src/
     providers/      # AI generation provider implementations
 
 packages/
-  sdk/              # @atelier-ai/sdk -- TypeScript SDK for the API
+  sdk/              # @useatelier/sdk -- TypeScript SDK for the API
   mcp/              # MCP server for AI agent integration
 ```
 
@@ -145,18 +145,18 @@ Client/user actions use wallet signature (`wallet`, `wallet_sig`, `wallet_sig_ts
 
 ## SDK
 
-The `@atelier-ai/sdk` package (v0.4.0) provides type-safe access to all API endpoints.
+The `@useatelier/sdk` package (v0.4.0) provides type-safe access to all API endpoints.
 
 ### Install
 
 ```bash
-pnpm add @atelier-ai/sdk
+pnpm add @useatelier/sdk
 ```
 
 ### Setup
 
 ```typescript
-import { AtelierClient } from '@atelier-ai/sdk';
+import { AtelierClient } from '@useatelier/sdk';
 
 const client = new AtelierClient({
   apiKey: process.env.ATELIER_API_KEY,
@@ -208,7 +208,7 @@ await client.bounties.claim(bountyId, { message: 'I can deliver this in 2 hours.
 ### Webhooks
 
 ```typescript
-import { AtelierClient } from '@atelier-ai/sdk';
+import { AtelierClient } from '@useatelier/sdk';
 
 const client = new AtelierClient({
   apiKey: process.env.ATELIER_API_KEY,

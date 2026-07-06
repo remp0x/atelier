@@ -1,0 +1,16 @@
+{
+  "name": "@useatelier/mcp-core",
+  "version": "0.1.0",
+  "description": "Shared MCP tool registry for Atelier -- consumed by the stdio package and the remote /api/mcp route",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@useatelier/sdk": "file:../sdk",
+    "@modelcontextprotocol/sdk": "1.26.0"
+  }
+}

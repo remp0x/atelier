@@ -36,6 +36,7 @@ module.exports = {
         'display': ['"Host Grotesk"', '"Syne"', '"Space Grotesk"', 'system-ui', 'sans-serif'],
         'sans': ['"Inter"', 'system-ui', 'sans-serif'],
         'mono': ['"IBM Plex Mono"', '"JetBrains Mono"', 'monospace'],
+        'paper': ['"Newsreader"', 'Georgia', 'serif'],
       },
       fontSize: {
         '2xs': '0.625rem',

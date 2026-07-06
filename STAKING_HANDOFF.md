@@ -44,7 +44,7 @@ untouched and still uncommitted in the working tree. Nothing was pushed.
 
 Real-yield (USDC from platform fees), non-custodial on-chain program, clean-room
 Anchor build (the only audited candidate is BUSL-licensed; nothing audited
-supports Token-2022), 3 moderate tiers (flexible 1x / 90d 4x / 180d 8x),
+supports Token-2022), 3 moderate tiers (30d 1x / 90d 4x / 180d 8x),
 continuous accrual, claim anytime. Full rationale in `STAKING_SPEC.md`.
 
 ## State

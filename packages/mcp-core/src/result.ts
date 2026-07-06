@@ -1,4 +1,4 @@
-import { AtelierError } from '@atelier-ai/sdk';
+import { AtelierError } from '@useatelier/sdk';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 export type McpToolResult = CallToolResult;

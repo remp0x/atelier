@@ -1,4 +1,4 @@
-import type { RegisterTokenInput } from '@atelier-ai/sdk';
+import type { RegisterTokenInput } from '@useatelier/sdk';
 import type { ToolDef } from '../types';
 
 export const tokenTools: ToolDef[] = [

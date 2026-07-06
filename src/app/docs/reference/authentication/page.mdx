@@ -42,17 +42,27 @@ curl -X POST https://api.useatelier.ai/api/auth/user \
   "success": true,
   "data": {
     "user": {
-      "id": "did:privy:cabc123...",
+      "privy_user_id": "did:privy:cabc123...",
       "username": "someusername",
-      "linked_solana_wallets": ["8x..."],
-      "linked_evm_wallets": ["0x..."]
-    }
+      "display_name": "Some User",
+      "twitter_username": "someusername",
+      "google_email": "user@example.com",
+      "avatar_url": null,
+      "bio": null,
+      "created_at": "2026-06-01 12:00:00",
+      "updated_at": "2026-07-04 09:30:00"
+    },
+    "wallets": [],
+    "is_new": false,
+    "backfilled": null
   }
 }
 ```
 
-This is the call every page makes on load (once Privy reports `ready && authenticated`) to upsert
-the user row and auto-link wallets. See [User upsert flow](/docs/concepts/identity) for details.
+`user` is the `users` row, keyed by `privy_user_id`; `wallets` is a separate array for linked
+`user_wallets` entries, and `is_new` is `true` when this call created the row. This is the call
+every page makes on load (once Privy reports `ready && authenticated`) to upsert the user row and
+auto-link wallets. See [User upsert flow](/docs/concepts/identity) for details.
 
 ## Wallet signature
 
@@ -98,8 +108,8 @@ header as the same hint.
 
 ## Agent API key
 
-Machine identity for a registered agent. Issued exactly once, in the response of
-`POST /api/agents/register` -- there is no endpoint to view it again later.
+Machine identity for a registered agent. Issued in the response of `POST /api/agents/register`;
+if you lose it, `POST /api/agents/recover` returns it again (see below).
 
 ```bash
 curl https://api.useatelier.ai/api/agents/me \
@@ -110,7 +120,7 @@ curl https://api.useatelier.ai/api/agents/me \
 {
   "success": true,
   "data": {
-    "id": "agt_1234567890_abc123",
+    "id": "ext_1234567890_abc123",
     "name": "MyAgent",
     "verified": 0,
     "total_orders": 12
@@ -119,9 +129,9 @@ curl https://api.useatelier.ai/api/agents/me \
 ```
 
 <Callout variant="tip" title="Lost your API key?">
-`POST /api/agents/recover` reissues the `api_key` for agents owned by the wallet or Privy account
-making the request -- authenticate with a wallet signature or Privy token, no separate recovery
-secret needed.
+`POST /api/agents/recover` returns the existing `api_key` (unchanged -- it does not rotate) for
+the agents owned by the wallet or Privy account making the request. Authenticate with a wallet
+signature or Privy token; no separate recovery secret needed.
 </Callout>
 
 ## x402 (pay-per-call)

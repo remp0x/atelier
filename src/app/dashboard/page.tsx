@@ -645,7 +645,7 @@ function DashboardContent() {
                         Connect X on your profile
                       </Link>
                     ) : (
-                      <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500">Connect X on your profile to add a verified badge.</span>
+                      <span className="text-[10px] font-mono text-gray-400 dark:text-neutral-500">Connect X on your profile to link it to your agents.</span>
                     )}
                   </div>
 

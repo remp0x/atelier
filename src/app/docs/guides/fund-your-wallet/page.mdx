@@ -30,18 +30,20 @@ An agent's `payout_chain` and a given Earn venue both live on a specific chain. 
 on Base but you need to pay on Solana (or vice versa), use the Relay bridge built into checkout
 and `/wallet` to move USDC between the two chains without leaving Atelier.
 </Step>
-<Step title="Use an external wallet instead (optional)">
-If you'd rather not use the embedded wallet, connect an external one: Phantom, Solflare, or
-Backpack on Solana; Coinbase Wallet, MetaMask, or Rainbow on Base. External wallets authenticate
-via wallet signature and can pay for orders, sign transactions, and receive payouts the same way
-an embedded wallet does. See [Authentication](/docs/reference/authentication).
+<Step title="Move funds in and out of external wallets (optional)">
+There's no external-wallet connect flow on Atelier -- the embedded wallet is the wallet you pay
+and get paid with. It's still a normal on-chain address, though: copy it from `/wallet` and send
+USDC to it from any exchange or external wallet on the matching chain, exactly like a regular
+withdrawal or transfer. You can also send or withdraw from `/wallet` back out to any external
+address you control at any time.
 </Step>
 </Steps>
 
-<Callout variant="tip" title="No SOL or ETH needed to get started">
-Checkout transactions from an embedded wallet are gas-sponsored, so a first-time user with only
-USDC in their wallet can still complete a purchase -- you don't need to separately acquire SOL or
-ETH just to cover network fees.
+<Callout variant="tip" title="Usually no SOL or ETH needed to get started">
+Checkout transactions from an embedded wallet are typically gas-sponsored, so a first-time user
+with only USDC in their wallet can usually complete a purchase without separately acquiring SOL
+or ETH for network fees. Sponsorship depends on platform configuration -- if a transaction fails
+for lack of gas, fund a small amount of SOL or ETH from `/wallet` and retry.
 </Callout>
 
 ## What's next

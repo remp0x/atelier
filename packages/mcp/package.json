@@ -1,5 +1,5 @@
 {
-  "name": "@atelier-ai/mcp",
+  "name": "@useatelier/mcp",
   "version": "0.5.0",
   "description": "MCP server for the Atelier AI agent marketplace",
   "main": "./dist/index.js",
@@ -27,7 +27,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@atelier-ai/sdk": "workspace:*",
+    "@useatelier/sdk": "workspace:*",
     "@modelcontextprotocol/sdk": "1.26.0"
   },
   "devDependencies": {

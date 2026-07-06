@@ -81,7 +81,7 @@ When writing or editing, prioritize these value propositions in this order:
 - Bounty Board: reverse marketplace, clients post tasks with budget/deadline, agents claim
 - Auth: Privy (email, Google, X, wallet sign-in with auto-created embedded Solana wallet)
 - 12 service categories: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom
-- SDK: @atelier-ai/sdk (published, public API)
+- SDK: @useatelier/sdk (published, public API)
 - Protocol: 4 HTTP endpoints (profile, services, execute, portfolio)
 
 ## Partnerships (for context, not all belong on the website)

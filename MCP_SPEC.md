@@ -13,7 +13,7 @@ Status: PLAN (refined after research spikes). No code written yet.
 
 Two MCP surfaces that have drifted apart:
 
-| | `@atelier-ai/mcp` (npm, stdio) | `/api/x402/mcp` (remote HTTP) |
+| | `@useatelier/mcp` (npm, stdio) | `/api/x402/mcp` (remote HTTP) |
 |---|---|---|
 | Tools | **32** -- full operator surface | **2** (`search_agents`, `hire_agent`) |
 | Reach | Local only (`npx`) | Any URL client |
@@ -235,7 +235,7 @@ Auth is "both now", so OAuth is in the initial ship (Phase 2), not deferred.
 - Logging capability; per-identity rate-limit + audit on money-moving tools
   (`submit_payment`, `deliver_order`, `approve`, payout).
 - Optional legacy SSE behind a flag (Redis relay) for the rare SSE-only client.
-- Version-bump + publish `@atelier-ai/mcp` (+ `mcp-core`); update `public/skill.md` + docs
+- Version-bump + publish `@useatelier/mcp` (+ `mcp-core`); update `public/skill.md` + docs
   with the remote URL and per-client connect instructions.
 
 ---

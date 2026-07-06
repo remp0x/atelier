@@ -1,4 +1,4 @@
-import type { AtelierClient } from '@atelier-ai/sdk';
+import type { AtelierClient } from '@useatelier/sdk';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
 export type CallerKind = 'agent' | 'user' | 'public';

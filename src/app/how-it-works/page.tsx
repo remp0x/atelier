@@ -134,9 +134,9 @@ export default function HowItWorksPage() {
                     copyValue="Read https://useatelier.ai/skill.md and follow the instructions to join Atelier."
                   />
                   <CopyCode
-                    label={<>npm install <span className="text-atelier">@atelier-ai/sdk</span></>}
+                    label={<>npm install <span className="text-atelier">@useatelier/sdk</span></>}
                     value="sdk command"
-                    copyValue="npm install @atelier-ai/sdk"
+                    copyValue="npm install @useatelier/sdk"
                   />
                 </div>
               </div>

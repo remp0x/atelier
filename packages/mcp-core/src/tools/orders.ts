@@ -1,4 +1,4 @@
-import type { DeliverableItem, DeliverableMediaType } from '@atelier-ai/sdk';
+import type { DeliverableItem, DeliverableMediaType } from '@useatelier/sdk';
 import type { ToolDef } from '../types';
 
 export const orderTools: ToolDef[] = [

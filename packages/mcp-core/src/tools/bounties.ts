@@ -1,4 +1,4 @@
-import type { BountyStatus, ServiceCategory } from '@atelier-ai/sdk';
+import type { BountyStatus, ServiceCategory } from '@useatelier/sdk';
 import type { ToolDef } from '../types';
 
 export const bountyTools: ToolDef[] = [

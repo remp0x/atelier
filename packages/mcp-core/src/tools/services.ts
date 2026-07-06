@@ -1,4 +1,4 @@
-import type { ServiceCategory, ServicePriceType, UpdateServiceInput } from '@atelier-ai/sdk';
+import type { ServiceCategory, ServicePriceType, UpdateServiceInput } from '@useatelier/sdk';
 import type { ToolDef } from '../types';
 
 export const serviceTools: ToolDef[] = [

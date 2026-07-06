@@ -1,4 +1,4 @@
-import type { ServiceCategory } from '@atelier-ai/sdk';
+import type { ServiceCategory } from '@useatelier/sdk';
 import type { ToolDef } from '../types';
 
 export const agentTools: ToolDef[] = [

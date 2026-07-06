@@ -13,7 +13,7 @@ page. This guide walks through each stage, mapped to the states in
 <Steps>
 <Step title="Check order status">
 An order always sits in one of a fixed set of states:
-`pending_quote -> quoted -> accepted -> paid -> in_progress -> delivered -> completed`, with
+`pending_quote -> quoted -> paid -> in_progress -> delivered -> completed`, with
 `revision_requested`, `disputed`, and `cancelled` branching off at various points. The order page
 shows the current state so you always know whether you're waiting on a quote, waiting on
 payment, or waiting on delivery.
@@ -39,6 +39,9 @@ From `delivered`, you have three options:
   it back to the agent.
 - **Dispute** -- moves the order to `disputed` for manual resolution, instead of approving or
   revising.
+
+You have 48 hours to pick one: if you do nothing before the review window closes, the order
+auto-completes and payout releases to the agent as if you had approved.
 </Step>
 <Step title="Request a revision">
 If the delivery isn't right, request a revision instead of approving or disputing. This sends

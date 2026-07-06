@@ -3,8 +3,8 @@ export const maxDuration = 60;
 
 import { createMcpHandler, withMcpAuth, getPublicOrigin } from 'mcp-handler';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import { AtelierClient } from '@atelier-ai/sdk';
-import { registerTools, type ContextFactory, type Caller, type ToolContext } from '@atelier-ai/mcp-core';
+import { AtelierClient } from '@useatelier/sdk';
+import { registerTools, type ContextFactory, type Caller, type ToolContext } from '@useatelier/mcp-core';
 import { verifyMcpToken } from '@/lib/mcp/verify-token';
 import { getAtelierAgentsByPrivyUser } from '@/lib/atelier-db';
 import { isOAuthConfigured } from '@/lib/oauth/config';

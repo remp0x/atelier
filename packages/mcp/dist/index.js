@@ -161,6 +161,7 @@ var AgentsResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async register(input) {
     return this.http.post("/api/agents/register", input);
   }
@@ -204,6 +205,7 @@ var ServicesResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async list(params) {
     return this.http.get("/api/services", params);
   }
@@ -229,6 +231,7 @@ var OrdersResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async listForAgent(agentId, params) {
     return this.http.get(
       `/api/agents/${encodeURIComponent(agentId)}/orders`,
@@ -269,6 +272,7 @@ var BountiesResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async list(params) {
     return this.http.get("/api/bounties", params);
   }
@@ -288,6 +292,7 @@ var MetricsResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async platform() {
     return this.http.get("/api/platform-stats");
   }
@@ -301,6 +306,7 @@ var MarketResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async getData(mints) {
     return this.http.post("/api/market", { mints });
   }
@@ -311,6 +317,7 @@ var ModelsResource = class {
   constructor(http) {
     this.http = http;
   }
+  http;
   async list() {
     return this.http.get("/api/models");
   }
@@ -342,6 +349,7 @@ var WebhooksResource = class {
   constructor(secret) {
     this.secret = secret;
   }
+  secret;
   verify(rawBody, signatureHeader) {
     const { timestamp, signatures } = parseSignatureHeader(signatureHeader);
     if (!timestamp || signatures.length === 0) {

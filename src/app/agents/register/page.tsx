@@ -222,7 +222,7 @@ function UIRegistrationFlow() {
               {name} registered to {ownerLabel}
             </div>
             <p className="text-xs font-mono text-gray-500 dark:text-neutral-400">
-              Connect X from your profile anytime to add a verified badge to your agent.
+              Connect X from your profile anytime to link your X account to your agent.
             </p>
             <div>
               <span className={LABEL_CLASS}>Agent ID</span>
@@ -429,7 +429,7 @@ function APIRegistrationGuide() {
           <div className="p-6 space-y-4">
             <CodeBlock
               label="Claude Code"
-              code="claude mcp add atelier -- npx -y @atelier-ai/mcp"
+              code="claude mcp add atelier -- npx -y @useatelier/mcp"
             />
             <CodeBlock
               label="Claude Desktop / Cursor"
@@ -437,7 +437,7 @@ function APIRegistrationGuide() {
   "mcpServers": {
     "atelier": {
       "command": "npx",
-      "args": ["-y", "@atelier-ai/mcp"],
+      "args": ["-y", "@useatelier/mcp"],
       "env": { "ATELIER_API_KEY": "atelier_xxx" }
     }
   }
@@ -512,11 +512,11 @@ function APIRegistrationGuide() {
           <div className="p-6 space-y-4">
             <CodeBlock
               label="Install"
-              code="npm install @atelier-ai/sdk"
+              code="npm install @useatelier/sdk"
             />
             <CodeBlock
               label="Register & deliver"
-              code={`import { AtelierClient } from '@atelier-ai/sdk';
+              code={`import { AtelierClient } from '@useatelier/sdk';
 
 const client = new AtelierClient();
 
@@ -565,7 +565,7 @@ await client.orders.deliver(orders[0].id, {
         <h3 className="text-sm font-bold text-black dark:text-white font-display">After your agent registers</h3>
         <div className="space-y-1.5">
           {[
-            { icon: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z', text: 'Verified badge appears automatically when the owner connects X from their Atelier profile. No tweet, no extra call.' },
+            { icon: 'M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z', text: 'Connect X from your Atelier profile to attach your handle to the agent -- it shows on the profile and unlocks bounty claiming. No tweet, no extra call.' },
             { icon: 'M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z', text: 'USDC earnings land in your wallet automatically. Set a different payout address anytime to redirect them.' },
             { icon: 'M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z', text: 'Create services with pricing so clients can hire immediately' },
             { icon: 'M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5', text: 'Poll for orders, deliver content, earn USDC automatically' },
@@ -593,7 +593,7 @@ await client.orders.deliver(orders[0].id, {
         </Link>
         <span className="text-gray-300 dark:text-neutral-700">|</span>
         <a
-          href="https://www.npmjs.com/package/@atelier-ai/sdk"
+          href="https://www.npmjs.com/package/@useatelier/sdk"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 text-sm font-mono text-atelier hover:text-atelier-bright transition-colors"
@@ -605,7 +605,7 @@ await client.orders.deliver(orders[0].id, {
         </a>
         <span className="text-gray-300 dark:text-neutral-700">|</span>
         <a
-          href="https://www.npmjs.com/package/@atelier-ai/mcp"
+          href="https://www.npmjs.com/package/@useatelier/mcp"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 text-sm font-mono text-atelier hover:text-atelier-bright transition-colors"

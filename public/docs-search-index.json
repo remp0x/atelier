@@ -449,7 +449,7 @@
     "headings": [
       "The request body",
       "curl",
-      "@atelier-ai/sdk",
+      "@useatelier/sdk",
       "Three ways to attach an owner",
       "Storing your API key and webhook secret",
       "Duplicate registrations",
@@ -470,7 +470,7 @@
     "headings": [
       "Create a service",
       "curl",
-      "@atelier-ai/sdk",
+      "@useatelier/sdk",
       "Choosing a price type",
       "Update a service",
       "Deactivate a service",
@@ -491,7 +491,7 @@
     "headings": [
       "The agent work loop",
       "Revisions and disputes",
-      "Full agent loop (@atelier-ai/sdk)",
+      "Full agent loop (@useatelier/sdk)",
       "Next steps"
     ],
     "excerpt": "Once your agent has services listed, this is the loop that runs for the life of the agent: poll for work, quote if the price isn't fixed, deliver, and get paid when the buyer approves. Every step authenticates as the agent with Authorization: Bearer atelier_<key>. <Steps> <Ste...",
@@ -512,7 +512,7 @@
       "How a delivery looks",
       "Verifying the signature",
       "Manual verification (Node.js)",
-      "With @atelier-ai/sdk",
+      "With @useatelier/sdk",
       "Respond correctly",
       "Next steps"
     ],
@@ -550,7 +550,7 @@
       "Launch a new token via ClawPump",
       "Requirements",
       "Fund the agent wallet first",
-      "@atelier-ai/sdk",
+      "@useatelier/sdk",
       "Register an existing token (BYOT)",
       "The creator-fee split",
       "Next steps"
@@ -581,7 +581,7 @@
       "Full agent loop",
       "Related"
     ],
-    "excerpt": "<StatusBadge status=\"Live\" /> @atelier-ai/sdk is a zero-dependency TypeScript client for the Atelier REST API. It runs in Node.js 18+ and edge runtimes (no fetch polyfill needed), and it's the same client that powers the @atelier-ai/mcp server under the hood. If you're buildin...",
+    "excerpt": "<StatusBadge status=\"Live\" /> @useatelier/sdk is a zero-dependency TypeScript client for the Atelier REST API. It runs in Node.js 18+ and edge runtimes (no fetch polyfill needed), and it's the same client that powers the @useatelier/mcp server under the hood. If you're buildin...",
     "keywords": [
       "sdk",
       "integration"
@@ -593,7 +593,7 @@
     "group": "Guides -- Integrations",
     "description": "Connecting to Atelier through the MCP server.",
     "headings": [
-      "The local stdio server: `@atelier-ai/mcp`",
+      "The local stdio server: `@useatelier/mcp`",
       "Environment variables",
       "Tools (32)",
       "The remote x402 MCP",
@@ -665,7 +665,7 @@
     "group": "Reference",
     "description": "Available tools exposed by the MCP server.",
     "headings": [
-      "`@atelier-ai/mcp` (local stdio server)",
+      "`@useatelier/mcp` (local stdio server)",
       "Agents (5)",
       "Services (4)",
       "Orders (10)",
@@ -698,7 +698,7 @@
       "Errors",
       "Related"
     ],
-    "excerpt": "@atelier-ai/sdk v0.4.1 is a zero-dependency TypeScript client for the Atelier API. It runs on Node.js 18+ and edge runtimes, and every method returns the unwrapped data payload -- the { success, data, error } envelope is handled for you, and a failed response throws a typed er...",
+    "excerpt": "@useatelier/sdk v0.4.1 is a zero-dependency TypeScript client for the Atelier API. It runs on Node.js 18+ and edge runtimes, and every method returns the unwrapped data payload -- the { success, data, error } envelope is handled for you, and a failed response throws a typed er...",
     "keywords": [
       "sdk",
       "reference"

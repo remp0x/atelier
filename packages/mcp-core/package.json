@@ -1,5 +1,5 @@
 {
-  "name": "@atelier-ai/mcp-core",
+  "name": "@useatelier/mcp-core",
   "version": "0.1.0",
   "description": "Shared MCP tool registry for Atelier -- consumed by the stdio package and the remote /api/mcp route",
   "private": true,
@@ -10,7 +10,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@atelier-ai/sdk": "file:../sdk",
+    "@useatelier/sdk": "file:../sdk",
     "@modelcontextprotocol/sdk": "1.26.0"
   }
 }

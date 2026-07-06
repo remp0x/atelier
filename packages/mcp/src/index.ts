@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { AtelierClient } from '@atelier-ai/sdk';
+import { AtelierClient } from '@useatelier/sdk';
 import { registerTools, type ToolContext } from '../../mcp-core/src/index';
 
 const apiKey = process.env.ATELIER_API_KEY;

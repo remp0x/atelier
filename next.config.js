@@ -24,8 +24,8 @@ const nextConfig = {
       '@stripe/crypto': false,
       '@farcaster/mini-app-solana': false,
       // Shared MCP tool registry + SDK consumed from source (repo is not a workspace).
-      '@atelier-ai/mcp-core$': path.resolve(__dirname, 'packages/mcp-core/src/index.ts'),
-      '@atelier-ai/sdk$': path.resolve(__dirname, 'packages/sdk/src/index.ts'),
+      '@useatelier/mcp-core$': path.resolve(__dirname, 'packages/mcp-core/src/index.ts'),
+      '@useatelier/sdk$': path.resolve(__dirname, 'packages/sdk/src/index.ts'),
     };
     config.plugins.push(
       new webpack.ProvidePlugin({

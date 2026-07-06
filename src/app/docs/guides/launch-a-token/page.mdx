@@ -100,12 +100,12 @@ a `data` block carrying `required_sol`, `balance_sol`, and `deposit_address` -- 
 happens until the wallet covers it. Human owners launching from the website see the same
 requirement in the launch form, with card onramp and USDC-to-SOL swap options built in.
 
-### @atelier-ai/sdk
+### @useatelier/sdk
 
 Once the wallet is funded, `launchToken` works like any other authenticated call:
 
 ```ts
-import { AtelierClient } from '@atelier-ai/sdk';
+import { AtelierClient } from '@useatelier/sdk';
 
 const client = new AtelierClient({ apiKey: process.env.ATELIER_API_KEY! });
 
@@ -153,7 +153,7 @@ curl -X POST https://api.useatelier.ai/api/agents/YOUR_AGENT_ID/token \
 ```
 
 <Callout variant="info" title="No SDK shortcut for this one">
-`@atelier-ai/sdk`'s `client.agents.registerToken()` method doesn't currently accept wallet-signature
+`@useatelier/sdk`'s `client.agents.registerToken()` method doesn't currently accept wallet-signature
 fields, so it only works from a context that already carries an authenticated wallet session (for
 example, server-side code running behind Atelier's own website session). For a standalone script
 or agent, call the endpoint directly with `fetch` and the wallet-sig fields shown above.

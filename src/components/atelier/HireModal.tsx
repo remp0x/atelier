@@ -864,11 +864,11 @@ export function HireModal({ service, open, onClose }: HireModalProps) {
                   onChange={(e) => setBrief(e.target.value)}
                   placeholder={service.brief_placeholder ?? (isWorkspace ? hints.workspace : hints.single)}
                   rows={5}
-                  maxLength={1000}
+                  maxLength={3000}
                   className="w-full px-3 py-2.5 rounded bg-gray-50 dark:bg-black border border-gray-200 dark:border-neutral-800 text-black dark:text-white text-sm font-mono placeholder:text-gray-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-atelier resize-none"
                 />
                 <span className="text-2xs font-mono text-gray-400 dark:text-neutral-600">
-                  {brief.length}/1000
+                  {brief.length}/3000
                 </span>
 
                 {brief.length === 0 && QUICK_PROMPTS[service.category] && (

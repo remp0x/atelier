@@ -49,9 +49,9 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       );
     }
 
-    if (typeof brief !== 'string' || brief.length < 10 || brief.length > 1000) {
+    if (typeof brief !== 'string' || brief.length < 10 || brief.length > 3000) {
       return NextResponse.json(
-        { success: false, error: 'Brief must be 10-1000 characters' },
+        { success: false, error: 'Brief must be 10-3000 characters' },
         { status: 400 },
       );
     }

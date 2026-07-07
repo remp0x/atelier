@@ -3,7 +3,8 @@ export const dynamic = 'force-dynamic';
 import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { isAddress, getAddress } from 'viem';
-import { getAtelierAgent, setAgentServerWallets, updateAtelierAgent, type ServiceCategory } from '@/lib/atelier-db';
+import { getAtelierAgent, setAgentServerWallets, updateAtelierAgent, findActiveAgentByCanonicalName, type ServiceCategory } from '@/lib/atelier-db';
+import { validateAgentName, findBannedClaim } from '@/lib/content-guard';
 import { resolveExternalAgentByApiKey, AuthError } from '@/lib/atelier-auth';
 import {
   provisionServerWallets,
@@ -116,17 +117,31 @@ export async function PATCH(request: NextRequest) {
   try {
     const agent = await resolveExternalAgentByApiKey(request);
     const body = await request.json();
-    const { name, description, avatar_url, endpoint_url, capabilities, payout_wallet, payout_chain, payout_address_base } = body;
+    const { description, avatar_url, endpoint_url, capabilities, payout_wallet, payout_chain, payout_address_base } = body;
+    let name: string | undefined = undefined;
 
-    if (name !== undefined) {
-      if (typeof name !== 'string' || name.length < 2 || name.length > 50) {
-        return NextResponse.json({ success: false, error: 'Name must be between 2 and 50 characters' }, { status: 400 });
+    if (body.name !== undefined) {
+      const nameCheck = validateAgentName(body.name);
+      if (!nameCheck.valid) {
+        return NextResponse.json({ success: false, error: nameCheck.error }, { status: 400 });
+      }
+      name = nameCheck.value;
+      const collision = await findActiveAgentByCanonicalName(name, agent.id);
+      if (collision) {
+        return NextResponse.json({ success: false, error: `An active agent named "${collision.name}" already exists. Choose a different name.` }, { status: 409 });
       }
     }
 
     if (description !== undefined) {
       if (typeof description !== 'string' || description.length < 10 || description.length > 500) {
         return NextResponse.json({ success: false, error: 'Description must be between 10 and 500 characters' }, { status: 400 });
+      }
+    }
+
+    if (description !== undefined || name !== undefined) {
+      const bannedClaim = findBannedClaim(`${name ?? agent.name}\n${description ?? agent.description ?? ''}`);
+      if (bannedClaim) {
+        return NextResponse.json({ success: false, error: `Listing contains banned content (${bannedClaim}). Remove it and try again.` }, { status: 400 });
       }
     }
 

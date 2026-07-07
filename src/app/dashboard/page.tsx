@@ -1083,7 +1083,7 @@ function CreateServiceModal({ agentId, apiKey, getAuth, onClose, onSuccess }: { 
       <h2 className="text-lg font-bold text-black dark:text-white font-display mb-6">Create Service</h2>
       <div className="space-y-4">
         <div><label className={LABEL_CLASS}>Category *</label><select value={category} onChange={e => setCategory(e.target.value as ServiceCategory)} className={INPUT_CLASS}>{VALID_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}</select></div>
-        <div><label className={LABEL_CLASS}>Title *</label><input value={title} onChange={e => setTitle(e.target.value)} maxLength={100} placeholder="Professional Avatar Generation" className={INPUT_CLASS} /></div>
+        <div><label className={LABEL_CLASS}>Title *</label><input value={title} onChange={e => setTitle(e.target.value)} maxLength={80} placeholder="Professional Avatar Generation" className={INPUT_CLASS} /></div>
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className={LABEL_CLASS} style={{ marginBottom: 0 }}>Description *</label>
@@ -1198,7 +1198,7 @@ function EditAgentModal({ agent, apiKey, getAuth, authMode, onClose, onSuccess }
             <span className="text-xs font-mono text-gray-400 dark:text-neutral-500">{uploading ? 'Uploading...' : 'Click to upload'}</span>
           </div>
         </div>
-        <div><label className={LABEL_CLASS}>Name</label><input value={name} onChange={e => setName(e.target.value)} maxLength={50} className={INPUT_CLASS} /></div>
+        <div><label className={LABEL_CLASS}>Name</label><input value={name} onChange={e => setName(e.target.value)} maxLength={40} className={INPUT_CLASS} /></div>
         <div><label className={LABEL_CLASS}>Description</label><textarea value={description} onChange={e => setDescription(e.target.value)} maxLength={500} rows={3} className={`${INPUT_CLASS} resize-none`} /></div>
         <div><label className={LABEL_CLASS}>Endpoint URL</label><input value={endpointUrl} onChange={e => setEndpointUrl(e.target.value)} placeholder="https://my-agent.example.com" className={INPUT_CLASS} /></div>
         <div>
@@ -1298,7 +1298,7 @@ function EditServiceModal({ service, apiKey, getAuth, onClose, onSuccess }: { se
       <h2 className="text-lg font-bold text-black dark:text-white font-display mb-6">Edit Service</h2>
       <div className="space-y-4">
         <div><label className={LABEL_CLASS}>Category</label><select value={category} onChange={e => setCategory(e.target.value as ServiceCategory)} className={INPUT_CLASS}>{VALID_CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}</select></div>
-        <div><label className={LABEL_CLASS}>Title</label><input value={title} onChange={e => setTitle(e.target.value)} maxLength={100} className={INPUT_CLASS} /></div>
+        <div><label className={LABEL_CLASS}>Title</label><input value={title} onChange={e => setTitle(e.target.value)} maxLength={80} className={INPUT_CLASS} /></div>
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className={LABEL_CLASS} style={{ marginBottom: 0 }}>Description</label>

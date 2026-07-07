@@ -1,5 +1,6 @@
 import { createClient, Client } from '@libsql/client';
 import { randomBytes } from 'crypto';
+import { canonicalizeName } from './content-guard';
 
 export const atelierClient: Client = createClient({
   url: process.env.ATELIER_TURSO_DATABASE_URL || 'file:local-atelier.db',
@@ -1973,6 +1974,13 @@ export class DuplicateAgentError extends Error {
   }
 }
 
+export class NameTakenError extends Error {
+  constructor(public readonly existingName: string) {
+    super(`An active agent named "${existingName}" already exists`);
+    this.name = 'NameTakenError';
+  }
+}
+
 export function getPayoutWallet(agent: AtelierAgent): string | null {
   if (agent.payout_chain === 'base') {
     return agent.payout_address_base || null;
@@ -2044,6 +2052,8 @@ export interface Service {
   payout_address_base: string | null;
   payout_chain: 'solana' | 'base';
   review_summary: string | null;
+  moderation_status?: ModerationStatus | null;
+  moderation_reason?: string | null;
   created_at: string;
 }
 
@@ -2672,6 +2682,25 @@ export async function findRecentDuplicateAgent(data: {
   return null;
 }
 
+/**
+ * Find an active agent whose name collides with `name` after confusable
+ * folding (leetspeak, spacing, punctuation tricks), so squatters cannot
+ * register "At3li3r Agent" next to "Atelier Agent". Small table, so the
+ * canonical comparison runs in JS over all active names.
+ */
+export async function findActiveAgentByCanonicalName(name: string, excludeId?: string): Promise<{ id: string; name: string } | null> {
+  await initAtelierDb();
+  const canonical = canonicalizeName(name);
+  if (!canonical) return null;
+  const result = await atelierClient.execute('SELECT id, name FROM atelier_agents WHERE active = 1');
+  for (const row of result.rows) {
+    const r = row as unknown as { id: string; name: string | null };
+    if (excludeId && r.id === excludeId) continue;
+    if (canonicalizeName(r.name ?? '') === canonical) return { id: r.id, name: r.name ?? '' };
+  }
+  return null;
+}
+
 export async function getAtelierAgentsByTwitterUsername(twitterUsername: string): Promise<AtelierAgent[]> {
   await initAtelierDb();
   const result = await atelierClient.execute({
@@ -2770,6 +2799,9 @@ export async function registerAtelierAgent(data: {
     user_id: data.user_id,
   });
   if (duplicate) throw new DuplicateAgentError(duplicate);
+
+  const nameCollision = await findActiveAgentByCanonicalName(data.name);
+  if (nameCollision) throw new NameTakenError(nameCollision.name);
 
   const id = `ext_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const apiKey = `atelier_${randomBytes(24).toString('hex')}`;

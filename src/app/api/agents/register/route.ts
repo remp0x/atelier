@@ -1,13 +1,13 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { registerAtelierAgent, DuplicateAgentError, isRegistrationTxUsed, setAgentModeration, setAgentServerWallets, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
+import { registerAtelierAgent, DuplicateAgentError, NameTakenError, isRegistrationTxUsed, setAgentModeration, setAgentServerWallets, isBannedIdentity, type ServiceCategory } from '@/lib/atelier-db';
 import { provisionServerWallets } from '@/lib/privy-server-wallets';
 import { moderateListing } from '@/lib/pod';
 import { notifyAgentModeration } from '@/lib/notifications';
 import { rateLimiters, getClientIp, isBlockedIp } from '@/lib/rateLimit';
 import { validateExternalUrl } from '@/lib/url-validation';
-import { violatesReservedBrand } from '@/lib/content-guard';
+import { validateAgentName, findBannedClaim } from '@/lib/content-guard';
 import { readPrivyAccessToken, verifyPrivyAccessToken, PrivyAuthError } from '@/lib/privy-auth';
 import { authenticateUserRequest } from '@/lib/session';
 import { WalletAuthError } from '@/lib/solana-auth';
@@ -55,17 +55,20 @@ type CommonFields = {
 };
 
 function parseCommonFields(body: Record<string, unknown>): { error: NextResponse } | { fields: CommonFields } {
-  const name = typeof body.name === 'string' ? body.name.trim() : '';
-  if (name.length < 2 || name.length > 50) {
-    return { error: NextResponse.json({ success: false, error: 'name is required (2-50 characters)' }, { status: 400 }) };
+  const nameCheck = validateAgentName(body.name);
+  if (!nameCheck.valid) {
+    return { error: NextResponse.json({ success: false, error: nameCheck.error }, { status: 400 }) };
   }
-  if (violatesReservedBrand(name)) {
-    return { error: NextResponse.json({ success: false, error: 'That name is reserved and cannot be used.' }, { status: 400 }) };
-  }
+  const name = nameCheck.value;
 
   const description = typeof body.description === 'string' ? body.description : '';
   if (description.length < 10 || description.length > 500) {
     return { error: NextResponse.json({ success: false, error: 'description is required (10-500 characters)' }, { status: 400 }) };
+  }
+
+  const bannedClaim = findBannedClaim(`${name}\n${description}`);
+  if (bannedClaim) {
+    return { error: NextResponse.json({ success: false, error: `Listing contains banned content (${bannedClaim}). Remove it and try again.` }, { status: 400 }) };
   }
 
   const endpoint_url = typeof body.endpoint_url === 'string' ? body.endpoint_url : undefined;
@@ -284,6 +287,13 @@ export async function POST(request: NextRequest) {
 
     return await registerBare(body, clientIp);
   } catch (error) {
+    if (error instanceof NameTakenError) {
+      return NextResponse.json({
+        success: false,
+        error: 'name_taken',
+        message: `An active agent named "${error.existingName}" already exists (names are compared case-insensitively, ignoring punctuation and lookalike characters). Choose a different name.`,
+      }, { status: 409 });
+    }
     if (error instanceof DuplicateAgentError) {
       const existing = error.existingAgent;
       const maskedKey = existing.api_key

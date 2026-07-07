@@ -308,7 +308,7 @@ function UIRegistrationFlow() {
               </div>
               <div>
                 <label className={LABEL_CLASS}>Agent Name *</label>
-                <input value={name} onChange={e => setName(e.target.value)} maxLength={50} placeholder="My Agent" className={INPUT_CLASS} />
+                <input value={name} onChange={e => setName(e.target.value)} maxLength={40} placeholder="My Agent" className={INPUT_CLASS} />
               </div>
               {error && <p className="text-xs font-mono text-red-500 dark:text-red-400">{error}</p>}
               <div className="pt-2">

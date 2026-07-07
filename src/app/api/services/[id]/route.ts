@@ -1,8 +1,10 @@
 export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServiceById, updateService, deactivateService, type ServiceCategory, type ServicePriceType } from '@/lib/atelier-db';
+import { getServiceById, updateService, deactivateService, setServiceModeration, clearModeration, type ServiceCategory, type ServicePriceType } from '@/lib/atelier-db';
 import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
+import { validateServiceTitle, findBannedClaim } from '@/lib/content-guard';
+import { moderateListing } from '@/lib/pod';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
 const VALID_PRICE_TYPES: ServicePriceType[] = ['fixed', 'quote', 'weekly', 'monthly'];
@@ -54,7 +56,8 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit, max_revisions } = body;
+    const { category, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit, max_revisions } = body;
+    let title: string | undefined = undefined;
 
     if (category !== undefined && !VALID_CATEGORIES.includes(category)) {
       return NextResponse.json(
@@ -63,12 +66,23 @@ export async function PATCH(
       );
     }
 
-    if (title !== undefined && (typeof title !== 'string' || title.length < 3 || title.length > 100)) {
-      return NextResponse.json({ success: false, error: 'title must be between 3 and 100 characters' }, { status: 400 });
+    if (body.title !== undefined) {
+      const titleCheck = validateServiceTitle(body.title);
+      if (!titleCheck.valid) {
+        return NextResponse.json({ success: false, error: titleCheck.error }, { status: 400 });
+      }
+      title = titleCheck.value;
     }
 
-    if (description !== undefined && (typeof description !== 'string' || description.length < 10 || description.length > 1000)) {
-      return NextResponse.json({ success: false, error: 'description must be between 10 and 1000 characters' }, { status: 400 });
+    if (description !== undefined && (typeof description !== 'string' || description.length < 40 || description.length > 1000)) {
+      return NextResponse.json({ success: false, error: 'description must be between 40 and 1000 characters -- describe what the service delivers, how, and for whom' }, { status: 400 });
+    }
+
+    if (title !== undefined || description !== undefined) {
+      const bannedClaim = findBannedClaim(`${title ?? existing.title}\n${description ?? existing.description}`);
+      if (bannedClaim) {
+        return NextResponse.json({ success: false, error: `Listing contains banned content (${bannedClaim}). Remove it and try again.` }, { status: 400 });
+      }
     }
 
     if (price_usd !== undefined && (isNaN(parseFloat(price_usd)) || parseFloat(price_usd) < 0)) {
@@ -106,7 +120,29 @@ export async function PATCH(
     if (max_revisions !== undefined) updates.max_revisions = max_revisions;
 
     const updated = await updateService(serviceId, agent.id, updates);
-    return NextResponse.json({ success: true, data: updated });
+
+    // Content edits go back through moderation, mirroring agent listings: a
+    // clean verdict clears a 'review' flag on the spot so owners can fix a
+    // flagged service and be relisted without an admin. 'spam' stays sticky.
+    let moderation: { status: string; reason: string | null } | undefined;
+    if ((title !== undefined || description !== undefined) && updated) {
+      if (existing.moderation_status === 'spam') {
+        moderation = { status: 'spam', reason: existing.moderation_reason ?? null };
+      } else {
+        const verdict = await moderateListing('service', `${updated.title}\n${updated.description}`);
+        if (verdict.verdict === 'ok') {
+          if (existing.moderation_status === 'review') {
+            await clearModeration('service', serviceId);
+          }
+          moderation = { status: 'ok', reason: null };
+        } else {
+          await setServiceModeration(serviceId, verdict.verdict, verdict.reason);
+          moderation = { status: verdict.verdict, reason: verdict.reason };
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true, data: moderation && updated ? { ...updated, moderation } : updated });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ success: false, error: error.message }, { status: error.statusCode });

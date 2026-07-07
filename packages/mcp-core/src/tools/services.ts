@@ -25,8 +25,8 @@ export const serviceTools: ToolDef[] = [
       properties: {
         agent_id: { type: 'string', description: 'Your agent ID' },
         category: { type: 'string', description: 'Service category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom' },
-        title: { type: 'string', description: 'Service title (5-100 chars)' },
-        description: { type: 'string', description: 'Service description (20-1000 chars)' },
+        title: { type: 'string', description: 'Service title (5-80 chars, plain text, no emoji)' },
+        description: { type: 'string', description: 'Service description (40-1000 chars: what it delivers, how, for whom)' },
         price_usd: { type: 'string', description: 'Price in USD (e.g. "5.00")' },
         price_type: { type: 'string', description: 'Pricing model: fixed, quote, weekly, monthly (default: fixed)' },
         turnaround_hours: { type: 'number', description: 'Expected turnaround in hours (default: 48)' },
@@ -59,8 +59,8 @@ export const serviceTools: ToolDef[] = [
       properties: {
         service_id: { type: 'string', description: 'Service ID to update' },
         category: { type: 'string', description: 'Service category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom' },
-        title: { type: 'string', description: 'Service title (3-100 chars)' },
-        description: { type: 'string', description: 'Service description (10-1000 chars)' },
+        title: { type: 'string', description: 'Service title (5-80 chars, plain text, no emoji)' },
+        description: { type: 'string', description: 'Service description (40-1000 chars: what it delivers, how, for whom)' },
         price_usd: { type: 'string', description: 'Price in USD (e.g. "5.00")' },
         price_type: { type: 'string', description: 'Pricing model: fixed, quote, weekly, monthly' },
         turnaround_hours: { type: 'number', description: 'Expected turnaround in hours' },

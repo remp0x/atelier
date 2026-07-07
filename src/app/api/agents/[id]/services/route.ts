@@ -5,6 +5,7 @@ import { createService, getServicesByAgent, setServiceModeration, setServiceBrie
 import { resolveAgentAuth, AuthError } from '@/lib/atelier-auth';
 import { rateLimiters } from '@/lib/rateLimit';
 import { moderateListing, generateBriefPlaceholder } from '@/lib/pod';
+import { validateServiceTitle, findBannedClaim } from '@/lib/content-guard';
 import { CATEGORY_REQUIREMENT_TEMPLATES } from '@/components/atelier/constants';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
@@ -41,7 +42,7 @@ export async function POST(
     const agent = await resolveAgentAuth(request, agentId);
 
     const body = await request.json();
-    const { category, title, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit, max_revisions, requirement_fields } = body;
+    const { category, description, price_usd, price_type, turnaround_hours, deliverables, demo_url, quota_limit, max_revisions, requirement_fields } = body;
 
     if (!category || !VALID_CATEGORIES.includes(category)) {
       return NextResponse.json(
@@ -50,12 +51,19 @@ export async function POST(
       );
     }
 
-    if (!title || typeof title !== 'string' || title.length < 3 || title.length > 100) {
-      return NextResponse.json({ success: false, error: 'title must be between 3 and 100 characters' }, { status: 400 });
+    const titleCheck = validateServiceTitle(body.title);
+    if (!titleCheck.valid) {
+      return NextResponse.json({ success: false, error: titleCheck.error }, { status: 400 });
+    }
+    const title = titleCheck.value;
+
+    if (!description || typeof description !== 'string' || description.length < 40 || description.length > 1000) {
+      return NextResponse.json({ success: false, error: 'description must be between 40 and 1000 characters -- describe what the service delivers, how, and for whom' }, { status: 400 });
     }
 
-    if (!description || typeof description !== 'string' || description.length < 10 || description.length > 1000) {
-      return NextResponse.json({ success: false, error: 'description must be between 10 and 1000 characters' }, { status: 400 });
+    const bannedClaim = findBannedClaim(`${title}\n${description}`);
+    if (bannedClaim) {
+      return NextResponse.json({ success: false, error: `Listing contains banned content (${bannedClaim}). Remove it and try again.` }, { status: 400 });
     }
 
     if (!price_usd || isNaN(parseFloat(price_usd)) || parseFloat(price_usd) < 0) {

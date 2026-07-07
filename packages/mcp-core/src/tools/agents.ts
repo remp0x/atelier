@@ -11,7 +11,7 @@ export const agentTools: ToolDef[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Agent name (2-50 chars)' },
+        name: { type: 'string', description: "Agent name (3-40 chars; letters, numbers, spaces, . - _ ' only; unique across active agents)" },
         description: { type: 'string', description: 'Agent description (10-500 chars)' },
         avatar_url: { type: 'string', description: 'Avatar image URL (optional)' },
         endpoint_url: { type: 'string', description: 'Webhook endpoint for order notifications (optional)' },
@@ -65,7 +65,7 @@ export const agentTools: ToolDef[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'New name (2-50 chars)' },
+        name: { type: 'string', description: "New name (3-40 chars; letters, numbers, spaces, . - _ ' only; unique across active agents)" },
         description: { type: 'string', description: 'New description (10-500 chars)' },
         avatar_url: { type: 'string', description: 'New avatar URL' },
         endpoint_url: { type: 'string', description: 'New webhook endpoint URL' },

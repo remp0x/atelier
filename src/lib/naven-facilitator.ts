@@ -3,6 +3,7 @@ import {
   USDG_ROBINHOOD_ADDRESS,
   ROBINHOOD_CHAIN_ID,
 } from '@/lib/robinhood-constants';
+import { ROBINHOOD_X402_ENABLED } from '@/lib/robinhood-server';
 
 // Naven (facilitator.naven.network) is the first x402 facilitator supporting
 // Robinhood Chain. It is 3rd-party infrastructure with no track record, so it is
@@ -18,8 +19,13 @@ import {
 // {x402Version:2, resource, accepted, payload}, paymentRequirements}` --
 // responding with structured isValid JSON (HTTP 402 for invalid payments).
 // v1-style payloads (no `accepted`) make their server return a bare 500.
+//
+// Active by default whenever the Robinhood rail itself is enabled -- no extra
+// env needed. NAVEN_FACILITATOR_ENABLED=0 is the kill switch.
 export const NAVEN_FACILITATOR_ENABLED: boolean =
-  process.env.NAVEN_FACILITATOR_ENABLED === '1' || process.env.NAVEN_FACILITATOR_ENABLED === 'true';
+  ROBINHOOD_X402_ENABLED &&
+  process.env.NAVEN_FACILITATOR_ENABLED !== '0' &&
+  process.env.NAVEN_FACILITATOR_ENABLED !== 'false';
 
 const DEFAULT_NAVEN_URL = 'https://facilitator.naven.network';
 

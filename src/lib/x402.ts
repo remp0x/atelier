@@ -7,6 +7,15 @@ import {
   extractBasePayerAddress,
 } from '@/lib/base-verify';
 import { USDC_BASE_ADDRESS } from '@/lib/base-server';
+import {
+  verifyRobinhoodUsdgReceived,
+  extractRobinhoodPayerAddress,
+} from '@/lib/robinhood-verify';
+import {
+  ROBINHOOD_X402_ENABLED,
+  getRobinhoodTreasuryAddress,
+  USDG_ROBINHOOD_ADDRESS,
+} from '@/lib/robinhood-server';
 import { getApiOrigin } from '@/lib/origins';
 
 const USDC_DECIMALS = 6;
@@ -16,15 +25,15 @@ function getSiteOrigin(): string {
   return getApiOrigin();
 }
 
-export type PaymentChain = 'solana' | 'base';
-export type X402Network = 'solana-mainnet' | 'base-mainnet';
+export type PaymentChain = 'solana' | 'base' | 'robinhood';
+export type X402Network = 'solana-mainnet' | 'base-mainnet' | 'robinhood-mainnet';
 
 export interface PaymentRequirements {
   version: '1';
   scheme: 'exact';
   network: X402Network;
   asset: {
-    currency: 'USDC';
+    currency: 'USDC' | 'USDG';
     address: string;
   };
   payTo: string;
@@ -41,13 +50,30 @@ export interface X402VerifyResult {
 }
 
 const SOLANA_TX_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,128}$/;
-const BASE_TX_REGEX = /^0x[a-fA-F0-9]{64}$/;
+const EVM_TX_REGEX = /^0x[a-fA-F0-9]{64}$/;
 
+// An EVM tx hash is ambiguous between Base and Robinhood Chain; without an
+// explicit X-Payment-Network hint it resolves to Base.
 export function detectChainFromTxRef(txRef: string): PaymentChain | null {
   const trimmed = txRef.trim();
-  if (BASE_TX_REGEX.test(trimmed)) return 'base';
+  if (EVM_TX_REGEX.test(trimmed)) return 'base';
   if (SOLANA_TX_REGEX.test(trimmed)) return 'solana';
   return null;
+}
+
+export function supportedPaymentChains(): PaymentChain[] {
+  return ROBINHOOD_X402_ENABLED ? ['solana', 'base', 'robinhood'] : ['solana', 'base'];
+}
+
+export function parsePaymentChain(value: string | null | undefined): PaymentChain | null {
+  if (!value) return null;
+  return supportedPaymentChains().includes(value as PaymentChain) ? (value as PaymentChain) : null;
+}
+
+export function paymentMethodForChain(chain: PaymentChain): string {
+  if (chain === 'base') return 'usdc-base';
+  if (chain === 'robinhood') return 'usdg-robinhood';
+  return 'usdc-sol';
 }
 
 export function buildFlatPaymentRequirements(params: {
@@ -69,6 +95,26 @@ export function buildFlatPaymentRequirements(params: {
       scheme: 'exact',
       network: 'base-mainnet',
       asset: { currency: 'USDC', address: USDC_BASE_ADDRESS },
+      payTo: treasury,
+      maxAmountRequired: String(microUnits),
+      description: params.description,
+      resource: params.resource,
+    };
+  }
+
+  if (chain === 'robinhood') {
+    if (!ROBINHOOD_X402_ENABLED) {
+      throw new Error('Robinhood Chain x402 rail is not enabled (ROBINHOOD_X402_ENABLED)');
+    }
+    const treasury = getRobinhoodTreasuryAddress();
+    if (!treasury) {
+      throw new Error('ATELIER_TREASURY_ROBINHOOD / ATELIER_TREASURY_BASE env var not set; cannot build Robinhood Chain payment requirements');
+    }
+    return {
+      version: '1',
+      scheme: 'exact',
+      network: 'robinhood-mainnet',
+      asset: { currency: 'USDG', address: USDG_ROBINHOOD_ADDRESS },
       payTo: treasury,
       maxAmountRequired: String(microUnits),
       description: params.description,
@@ -115,7 +161,7 @@ export function buildPaymentRequiredResponse(requirements: PaymentRequirements):
       'Content-Type': 'application/json',
       'X-Payment-Scheme': 'exact',
       'X-Payment-Network': requirements.network,
-      'X-Payment-Asset': 'USDC',
+      'X-Payment-Asset': requirements.asset.currency,
     },
   });
 }
@@ -143,6 +189,7 @@ const X402_MAX_TIMEOUT_SECONDS = 120;
 // CAIP-2 network identifiers (x402 v2 wire format). Solana mainnet uses its genesis hash.
 const CAIP2_NETWORK: Record<X402Network, string> = {
   'base-mainnet': 'eip155:8453',
+  'robinhood-mainnet': 'eip155:4663',
   'solana-mainnet': 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp',
 };
 
@@ -243,7 +290,7 @@ export function buildX402ChallengeResponse(params: {
 export function parseX402Header(headerValue: string | null): string | null {
   if (!headerValue) return null;
   const trimmed = headerValue.trim();
-  if (BASE_TX_REGEX.test(trimmed)) return trimmed;
+  if (EVM_TX_REGEX.test(trimmed)) return trimmed;
   if (SOLANA_TX_REGEX.test(trimmed)) return trimmed;
   return null;
 }
@@ -251,8 +298,9 @@ export function parseX402Header(headerValue: string | null): string | null {
 export function networkToChain(network: string | null | undefined): PaymentChain | null {
   if (!network) return null;
   const normalized = network.toLowerCase().trim();
-  if (normalized === 'base-mainnet' || normalized === 'base') return 'base';
-  if (normalized === 'solana-mainnet' || normalized === 'solana') return 'solana';
+  if (normalized === 'base-mainnet' || normalized === 'base' || normalized === 'eip155:8453') return 'base';
+  if (normalized === 'robinhood-mainnet' || normalized === 'robinhood' || normalized === 'eip155:4663') return 'robinhood';
+  if (normalized === 'solana-mainnet' || normalized === 'solana' || normalized.startsWith('solana:')) return 'solana';
   return null;
 }
 
@@ -268,7 +316,7 @@ export async function verifyX402Payment(
 
   try {
     if (chain === 'base') {
-      if (!BASE_TX_REGEX.test(txRef)) {
+      if (!EVM_TX_REGEX.test(txRef)) {
         return { verified: false, payerWallet: null, chain, error: 'Invalid Base transaction hash format' };
       }
       const txHash = txRef as `0x${string}`;
@@ -277,6 +325,22 @@ export async function verifyX402Payment(
         return { verified: false, payerWallet: null, chain, error: result.error };
       }
       const payerWallet = await extractBasePayerAddress(txHash);
+      if (!payerWallet) {
+        return { verified: false, payerWallet: null, chain, error: 'Could not extract payer wallet from transaction' };
+      }
+      return { verified: true, payerWallet, chain };
+    }
+
+    if (chain === 'robinhood') {
+      if (!EVM_TX_REGEX.test(txRef)) {
+        return { verified: false, payerWallet: null, chain, error: 'Invalid Robinhood Chain transaction hash format' };
+      }
+      const txHash = txRef as `0x${string}`;
+      const result = await verifyRobinhoodUsdgReceived(txHash, expectedTotalUsd);
+      if (!result.verified) {
+        return { verified: false, payerWallet: null, chain, error: result.error };
+      }
+      const payerWallet = await extractRobinhoodPayerAddress(txHash);
       if (!payerWallet) {
         return { verified: false, payerWallet: null, chain, error: 'Could not extract payer wallet from transaction' };
       }

@@ -3,6 +3,8 @@ import { getServiceById, type Service } from '@/lib/atelier-db';
 import {
   buildPaymentRequirements,
   buildX402ChallengeResponse,
+  parsePaymentChain,
+  supportedPaymentChains,
   type PaymentChain,
   type PaymentRequirements,
 } from '@/lib/x402';
@@ -56,17 +58,18 @@ export async function buildServiceChallenge(
   }
 
   let requestedChain: PaymentChain = 'solana';
-  if (chainParam === 'base') requestedChain = 'base';
-  else if (chainParam && chainParam !== 'solana') {
-    return jsonError(`Unsupported chain: ${chainParam}`, 400);
+  if (chainParam) {
+    const parsed = parsePaymentChain(chainParam);
+    if (!parsed) return jsonError(`Unsupported chain: ${chainParam}`, 400);
+    requestedChain = parsed;
   }
 
-  const baseEligible = typeof service.payout_address_base === 'string' && service.payout_address_base.length > 0;
+  const evmEligible = typeof service.payout_address_base === 'string' && service.payout_address_base.length > 0;
 
-  const chainOrder: PaymentChain[] =
-    requestedChain === 'base' && baseEligible
-      ? ['base', 'solana']
-      : ['solana', ...(baseEligible ? (['base'] as PaymentChain[]) : [])];
+  const chainOrder: PaymentChain[] = [
+    requestedChain,
+    ...supportedPaymentChains().filter((c) => c !== requestedChain),
+  ].filter((c) => c === 'solana' || evmEligible);
 
   const requirements: PaymentRequirements[] = [];
   for (const chain of chainOrder) {

@@ -21,7 +21,7 @@ export interface PartnerPayout {
   tx_hash: string | null;
   status: 'pending' | 'paid' | 'failed';
   error: string | null;
-  chain: 'solana' | 'base';
+  chain: 'solana' | 'base' | 'robinhood';
   created_at: string;
   paid_at: string | null;
 }
@@ -214,7 +214,7 @@ export async function createPartnerPayout(data: {
   partner_slug: string;
   order_id: string;
   amount_usd: string;
-  chain?: 'solana' | 'base';
+  chain?: 'solana' | 'base' | 'robinhood';
 }): Promise<PartnerPayout> {
   await initAtelierDb();
   const id = `ppo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

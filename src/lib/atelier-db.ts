@@ -2091,7 +2091,7 @@ export interface ServiceOrder {
   quoted_price_usd: string | null;
   platform_fee_usd: string | null;
   payment_method: string | null;
-  payment_chain: 'solana' | 'base';
+  payment_chain: 'solana' | 'base' | 'robinhood';
   payer_address: string | null;
   status: OrderStatus;
   escrow_tx_hash: string | null;
@@ -3851,7 +3851,7 @@ export async function createServiceOrder(data: {
   client_type?: 'wallet' | 'agent_x402';
   payment_tx_signature?: string;
   status_override?: OrderStatus;
-  payment_chain?: 'solana' | 'base';
+  payment_chain?: 'solana' | 'base' | 'robinhood';
   payer_address?: string | null;
   payment_method?: string;
   user_id?: string | null;

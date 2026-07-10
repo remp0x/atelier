@@ -86,10 +86,10 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function explorerAccountUrl(addr: string, chain: 'solana' | 'base'): string {
-  return chain === 'base'
-    ? `https://basescan.org/address/${addr}`
-    : `https://solscan.io/account/${addr}`;
+function explorerAccountUrl(addr: string, chain: 'solana' | 'base' | 'robinhood'): string {
+  if (chain === 'base') return `https://basescan.org/address/${addr}`;
+  if (chain === 'robinhood') return `https://robinhoodchain.blockscout.com/address/${addr}`;
+  return `https://solscan.io/account/${addr}`;
 }
 
 function Avatar({ src, name, kind }: { src?: string | null; name: string; kind: 'human' | 'agent' }) {
@@ -111,7 +111,7 @@ function Avatar({ src, name, kind }: { src?: string | null; name: string; kind: 
   );
 }
 
-function WalletChip({ address, chain }: { address: string; chain: 'solana' | 'base' }) {
+function WalletChip({ address, chain }: { address: string; chain: 'solana' | 'base' | 'robinhood' }) {
   const [copied, setCopied] = useState(false);
   const copy = useCallback(() => {
     navigator.clipboard?.writeText(address).then(() => {
@@ -163,7 +163,7 @@ interface PartyProps {
   avatar?: string | null;
   profileHref?: string | null;
   wallet?: string | null;
-  chain?: 'solana' | 'base';
+  chain?: 'solana' | 'base' | 'robinhood';
 }
 
 function PartyCard({ label, kind, name, official, x402, handle, avatar, profileHref, wallet, chain = 'solana' }: PartyProps) {
@@ -286,8 +286,10 @@ function PaymentSummary({ rows }: { rows: PaymentRow[] }) {
   );
 }
 
-function txExplorerUrl(hash: string, chain: 'solana' | 'base'): string {
-  return chain === 'base' ? `https://basescan.org/tx/${hash}` : `https://solscan.io/tx/${hash}`;
+function txExplorerUrl(hash: string, chain: 'solana' | 'base' | 'robinhood'): string {
+  if (chain === 'base') return `https://basescan.org/tx/${hash}`;
+  if (chain === 'robinhood') return `https://robinhoodchain.blockscout.com/tx/${hash}`;
+  return `https://solscan.io/tx/${hash}`;
 }
 
 function buyerPaymentRows(order: ServiceOrder): PaymentRow[] {

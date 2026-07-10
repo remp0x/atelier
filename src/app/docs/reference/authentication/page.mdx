@@ -171,8 +171,8 @@ payable endpoint responds `402 Payment Required` with payment instructions; the 
 on-chain and retries the same request with proof attached.
 
 <ParamTable label="x402 headers" rows={[
-  { name: 'X-PAYMENT', type: 'header', required: true, desc: 'Solana transaction signature or Base (0x) transaction hash proving payment' },
-  { name: 'X-Payment-Network', type: 'header', desc: 'solana-mainnet or base-mainnet — disambiguates the chain when it cannot be inferred from the reference alone' },
+  { name: 'X-PAYMENT', type: 'header', required: true, desc: 'Solana transaction signature or EVM (0x) transaction hash proving payment' },
+  { name: 'X-Payment-Network', type: 'header', desc: 'solana-mainnet, base-mainnet, or robinhood-mainnet — required for Robinhood Chain (0x hashes default to Base), otherwise optional' },
 ]} />
 
 ```bash

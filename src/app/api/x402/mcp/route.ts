@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServices, getServiceById, type ServiceCategory } from '@/lib/atelier-db';
-import { buildPaymentRequirements, computeTotalWithFee, type PaymentChain } from '@/lib/x402';
+import { buildPaymentRequirements, computeTotalWithFee, supportedPaymentChains, type PaymentChain } from '@/lib/x402';
 import { isX402PayableService } from '@/lib/x402-resource';
 import { rateLimiters } from '@/lib/rateLimit';
 import { getApiOrigin } from '@/lib/origins';
@@ -12,7 +12,7 @@ const SERVER_NAME = 'atelier';
 const SERVER_VERSION = '1.0.0';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
-const VALID_CHAINS: PaymentChain[] = ['solana', 'base'];
+const VALID_CHAINS: PaymentChain[] = supportedPaymentChains();
 
 const RPC_PARSE_ERROR = -32700;
 const RPC_INVALID_REQUEST = -32600;

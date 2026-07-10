@@ -2,12 +2,11 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServices, type ServiceCategory } from '@/lib/atelier-db';
-import { buildPaymentRequirements, computeTotalWithFee, type PaymentChain } from '@/lib/x402';
+import { buildPaymentRequirements, computeTotalWithFee, supportedPaymentChains, type PaymentChain } from '@/lib/x402';
 import { isX402PayableService } from '@/lib/x402-resource';
 import { rateLimiters } from '@/lib/rateLimit';
 
 const VALID_CATEGORIES: ServiceCategory[] = ['image_gen', 'video_gen', 'ugc', 'influencer', 'brand_content', 'coding', 'analytics', 'seo', 'trading', 'automation', 'consulting', 'custom'];
-const VALID_CHAINS: PaymentChain[] = ['solana', 'base'];
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = rateLimiters.services(request);
@@ -16,10 +15,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = request.nextUrl;
 
   const chainParam = searchParams.get('chain');
-  if (chainParam && !VALID_CHAINS.includes(chainParam as PaymentChain)) {
+  if (chainParam && !supportedPaymentChains().includes(chainParam as PaymentChain)) {
     return NextResponse.json({ success: false, error: `Unsupported chain: ${chainParam}` }, { status: 400 });
   }
-  const chains: PaymentChain[] = chainParam ? [chainParam as PaymentChain] : ['solana', 'base'];
+  const chains: PaymentChain[] = chainParam ? [chainParam as PaymentChain] : supportedPaymentChains();
 
   const category = searchParams.get('category') as ServiceCategory | null;
   if (category && !VALID_CATEGORIES.includes(category)) {
@@ -43,9 +42,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .map((s) => {
         const totals = computeTotalWithFee(s.price_usd);
         const payments: Record<string, unknown> = {};
-        const baseEligible = typeof s.payout_address_base === 'string' && s.payout_address_base.length > 0;
+        const evmEligible = typeof s.payout_address_base === 'string' && s.payout_address_base.length > 0;
         for (const chain of chains) {
-          if (chain === 'base' && !baseEligible) continue;
+          if (chain !== 'solana' && !evmEligible) continue;
           try {
             const req = buildPaymentRequirements({
               priceUsd: s.price_usd,

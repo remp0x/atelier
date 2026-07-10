@@ -1,5 +1,6 @@
 import { sendUsdcPayout } from './solana-payout';
 import { sendBaseUsdcPayout } from './base-payout';
+import { sendRobinhoodUsdgPayout } from './robinhood-payout';
 import type { PaymentChain } from './x402';
 import {
   createPartnerPayout,
@@ -33,7 +34,9 @@ export async function settlePartnerSplit({
     return;
   }
 
-  const destination = paymentChain === 'base' ? partner.wallet_address_base : partner.wallet_address;
+  const destination = paymentChain === 'base' || paymentChain === 'robinhood'
+    ? partner.wallet_address_base
+    : partner.wallet_address;
   if (!destination) {
     console.warn(`Partner ${partnerSlug} missing ${paymentChain} wallet, skipping split for order ${orderId}`);
     return;
@@ -53,7 +56,9 @@ export async function settlePartnerSplit({
   try {
     const txHash = paymentChain === 'base'
       ? await sendBaseUsdcPayout(destination, amountUsd)
-      : await sendUsdcPayout(destination, amountUsd);
+      : paymentChain === 'robinhood'
+        ? await sendRobinhoodUsdgPayout(destination, amountUsd)
+        : await sendUsdcPayout(destination, amountUsd);
     await markPartnerPayoutPaid(payout.id, txHash);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

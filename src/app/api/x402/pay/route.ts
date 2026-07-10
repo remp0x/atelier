@@ -18,6 +18,8 @@ import {
   computeTotalWithFee,
   networkToChain,
   detectChainFromTxRef,
+  parsePaymentChain,
+  paymentMethodForChain,
   type PaymentChain,
 } from '@/lib/x402';
 import {
@@ -80,16 +82,21 @@ function getOrigin(request: NextRequest): string {
 }
 
 function resolveQueryChain(param: string | null, fallback: PaymentChain): PaymentChain {
-  if (param === 'base') return 'base';
-  if (param === 'solana') return 'solana';
-  return fallback;
+  return parsePaymentChain(param) ?? fallback;
 }
 
-function serviceBaseEligible(service: Service): boolean {
+// Base and Robinhood Chain payouts both go to payout_address_base (one EVM
+// address, valid on both chains), so a single eligibility check covers them.
+function serviceEvmEligible(service: Service): boolean {
   return typeof service.payout_address_base === 'string' && service.payout_address_base.length > 0;
 }
 
 const BASE_NOT_AVAILABLE = 'This service is not available on Base yet: the provider has not configured a Base payout wallet.';
+const ROBINHOOD_NOT_AVAILABLE = 'This service is not available on Robinhood Chain yet: the provider has not configured an EVM payout wallet.';
+
+function chainNotAvailableError(chain: PaymentChain): string {
+  return chain === 'robinhood' ? ROBINHOOD_NOT_AVAILABLE : BASE_NOT_AVAILABLE;
+}
 
 const BRIEF_REQUIRED = 'A brief is required to hire this agent. Describe what you want produced via a "brief" JSON body field, a ?brief= query param, or an X-Atelier-Brief header. No order was created.';
 
@@ -164,8 +171,8 @@ export async function GET(request: NextRequest): Promise<NextResponse | Response
 
     const chain = resolveQueryChain(request.nextUrl.searchParams.get('chain'), 'solana');
 
-    if (chain === 'base' && !serviceBaseEligible(service)) {
-      return NextResponse.json({ success: false, error: BASE_NOT_AVAILABLE }, { status: 400 });
+    if (chain !== 'solana' && !serviceEvmEligible(service)) {
+      return NextResponse.json({ success: false, error: chainNotAvailableError(chain) }, { status: 400 });
     }
 
     if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
@@ -265,7 +272,7 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       if (!hasHireInput) {
         return NextResponse.json({ success: false, error: BRIEF_REQUIRED }, { status: 400 });
       }
-      if (!serviceBaseEligible(service)) {
+      if (!serviceEvmEligible(service)) {
         return NextResponse.json(
           { success: false, error: `${BASE_NOT_AVAILABLE} No payment was taken.` },
           { status: 409 },
@@ -279,8 +286,8 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
 
     if (!txSignature) {
       const chain = resolveQueryChain(request.nextUrl.searchParams.get('chain'), headerChain ?? 'solana');
-      if (chain === 'base' && !serviceBaseEligible(service)) {
-        return NextResponse.json({ success: false, error: BASE_NOT_AVAILABLE }, { status: 400 });
+      if (chain !== 'solana' && !serviceEvmEligible(service)) {
+        return NextResponse.json({ success: false, error: chainNotAvailableError(chain) }, { status: 400 });
       }
       if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
         const challenge = cdpChallengeForService(service, getOrigin(request));
@@ -323,7 +330,7 @@ async function recordPaidOrderAndPayout(
   order: Awaited<ReturnType<typeof createServiceOrder>>;
   payout: Awaited<ReturnType<typeof settleX402ProviderPayout>>;
 }> {
-  const paymentMethod = paymentChain === 'base' ? 'usdc-base' : 'usdc-sol';
+  const paymentMethod = paymentMethodForChain(paymentChain);
 
   const order = await createServiceOrder({
     service_id: service.id,
@@ -389,9 +396,9 @@ async function recordPaidOrderAndPayout(
         chain: payout.chain,
         amount_usd: payout.amountUsd,
         hint:
-          payout.chain === 'base'
-            ? 'Set payout_address_base via PATCH /api/agents/me to receive Base payouts, then retry the payout.'
-            : 'Set payout_wallet via PATCH /api/agents/me, then retry the payout.',
+          payout.chain === 'solana'
+            ? 'Set payout_wallet via PATCH /api/agents/me, then retry the payout.'
+            : 'Set payout_address_base via PATCH /api/agents/me to receive EVM (Base / Robinhood Chain) payouts, then retry the payout.',
       },
     });
   }

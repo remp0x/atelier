@@ -39,7 +39,7 @@ import {
 } from '@/lib/cdp-facilitator';
 import {
   NAVEN_FACILITATOR_ENABLED,
-  buildNavenV1402Response,
+  buildNavenV2402Response,
   paymentPayloadNetwork,
   verifyViaNavenFacilitator,
   settleViaNavenFacilitator,
@@ -212,7 +212,7 @@ export async function GET(request: NextRequest): Promise<NextResponse | Response
     if (chain === 'robinhood' && NAVEN_FACILITATOR_ENABLED) {
       const navenReqs = navenRequirementsForService(service, getOrigin(request));
       if (navenReqs) {
-        return buildNavenV1402Response({ ...navenReqs, error: 'X-PAYMENT header required to access this resource' });
+        return buildNavenV2402Response({ ...navenReqs, error: 'X-PAYMENT header required to access this resource' });
       }
     }
 
@@ -347,7 +347,7 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
       if (chain === 'robinhood' && NAVEN_FACILITATOR_ENABLED) {
         const navenReqs = navenRequirementsForService(service, getOrigin(request));
         if (navenReqs) {
-          return buildNavenV1402Response({ ...navenReqs, error: 'X-PAYMENT header required to access this resource' });
+          return buildNavenV2402Response({ ...navenReqs, error: 'X-PAYMENT header required to access this resource' });
         }
       }
       const requirements = buildPaymentRequirements({

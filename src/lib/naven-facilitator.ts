@@ -8,8 +8,16 @@ import {
 // Robinhood Chain. It is 3rd-party infrastructure with no track record, so it is
 // NEVER trusted as the source of truth: after a Naven settle we independently
 // verify the returned transaction on-chain (robinhood-verify.ts) before an order
-// is created. Off by default; their /verify has been observed to 500 on
-// well-formed requests, so this stays dark until proven against their live API.
+// is created.
+//
+// Wire format verified against their live stack (2026-07-10): x402 v2 only.
+// Their own test resource (GET api.naven.network/x402-test/ping) serves
+// `{x402Version:2, resource, accepts:[{scheme:'exact', network:'eip155:4663',
+// asset:USDG, amount, payTo, maxTimeoutSeconds, extra:{name:'Global Dollar',
+// version:'1'}}]}`, and /verify accepts `{x402Version:2, paymentPayload:
+// {x402Version:2, resource, accepted, payload}, paymentRequirements}` --
+// responding with structured isValid JSON (HTTP 402 for invalid payments).
+// v1-style payloads (no `accepted`) make their server return a bare 500.
 export const NAVEN_FACILITATOR_ENABLED: boolean =
   process.env.NAVEN_FACILITATOR_ENABLED === '1' || process.env.NAVEN_FACILITATOR_ENABLED === 'true';
 
@@ -33,16 +41,13 @@ export interface NavenRequirementsInput {
   description: string;
 }
 
-interface NavenV1Requirements {
+export interface NavenV2Requirements {
   scheme: 'exact';
   network: string;
-  maxAmountRequired: string;
-  resource: string;
-  description: string;
-  mimeType: string;
+  amount: string;
+  asset: string;
   payTo: string;
   maxTimeoutSeconds: number;
-  asset: string;
   extra: { name: string; version: string };
 }
 
@@ -50,49 +55,44 @@ function atomicAmount(totalUsd: number): string {
   return String(Math.round(totalUsd * 1_000_000));
 }
 
-// Naven's stack is a fork of the x402 v1-era packages (@naven-os/x402@0.6.x), so
-// the primary wire shape is v1 with their human-readable network id "robinhood"
-// (per docs.naven.network/facilitator/integrations). Their /supported endpoint
-// advertises CAIP-2, so the v2 shape is kept as a fallback attempt.
-export function buildNavenV1Requirements(params: NavenRequirementsInput): NavenV1Requirements {
+export function buildNavenV2Requirements(params: NavenRequirementsInput): NavenV2Requirements {
   return {
     scheme: 'exact',
-    network: 'robinhood',
-    maxAmountRequired: atomicAmount(params.totalUsd),
-    resource: params.resourceUrl,
-    description: params.description,
-    mimeType: 'application/json',
-    payTo: params.payTo,
-    maxTimeoutSeconds: 120,
-    asset: USDG_ROBINHOOD_ADDRESS,
-    extra: { ...USDG_ROBINHOOD_EIP712 },
-  };
-}
-
-function buildNavenV2Requirements(params: NavenRequirementsInput) {
-  return {
-    scheme: 'exact' as const,
     network: ROBINHOOD_CAIP2_NETWORK,
     amount: atomicAmount(params.totalUsd),
     asset: USDG_ROBINHOOD_ADDRESS,
     payTo: params.payTo,
-    maxTimeoutSeconds: 120,
+    maxTimeoutSeconds: 300,
     extra: { ...USDG_ROBINHOOD_EIP712 },
   };
 }
 
+function navenResourceInfo(params: NavenRequirementsInput) {
+  return {
+    url: params.resourceUrl,
+    description: params.description,
+    mimeType: 'application/json',
+  };
+}
+
 /**
- * Buyer-facing HTTP 402 in x402 v1 shape for the Naven/Robinhood rail, mirroring
- * buildCdpV1402Response: the fields (amount / payTo / asset / extra) must match
- * what is later sent to the facilitator so the buyer's EIP-3009 signature binds
- * to the same requirements.
+ * Buyer-facing HTTP 402 in the x402 v2 shape Naven's live stack serves and its
+ * clients consume. The fields (amount / payTo / asset / extra) must match what
+ * is later sent to the facilitator so the buyer's EIP-3009 signature binds to
+ * the same requirements.
  */
-export function buildNavenV1402Response(params: NavenRequirementsInput & { error: string }): Response {
-  const entry = buildNavenV1Requirements(params);
-  return new Response(JSON.stringify({ x402Version: 1, error: params.error, accepts: [entry] }), {
+export function buildNavenV2402Response(params: NavenRequirementsInput & { error: string }): Response {
+  const serialized = JSON.stringify({
+    x402Version: 2,
+    error: params.error,
+    resource: navenResourceInfo(params),
+    accepts: [buildNavenV2Requirements(params)],
+  });
+  return new Response(serialized, {
     status: 402,
     headers: {
       'Content-Type': 'application/json',
+      'Payment-Required': Buffer.from(serialized).toString('base64'),
       'X-Payment-Scheme': 'exact',
       'X-Payment-Network': 'robinhood-mainnet',
       'X-Payment-Asset': 'USDG',
@@ -162,39 +162,32 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+// Naven answers verify with HTTP 402 + structured JSON for an invalid payment,
+// so the body is parsed at any status; only an unparseable body is an error.
 async function navenPost(
   endpointPath: 'verify' | 'settle',
   buyerPayload: Record<string, unknown>,
   requirements: NavenRequirementsInput,
 ): Promise<{ status: number; body: Record<string, unknown> | null }> {
   const endpoint = `${navenFacilitatorUrl()}/${endpointPath}`;
-  const signature = buyerSignaturePayload(buyerPayload);
+  const accepted = buildNavenV2Requirements(requirements);
 
-  const attempts = [
-    {
-      x402Version: 1,
-      paymentPayload: { x402Version: 1, scheme: 'exact', network: 'robinhood', payload: signature },
-      paymentRequirements: buildNavenV1Requirements(requirements),
-    },
-    {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       x402Version: 2,
-      paymentPayload: { x402Version: 2, scheme: 'exact', network: ROBINHOOD_CAIP2_NETWORK, payload: signature },
-      paymentRequirements: buildNavenV2Requirements(requirements),
-    },
-  ];
-
-  let last: { status: number; body: Record<string, unknown> | null } = { status: 0, body: null };
-  for (const body of attempts) {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-    last = { status: response.status, body: parsed };
-    if (response.ok && parsed) return last;
-  }
-  return last;
+      paymentPayload: {
+        x402Version: 2,
+        resource: navenResourceInfo(requirements),
+        accepted,
+        payload: buyerSignaturePayload(buyerPayload),
+      },
+      paymentRequirements: accepted,
+    }),
+  });
+  const parsed = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  return { status: response.status, body: parsed };
 }
 
 export async function verifyViaNavenFacilitator(args: {
@@ -210,9 +203,9 @@ export async function verifyViaNavenFacilitator(args: {
       return { isValid: false, error: `Naven verify returned no parseable body (status ${status})` };
     }
     return {
-      isValid: body.isValid === true || body.valid === true,
+      isValid: body.isValid === true,
       payer: asString(body.payer),
-      invalidReason: asString(body.invalidReason) ?? asString(body.reason),
+      invalidReason: asString(body.invalidReason) ?? asString(body.invalidMessage),
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Naven verify error';

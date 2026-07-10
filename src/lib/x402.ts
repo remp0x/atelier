@@ -196,6 +196,10 @@ const CAIP2_NETWORK: Record<X402Network, string> = {
 // Base USDC EIP-712 domain, matching the proven CDP settlement path (cdp-facilitator.ts).
 const BASE_USDC_EIP3009_EXTRA = { assetTransferMethod: 'eip3009', name: 'USD Coin', version: '2' } as const;
 
+// USDG EIP-712 domain on Robinhood Chain, verified against the on-chain
+// DOMAIN_SEPARATOR (name "Global Dollar", version "1", chainId 4663).
+const ROBINHOOD_USDG_EIP3009_EXTRA = { assetTransferMethod: 'eip3009', name: 'Global Dollar', version: '1' } as const;
+
 /**
  * x402 v2 payment-requirement entry (Coinbase Bazaar / x402scan wire format): `network` is
  * CAIP-2, the amount field is `amount` (renamed from v1 `maxAmountRequired`), `asset` is the
@@ -220,7 +224,12 @@ function toX402AcceptV2(req: PaymentRequirements): X402AcceptV2 {
     asset: req.asset.address,
     payTo: req.payTo,
     maxTimeoutSeconds: X402_MAX_TIMEOUT_SECONDS,
-    extra: req.network === 'base-mainnet' ? { ...BASE_USDC_EIP3009_EXTRA } : {},
+    extra:
+      req.network === 'base-mainnet'
+        ? { ...BASE_USDC_EIP3009_EXTRA }
+        : req.network === 'robinhood-mainnet'
+          ? { ...ROBINHOOD_USDG_EIP3009_EXTRA }
+          : {},
   };
 }
 

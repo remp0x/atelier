@@ -421,7 +421,7 @@ var agentTools = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "Agent name (2-50 chars)" },
+        name: { type: "string", description: "Agent name (3-40 chars; letters, numbers, spaces, . - _ ' only; unique across active agents)" },
         description: { type: "string", description: "Agent description (10-500 chars)" },
         avatar_url: { type: "string", description: "Avatar image URL (optional)" },
         endpoint_url: { type: "string", description: "Webhook endpoint for order notifications (optional)" },
@@ -475,7 +475,7 @@ var agentTools = [
     inputSchema: {
       type: "object",
       properties: {
-        name: { type: "string", description: "New name (2-50 chars)" },
+        name: { type: "string", description: "New name (3-40 chars; letters, numbers, spaces, . - _ ' only; unique across active agents)" },
         description: { type: "string", description: "New description (10-500 chars)" },
         avatar_url: { type: "string", description: "New avatar URL" },
         endpoint_url: { type: "string", description: "New webhook endpoint URL" },
@@ -553,8 +553,8 @@ var serviceTools = [
       properties: {
         agent_id: { type: "string", description: "Your agent ID" },
         category: { type: "string", description: "Service category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom" },
-        title: { type: "string", description: "Service title (5-100 chars)" },
-        description: { type: "string", description: "Service description (20-1000 chars)" },
+        title: { type: "string", description: "Service title (5-80 chars, plain text, no emoji)" },
+        description: { type: "string", description: "Service description (40-1000 chars: what it delivers, how, for whom)" },
         price_usd: { type: "string", description: 'Price in USD (e.g. "5.00")' },
         price_type: { type: "string", description: "Pricing model: fixed, quote, weekly, monthly (default: fixed)" },
         turnaround_hours: { type: "number", description: "Expected turnaround in hours (default: 48)" },
@@ -587,8 +587,8 @@ var serviceTools = [
       properties: {
         service_id: { type: "string", description: "Service ID to update" },
         category: { type: "string", description: "Service category: image_gen, video_gen, ugc, influencer, brand_content, coding, analytics, seo, trading, automation, consulting, custom" },
-        title: { type: "string", description: "Service title (3-100 chars)" },
-        description: { type: "string", description: "Service description (10-1000 chars)" },
+        title: { type: "string", description: "Service title (5-80 chars, plain text, no emoji)" },
+        description: { type: "string", description: "Service description (40-1000 chars: what it delivers, how, for whom)" },
         price_usd: { type: "string", description: 'Price in USD (e.g. "5.00")' },
         price_type: { type: "string", description: "Pricing model: fixed, quote, weekly, monthly" },
         turnaround_hours: { type: "number", description: "Expected turnaround in hours" },
@@ -1046,14 +1046,14 @@ var x402Tools = [
   },
   {
     name: "atelier_get_payment_requirements",
-    description: "Get the x402 USDC payment requirements (the 402 challenge) for an Atelier service before hiring: amount, asset, network, and payTo address. Then pay on-chain and call atelier_submit_payment with the tx signature.",
+    description: "Get the x402 payment requirements (the 402 challenge) for an Atelier service before hiring: amount, asset, network, and payTo address. Assets: USDC on Solana/Base, USDG on Robinhood Chain. Then pay on-chain and call atelier_submit_payment with the tx signature.",
     auth: "none",
     annotations: { title: "Get payment requirements", readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         service_id: { type: "string", description: "The service_id to get payment requirements for." },
-        chain: { type: "string", description: "Payment chain: 'solana' (default) or 'base'." }
+        chain: { type: "string", description: "Payment chain: 'solana' (default), 'base', or 'robinhood' (Robinhood Chain, pays in USDG)." }
       },
       required: ["service_id"]
     },
@@ -1070,7 +1070,7 @@ var x402Tools = [
   },
   {
     name: "atelier_submit_payment",
-    description: "Finalize hiring an Atelier agent after paying on-chain. Submit the x402 USDC payment proof (transaction signature/hash) plus your brief; this creates the paid order, settles the provider payout, and returns the order_id + status_url. Get the amount/address first via atelier_get_payment_requirements.",
+    description: "Finalize hiring an Atelier agent after paying on-chain. Submit the x402 payment proof (transaction signature/hash) plus your brief; this creates the paid order, settles the provider payout, and returns the order_id + status_url. Get the amount/address first via atelier_get_payment_requirements.",
     auth: "none",
     annotations: { title: "Submit payment / finalize hire", openWorldHint: true },
     inputSchema: {
@@ -1078,8 +1078,8 @@ var x402Tools = [
       properties: {
         service_id: { type: "string", description: "The service_id you are paying for." },
         brief: { type: "string", description: "Description of the work you want the agent to perform." },
-        tx_signature: { type: "string", description: "On-chain payment proof: Solana tx signature or Base 0x tx hash." },
-        chain: { type: "string", description: "Payment network: 'solana' (-> solana-mainnet) or 'base' (-> base-mainnet). Auto-detected if omitted." }
+        tx_signature: { type: "string", description: "On-chain payment proof: Solana tx signature or EVM (Base / Robinhood Chain) 0x tx hash." },
+        chain: { type: "string", description: "Payment network: 'solana' (-> solana-mainnet), 'base' (-> base-mainnet), or 'robinhood' (-> robinhood-mainnet). Auto-detected if omitted, EXCEPT Robinhood Chain: 0x hashes default to Base, so always pass 'robinhood' when you paid there." }
       },
       required: ["service_id", "brief", "tx_signature"]
     },
@@ -1096,7 +1096,7 @@ var x402Tools = [
         "X-Atelier-Brief": brief
       };
       if (typeof args.chain === "string" && args.chain) {
-        headers["X-Payment-Network"] = args.chain === "base" ? "base-mainnet" : "solana-mainnet";
+        headers["X-Payment-Network"] = args.chain === "base" ? "base-mainnet" : args.chain === "robinhood" ? "robinhood-mainnet" : "solana-mainnet";
       }
       if (ctx.apiKey) headers["Authorization"] = `Bearer ${ctx.apiKey}`;
       const outcome = await fetchJson(`${ctx.baseUrl}/api/x402/pay?service_id=${encodeURIComponent(serviceId)}`, {
@@ -1254,7 +1254,7 @@ function registerTools(server2, makeContext) {
 var apiKey = process.env.ATELIER_API_KEY;
 var baseUrl = process.env.ATELIER_BASE_URL || "https://api.useatelier.ai";
 var client = new AtelierClient({ apiKey, baseUrl });
-var server = new import_mcp.McpServer({ name: "atelier", version: "0.5.0" });
+var server = new import_mcp.McpServer({ name: "atelier", version: "0.5.1" });
 registerTools(server, () => ({
   client,
   caller: { kind: "agent" },

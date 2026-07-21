@@ -5,34 +5,35 @@ export const metadata = {
 
 # Staking (real-yield)
 
-<StatusBadge status="Beta" />
+<StatusBadge status="Live" />
 
 $ATELIER staking is a real-yield, revenue-share program: stake $ATELIER and earn a pro-rata share
-of platform revenue paid in USDC, not inflationary token emissions.
+of platform revenue paid in SOL, not inflationary token emissions.
 
-<Callout variant="warning" title="Not audited, not on mainnet">
-Staking is in testing on Solana devnet and has not been professionally audited. It is not live on
-mainnet and there is no date for that yet -- a third-party audit is a hard gate before any
-mainnet deployment. Nothing on this page describes a live, funded product. Treat it as a preview
-of the design, not something you can stake into today.
+<Callout variant="info" title="Live on mainnet">
+Staking is live on Solana mainnet, funded by real platform revenue. The program passed a
+third-party audit before deployment, on top of three internal security reviews. As with any
+smart contract, audited does not mean risk-free.
 </Callout>
 
 ## How it works
 
 The staking program is non-custodial: a program-owned PDA holds both the staked-$ATELIER vault
-and the USDC reward vault. No admin key can move funds out of either vault -- only a user's own
-`unstake` and `claim` instructions can.
+and the SOL reward vault (wrapped SOL on-chain; claims unwrap it to native SOL automatically).
+No admin key can move funds out of either vault -- only a user's own `unstake` and `claim`
+instructions can.
 
 ### Lock tiers
 
-Staking $ATELIER means locking it into one of three tiers, each with a different reward
+Staking $ATELIER means locking it into one of four tiers, each with a different reward
 multiplier:
 
 | Tier | Lock | Multiplier |
 |---|---|---|
-| 30-day | 30-day lock | 1x |
-| 90-day | 90-day lock | 4x |
-| 180-day | 180-day lock | 8x |
+| 15-day | 15-day lock | 1x |
+| 30-day | 30-day lock | 4x |
+| 60-day | 60-day lock | 10x |
+| 180-day | 180-day lock | 20x |
 
 A longer lock means a larger weighted share of the reward pool for the same amount staked, but
 your principal is committed for that lock's duration.
@@ -40,7 +41,7 @@ your principal is committed for that lock's duration.
 ### Rewards drip linearly, they are not claim-anytime-instant
 
 This is not a pool where rewards accrue continuously and sit ready to claim the instant they're
-funded. Each funding round is distributed using a Synthetix-style linear drip: USDC funded into
+funded. Each funding round is distributed using a Synthetix-style linear drip: SOL funded into
 the reward vault pays out gradually over a fixed `reward_duration` window, pro-rata to each
 staker's weighted share (amount staked x tier multiplier) for the time they were staked during
 that window. Claiming pulls whatever has dripped so far -- it does not fast-forward the window.
@@ -48,14 +49,15 @@ that window. Claiming pulls whatever has dripped so far -- it does not fast-forw
 ### Reward source and funding cadence
 
 Rewards come from platform revenue, not new token issuance. By default, 50% of creator-fee
-revenue (configurable) is routed into the staking reward vault, funded on a weekly cadence from
-treasury USDC.
+revenue (configurable) is routed into the staking reward vault, funded on a weekly cadence in
+SOL -- creator fees arrive in SOL and rewards pay out in SOL, so no price conversion, oracle,
+or swap sits in the funding pipeline.
 
 ### Principal
 
 Unstaking returns your staked $ATELIER 1:1. Staking never risks your principal the way, say,
 [Earn's](/docs/concepts/earn) liquidity-provision venue does -- the risk profile here is smart
-contract and audit risk on an unaudited program, not market/trading risk on your stake.
+contract risk on an audited program, not market/trading risk on your stake.
 
 ## Related
 

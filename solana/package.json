@@ -1,0 +1,22 @@
+{
+  "name": "atelier-staking",
+  "version": "0.1.0",
+  "license": "MIT",
+  "scripts": {
+    "test": "anchor test",
+    "lint": "tsc --noEmit -p ./tsconfig.json",
+    "init-pool": "ts-node migrations/initialize-pool.ts"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "0.31.1",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.14.0",
+    "chai": "^4.3.10",
+    "mocha": "^10.4.0",
+    "ts-mocha": "^10.0.0",
+    "typescript": "^5.4.5"
+  }
+}

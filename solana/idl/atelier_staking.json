@@ -1,0 +1,1001 @@
+{
+  "address": "5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq",
+  "metadata": {
+    "name": "atelier_staking",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Atelier $ATELIER revenue-share staking program"
+  },
+  "docs": [
+    "Atelier $ATELIER staking.",
+    "",
+    "Custodial-free, on-chain revenue-share staking. Stakers lock $ATELIER",
+    "(Token-2022) into one of four lock tiers that scale their reward weight.",
+    "USDC funded by Atelier's backend (or anyone) accrues pro-rata to weighted",
+    "stake via a MasterChef/Synthetix `acc_reward_per_weight` accumulator.",
+    "",
+    "Trust model: the program holds staked tokens and USDC in PDA-owned vaults.",
+    "There is intentionally NO admin instruction that can move vault funds; the",
+    "only outflows are user `unstake` (their own principal) and user `claim`",
+    "(their own accrued rewards). `set_paused` can only block NEW stakes -- it can",
+    "never block unstake or claim. See SECURITY.md."
+  ],
+  "instructions": [
+    {
+      "name": "claim",
+      "docs": [
+        "Claim all accrued USDC rewards for a position without unstaking."
+      ],
+      "discriminator": [
+        62,
+        198,
+        214,
+        193,
+        213,
+        159,
+        108,
+        210
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "position"
+          ]
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "relations": [
+            "position"
+          ]
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "reward_mint",
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "reward_vault",
+          "writable": true
+        },
+        {
+          "name": "owner_reward_ata",
+          "writable": true
+        },
+        {
+          "name": "reward_token_program"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "crank_sync",
+      "docs": [
+        "Fold any USDC sitting in the reward vault into the accumulator and start",
+        "its linear drip. Restricted to the pool `funder`: notify resets the drip",
+        "window, so leaving it open let anyone re-notify with dust and stretch",
+        "unvested rewards (griefing). The backend funder cranks after each deposit."
+      ],
+      "discriminator": [
+        119,
+        31,
+        241,
+        92,
+        243,
+        124,
+        115,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "funder",
+          "signer": true,
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "reward_vault"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_pool",
+      "docs": [
+        "One-time pool creation for a given (staked mint, pool_id). Sets the",
+        "four lock tiers, the reward-drip window, and the `funder` allowed to",
+        "crank (all immutable thereafter) and rejects unsafe Token-2022",
+        "extensions. A `funder` of `Pubkey::default()` defaults to `admin`.",
+        "`pool_id` disambiguates successive pools for the same mint (retired",
+        "pools keep their address; a new id derives a fresh one)."
+      ],
+      "discriminator": [
+        95,
+        180,
+        10,
+        172,
+        84,
+        174,
+        232,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "program",
+          "docs": [
+            "This program, used to reach its ProgramData. Closes the init front-run",
+            "vector: the pool PDA is deterministic per mint, so without this gate",
+            "anyone could create the canonical pool first and seize `admin` forever."
+          ],
+          "address": "5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq"
+        },
+        {
+          "name": "program_data",
+          "docs": [
+            "Only the program's upgrade authority may initialize a pool."
+          ]
+        },
+        {
+          "name": "staked_mint"
+        },
+        {
+          "name": "reward_mint"
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "staked_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "reward_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  119,
+                  97,
+                  114,
+                  100,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
+        },
+        {
+          "name": "staked_token_program"
+        },
+        {
+          "name": "reward_token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "pool_id",
+          "type": "u8"
+        },
+        {
+          "name": "tiers",
+          "type": {
+            "array": [
+              {
+                "defined": {
+                  "name": "Tier"
+                }
+              },
+              4
+            ]
+          }
+        },
+        {
+          "name": "reward_duration_secs",
+          "type": "i64"
+        },
+        {
+          "name": "funder",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "set_paused",
+      "docs": [
+        "Admin-only: pause/unpause NEW stakes. Cannot affect unstake or claim."
+      ],
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "pool",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "stake",
+      "docs": [
+        "Stake `amount` into `tier_index`. Creates the position on first use,",
+        "adds to it (re-locking) thereafter."
+      ],
+      "discriminator": [
+        206,
+        176,
+        202,
+        18,
+        200,
+        209,
+        179,
+        108
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "pool",
+          "writable": true
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "staked_mint",
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "staked_vault",
+          "writable": true
+        },
+        {
+          "name": "owner_staked_ata",
+          "writable": true
+        },
+        {
+          "name": "reward_vault"
+        },
+        {
+          "name": "staked_token_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "tier_index",
+          "type": "u8"
+        },
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "unstake",
+      "docs": [
+        "Withdraw `amount` of staked principal once the lock has expired."
+      ],
+      "discriminator": [
+        90,
+        95,
+        107,
+        42,
+        205,
+        124,
+        50,
+        225
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "position"
+          ]
+        },
+        {
+          "name": "pool",
+          "writable": true,
+          "relations": [
+            "position"
+          ]
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "staked_mint",
+          "relations": [
+            "pool"
+          ]
+        },
+        {
+          "name": "staked_vault",
+          "writable": true
+        },
+        {
+          "name": "owner_staked_ata",
+          "writable": true
+        },
+        {
+          "name": "reward_vault"
+        },
+        {
+          "name": "staked_token_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "StakePool",
+      "discriminator": [
+        121,
+        34,
+        206,
+        21,
+        79,
+        127,
+        255,
+        28
+      ]
+    },
+    {
+      "name": "StakePosition",
+      "discriminator": [
+        78,
+        165,
+        30,
+        111,
+        171,
+        125,
+        11,
+        220
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "Claimed",
+      "discriminator": [
+        217,
+        192,
+        123,
+        72,
+        108,
+        150,
+        248,
+        33
+      ]
+    },
+    {
+      "name": "PausedSet",
+      "discriminator": [
+        171,
+        125,
+        127,
+        156,
+        233,
+        81,
+        68,
+        66
+      ]
+    },
+    {
+      "name": "PoolInitialized",
+      "discriminator": [
+        100,
+        118,
+        173,
+        87,
+        12,
+        198,
+        254,
+        229
+      ]
+    },
+    {
+      "name": "RewardsSynced",
+      "discriminator": [
+        66,
+        57,
+        28,
+        213,
+        120,
+        33,
+        234,
+        123
+      ]
+    },
+    {
+      "name": "Staked",
+      "discriminator": [
+        11,
+        146,
+        45,
+        205,
+        230,
+        58,
+        213,
+        240
+      ]
+    },
+    {
+      "name": "Unstaked",
+      "discriminator": [
+        27,
+        179,
+        156,
+        215,
+        47,
+        71,
+        195,
+        7
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "Paused",
+      "msg": "Pool is paused for new stakes"
+    },
+    {
+      "code": 6001,
+      "name": "ZeroAmount",
+      "msg": "Amount must be greater than zero"
+    },
+    {
+      "code": 6002,
+      "name": "InvalidTierIndex",
+      "msg": "Tier index out of range or mismatched"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidTierConfig",
+      "msg": "Invalid tier configuration"
+    },
+    {
+      "code": 6004,
+      "name": "Locked",
+      "msg": "Position is still locked"
+    },
+    {
+      "code": 6005,
+      "name": "InsufficientStake",
+      "msg": "Insufficient staked balance"
+    },
+    {
+      "code": 6006,
+      "name": "NothingToClaim",
+      "msg": "Nothing to claim"
+    },
+    {
+      "code": 6007,
+      "name": "UnsafeMintExtension",
+      "msg": "Staked mint carries a disallowed Token-2022 extension"
+    },
+    {
+      "code": 6008,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6009,
+      "name": "RewardVaultBalanceMismatch",
+      "msg": "Reward vault balance is inconsistent with the ledger"
+    },
+    {
+      "code": 6010,
+      "name": "Unauthorized",
+      "msg": "Only the program upgrade authority may initialize a pool"
+    },
+    {
+      "code": 6011,
+      "name": "InvalidRewardDuration",
+      "msg": "Reward duration must be greater than zero and within bounds"
+    }
+  ],
+  "types": [
+    {
+      "name": "Claimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PausedSet",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PoolInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "funder",
+            "type": "pubkey"
+          },
+          {
+            "name": "staked_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "reward_mint",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RewardsSynced",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_rewards",
+            "type": "u64"
+          },
+          {
+            "name": "acc_reward_per_weight",
+            "type": "u128"
+          },
+          {
+            "name": "total_weight",
+            "type": "u128"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StakePool",
+      "docs": [
+        "Aggregate pool state for one staked mint. Holds the global accumulator and",
+        "the running totals; the PDA is also the authority over both vaults."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "pool_id",
+            "docs": [
+              "Distinguishes multiple pools for the same staked mint (part of the pool",
+              "PDA seeds). Lets a new pool (new reward mint / tier set) be created",
+              "without colliding with retired ones."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "funder",
+            "docs": [
+              "Only this key may `crank_sync` (fund + notify a reward tranche). Set at",
+              "init to the backend funding wallet. Gating notify defeats the",
+              "dust-donation re-notify griefing that can stretch unvested rewards."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "staked_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "reward_mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "staked_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "reward_vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "tiers",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Tier"
+                  }
+                },
+                4
+              ]
+            }
+          },
+          {
+            "name": "total_staked",
+            "docs": [
+              "Raw staked principal (sum of position.amount). TVL numerator."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_weight",
+            "docs": [
+              "Sum of position weights. Distribution denominator."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "acc_reward_per_weight",
+            "docs": [
+              "Cumulative USDC distributed per unit of weight, scaled by ACC_SCALE."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "reward_rate",
+            "docs": [
+              "Linear reward drip (Synthetix-style). Funded USDC is paid out over",
+              "`reward_duration` seconds rather than dumped into the accumulator at once,",
+              "so a position must be staked across real time to earn -- defeating crank",
+              "front-running and JIT (stake-around-the-crank) reward capture.",
+              "`reward_rate` is (micro-USDC * ACC_SCALE) per second."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "period_finish",
+            "docs": [
+              "Unix time the current drip ends."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "last_update_time",
+            "docs": [
+              "Unix time the accumulator was last advanced."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "reward_duration",
+            "docs": [
+              "Length of each drip window (set at init, immutable)."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "reward_vault_last_balance",
+            "docs": [
+              "Last observed reward-vault balance; deposits are detected as the delta."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_rewards_distributed",
+            "docs": [
+              "Cumulative USDC funded into drips."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_rewards_claimed",
+            "type": "u64"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "staked_vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "reward_vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StakePosition",
+      "docs": [
+        "A single staker's position in one tier of a pool. PDA per",
+        "(pool, owner, tier_index), so a user can hold up to one position per tier."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "weight",
+            "type": "u128"
+          },
+          {
+            "name": "tier_index",
+            "type": "u8"
+          },
+          {
+            "name": "lock_until",
+            "type": "i64"
+          },
+          {
+            "name": "reward_debt",
+            "docs": [
+              "MasterChef reward debt: weight * acc / ACC_SCALE captured at last settle."
+            ],
+            "type": "u128"
+          },
+          {
+            "name": "pending_reward",
+            "docs": [
+              "Settled-but-unclaimed USDC."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Staked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "tier_index",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "position_amount",
+            "type": "u64"
+          },
+          {
+            "name": "position_weight",
+            "type": "u128"
+          },
+          {
+            "name": "lock_until",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Tier",
+      "docs": [
+        "One lock tier: how long the stake is locked and the reward-weight",
+        "multiplier it earns (in basis points; 10_000 = 1.0x)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "duration_secs",
+            "type": "i64"
+          },
+          {
+            "name": "multiplier_bps",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Unstaked",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pool",
+            "type": "pubkey"
+          },
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "tier_index",
+            "type": "u8"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "position_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ],
+  "constants": [
+    {
+      "name": "POOL_SEED",
+      "type": "bytes",
+      "value": "[112, 111, 111, 108]"
+    },
+    {
+      "name": "POSITION_SEED",
+      "type": "bytes",
+      "value": "[112, 111, 115, 105, 116, 105, 111, 110]"
+    },
+    {
+      "name": "REWARD_VAULT_SEED",
+      "type": "bytes",
+      "value": "[114, 101, 119, 97, 114, 100, 95, 118, 97, 117, 108, 116]"
+    },
+    {
+      "name": "STAKED_VAULT_SEED",
+      "type": "bytes",
+      "value": "[115, 116, 97, 107, 101, 100, 95, 118, 97, 117, 108, 116]"
+    }
+  ]
+}

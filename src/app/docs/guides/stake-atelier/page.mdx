@@ -5,17 +5,16 @@ export const metadata = {
 
 # Stake $ATELIER
 
-<StatusBadge status="Beta" />
+<StatusBadge status="Live" />
 
-<Callout variant="warning" title="Not audited, not on mainnet">
-Staking is in testing on Solana devnet and has not been professionally audited. It is not live on
-mainnet, and there's no date for that yet -- a third-party audit is a hard gate before any
-mainnet deployment. This guide describes how staking is designed to work once it ships, not
-something you can stake into today.
+<Callout variant="info" title="Live on mainnet">
+Staking is live on Solana mainnet. The program passed a third-party audit before deployment, on
+top of three internal security reviews; findings and fixes are documented in the repository's
+security notes. As with any smart contract, audited does not mean risk-free.
 </Callout>
 
 $ATELIER staking is a real-yield, revenue-share program: you lock $ATELIER and earn a pro-rata
-share of platform revenue paid out in USDC, not inflationary token emissions. See
+share of platform revenue paid out in SOL, not inflationary token emissions. See
 [Staking (real-yield)](/docs/concepts/staking) for the full mechanics and
 [Token & staking program](/docs/protocol/token-and-staking) for the on-chain program details.
 
@@ -27,24 +26,27 @@ You'll need it in your Solana wallet before you can stake. See
 [Fund your wallet](/docs/guides/fund-your-wallet) for getting a Solana wallet funded.
 </Step>
 <Step title="Choose a lock tier">
-Staking locks your $ATELIER into one of three tiers, each with a different reward multiplier:
+Staking locks your $ATELIER into one of four tiers, each with a different reward multiplier:
 
 | Tier | Lock | Multiplier |
 |---|---|---|
-| 30-day | 30-day lock | 1x |
-| 90-day | 90-day lock | 4x |
-| 180-day | 180-day lock | 8x |
+| 15-day | 15-day lock | 1x |
+| 30-day | 30-day lock | 4x |
+| 60-day | 60-day lock | 10x |
+| 180-day | 180-day lock | 20x |
 
 A longer lock means a larger weighted share of the reward pool for the same amount staked, but
 your principal is committed for that lock's duration -- there's no early exit.
 </Step>
 <Step title="Stake">
 Once staking is live, you'll stake $ATELIER into your chosen tier from `/stake` using your Privy
-embedded Solana wallet (or a connected external wallet). The program is non-custodial: a
-program-owned PDA holds both the staked-$ATELIER vault and the USDC reward vault, and no admin
+embedded Solana wallet or an external Solana wallet (Phantom, Solflare, or any Wallet Standard
+wallet). Positions belong to whichever wallet signs; external wallets pay their own transaction
+fee, while the embedded wallet stays gas-sponsored. The program is non-custodial: a
+program-owned PDA holds both the staked-$ATELIER vault and the SOL reward vault, and no admin
 key can move funds out of either -- only your own unstake and claim instructions can.
 </Step>
-<Step title="Earn USDC via linear drip">
+<Step title="Earn SOL via linear drip">
 Rewards don't accrue continuously and sit ready to claim the instant they're funded. Each funding
 round pays out gradually over a fixed reward-duration window, pro-rata to your weighted share
 (amount staked x tier multiplier) for the time you were staked during that window. Rewards come
@@ -54,7 +56,8 @@ on a periodic funding cadence -- not from new token issuance.
 <Step title="Claim">
 Claiming pulls whatever has dripped so far into your weighted share; it doesn't fast-forward the
 drip window. You can claim as often as you like -- there's no penalty for claiming smaller
-amounts more frequently versus waiting.
+amounts more frequently versus waiting. Rewards arrive as plain SOL: on-chain the reward vault
+holds wrapped SOL, and the claim transaction unwraps it for you automatically.
 </Step>
 <Step title="Unstake">
 Unstaking returns your staked $ATELIER 1:1 -- staking never puts your principal at market or

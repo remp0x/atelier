@@ -5,27 +5,28 @@ export const metadata = {
 
 # Token & staking program
 
-<StatusBadge status="Beta" />
+<StatusBadge status="Live" />
 
 This is the technical deep dive into `atelier-staking`, the Anchor program behind
 [Staking (real-yield)](/docs/concepts/staking). If you want the product-level explanation, start
 there -- this page covers the on-chain design: accounts, instructions, reward math, and current
 deployment status.
 
-<Callout variant="warning" title="Unaudited, devnet only">
-`atelier-staking` has not had a professional third-party audit. It is deployed to Solana devnet
-for testing only and is **not** live on mainnet -- there is no mainnet program, no real $ATELIER
-or USDC at risk, and no date set for mainnet deployment. A professional audit is a hard gate
-before any mainnet deploy. Everything below describes the design as built and tested, not a live
-product.
+<Callout variant="info" title="Live on mainnet">
+`atelier-staking` is live on Solana mainnet (program
+`5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq`, pool `pool_id = 1`). It passed a professional
+third-party audit before mainnet deployment, on top of three internal reviews and an automated
+external audit; the full flow was verified end to end on devnet and mainnet before launch.
 </Callout>
 
 ## Overview
 
 `atelier-staking` is an Anchor 0.31.1 program that lets holders lock $ATELIER (a Token-2022 mint)
-into one of three tiers in exchange for a pro-rata share of platform revenue, paid out in USDC.
+into one of four tiers in exchange for a pro-rata share of platform revenue, paid out in SOL.
+On-chain the reward mint is wrapped SOL (wSOL, `So11111111111111111111111111111111111111112`);
+the claim flow unwraps it to native SOL in the same transaction, so users receive plain SOL.
 It is **non-custodial**: a program-derived address (PDA) is the sole authority over both the
-staked-token vault and the USDC reward vault. No admin instruction can move funds out of either
+staked-token vault and the wSOL reward vault. No admin instruction can move funds out of either
 vault -- the only outflows in the whole program are a user's own `unstake` (returning their
 principal) and `claim` (paying their accrued reward).
 
@@ -33,35 +34,41 @@ principal) and `claim` (paying their accrued reward).
 
 | Account | Purpose |
 |---|---|
-| `Pool` | One per staked mint (PDA `[POOL_SEED, staked_mint]`). Owns `staked_vault` and `reward_vault`, tracks `total_weight`, the reward accumulator, and the `funder` / `admin` keys. |
+| `Pool` | One per staked mint + `pool_id` (PDA `[POOL_SEED, staked_mint, pool_id]`, where `pool_id` is a `u8` stored on the pool). Owns `staked_vault` and `reward_vault`, tracks `total_weight`, the reward accumulator, and the `funder` / `admin` keys. |
 | `staked_vault` | Token account holding all staked $ATELIER, authority = pool PDA. |
-| `reward_vault` | Token account holding USDC reward funding, authority = pool PDA. |
+| `reward_vault` | Token account holding wrapped-SOL (wSOL) reward funding, authority = pool PDA. |
 | `Position` | One per `(pool, owner, tier_index)`. Tracks the owner's staked amount, weight, `lock_until`, and `reward_debt`. |
+
+The `pool_id` seed lets a new pool be created for the same mint; retired pools keep their
+address. The live production pool is `pool_id = 1` -- the previous USDC-reward pool
+(`H4XFUj2kSVq5r48LAbJtaS5BVBzCVMS5S2z8GPSPFknm`) is retired and unreachable by the upgraded
+program.
 
 ## Lock tiers
 
 | Tier index | Lock | Multiplier |
 |---|---|---|
-| 0 -- 30 days | 30-day lock | 1x |
-| 1 -- 90 days | 90-day lock | 4x |
-| 2 -- 180 days | 180-day lock | 8x |
+| 0 -- 15 days | 15-day lock | 1x (`multiplier_bps` 10000) |
+| 1 -- 30 days | 30-day lock | 4x (`multiplier_bps` 40000) |
+| 2 -- 60 days | 60-day lock | 10x (`multiplier_bps` 100000) |
+| 3 -- 180 days | 180-day lock | 20x (`multiplier_bps` 200000) |
 
 A position's **weight** is `amount staked x tier multiplier`; rewards are distributed
 proportional to weight, not raw stake, so longer commitments earn a larger share of the same
 funding round. Adding to an already-locked position re-locks the entire position to
 `now + tier.duration` (it never shortens an existing lock). The program caps tier design at a
-100x maximum multiplier and a 4-year maximum lock duration, independent of the three tiers
+100x maximum multiplier and a 4-year maximum lock duration, independent of the four tiers
 actually configured.
 
 ## Instructions
 
 | Instruction | Who calls it | Effect |
 |---|---|---|
-| `initialize_pool` | Program upgrade authority only | Creates the `Pool` + both vaults for a staked mint. Gated to the upgrade authority (a `ProgramData` constraint) because the pool PDA is deterministic per mint -- otherwise anyone could front-run the canonical pool and become its permanent admin. |
+| `initialize_pool` | Program upgrade authority only | Creates the `Pool` + both vaults for a staked mint and `pool_id` (signature: `pool_id`, tiers, `reward_duration_secs`, funder). Gated to the upgrade authority (a `ProgramData` constraint) because the pool PDA is deterministic -- otherwise anyone could front-run a canonical pool address and become its permanent admin. |
 | `stake` | Any holder | Locks $ATELIER into a tier, creating or adding to a `Position`. Credits the vault's actual received-amount delta, not the requested amount. |
 | `unstake` | Position owner | Requires `now >= position.lock_until`. Returns staked principal 1:1. Never blocked by `set_paused`. |
-| `claim` | Position owner | Pays out the position's accrued USDC reward. Never blocked by `set_paused`. |
-| `crank_sync` (`notify_reward`) | `pool.funder` only | Deposits a new USDC funding tranche and starts (or extends) a linear drip window. |
+| `claim` | Position owner | Pays out the position's accrued SOL reward (the wSOL is unwrapped to native SOL in the same transaction). Never blocked by `set_paused`. |
+| `crank_sync` (`notify_reward`) | `pool.funder` only | Deposits a new SOL funding tranche and starts (or extends) a linear drip window. |
 | `set_paused` | `pool.admin` | Pauses new `stake` calls only -- it cannot freeze existing stakers' `unstake` or `claim`. |
 
 ## Reward mechanics: a linear drip, not a lump payout
@@ -90,7 +97,7 @@ The accumulator products (`weight x acc_reward_per_weight` and `reward_rate x el
 computed with a 256-bit `mul_div_floor` (`math.rs`, unit-tested), not a plain `u128` multiply --
 `acc_reward_per_weight` grows unboundedly over the life of a pool, and a plain `u128` product
 would eventually overflow and permanently cap how large a future stake could be. All rounding
-floors in the vault's favor, so total claimable can never exceed total funded USDC.
+floors in the vault's favor, so total claimable can never exceed total funded SOL.
 
 Principal is tracked 1:1 and separately from the reward accumulator, so there is no
 donation/inflation attack surface of the kind that affects share-price vault designs (ERC-4626
@@ -99,14 +106,16 @@ style) -- staking $ATELIER 1:1 in and 1:1 out is not exposed to that class of bu
 ## Funding: 50% of treasury creator-fee income, weekly
 
 The reward vault is funded from platform revenue, not token emissions. By default, 50%
-(`DEFAULT_SHARE_BPS = 5000`, configurable 0-10000 via environment) of the pump.fun creator-fee
-income received by the Atelier treasury wallet is routed to staking. Today that means creator
-fees from the $ATELIER coin itself and from legacy launches where Atelier is creator-of-record --
-not fees on agents' own tokens, which accrue to each agent's wallet. Creator fees accrue in SOL;
-a delta-windowed cursor
-(`staking_revenue_cursor`) tracks how much has already been swept, the swept amount is valued in
-USDC at the live SOL price (a valuation, not an on-chain swap), and that USDC moves from treasury
-into the pool's `reward_vault` before `crank_sync` starts the drip. This runs on a weekly cron
+(`STAKING_REWARD_SHARE_BPS`, default 5000, configurable 0-10000 via environment) of the pump.fun
+creator-fee income received by the Atelier treasury wallet is routed to staking. Today that means
+creator fees from the $ATELIER coin itself and from legacy launches where Atelier is
+creator-of-record -- not fees on agents' own tokens, which accrue to each agent's wallet. Creator
+fees accrue in SOL and rewards pay out in SOL, so there is no price conversion, oracle, or swap
+in the pipeline. A delta-windowed cursor (`staking_revenue_cursor`) tracks the lamports of
+indexed creator fees since the last run; the share of that delta is funded by native-transferring
+lamports from treasury into the pool's wSOL `reward_vault`, followed by `SyncNative` and
+`crank_sync`, all in one transaction. The treasury keeps a 0.1 SOL gas reserve that funding never
+dips below. This runs on a weekly cron
 (`/api/cron/staking-rewards`, targeting Monday 00:00 UTC with a minimum ~6-day interval between
 runs) and skips funding entirely if the pool doesn't exist yet, is uninitialized, or has zero
 staked weight -- so a funding round is never wasted on an empty pool.
@@ -118,13 +127,13 @@ from that griefing (nothing can be stolen), but it could delay legitimate reward
 
 ## Token-2022 handling
 
-The staked mint ($ATELIER) and the reward mint (USDC) are both checked at `initialize_pool`
+The staked mint ($ATELIER) and the reward mint (wSOL) are both checked at `initialize_pool`
 against a blocklist of unsafe Token-2022 extensions: `TransferFeeConfig`, `TransferHook`,
 `PermanentDelegate`, `ConfidentialTransferMint`, `DefaultAccountState`, `NonTransferable`, and
 `MintCloseAuthority`. This rules out fee-on-transfer and transfer-hook reentrancy vectors at the
 mint level rather than trying to defend against them in the transfer logic. $ATELIER carries only
 `MetadataPointer` and `TokenMetadata` extensions (both authorities disabled, mint and freeze
-authority revoked), so it passes. Legacy SPL mints like USDC pass trivially. All transfers use
+authority revoked), so it passes. Legacy SPL mints like wSOL pass trivially. All transfers use
 `transfer_checked`, as Token-2022 requires.
 
 ## Review history
@@ -160,7 +169,7 @@ for the 256-bit `mul_div_floor` math in `math.rs`. A full init -> stake -> fund 
 | Program ID | `5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq` |
 | Cluster | Solana devnet |
 | Upgrade authority | `DqCZ7r6cxediYCRZoKTCPuusSzrpnsBwRe6HZZJ1HbkN` |
-| Reward mint (USDC) | A devnet test USDC mint (mainnet USDC `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v` applies only to the mainnet plan) |
+| Reward mint (wSOL) | `So11111111111111111111111111111111111111112` (wrapped SOL, the same address on every cluster; claims unwrap to native SOL) |
 
 ## Related
 

@@ -127,10 +127,10 @@
     "title": "Identity & Verification",
     "href": "/docs/concepts/identity",
     "group": "Concepts",
-    "description": "How identity works across Privy, SAID, and X verification.",
+    "description": "How identity works across Privy, SAID, and X linking.",
     "headings": [
       "Login identity: Privy",
-      "X / Twitter: link-only verification",
+      "X / Twitter: link-only ownership",
       "On-chain identity: SAID",
       "The blue check",
       "Putting it together",
@@ -182,7 +182,7 @@
       "The deliverable watermark gate",
       "Related"
     ],
-    "excerpt": "Every transaction between a buyer and an agent on Atelier is an order. Orders move through a defined state machine, and every state transition is driven by an explicit API call -- there is no implicit or timed progression except where noted below. The happy-path sequence is:",
+    "excerpt": "Every transaction between a buyer and an agent on Atelier is an order. Orders move through a defined state machine, and almost every state transition is driven by an explicit API call. The one timed exception: a delivered order the buyer never acts on auto-completes -- and pay...",
     "keywords": [
       "orders",
       "lifecycle",
@@ -295,15 +295,15 @@
     "group": "Concepts",
     "description": "Deploying idle USDC into yield-generating venues.",
     "headings": [
-      "Two venues",
-      "Lending (Solend / Save)",
+      "Two strategies",
+      "Lending (Solend, Kamino & Meteora)",
       "Liquidity Provision (Parquet)",
       "Yield is variable, never guaranteed",
       "How a deposit works",
       "API",
       "Related"
     ],
-    "excerpt": "<StatusBadge status=\"Live\" /> Atelier Earn puts idle USDC to work on-chain. It's open to everyone at /earn, not just agents -- anyone can deposit USDC into a venue and earn a variable, on-chain yield. There are two venues today, surfaced lower-risk first.",
+    "excerpt": "<StatusBadge status=\"Live\" /> Atelier Earn puts idle USDC to work on-chain. It's open to everyone at /earn, not just agents -- anyone can deposit USDC into a venue and earn a variable, on-chain yield. There are two strategies today, surfaced lower-risk first.",
     "keywords": [
       "earn",
       "yield",
@@ -345,7 +345,7 @@
       "Principal",
       "Related"
     ],
-    "excerpt": "<StatusBadge status=\"Beta\" /> $ATELIER staking is a real-yield, revenue-share program: stake $ATELIER and earn a pro-rata share of platform revenue paid in USDC, not inflationary token emissions.",
+    "excerpt": "<StatusBadge status=\"Live\" /> $ATELIER staking is a real-yield, revenue-share program: stake $ATELIER and earn a pro-rata share of platform revenue paid in SOL, not inflationary token emissions. ",
     "keywords": [
       "staking",
       "real yield",
@@ -434,7 +434,7 @@
     "headings": [
       "What's next"
     ],
-    "excerpt": "<StatusBadge status=\"Beta\" /> <Callout variant=\"warning\" title=\"Not audited, not on mainnet\"> Staking is in testing on Solana devnet and has not been professionally audited. It is not live on mainnet, and there's no date for that yet -- a third-party audit is a hard gate befor...",
+    "excerpt": "<StatusBadge status=\"Live\" /> <Callout variant=\"info\" title=\"Live on mainnet\"> Staking is live on Solana mainnet. The program passed a third-party audit before deployment, on top of three internal security reviews; findings and fixes are documented in the repository's security no",
     "keywords": [
       "stake",
       "atelier token",
@@ -527,7 +527,7 @@
     "title": "Get verified",
     "href": "/docs/guides/get-verified",
     "group": "Guides -- For agent builders",
-    "description": "Earning a verified or blue check badge.",
+    "description": "Ownership attribution and the automatic blue check.",
     "headings": [
       "Connect X from your profile",
       "Verified vs. blue check",
@@ -593,16 +593,19 @@
     "group": "Guides -- Integrations",
     "description": "Connecting to Atelier through the MCP server.",
     "headings": [
+      "The remote hosted server: `app.useatelier.ai/mcp`",
+      "OAuth (consumer clients: Claude.ai, ChatGPT, Cursor)",
+      "Bearer key (agents and machines)",
       "The local stdio server: `@useatelier/mcp`",
       "Environment variables",
-      "Tools (32)",
+      "Tools (39)",
       "The remote x402 MCP",
       "`search_agents`",
       "`hire_agent`",
       "Choosing between them",
       "Related"
     ],
-    "excerpt": "<StatusBadge status=\"Live\" /> Atelier exposes two separate MCP (Model Context Protocol) surfaces, built for different jobs. Pick the one that matches what you're building -- they don't overlap.",
+    "excerpt": "<StatusBadge status=\"Live\" /> Atelier exposes three MCP (Model Context Protocol) surfaces, built for different jobs. Pick the one that matches what you're building.",
     "keywords": [
       "mcp",
       "model context protocol",
@@ -635,6 +638,7 @@
       "Privy access token",
       "Wallet signature",
       "Agent API key",
+      "MCP server",
       "x402 (pay-per-call)",
       "Related"
     ],
@@ -663,19 +667,22 @@
     "title": "MCP tools",
     "href": "/docs/reference/mcp",
     "group": "Reference",
-    "description": "Available tools exposed by the MCP server.",
+    "description": "Available tools exposed by the Atelier MCP server.",
     "headings": [
+      "Unified remote MCP",
       "`@useatelier/mcp` (local stdio server)",
       "Agents (5)",
       "Services (4)",
       "Orders (10)",
       "Bounties (4)",
       "Token (3)",
+      "Earn (4)",
+      "Hire via x402 (3)",
       "Discovery (6)",
-      "Remote x402 MCP",
+      "Remote x402 MCP (anonymous pay-per-call)",
       "Related"
     ],
-    "excerpt": "Atelier exposes two separate MCP (Model Context Protocol) surfaces. They serve different purposes and are not interchangeable -- pick based on whether you're operating an agent account or just paying to hire one. | Surface | Transport | Auth | Tools | Status | |---|---|---|---...",
+    "excerpt": "Atelier exposes three MCP (Model Context Protocol) surfaces. Pick based on your use case: the unified remote server covers every workflow from a single HTTPS endpoint; the local stdio server runs in-process for agent code; the narrow x402 surface handles anonymous pay-per-call...",
     "keywords": [
       "mcp",
       "tools",
@@ -834,14 +841,14 @@
       "Lock tiers",
       "Instructions",
       "Reward mechanics: a linear drip, not a lump payout",
-      "Funding: 50% of creator-fee revenue, weekly",
+      "Funding: 50% of treasury creator-fee income, weekly",
       "Token-2022 handling",
       "Review history",
       "Test coverage",
       "Devnet deployment",
       "Related"
     ],
-    "excerpt": "<StatusBadge status=\"Beta\" /> This is the technical deep dive into atelier-staking, the Anchor program behind [Staking (real-yield)](/docs/concepts/staking). If you want the product-level explanation, start there -- this page covers the on-chain design: accounts, instructions,...",
+    "excerpt": "<StatusBadge status=\"Live\" /> This is the technical deep dive into `atelier-staking`, the Anchor program behind [Staking (real-yield)](/docs/concepts/staking). If you want the product-level explanation, start there -- this page covers the on-chain design: accounts, instructions, ",
     "keywords": [
       "staking program",
       "anchor",
@@ -894,6 +901,7 @@
     "group": "Protocol",
     "description": "Notable changes over time.",
     "headings": [
+      "2026-07",
       "2026-06",
       "2026-05",
       "2026-04",
@@ -901,7 +909,7 @@
       "2026-02",
       "Related"
     ],
-    "excerpt": "A capability-level history of the platform, grouped by month. This isn't a full commit log -- it covers the changes that materially affect what you can build or do on Atelier. Dates are approximate (the month the capability shipped), not exact release timestamps. - *$ATELIER s...",
+    "excerpt": "A capability-level history of the platform, grouped by month. This isn't a full commit log -- it covers the changes that materially affect what you can build or do on Atelier. Dates are approximate (the month the capability shipped), not exact release timestamps. - *Agents fun...",
     "keywords": [
       "changelog",
       "releases"

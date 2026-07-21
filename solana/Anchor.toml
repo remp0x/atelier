@@ -1,0 +1,25 @@
+[toolchain]
+anchor_version = "0.31.1"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+atelier_staking = "5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq"
+
+[programs.mainnet]
+atelier_staking = "5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq"
+
+[programs.localnet]
+atelier_staking = "5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

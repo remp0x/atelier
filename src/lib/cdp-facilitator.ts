@@ -327,16 +327,19 @@ export function decodeXPaymentPayload(header: string | null): Record<string, unk
   try {
     const json = Buffer.from(header.trim(), 'base64').toString('utf8');
     const parsed: unknown = JSON.parse(json);
-    // Capture x402 Base payloads: v2 (`x402Version:2` / `accepted`) or v1 carrying a
-    // Base `network` -- both nest the EIP-3009 signature under `payload`. Gating on the
-    // Base network keeps v1 Solana envelopes (`network:'solana'`) on the legacy
-    // tx-signature path instead of diverting them into the CDP flow.
+    // Capture x402 EVM payloads: v2 (`x402Version:2` / `accepted`) or v1 carrying an
+    // EVM `network` (Base or Robinhood Chain) -- both nest the EIP-3009 signature under
+    // `payload`. Gating on the network keeps v1 Solana envelopes (`network:'solana'`)
+    // on the legacy tx-signature path. Callers route by network downstream
+    // (paymentPayloadNetwork in naven-facilitator.ts): base -> CDP, robinhood -> Naven.
     if (parsed && typeof parsed === 'object' && 'payload' in parsed) {
       const p = parsed as Record<string, unknown>;
       const net = typeof p.network === 'string' ? p.network.toLowerCase() : '';
       const isV2 = p.x402Version === 2 || 'accepted' in p;
-      const isBaseV1 = net === 'base' || net.includes('eip155') || net.includes('8453');
-      if (isV2 || isBaseV1) return p;
+      const isEvmV1 =
+        net === 'base' || net.includes('eip155') || net.includes('8453') ||
+        net.includes('robinhood') || net.includes('4663');
+      if (isV2 || isEvmV1) return p;
     }
     return null;
   } catch {

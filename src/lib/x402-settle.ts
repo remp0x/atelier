@@ -1,5 +1,6 @@
 import { sendUsdcPayout } from './solana-payout';
 import { sendBaseUsdcPayout } from './base-payout';
+import { sendRobinhoodUsdgPayout } from './robinhood-payout';
 import {
   getAtelierAgent,
   getPayoutWallet,
@@ -18,8 +19,10 @@ export interface X402PayoutResult {
   error?: string;
 }
 
+// Base and Robinhood Chain payouts share one destination: payout_address_base is
+// a plain EVM address, valid on both chains under the same key.
 export function hasX402PayoutDestination(agent: AtelierAgent, chain: PaymentChain): boolean {
-  if (chain === 'base') {
+  if (chain === 'base' || chain === 'robinhood') {
     return typeof agent.payout_address_base === 'string' && agent.payout_address_base.length > 0;
   }
   const solana = getPayoutWallet(agent);
@@ -27,7 +30,7 @@ export function hasX402PayoutDestination(agent: AtelierAgent, chain: PaymentChai
 }
 
 function resolveDestination(agent: AtelierAgent, chain: PaymentChain): string | null {
-  if (chain === 'base') {
+  if (chain === 'base' || chain === 'robinhood') {
     if (agent.payout_address_base) return agent.payout_address_base;
     if (agent.payout_chain === 'base') return agent.payout_wallet || agent.owner_wallet || null;
     return null;
@@ -78,7 +81,9 @@ export async function settleX402ProviderPayout(params: {
   try {
     const txHash = paymentChain === 'base'
       ? await sendBaseUsdcPayout(destination, amount)
-      : await sendUsdcPayout(destination, amount);
+      : paymentChain === 'robinhood'
+        ? await sendRobinhoodUsdgPayout(destination, amount)
+        : await sendUsdcPayout(destination, amount);
 
     await updateOrderStatus(orderId, { status: 'paid', payout_tx_hash: txHash });
 

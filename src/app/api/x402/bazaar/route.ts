@@ -2,13 +2,11 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServices } from '@/lib/atelier-db';
-import { buildPaymentRequirements, type PaymentChain, type PaymentRequirements } from '@/lib/x402';
+import { buildPaymentRequirements, supportedPaymentChains, type PaymentRequirements } from '@/lib/x402';
 import { buildDiscoverableResource, type DiscoverableResource } from '@/lib/cdp-facilitator';
 import { isX402PayableService } from '@/lib/x402-resource';
 import { rateLimiters } from '@/lib/rateLimit';
 import { getApiOrigin } from '@/lib/origins';
-
-const SUPPORTED_CHAINS: PaymentChain[] = ['solana', 'base'];
 
 const INPUT_SCHEMA = {
   type: 'object',
@@ -50,9 +48,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       .filter(isX402PayableService)
       .map((s) => {
         const accepts: PaymentRequirements[] = [];
-        const baseEligible = typeof s.payout_address_base === 'string' && s.payout_address_base.length > 0;
-        for (const chain of SUPPORTED_CHAINS) {
-          if (chain === 'base' && !baseEligible) continue;
+        const evmEligible = typeof s.payout_address_base === 'string' && s.payout_address_base.length > 0;
+        for (const chain of supportedPaymentChains()) {
+          if (chain !== 'solana' && !evmEligible) continue;
           try {
             accepts.push(
               buildPaymentRequirements({

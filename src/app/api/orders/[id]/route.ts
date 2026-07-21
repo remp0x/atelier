@@ -357,7 +357,7 @@ export async function PATCH(
       const paymentChain: 'solana' | 'base' =
         bodyChain === 'base' ? 'base' :
         bodyChain === 'solana' ? 'solana' :
-        order.payment_chain || 'solana';
+        order.payment_chain === 'base' ? 'base' : 'solana';
 
       let payerAddressOnChain: string | null = null;
 

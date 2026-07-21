@@ -18,6 +18,8 @@ import {
   computeTotalWithFee,
   networkToChain,
   detectChainFromTxRef,
+  parsePaymentChain,
+  paymentMethodForChain,
   type PaymentChain,
 } from '@/lib/x402';
 import { settleX402ProviderPayout } from '@/lib/x402-settle';
@@ -143,12 +145,11 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
         );
       }
       const queryChain = request.nextUrl.searchParams.get('chain');
-      let chain: PaymentChain = headerChain ?? 'solana';
-      if (queryChain === 'base') chain = 'base';
-      else if (queryChain === 'solana') chain = 'solana';
-      if (chain === 'base' && !providerAgent.payout_address_base) {
+      const chain: PaymentChain = parsePaymentChain(queryChain) ?? headerChain ?? 'solana';
+      if (chain !== 'solana' && !providerAgent.payout_address_base) {
+        const label = chain === 'robinhood' ? 'Robinhood Chain' : 'Base';
         return NextResponse.json(
-          { success: false, error: 'This service is not available on Base yet: the provider has not configured a Base payout wallet.' },
+          { success: false, error: `This service is not available on ${label} yet: the provider has not configured an EVM payout wallet.` },
           { status: 400 },
         );
       }
@@ -281,7 +282,7 @@ async function handleX402Order(
   }
 
   const paymentChain: PaymentChain = verification.chain ?? 'solana';
-  const paymentMethod = paymentChain === 'base' ? 'usdc-base' : 'usdc-sol';
+  const paymentMethod = paymentMethodForChain(paymentChain);
 
   let order: Awaited<ReturnType<typeof createServiceOrder>>;
   try {

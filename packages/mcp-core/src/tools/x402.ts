@@ -45,14 +45,14 @@ export const x402Tools: ToolDef[] = [
   {
     name: 'atelier_get_payment_requirements',
     description:
-      'Get the x402 USDC payment requirements (the 402 challenge) for an Atelier service before hiring: amount, asset, network, and payTo address. Then pay on-chain and call atelier_submit_payment with the tx signature.',
+      'Get the x402 payment requirements (the 402 challenge) for an Atelier service before hiring: amount, asset, network, and payTo address. Assets: USDC on Solana/Base, USDG on Robinhood Chain. Then pay on-chain and call atelier_submit_payment with the tx signature.',
     auth: 'none',
     annotations: { title: 'Get payment requirements', readOnlyHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
         service_id: { type: 'string', description: 'The service_id to get payment requirements for.' },
-        chain: { type: 'string', description: "Payment chain: 'solana' (default) or 'base'." },
+        chain: { type: 'string', description: "Payment chain: 'solana' (default), 'base', or 'robinhood' (Robinhood Chain, pays in USDG)." },
       },
       required: ['service_id'],
     },
@@ -70,7 +70,7 @@ export const x402Tools: ToolDef[] = [
   {
     name: 'atelier_submit_payment',
     description:
-      'Finalize hiring an Atelier agent after paying on-chain. Submit the x402 USDC payment proof (transaction signature/hash) plus your brief; this creates the paid order, settles the provider payout, and returns the order_id + status_url. Get the amount/address first via atelier_get_payment_requirements.',
+      'Finalize hiring an Atelier agent after paying on-chain. Submit the x402 payment proof (transaction signature/hash) plus your brief; this creates the paid order, settles the provider payout, and returns the order_id + status_url. Get the amount/address first via atelier_get_payment_requirements.',
     auth: 'none',
     annotations: { title: 'Submit payment / finalize hire', openWorldHint: true },
     inputSchema: {
@@ -78,8 +78,8 @@ export const x402Tools: ToolDef[] = [
       properties: {
         service_id: { type: 'string', description: 'The service_id you are paying for.' },
         brief: { type: 'string', description: 'Description of the work you want the agent to perform.' },
-        tx_signature: { type: 'string', description: 'On-chain payment proof: Solana tx signature or Base 0x tx hash.' },
-        chain: { type: 'string', description: "Payment network: 'solana' (-> solana-mainnet) or 'base' (-> base-mainnet). Auto-detected if omitted." },
+        tx_signature: { type: 'string', description: 'On-chain payment proof: Solana tx signature or EVM (Base / Robinhood Chain) 0x tx hash.' },
+        chain: { type: 'string', description: "Payment network: 'solana' (-> solana-mainnet), 'base' (-> base-mainnet), or 'robinhood' (-> robinhood-mainnet). Auto-detected if omitted, EXCEPT Robinhood Chain: 0x hashes default to Base, so always pass 'robinhood' when you paid there." },
       },
       required: ['service_id', 'brief', 'tx_signature'],
     },
@@ -97,7 +97,10 @@ export const x402Tools: ToolDef[] = [
         'X-Atelier-Brief': brief,
       };
       if (typeof args.chain === 'string' && args.chain) {
-        headers['X-Payment-Network'] = args.chain === 'base' ? 'base-mainnet' : 'solana-mainnet';
+        headers['X-Payment-Network'] =
+          args.chain === 'base' ? 'base-mainnet'
+          : args.chain === 'robinhood' ? 'robinhood-mainnet'
+          : 'solana-mainnet';
       }
       if (ctx.apiKey) headers['Authorization'] = `Bearer ${ctx.apiKey}`;
 

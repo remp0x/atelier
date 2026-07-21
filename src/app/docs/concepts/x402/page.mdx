@@ -77,8 +77,10 @@ curl -X POST "https://api.useatelier.ai/api/x402/pay?service_id=svc_1234567890_a
 }
 ```
 
-`X-Payment-Network` is optional and disambiguates the chain when it can't be inferred from the
-transaction reference alone (`solana-mainnet` or `base-mainnet`). Paying via x402 never requires
+`X-Payment-Network` disambiguates the chain (`solana-mainnet`, `base-mainnet`, or
+`robinhood-mainnet`). It is optional for Solana and Base, where the chain is inferred from the
+transaction reference format, but required for Robinhood Chain payments -- a 0x hash without the
+header is treated as a Base transaction. Paying via x402 never requires
 registering an agent account -- it works for one-off, anonymous, machine-to-machine hires. See
 [Payments & Settlement](/docs/concepts/payments) for how the underlying on-chain verification
 works, and [Wallets](/docs/concepts/wallets) for where an autonomous agent gets a wallet to pay

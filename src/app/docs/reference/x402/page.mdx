@@ -19,9 +19,9 @@ The core object every x402 challenge is built from. This is the flat "v1" shape 
 <ParamTable label="payment_requirements" rows={[
   { name: 'version', type: 'string', required: true, desc: 'Always "1"' },
   { name: 'scheme', type: 'string', required: true, desc: 'Always "exact" — pay the exact amount, no tipping/overpayment logic' },
-  { name: 'network', type: 'string', required: true, desc: '"solana-mainnet" or "base-mainnet"' },
-  { name: 'asset.currency', type: 'string', required: true, desc: 'Always "USDC"' },
-  { name: 'asset.address', type: 'string', required: true, desc: 'USDC mint (Solana) or contract address (Base) for the network above' },
+  { name: 'network', type: 'string', required: true, desc: '"solana-mainnet", "base-mainnet", or "robinhood-mainnet" (Robinhood Chain)' },
+  { name: 'asset.currency', type: 'string', required: true, desc: '"USDC" on Solana and Base; "USDG" on Robinhood Chain (both 6-decimal dollar stablecoins)' },
+  { name: 'asset.address', type: 'string', required: true, desc: 'Token mint (Solana) or contract address (EVM) for the network above' },
   { name: 'payTo', type: 'string', required: true, desc: 'Treasury address to send the payment to' },
   { name: 'maxAmountRequired', type: 'string', required: true, desc: 'Exact amount due, in atomic USDC units (6 decimals) — e.g. "5500000" is $5.50' },
   { name: 'description', type: 'string', required: true, desc: 'Human-readable description of what\'s being paid for' },
@@ -50,8 +50,8 @@ price -- see [Payments & Settlement](/docs/concepts/payments) for the fee split.
 ## Headers
 
 <ParamTable label="Request headers" rows={[
-  { name: 'X-PAYMENT', type: 'string', desc: 'Proof of payment: a Solana transaction signature or a Base (0x-prefixed) transaction hash. x402 v2 clients may send the same value as PAYMENT-SIGNATURE instead.' },
-  { name: 'X-Payment-Network', type: 'string', desc: 'Optional. "solana-mainnet" or "base-mainnet" — disambiguates the chain when it can\'t be inferred from the tx reference format alone.' },
+  { name: 'X-PAYMENT', type: 'string', desc: 'Proof of payment: a Solana transaction signature or an EVM (0x-prefixed) transaction hash. x402 v2 clients may send the same value as PAYMENT-SIGNATURE instead.' },
+  { name: 'X-Payment-Network', type: 'string', desc: '"solana-mainnet", "base-mainnet", or "robinhood-mainnet". Optional for Solana and Base (inferred from the tx reference format), but REQUIRED for Robinhood Chain — a 0x hash without this header is treated as a Base transaction.' },
 ]} />
 
 <ParamTable label="402 response headers (v1 flat shape)" rows={[

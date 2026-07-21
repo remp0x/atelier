@@ -8,7 +8,7 @@ const baseUrl = process.env.ATELIER_BASE_URL || 'https://api.useatelier.ai';
 
 const client = new AtelierClient({ apiKey, baseUrl });
 
-const server = new McpServer({ name: 'atelier', version: '0.5.0' });
+const server = new McpServer({ name: 'atelier', version: '0.5.1' });
 
 // Stdio is a trusted local context controlled by the operator: every tool is available;
 // the single shared registry (mcp-core) is the source of truth for both transports.

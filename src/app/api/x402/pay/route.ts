@@ -18,6 +18,8 @@ import {
   computeTotalWithFee,
   networkToChain,
   detectChainFromTxRef,
+  parsePaymentChain,
+  paymentMethodForChain,
   type PaymentChain,
 } from '@/lib/x402';
 import {
@@ -35,6 +37,18 @@ import {
   type CdpResourceInfo,
   type CdpBazaarExtension,
 } from '@/lib/cdp-facilitator';
+import {
+  NAVEN_FACILITATOR_ENABLED,
+  buildNavenV2402Response,
+  paymentPayloadNetwork,
+  verifyViaNavenFacilitator,
+  settleViaNavenFacilitator,
+  extractNavenPayer,
+  encodeNavenPaymentResponse,
+  type NavenRequirementsInput,
+} from '@/lib/naven-facilitator';
+import { getRobinhoodTreasuryAddress } from '@/lib/robinhood-server';
+import { verifyRobinhoodUsdgReceived } from '@/lib/robinhood-verify';
 import { settleX402ProviderPayout } from '@/lib/x402-settle';
 import { rateLimiters } from '@/lib/rateLimit';
 import { notifyAgentWebhook } from '@/lib/webhook';
@@ -80,16 +94,21 @@ function getOrigin(request: NextRequest): string {
 }
 
 function resolveQueryChain(param: string | null, fallback: PaymentChain): PaymentChain {
-  if (param === 'base') return 'base';
-  if (param === 'solana') return 'solana';
-  return fallback;
+  return parsePaymentChain(param) ?? fallback;
 }
 
-function serviceBaseEligible(service: Service): boolean {
+// Base and Robinhood Chain payouts both go to payout_address_base (one EVM
+// address, valid on both chains), so a single eligibility check covers them.
+function serviceEvmEligible(service: Service): boolean {
   return typeof service.payout_address_base === 'string' && service.payout_address_base.length > 0;
 }
 
 const BASE_NOT_AVAILABLE = 'This service is not available on Base yet: the provider has not configured a Base payout wallet.';
+const ROBINHOOD_NOT_AVAILABLE = 'This service is not available on Robinhood Chain yet: the provider has not configured an EVM payout wallet.';
+
+function chainNotAvailableError(chain: PaymentChain): string {
+  return chain === 'robinhood' ? ROBINHOOD_NOT_AVAILABLE : BASE_NOT_AVAILABLE;
+}
 
 const BRIEF_REQUIRED = 'A brief is required to hire this agent. Describe what you want produced via a "brief" JSON body field, a ?brief= query param, or an X-Atelier-Brief header. No order was created.';
 
@@ -120,6 +139,21 @@ function cdpChallengeForService(service: Service, origin: string): CdpServiceCha
       inputProperties: CDP_BAZAAR_INPUT_PROPERTIES,
       outputExample: CDP_BAZAAR_OUTPUT_EXAMPLE,
     }),
+  };
+}
+
+// Naven (facilitator.naven.network) is the only facilitator supporting Robinhood
+// Chain. The 402 advertises the same amount/payTo/asset the settle path later
+// sends, so the buyer's EIP-3009 signature binds to matching requirements.
+function navenRequirementsForService(service: Service, origin: string): NavenRequirementsInput | null {
+  const treasury = getRobinhoodTreasuryAddress();
+  if (!treasury) return null;
+  const { totalUsd } = computeTotalWithFee(service.price_usd);
+  return {
+    totalUsd,
+    payTo: treasury,
+    resourceUrl: `${origin}/api/x402/pay/${service.id}`,
+    description: (service.description.trim() || service.title).slice(0, 240),
   };
 }
 
@@ -164,14 +198,21 @@ export async function GET(request: NextRequest): Promise<NextResponse | Response
 
     const chain = resolveQueryChain(request.nextUrl.searchParams.get('chain'), 'solana');
 
-    if (chain === 'base' && !serviceBaseEligible(service)) {
-      return NextResponse.json({ success: false, error: BASE_NOT_AVAILABLE }, { status: 400 });
+    if (chain !== 'solana' && !serviceEvmEligible(service)) {
+      return NextResponse.json({ success: false, error: chainNotAvailableError(chain) }, { status: 400 });
     }
 
     if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
       const challenge = cdpChallengeForService(service, getOrigin(request));
       if (challenge) {
         return cdp402ForChallenge(request, challenge);
+      }
+    }
+
+    if (chain === 'robinhood' && NAVEN_FACILITATOR_ENABLED) {
+      const navenReqs = navenRequirementsForService(service, getOrigin(request));
+      if (navenReqs) {
+        return buildNavenV2402Response({ ...navenReqs, error: 'X-PAYMENT header required to access this resource' });
       }
     }
 
@@ -260,18 +301,33 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
 
     // v1 clients send `X-PAYMENT`; x402 v2 clients send `PAYMENT-SIGNATURE`. Accept both.
     const paymentHeader = request.headers.get('X-PAYMENT') ?? request.headers.get('PAYMENT-SIGNATURE');
-    const cdpPayload = CDP_FACILITATOR_ENABLED ? decodeXPaymentPayload(paymentHeader) : null;
-    if (cdpPayload) {
+    const facilitatorPayload = decodeXPaymentPayload(paymentHeader);
+    const facilitatorNetwork = facilitatorPayload ? paymentPayloadNetwork(facilitatorPayload) : null;
+
+    if (facilitatorPayload && facilitatorNetwork === 'robinhood' && NAVEN_FACILITATOR_ENABLED) {
       if (!hasHireInput) {
         return NextResponse.json({ success: false, error: BRIEF_REQUIRED }, { status: 400 });
       }
-      if (!serviceBaseEligible(service)) {
+      if (!serviceEvmEligible(service)) {
+        return NextResponse.json(
+          { success: false, error: `${ROBINHOOD_NOT_AVAILABLE} No payment was taken.` },
+          { status: 409 },
+        );
+      }
+      return handleNavenHire(request, service, facilitatorPayload, brief, requirementAnswers);
+    }
+
+    if (facilitatorPayload && facilitatorNetwork !== 'robinhood' && CDP_FACILITATOR_ENABLED) {
+      if (!hasHireInput) {
+        return NextResponse.json({ success: false, error: BRIEF_REQUIRED }, { status: 400 });
+      }
+      if (!serviceEvmEligible(service)) {
         return NextResponse.json(
           { success: false, error: `${BASE_NOT_AVAILABLE} No payment was taken.` },
           { status: 409 },
         );
       }
-      return handleCdpHire(request, service, cdpPayload, brief, requirementAnswers);
+      return handleCdpHire(request, service, facilitatorPayload, brief, requirementAnswers);
     }
 
     const headerChain = networkToChain(request.headers.get('X-Payment-Network'));
@@ -279,13 +335,19 @@ export async function POST(request: NextRequest): Promise<NextResponse | Respons
 
     if (!txSignature) {
       const chain = resolveQueryChain(request.nextUrl.searchParams.get('chain'), headerChain ?? 'solana');
-      if (chain === 'base' && !serviceBaseEligible(service)) {
-        return NextResponse.json({ success: false, error: BASE_NOT_AVAILABLE }, { status: 400 });
+      if (chain !== 'solana' && !serviceEvmEligible(service)) {
+        return NextResponse.json({ success: false, error: chainNotAvailableError(chain) }, { status: 400 });
       }
       if (chain === 'base' && CDP_FACILITATOR_ENABLED) {
         const challenge = cdpChallengeForService(service, getOrigin(request));
         if (challenge) {
           return cdp402ForChallenge(request, challenge);
+        }
+      }
+      if (chain === 'robinhood' && NAVEN_FACILITATOR_ENABLED) {
+        const navenReqs = navenRequirementsForService(service, getOrigin(request));
+        if (navenReqs) {
+          return buildNavenV2402Response({ ...navenReqs, error: 'X-PAYMENT header required to access this resource' });
         }
       }
       const requirements = buildPaymentRequirements({
@@ -323,7 +385,7 @@ async function recordPaidOrderAndPayout(
   order: Awaited<ReturnType<typeof createServiceOrder>>;
   payout: Awaited<ReturnType<typeof settleX402ProviderPayout>>;
 }> {
-  const paymentMethod = paymentChain === 'base' ? 'usdc-base' : 'usdc-sol';
+  const paymentMethod = paymentMethodForChain(paymentChain);
 
   const order = await createServiceOrder({
     service_id: service.id,
@@ -389,9 +451,9 @@ async function recordPaidOrderAndPayout(
         chain: payout.chain,
         amount_usd: payout.amountUsd,
         hint:
-          payout.chain === 'base'
-            ? 'Set payout_address_base via PATCH /api/agents/me to receive Base payouts, then retry the payout.'
-            : 'Set payout_wallet via PATCH /api/agents/me, then retry the payout.',
+          payout.chain === 'solana'
+            ? 'Set payout_wallet via PATCH /api/agents/me, then retry the payout.'
+            : 'Set payout_address_base via PATCH /api/agents/me to receive EVM (Base / Robinhood Chain) payouts, then retry the payout.',
       },
     });
   }
@@ -596,5 +658,129 @@ async function handleCdpHire(
 
   const headers = new Headers({ 'Content-Type': 'application/json' });
   headers.set('X-PAYMENT-RESPONSE', encodeXPaymentResponse(settlement));
+  return new NextResponse(JSON.stringify(responseBody), { status: 200, headers });
+}
+
+async function handleNavenHire(
+  request: NextRequest,
+  service: Service,
+  paymentPayload: Record<string, unknown>,
+  brief: string,
+  requirementAnswers: Record<string, string> | undefined,
+): Promise<NextResponse | Response> {
+  const origin = getOrigin(request);
+  const requirements = navenRequirementsForService(service, origin);
+  if (!requirements) {
+    return NextResponse.json(
+      { success: false, error: 'Robinhood treasury (ATELIER_TREASURY_ROBINHOOD / ATELIER_TREASURY_BASE) not configured for Naven settlement' },
+      { status: 503 },
+    );
+  }
+
+  const verification = await verifyViaNavenFacilitator({ buyerPayload: paymentPayload, requirements });
+  if (!verification.isValid) {
+    return NextResponse.json(
+      { success: false, error: `Naven payment verification failed: ${verification.invalidReason ?? verification.error ?? 'invalid payment'}` },
+      { status: 402 },
+    );
+  }
+
+  const settlement = await settleViaNavenFacilitator({ buyerPayload: paymentPayload, requirements });
+  if (!settlement.success || !settlement.transaction) {
+    return NextResponse.json(
+      { success: false, error: `Naven settlement failed: ${settlement.errorReason ?? settlement.error ?? 'settle did not return a transaction'}` },
+      { status: 402 },
+    );
+  }
+
+  const txHash = settlement.transaction;
+  if (!/^0x[a-fA-F0-9]{64}$/.test(txHash)) {
+    return NextResponse.json(
+      { success: false, error: 'Naven settlement returned an invalid transaction hash' },
+      { status: 502 },
+    );
+  }
+
+  const alreadyUsed = await isPaymentTxSignatureUsed(txHash);
+  if (alreadyUsed) {
+    return NextResponse.json(
+      { success: false, error: 'Settlement transaction already used for a previous order' },
+      { status: 409 },
+    );
+  }
+
+  // The facilitator's word is never the source of truth for money received:
+  // confirm the USDG transfer to our treasury on-chain before creating the order.
+  const { totalUsd, feeUsd, priceUsd } = computeTotalWithFee(service.price_usd);
+  const onChain = await verifyRobinhoodUsdgReceived(txHash as `0x${string}`, totalUsd);
+  if (!onChain.verified) {
+    return NextResponse.json(
+      { success: false, error: `Naven settlement did not pass on-chain verification: ${onChain.error ?? 'transfer not found'}` },
+      { status: 402 },
+    );
+  }
+
+  // The tx sender is Naven's signer; the payer is the EIP-3009 authorization signer.
+  const payerWallet = extractNavenPayer(paymentPayload) ?? settlement.payer ?? verification.payer;
+  if (!payerWallet) {
+    return NextResponse.json(
+      { success: false, error: 'Naven settlement succeeded but no payer address could be determined' },
+      { status: 502 },
+    );
+  }
+
+  const buyerAgentId = await resolveOptionalBuyerAgentId(request);
+  let order: Awaited<ReturnType<typeof recordPaidOrderAndPayout>>['order'];
+  let payout: Awaited<ReturnType<typeof recordPaidOrderAndPayout>>['payout'];
+  try {
+    ({ order, payout } = await recordPaidOrderAndPayout(
+      service,
+      payerWallet,
+      txHash,
+      'robinhood',
+      brief,
+      requirementAnswers,
+      buyerAgentId,
+    ));
+  } catch (err) {
+    if (err instanceof DuplicateOrderPaymentError) {
+      return NextResponse.json(
+        { success: false, error: 'Settlement transaction already used for a previous order' },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
+
+  const responseBody = {
+    success: true,
+    data: {
+      order_id: order.id,
+      status: order.status,
+      status_url: `${origin}/api/orders/${order.id}`,
+      poll_hint: 'GET status_url to check generation progress until status is delivered or completed.',
+      x402: {
+        payment_verified: true,
+        settled_via: 'naven-facilitator',
+        payer_wallet: payerWallet,
+        total_charged_usd: totalUsd,
+        platform_fee_usd: feeUsd,
+        provider_payout_usd: priceUsd,
+        tx_signature: txHash,
+        payment_chain: 'robinhood' as const,
+        payout: {
+          attempted: payout.attempted,
+          paid: payout.paid,
+          tx_hash: payout.txHash,
+          destination: payout.destination,
+          chain: payout.chain,
+          error: payout.error,
+        },
+      },
+    },
+  };
+
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  headers.set('X-PAYMENT-RESPONSE', encodeNavenPaymentResponse(settlement));
   return new NextResponse(JSON.stringify(responseBody), { status: 200, headers });
 }

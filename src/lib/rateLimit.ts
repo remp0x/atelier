@@ -28,6 +28,8 @@ const BLOCKED_IPS = new Set(
     '100.53.184.81',
     '100.31.250.47',
     '100.57.4.226',
+    // ClipIt AI spam agent (did:privy:cmrcpb1sj000i0cjl6bkstz95 / clipitagentai), banned 2026-07-09
+    '3.146.189.250',
     ...(process.env.BLOCKED_IPS || '').split(',').map((s) => s.trim()),
   ].filter(Boolean),
 );

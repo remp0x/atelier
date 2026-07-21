@@ -333,11 +333,20 @@ export async function fetchPosition(
   return decodeStakePosition(info.data);
 }
 
+/**
+ * All positions in the ACTIVE pool. The pool memcmp (offset 8 = the position's
+ * `pool` field) matters: retired pools (pre-pool_id) and test pools share the
+ * program, so an unfiltered scan overcounts stakers and per-tier totals.
+ */
 export async function fetchAllPositions(
   connection: Connection,
 ): Promise<StakePositionAccount[]> {
+  const [pool] = findPoolPda();
   const accounts = await connection.getProgramAccounts(STAKING_PROGRAM_ID, {
-    filters: [{ memcmp: { offset: 0, bytes: bs58.encode(ACCT_STAKE_POSITION) } }],
+    filters: [
+      { memcmp: { offset: 0, bytes: bs58.encode(ACCT_STAKE_POSITION) } },
+      { memcmp: { offset: 8, bytes: pool.toBase58() } },
+    ],
   });
   return accounts.map((a) => decodeStakePosition(a.account.data as Buffer));
 }

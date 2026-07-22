@@ -47,6 +47,8 @@ async function confirmTx(connection: Connection, sig: string): Promise<void> {
     }
     await new Promise<void>((resolve) => setTimeout(resolve, 1500));
   }
+  // Timed out without a confirmed/finalized status: do not report success.
+  throw new Error('Transaction not confirmed in time. Check your wallet before retrying.');
 }
 
 export function PositionCard({

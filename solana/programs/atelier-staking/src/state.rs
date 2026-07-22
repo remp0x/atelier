@@ -35,13 +35,13 @@ pub struct StakePool {
     pub total_staked: u64,
     /// Sum of position weights. Distribution denominator.
     pub total_weight: u128,
-    /// Cumulative USDC distributed per unit of weight, scaled by ACC_SCALE.
+    /// Cumulative reward base units distributed per unit of weight, scaled by ACC_SCALE.
     pub acc_reward_per_weight: u128,
-    /// Linear reward drip (Synthetix-style). Funded USDC is paid out over
+    /// Linear reward drip (Synthetix-style). Funded rewards are paid out over
     /// `reward_duration` seconds rather than dumped into the accumulator at once,
     /// so a position must be staked across real time to earn -- defeating crank
     /// front-running and JIT (stake-around-the-crank) reward capture.
-    /// `reward_rate` is (micro-USDC * ACC_SCALE) per second.
+    /// `reward_rate` is (reward base units * ACC_SCALE) per second.
     pub reward_rate: u128,
     /// Unix time the current drip ends.
     pub period_finish: i64,
@@ -51,7 +51,7 @@ pub struct StakePool {
     pub reward_duration: i64,
     /// Last observed reward-vault balance; deposits are detected as the delta.
     pub reward_vault_last_balance: u64,
-    /// Cumulative USDC funded into drips.
+    /// Cumulative reward base units funded into drips.
     pub total_rewards_distributed: u64,
     pub total_rewards_claimed: u64,
     pub paused: bool,
@@ -98,7 +98,7 @@ impl StakePool {
         Ok(())
     }
 
-    /// Fold a freshly-deposited `amount` (micro-USDC) into the linear drip,
+    /// Fold a freshly-deposited `amount` (reward base units) into the linear drip,
     /// rolling any not-yet-dripped remainder of the current window into the new
     /// rate (Synthetix `notifyRewardAmount`). MUST be called after
     /// `update_rewards(now)`. A balance below the recorded one can only mean
@@ -159,7 +159,7 @@ pub struct StakePosition {
     pub lock_until: i64,
     /// MasterChef reward debt: weight * acc / ACC_SCALE captured at last settle.
     pub reward_debt: u128,
-    /// Settled-but-unclaimed USDC.
+    /// Settled-but-unclaimed reward base units.
     pub pending_reward: u64,
     pub bump: u8,
 }

@@ -37,7 +37,10 @@ export function formatSol(amount: bigint, displayDecimals = 4): string {
 
 export function parseTokenInput(str: string, decimals: number): bigint {
   const clean = str.trim();
-  if (!clean || clean === '.') return 0n;
+  // Accept only plain decimal numerals. `<input type="number">` also emits
+  // scientific notation ("1e5") and signs, which would throw in BigInt() and
+  // crash the panel (this runs during render); reject them to 0 instead.
+  if (!/^\d*\.?\d*$/.test(clean) || clean === '' || clean === '.') return 0n;
   const [intPart, fracPart = ''] = clean.split('.');
   const fracPadded = fracPart.padEnd(decimals, '0').slice(0, decimals);
   const intVal = BigInt(intPart || '0') * 10n ** BigInt(decimals);

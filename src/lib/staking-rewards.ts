@@ -6,6 +6,7 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 import { createSyncNativeInstruction } from '@solana/spl-token';
+import bs58 from 'bs58';
 import { atelierClient, getTotalIndexedWithdrawals } from './atelier-db';
 import {
   getAtelierKeypair,
@@ -35,7 +36,14 @@ const MIN_FUNDING_INTERVAL_SECS = 6 * 24 * 60 * 60; // weekly cadence, 1-day sla
 const LAMPORTS_PER_SOL = 1_000_000_000n;
 /** Never drain the treasury below this: it pays gas for every backend flow. */
 const TREASURY_GAS_RESERVE_LAMPORTS = 100_000_000n; // 0.1 SOL
+/** Sanity ceiling: a single epoch never distributes more than this. A budget
+ *  above it is treated as a misconfiguration (fat-fingered override, or a huge
+ *  frozen-cursor backlog after an override was removed) and skipped, not sent. */
+const MAX_EPOCH_LAMPORTS = 50n * LAMPORTS_PER_SOL;
 const REVENUE_CURSOR_ID = 'creator_fees';
+const FUNDING_LOCK_ID = 'staking_fund';
+/** A crashed run auto-releases the lock after this, so it can never wedge. */
+const FUNDING_LOCK_TTL_MS = 5 * 60 * 1000;
 
 let initialized = false;
 
@@ -59,7 +67,41 @@ async function initStakingRewardsDb(): Promise<void> {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  await atelierClient.execute(`
+    CREATE TABLE IF NOT EXISTS staking_funding_lock (
+      id TEXT PRIMARY KEY,
+      locked_until INTEGER NOT NULL DEFAULT 0
+    )
+  `);
   initialized = true;
+}
+
+/**
+ * Mutual exclusion across concurrent invocations (scheduled cron racing a manual
+ * trigger, or a Vercel double-invoke). The conditional UPDATE is atomic in
+ * libSQL, so exactly one caller flips the lock; the TTL guarantees a crashed run
+ * auto-releases. Returns true if the lock was acquired.
+ */
+async function acquireFundingLock(): Promise<boolean> {
+  const now = Date.now();
+  await atelierClient.execute({
+    sql: `INSERT INTO staking_funding_lock (id, locked_until) VALUES (?, 0)
+          ON CONFLICT(id) DO NOTHING`,
+    args: [FUNDING_LOCK_ID],
+  });
+  const res = await atelierClient.execute({
+    sql: `UPDATE staking_funding_lock SET locked_until = ?
+          WHERE id = ? AND locked_until < ?`,
+    args: [now + FUNDING_LOCK_TTL_MS, FUNDING_LOCK_ID, now],
+  });
+  return res.rowsAffected > 0;
+}
+
+async function releaseFundingLock(): Promise<void> {
+  await atelierClient.execute({
+    sql: `UPDATE staking_funding_lock SET locked_until = 0 WHERE id = ?`,
+    args: [FUNDING_LOCK_ID],
+  });
 }
 
 async function getRevenueCursorLamports(): Promise<bigint | null> {
@@ -207,7 +249,7 @@ async function recentlyFunded(): Promise<boolean> {
 }
 
 export interface FundingResult {
-  status: 'funded' | 'skipped';
+  status: 'funded' | 'skipped' | 'uncertain';
   reason?: string;
   amountLamports?: string;
   transferSig?: string;
@@ -238,6 +280,20 @@ function buildCrankSyncIx(
 export async function fundStakingRewards(): Promise<FundingResult> {
   await initStakingRewardsDb();
 
+  // Serialize concurrent invocations (scheduled cron vs manual trigger vs Vercel
+  // retry). Without this, two runs both pass recentlyFunded() -- which is written
+  // last -- and double-fund.
+  if (!(await acquireFundingLock())) {
+    return { status: 'skipped', reason: 'another funding run holds the lock' };
+  }
+  try {
+    return await fundStakingRewardsLocked();
+  } finally {
+    await releaseFundingLock();
+  }
+}
+
+async function fundStakingRewardsLocked(): Promise<FundingResult> {
   if (await recentlyFunded()) {
     return { status: 'skipped', reason: 'already funded this interval' };
   }
@@ -251,6 +307,15 @@ export async function fundStakingRewards(): Promise<FundingResult> {
 
   if (budget <= 0n) {
     return { status: 'skipped', reason: 'zero budget' };
+  }
+  // Reject an implausibly large budget rather than send it: a fat-fingered
+  // override, or the entire frozen-cursor backlog surfacing as one delta after an
+  // override is removed, should surface as an error -- not a lump distribution.
+  if (budget > MAX_EPOCH_LAMPORTS) {
+    return {
+      status: 'skipped',
+      reason: `budget ${budget} exceeds per-epoch cap ${MAX_EPOCH_LAMPORTS} -- check overrides/cursor`,
+    };
   }
 
   const connection = getServerConnection();
@@ -271,8 +336,8 @@ export async function fundStakingRewards(): Promise<FundingResult> {
   }
   // Don't fund a pool with no staked weight: rewards drip over time and the
   // accumulator does not advance while total_weight == 0, so a tranche funded now
-  // would partly drip to nobody (wasted). Wait for real stake. (JIT/monopoly
-  // capture itself is handled on-chain by the linear drip.)
+  // would drip to nobody and (there being no admin sweep on-chain) strand
+  // permanently in the vault. Wait for real stake.
   if (poolAccount.totalWeight === 0n) {
     return {
       status: 'skipped',
@@ -304,17 +369,17 @@ export async function fundStakingRewards(): Promise<FundingResult> {
   tx.feePayer = payer.publicKey;
   tx.add(transferIx, syncIx, crankIx);
   tx.sign(payer);
-
-  const sig = await connection.sendRawTransaction(tx.serialize());
-  await pollTransactionConfirmation(connection, sig);
-
-  // Advance the feed cursor BEFORE the audit row: the transfer is irreversible, so
-  // the cursor (cross-run idempotency for the feed) is the tighter guard -- if the
-  // audit insert later fails, the next run still sees delta 0 and won't re-fund.
-  if (feed) {
-    await setRevenueCursorLamports(feed.cumulativeLamports);
+  if (!tx.signature) {
+    return { status: 'skipped', reason: 'failed to sign funding transaction' };
   }
+  const sig = bs58.encode(tx.signature);
 
+  // Commit the idempotency guards BEFORE broadcasting -- the audit row (which
+  // recentlyFunded() reads) and the feed cursor. This is the treasury-safe
+  // direction: if the tx lands but confirmation times out, no run will re-send
+  // it. The cost is that a genuinely-dropped tx skips this epoch's revenue
+  // (recoverable via a manual STAKING_EPOCH_REVENUE_SOL top-up) rather than
+  // risking a double-pay of real SOL.
   const id = `stkfund_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
   await atelierClient.execute({
     sql: `INSERT INTO staking_reward_funding_sol
@@ -322,6 +387,34 @@ export async function fundStakingRewards(): Promise<FundingResult> {
       VALUES (?, ?, ?, ?, ?, ?)`,
     args: [id, budget.toString(), sig, sig, revenue.toString(), shareBps],
   });
+  if (feed) {
+    await setRevenueCursorLamports(feed.cumulativeLamports);
+  }
+
+  await connection.sendRawTransaction(tx.serialize());
+  try {
+    await pollTransactionConfirmation(connection, sig);
+  } catch {
+    // Landed-but-unconfirmed vs dropped are indistinguishable here. One
+    // reconciliation query (searches recent history) resolves the common case;
+    // if still unknown, report uncertain and leave the guards committed so no
+    // re-send happens. An operator reconciles from the sig.
+    const status = await connection.getSignatureStatus(sig, {
+      searchTransactionHistory: true,
+    });
+    const confirmed =
+      status.value?.confirmationStatus === 'confirmed' ||
+      status.value?.confirmationStatus === 'finalized';
+    if (!(confirmed && !status.value?.err)) {
+      return {
+        status: 'uncertain',
+        reason: 'funding tx sent but not confirmed -- verify on-chain before re-funding',
+        amountLamports: budget.toString(),
+        transferSig: sig,
+        crankSig: sig,
+      };
+    }
+  }
 
   return {
     status: 'funded',

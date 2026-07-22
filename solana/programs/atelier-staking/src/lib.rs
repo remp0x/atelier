@@ -11,18 +11,21 @@ use constants::TIER_COUNT;
 use instructions::*;
 use state::Tier;
 
-// Placeholder id (valid Anchor example key). Run `anchor keys sync` after the
-// first build to replace with the real keypair. See DEPLOY_AUDIT_RUNBOOK.md.
+// Live program id. The keypair (target/deploy/atelier_staking-keypair.json,
+// gitignored) is Atelier-controlled and matches the deployed mainnet program;
+// post-deploy the program is governed by its separate upgrade authority.
 declare_id!("5VrSQib1ahpywtzB1eCs44fbR4QeQHUh1PdfCtdNDYdq");
 
 /// Atelier $ATELIER staking.
 ///
 /// Custodial-free, on-chain revenue-share staking. Stakers lock $ATELIER
 /// (Token-2022) into one of four lock tiers that scale their reward weight.
-/// USDC funded by Atelier's backend (or anyone) accrues pro-rata to weighted
-/// stake via a MasterChef/Synthetix `acc_reward_per_weight` accumulator.
+/// The reward mint (wrapped SOL in production) funded by Atelier's backend (or
+/// anyone) accrues pro-rata to weighted stake via a MasterChef/Synthetix
+/// `acc_reward_per_weight` accumulator.
 ///
-/// Trust model: the program holds staked tokens and USDC in PDA-owned vaults.
+/// Trust model: the program holds staked tokens and reward tokens in PDA-owned
+/// vaults.
 /// There is intentionally NO admin instruction that can move vault funds; the
 /// only outflows are user `unstake` (their own principal) and user `claim`
 /// (their own accrued rewards). `set_paused` can only block NEW stakes -- it can

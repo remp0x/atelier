@@ -11,9 +11,10 @@ Non-custodial, on-chain revenue-share staking for $ATELIER (Solana, Anchor
 of platform revenue paid in SOL accrues pro-rata to weighted stake via a
 MasterChef/Synthetix `acc_reward_per_weight` accumulator, **dripped linearly over
 a `reward_duration` window**. The reward mint is wrapped SOL (wSOL,
-`So11111111111111111111111111111111111111112`); `claim` unwraps it to native SOL
-in the same transaction. Principal returns 1:1; only the SOL reward is
-weighted. PDA-owned vaults; the pool PDA is the sole vault authority. The pool
+`So11111111111111111111111111111111111111112`); `claim` pays wSOL, and the
+CLIENT wraps the claim tx as `[create wSOL ATA, claim, close ATA]` so the user
+receives native SOL -- the on-chain program itself does not unwrap. Principal
+returns 1:1; only the reward is weighted. PDA-owned vaults; the pool PDA is the sole vault authority. The pool
 PDA is `[b"pool", staked_mint, pool_id]` where `pool_id` is a `u8` stored in
 `StakePool` (`initialize_pool(pool_id, tiers, reward_duration_secs, funder)`),
 so a new pool can be created for the same mint; retired pools keep their

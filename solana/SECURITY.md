@@ -1,8 +1,10 @@
 # atelier-staking -- Security Notes
 
-Status: **UNAUDITED.** This program custodies user funds. It MUST NOT hold real
-mainnet $ATELIER or SOL until a professional third-party audit is complete. See
-`DEPLOY_AUDIT_RUNBOOK.md` for the gate.
+Status: **AUDITED + LIVE ON MAINNET (2026-07-22).** Three internal reviews, an
+automated external audit (Codex), a professional third-party audit, and a
+post-audit adversarial re-review of the `pool_id` + wSOL delta (no exploitable
+findings). Residual items are operational, not adversarial: see "Known residual
+items" and `DEPLOY_AUDIT_RUNBOOK.md`.
 
 This document maps the standard Solana/Anchor + Token-2022 vulnerability classes
 to how this program addresses each. It is the self-review pass, not a substitute
@@ -222,3 +224,19 @@ the custody model (no admin path to vault funds; outflows only via `claim`/
 3. Re-confirm `reward_vault_last_balance` cannot desync under concurrent
    stake/claim within one slot (Anchor serializes per-account writes; the prior
    review found the mismatch guard unreachable, but re-verify).
+4. **Stranded rewards on an emptied pool (LOW, solvency-safe, accepted).** If a
+   funded drip window is active and `total_weight` falls to 0 mid-window (every
+   position unstakes after locks expire), the reward base units scheduled for
+   that empty sub-period are skipped by `update_rewards` (correct -- a later
+   first-staker must not capture them) and are NOT recovered on the next crank
+   past `period_finish`. With no admin sweep by design, that residue is stuck in
+   the vault. It is never over-distributed or attacker-profitable, and is
+   unreachable in the near term (the treasury's own position is locked well
+   beyond one drip window). Mitigation in place: the funding cron refuses to
+   fund a pool with zero weighted stake. A future `funder`-only reclaim of
+   *unscheduled* residue would close it if the pool ever fully drains.
+5. **Post-audit delta re-reviewed (2026-07-22):** the `pool_id` PDA-seed change
+   and the USDC->wSOL (9-decimal) reward migration were adversarially
+   re-reviewed after the paid audit -- signer-seed reconstruction, pool/vault
+   isolation, and the 256-bit `mul_div_floor` all verified with no exploitable
+   findings.

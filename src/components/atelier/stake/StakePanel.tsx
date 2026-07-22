@@ -75,6 +75,7 @@ export function StakePanel({
       setStep('confirming');
       setStatusMsg('Confirming on-chain...');
 
+      let confirmed = false;
       for (let i = 0; i < 40; i++) {
         const { value } = await connection.getSignatureStatuses([sig]);
         const status = value[0];
@@ -86,10 +87,14 @@ export function StakePanel({
             status.confirmationStatus === 'confirmed' ||
             status.confirmationStatus === 'finalized'
           ) {
+            confirmed = true;
             break;
           }
         }
         await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+      }
+      if (!confirmed) {
+        throw new Error('Transaction not confirmed in time. Check your wallet before retrying.');
       }
 
       setStep('done');

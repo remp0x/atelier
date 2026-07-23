@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { STAKING_TIERS } from '@/lib/staking-config';
-import { formatTokenAmount, formatSol, type StakingStatsData } from './types';
+import { formatTokenAmount, formatSol, formatApr, type StakingStatsData } from './types';
 
 interface Props {
   stats: StakingStatsData;
@@ -74,6 +74,7 @@ export function StakeDashboard({ stats }: Props) {
             const tierStats = stats.tiers.find((t) => t.tier === tier.index);
             const stakedAmt = tierStats ? formatTokenAmount(BigInt(tierStats.staked), atelierDecimals, 2) : '0.00';
             const posCount = tierStats?.positions ?? 0;
+            const apr = formatApr(tierStats?.aprPercent ?? null);
             const totalStaked = BigInt(stats.tvlStaked);
             const tierStaked = BigInt(tierStats?.staked ?? '0');
             const pct =
@@ -106,6 +107,11 @@ export function StakeDashboard({ stats }: Props) {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0 text-right">
+                  {apr && (
+                    <span className="font-mono text-[11px] text-emerald-500 dark:text-emerald-400 tabular-nums">
+                      ~{apr} <span className="text-gray-400 dark:text-neutral-600">APR est.</span>
+                    </span>
+                  )}
                   <span className="font-mono text-[11px] text-gray-400 dark:text-neutral-500 tabular-nums">
                     {posCount} pos
                   </span>
@@ -117,6 +123,13 @@ export function StakeDashboard({ stats }: Props) {
             );
           })}
         </div>
+        {stats.aprLive && (
+          <div className="border-t border-gray-100 dark:border-neutral-800/60 px-4 py-2">
+            <p className="font-mono text-[9px] text-gray-400 dark:text-neutral-600 leading-relaxed">
+              APR is an estimate based on current rewards and total staked -- it varies and is not guaranteed.
+            </p>
+          </div>
+        )}
       </motion.div>
 
       {stats.paused && (

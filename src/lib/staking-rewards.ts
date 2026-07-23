@@ -38,8 +38,16 @@ const LAMPORTS_PER_SOL = 1_000_000_000n;
 const TREASURY_GAS_RESERVE_LAMPORTS = 100_000_000n; // 0.1 SOL
 /** Sanity ceiling: a single epoch never distributes more than this. A budget
  *  above it is treated as a misconfiguration (fat-fingered override, or a huge
- *  frozen-cursor backlog after an override was removed) and skipped, not sent. */
-const MAX_EPOCH_LAMPORTS = 50n * LAMPORTS_PER_SOL;
+ *  frozen-cursor backlog after an override was removed) and skipped, not sent.
+ *  Configurable via STAKING_MAX_EPOCH_SOL so the cap can be raised as real
+ *  weekly revenue grows past the default (otherwise a genuine skyrocket would
+ *  trip the cap and, since the cursor doesn't advance on a skip, wedge). */
+const DEFAULT_MAX_EPOCH_SOL = 50;
+function maxEpochLamports(): bigint {
+  const raw = Number(process.env.STAKING_MAX_EPOCH_SOL ?? DEFAULT_MAX_EPOCH_SOL);
+  const sol = Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_EPOCH_SOL;
+  return BigInt(Math.floor(sol * Number(LAMPORTS_PER_SOL)));
+}
 const REVENUE_CURSOR_ID = 'creator_fees';
 const FUNDING_LOCK_ID = 'staking_fund';
 /** A crashed run auto-releases the lock after this, so it can never wedge. */
@@ -311,10 +319,11 @@ async function fundStakingRewardsLocked(): Promise<FundingResult> {
   // Reject an implausibly large budget rather than send it: a fat-fingered
   // override, or the entire frozen-cursor backlog surfacing as one delta after an
   // override is removed, should surface as an error -- not a lump distribution.
-  if (budget > MAX_EPOCH_LAMPORTS) {
+  const maxEpoch = maxEpochLamports();
+  if (budget > maxEpoch) {
     return {
       status: 'skipped',
-      reason: `budget ${budget} exceeds per-epoch cap ${MAX_EPOCH_LAMPORTS} -- check overrides/cursor`,
+      reason: `budget ${budget} exceeds per-epoch cap ${maxEpoch} (STAKING_MAX_EPOCH_SOL) -- raise the cap or check overrides/cursor`,
     };
   }
 

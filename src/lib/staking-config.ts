@@ -139,3 +139,50 @@ export function weightFor(amount: bigint, tierIndex: number): bigint {
   const tier = getTier(tierIndex);
   return (amount * BigInt(tier.multiplierBps)) / BigInt(BPS_DENOM);
 }
+
+const SECONDS_PER_YEAR = 31_536_000;
+const ATELIER_DECIMALS = 6;
+const SOL_DECIMALS = 9;
+
+/**
+ * Estimated annual percentage rate for a tier, in percent (e.g. 42.5 for 42.5%).
+ *
+ * A position of `A` tokens in a tier of multiplier `m` has weight `A*m` and earns
+ * `weight * rewardRate / (totalWeight * ACC_SCALE)` reward base units per second;
+ * the position size `A` cancels, leaving an APR that depends only on the tier
+ * multiplier, the live drip rate, total staked weight, and the two token prices.
+ * It scales linearly with the tier multiplier and falls as `totalWeight` grows
+ * (more stakers dilute the same drip).
+ *
+ * This is an ESTIMATE: `rewardRate` reflects only the current drip window (funded
+ * from variable weekly revenue), so annualizing it assumes that rate persists.
+ * Returns null when it cannot be computed (no active drip, no weight, or a
+ * missing/zero price).
+ */
+export function estimateTierAprPercent(params: {
+  rewardRate: bigint;
+  totalWeight: bigint;
+  tierMultiplierBps: number;
+  solPriceUsd: number;
+  atelierPriceUsd: number;
+}): number | null {
+  const { rewardRate, totalWeight, tierMultiplierBps, solPriceUsd, atelierPriceUsd } = params;
+  if (rewardRate <= 0n || totalWeight <= 0n) return null;
+  if (!(solPriceUsd > 0) || !(atelierPriceUsd > 0)) return null;
+
+  const rate = Number(rewardRate);
+  const tw = Number(totalWeight);
+  const accScale = Number(ACC_SCALE);
+  const m = tierMultiplierBps / BPS_DENOM;
+
+  // annual reward (base units) per token staked in this tier:
+  //   m * rate * secondsPerYear / (totalWeight * ACC_SCALE)
+  // converted to USD (reward is SOL/lamports) and divided by the token's USD
+  // value (ATELIER). The token/decimal factors reduce to 10^(ATELIER-SOL)=1e-3.
+  const decimalFactor = 10 ** (ATELIER_DECIMALS - SOL_DECIMALS); // 1e-3
+  const ratio =
+    (m * rate * SECONDS_PER_YEAR * solPriceUsd * decimalFactor) /
+    (tw * accScale * atelierPriceUsd);
+  if (!Number.isFinite(ratio) || ratio < 0) return null;
+  return ratio * 100;
+}

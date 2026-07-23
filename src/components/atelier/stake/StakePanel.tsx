@@ -6,7 +6,7 @@ import { Connection, PublicKey, Transaction } from '@solana/web3.js';
 import { STAKING_TIERS } from '@/lib/staking-config';
 import { buildStakeIx } from '@/lib/staking-program';
 import { StatusBanner } from '@/components/atelier/earn/StatusBanner';
-import { parseTokenInput, formatTokenAmount, type StakingStatsData } from './types';
+import { parseTokenInput, formatTokenAmount, formatApr, type StakingStatsData } from './types';
 import { useStakeTxSender, type StakeWalletMode } from './useStakeTxSender';
 
 const SOLANA_RPC_URL =
@@ -147,6 +147,8 @@ export function StakePanel({
           <div className="grid grid-cols-2 gap-2">
             {STAKING_TIERS.map((tier) => {
               const active = selectedTier === tier.index;
+              const tierStat = stats.tiers.find((s) => s.tier === tier.index);
+              const apr = formatApr(tierStat?.aprPercent ?? null);
               return (
                 <button
                   key={tier.index}
@@ -173,6 +175,11 @@ export function StakePanel({
                   >
                     {tier.multiplierLabel} weight
                   </span>
+                  {apr && (
+                    <span className="font-mono text-[9px] text-emerald-500 dark:text-emerald-400">
+                      ~{apr} APR <span className="text-gray-400 dark:text-neutral-600">est.</span>
+                    </span>
+                  )}
                   {active && (
                     <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-atelier" />
                   )}

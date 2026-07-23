@@ -10,13 +10,22 @@ export interface StakingStatsData {
   totalRewardsClaimed: string;
   rewardVaultBalance: string;
   paused: boolean;
+  aprLive: boolean;
   tiers: {
     tier: number;
     label: string;
     multiplierLabel: string;
     positions: number;
     staked: string;
+    aprPercent: number | null;
   }[];
+}
+
+export function formatApr(aprPercent: number | null): string | null {
+  if (aprPercent === null || !Number.isFinite(aprPercent)) return null;
+  if (aprPercent >= 1000) return `${Math.round(aprPercent).toLocaleString()}%`;
+  if (aprPercent >= 100) return `${aprPercent.toFixed(0)}%`;
+  return `${aprPercent.toFixed(1)}%`;
 }
 
 export function formatTokenAmount(

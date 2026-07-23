@@ -5,7 +5,15 @@ import { getAccount, getMint, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token';
 import { getServerConnection } from '@/lib/solana-server';
 import { ATELIER_TOKEN_MINT } from '@/lib/solana-token-balance';
 import { fetchPool, fetchAllPositions } from '@/lib/staking-program';
-import { findPoolPda, findRewardVaultPda, STAKING_TIERS, REWARD_DECIMALS } from '@/lib/staking-config';
+import {
+  findPoolPda,
+  findRewardVaultPda,
+  STAKING_TIERS,
+  REWARD_DECIMALS,
+  estimateTierAprPercent,
+} from '@/lib/staking-config';
+import { getSolPriceUsd } from '@/lib/sol-price';
+import { getMarketData } from '@/lib/market-data';
 
 interface TierStat {
   tier: number;
@@ -13,6 +21,9 @@ interface TierStat {
   multiplierLabel: string;
   positions: number;
   staked: string;
+  /** Estimated APR for this tier, in percent; null when it can't be computed
+   *  (no active drip, no staked weight, or a missing price). */
+  aprPercent: number | null;
 }
 
 interface StakingStats {
@@ -27,6 +38,9 @@ interface StakingStats {
   totalRewardsClaimed: string;
   rewardVaultBalance: string;
   paused: boolean;
+  /** True while a reward drip is live (rate > 0, weight > 0, before period end).
+   *  APRs are only meaningful, and only populated, while this holds. */
+  aprLive: boolean;
   tiers: TierStat[];
 }
 
@@ -60,12 +74,14 @@ async function computeStats(): Promise<StakingStats> {
       totalRewardsClaimed: '0',
       rewardVaultBalance: '0',
       paused: false,
+      aprLive: false,
       tiers: STAKING_TIERS.map((t) => ({
         tier: t.index,
         label: t.label,
         multiplierLabel: t.multiplierLabel,
         positions: 0,
         staked: '0',
+        aprPercent: null,
       })),
     };
   }
@@ -90,6 +106,37 @@ async function computeStats(): Promise<StakingStats> {
     rewardVaultBalance = 0n;
   }
 
+  // APR is only meaningful while a drip is live. When it is, price both assets
+  // (SOL for the reward, ATELIER for the stake) and derive a per-tier estimate.
+  const nowSecs = Math.floor(Date.now() / 1000);
+  const aprLive =
+    pool.rewardRate > 0n &&
+    pool.totalWeight > 0n &&
+    Number(pool.periodFinish) > nowSecs;
+
+  let solPriceUsd = 0;
+  let atelierPriceUsd = 0;
+  if (aprLive) {
+    const mint = ATELIER_TOKEN_MINT.toBase58();
+    const [sol, market] = await Promise.all([
+      getSolPriceUsd().catch(() => 0),
+      getMarketData([mint]).catch(() => ({}) as Record<string, { price_usd: number } | null>),
+    ]);
+    solPriceUsd = sol;
+    atelierPriceUsd = market[mint]?.price_usd ?? 0;
+  }
+
+  const tierApr = (multiplierBps: number): number | null =>
+    aprLive
+      ? estimateTierAprPercent({
+          rewardRate: pool.rewardRate,
+          totalWeight: pool.totalWeight,
+          tierMultiplierBps: multiplierBps,
+          solPriceUsd,
+          atelierPriceUsd,
+        })
+      : null;
+
   return {
     initialized: true,
     atelierDecimals,
@@ -102,12 +149,14 @@ async function computeStats(): Promise<StakingStats> {
     totalRewardsClaimed: pool.totalRewardsClaimed.toString(),
     rewardVaultBalance: rewardVaultBalance.toString(),
     paused: pool.paused,
+    aprLive,
     tiers: STAKING_TIERS.map((t) => ({
       tier: t.index,
       label: t.label,
       multiplierLabel: t.multiplierLabel,
       positions: tierCount.get(t.index) ?? 0,
       staked: (tierStaked.get(t.index) ?? 0n).toString(),
+      aprPercent: tierApr(t.multiplierBps),
     })),
   };
 }
